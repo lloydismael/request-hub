@@ -5,8 +5,16 @@
     <div class="col-lg-8">
         <div class="glass-card p-4 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="h4 mb-0">{{ request_obj.reference_code }}</h1>
-                <span class="badge rounded-pill bg-primary text-uppercase fw-semibold">{{ request_obj.get_status_display }}</span>
+                <div>
+                    <h1 class="h4 mb-0">{{ request_obj.reference_code }}</h1>
+                    <p class="text-muted mb-0">Created {{ request_obj.created_at|date:"M d, Y" }}</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge rounded-pill bg-primary text-uppercase fw-semibold">{{ request_obj.get_status_display }}</span>
+                    {% if request.user.role == 'admin' or request.user.role == 'requestor' and request_obj.requestor_id == request.user.id %}
+                        <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' request_obj.pk %}">Delete</a>
+                    {% endif %}
+                </div>
             </div>
             <div class="row g-3">
                 <div class="col-sm-6">
@@ -31,7 +39,13 @@
                 </div>
                 <div class="col-sm-6">
                     <p class="text-muted mb-1">Engineer</p>
-                    <p class="mb-0">{{ request_obj.engineer.get_full_name|default:request_obj.engineer.username|default:"Unassigned" }}</p>
+                    <p class="mb-0">
+                        {% if request_obj.engineer %}
+                            {{ request_obj.engineer.get_full_name|default:request_obj.engineer.username }}
+                        {% else %}
+                            <span class="text-muted">Unassigned</span>
+                        {% endif %}
+                    </p>
                 </div>
                 <div class="col-sm-6">
                     <p class="text-muted mb-1">Start Date</p>

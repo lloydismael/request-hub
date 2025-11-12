@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
-from django.views.generic import DetailView, ListView, TemplateView, UpdateView
+from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
 
 from accounts.models import User
 
@@ -149,6 +149,26 @@ class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):
         )
         messages.success(request, f"{target_label} notified for {request_obj.reference_code}.")
         return redirect("hub:dashboard")
+
+
+class RequestDeleteView(LoginRequiredMixin, DeleteView):
+    model = Request
+    success_url = reverse_lazy("hub:dashboard")
+    template_name = "hub/request_confirm_delete.html"
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.role == User.Roles.ADMIN:
+            return qs
+        if user.role == User.Roles.REQUESTOR:
+            return qs.filter(requestor=user)
+        return qs.none()
+
+    def delete(self, request, *args, **kwargs):
+        response = super().delete(request, *args, **kwargs)
+        messages.success(request, "Request deleted successfully.")
+        return response
 
 
 class NotificationListView(LoginRequiredMixin, ListView):

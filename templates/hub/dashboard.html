@@ -134,6 +134,9 @@
                                         <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-detail' item.pk %}">View</a>
                                         {% if role == 'admin' %}
                                             <a class="btn btn-sm btn-primary" href="{% url 'hub:request-manage' item.pk %}">Manage</a>
+                                            <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
+                                        {% elif role == 'requestor' %}
+                                            <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% endif %}
                                     </div>
                                     {% if role == 'admin' %}
