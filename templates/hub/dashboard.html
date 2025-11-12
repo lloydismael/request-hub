@@ -3,7 +3,7 @@
 {% block title %}Dashboard · Request Hub{% endblock %}
 {% block content %}
 <div class="row g-4">
-    <div class="col-12 col-xl-8">
+    <div class="col-12 col-xl-9">
         <div class="glass-card p-4 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">{% if role == 'requestor' %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
@@ -18,6 +18,11 @@
                             <th>ID</th>
                             <th>Account</th>
                             {% if role == 'admin' %}
+                                <th>Account Manager</th>
+                                <th>Assigned Engineer</th>
+                            {% elif role == 'engineer' %}
+                                <th>Account Manager</th>
+                            {% elif role == 'requestor' %}
                                 <th>Assigned Engineer</th>
                             {% endif %}
                             <th>Priority</th>
@@ -33,12 +38,82 @@
                                 <td>{{ item.account.name }}</td>
                                 {% if role == 'admin' %}
                                     <td>
+                                        {% with manager=item.requestor %}
+                                            {% if manager %}
+                                                {% with manager_name=manager.get_full_name|default:manager.username %}
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        {% if manager.profile_photo %}
+                                                            <img src="{{ manager.profile_photo.url }}" alt="{{ manager_name }}" class="table-avatar">
+                                                        {% else %}
+                                                            <span class="table-avatar table-avatar--placeholder">{{ manager_name|slice:":1"|upper }}</span>
+                                                        {% endif %}
+                                                        <span>{{ manager_name }}</span>
+                                                    </div>
+                                                {% endwith %}
+                                            {% else %}
+                                                <span class="text-muted">Unknown</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                    <td>
                                         {% if item.engineer %}
-                                            {{ item.engineer.get_full_name|default:item.engineer.username }}
+                                            {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
+                                                <div class="d-flex align-items-center gap-2">
+                                                    {% if item.engineer.profile_photo %}
+                                                        <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
+                                                    {% else %}
+                                                        <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
+                                                    {% endif %}
+                                                    <span>{{ engineer_name }}</span>
+                                                </div>
+                                            {% endwith %}
                                         {% else %}
                                             <span class="text-muted">Unassigned</span>
                                         {% endif %}
                                     </td>
+                                    {% elif role == 'engineer' %}
+                                        <td>
+                                            {% with manager_user=item.requestor %}
+                                                {% if manager_user %}
+                                                    {% with fallback_name=manager_user.get_full_name|default:manager_user.username %}
+                                                        {% with manager_name=item.account_manager|default:fallback_name %}
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                {% if manager_user.profile_photo %}
+                                                                    <img src="{{ manager_user.profile_photo.url }}" alt="{{ manager_name }}" class="table-avatar">
+                                                                {% else %}
+                                                                    <span class="table-avatar table-avatar--placeholder">{{ manager_name|slice:":1"|upper }}</span>
+                                                                {% endif %}
+                                                                <span>{{ manager_name }}</span>
+                                                            </div>
+                                                        {% endwith %}
+                                                    {% endwith %}
+                                                {% elif item.account_manager %}
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <span class="table-avatar table-avatar--placeholder">{{ item.account_manager|slice:":1"|upper }}</span>
+                                                        <span>{{ item.account_manager }}</span>
+                                                    </div>
+                                                {% else %}
+                                                    <span class="text-muted">Unknown</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                    {% elif role == 'requestor' %}
+                                        <td>
+                                            {% if item.engineer %}
+                                                {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        {% if item.engineer.profile_photo %}
+                                                            <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
+                                                        {% else %}
+                                                            <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
+                                                        {% endif %}
+                                                        <span>{{ engineer_name }}</span>
+                                                    </div>
+                                                {% endwith %}
+                                            {% else %}
+                                                <span class="text-muted">Unassigned</span>
+                                            {% endif %}
+                                        </td>
                                 {% endif %}
                                 <td class="text-capitalize">{{ item.get_priority_display }}</td>
                                 <td class="text-capitalize">{{ item.get_status_display }}</td>
@@ -79,7 +154,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="{% if role == 'admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
+                                <td colspan="{% if role == 'admin' %}8{% elif role == 'engineer' %}7{% elif role == 'requestor' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -87,8 +162,8 @@
             </div>
         </div>
     </div>
-    <div class="col-12 col-xl-4">
-        <div class="glass-card p-4 mb-4">
+    <div class="col-12 col-xl-3">
+        <div class="glass-card glass-card--compact p-4 mb-4">
             <h2 class="h6 text-uppercase text-muted">Notifications</h2>
             <ul class="list-unstyled mt-3 mb-0">
                 {% for notification in notifications %}
