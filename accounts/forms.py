@@ -14,7 +14,7 @@ ROLE_CHOICES = [(key, label) for key, label in ROLE_LABELS.items()]
 ROLE_DEFAULT_USERNAMES = {
     User.Roles.ADMIN: "Admin",
     User.Roles.ENGINEER: "engineer_admin",
-    User.Roles.REQUESTOR: "manager_admin",
+    User.Roles.REQUESTOR: "account_admin",
 }
 
 

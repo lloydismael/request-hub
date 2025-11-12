@@ -1,17 +1,11 @@
 from django import forms
 
 from accounts.models import User
-
-from .constants import ACCOUNT_MANAGER_NAMES
 from .models import Account, Request
 
 
 class RequestForm(forms.ModelForm):
     account_name = forms.CharField(label="Account Name", widget=forms.TextInput(attrs={"class": "form-control"}))
-    account_manager = forms.ChoiceField(
-        choices=[(name, name) for name in ACCOUNT_MANAGER_NAMES],
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
     engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
         required=False,
@@ -24,7 +18,6 @@ class RequestForm(forms.ModelForm):
         model = Request
         fields = [
             "account_name",
-            "account_manager",
             "product_category",
             "engagement_type",
             "description",

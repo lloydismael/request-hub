@@ -50,6 +50,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if form.is_valid():
             req = form.save(commit=False)
             req.requestor = request.user
+            full_name = request.user.get_full_name().strip()
+            req.account_manager = full_name or request.user.username
             req.save()
             messages.success(request, "Request submitted successfully.")
             return redirect("hub:dashboard")
