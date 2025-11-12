@@ -17,10 +17,13 @@
                         <tr>
                             <th>ID</th>
                             <th>Account</th>
+                            {% if role == 'admin' %}
+                                <th>Assigned Engineer</th>
+                            {% endif %}
                             <th>Priority</th>
                             <th>Status</th>
                             <th>Due</th>
-                            <th></th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -28,19 +31,55 @@
                             <tr class="{% if item.is_overdue %}table-danger{% endif %}">
                                 <td>{{ item.reference_code }}</td>
                                 <td>{{ item.account.name }}</td>
+                                {% if role == 'admin' %}
+                                    <td>
+                                        {% if item.engineer %}
+                                            {{ item.engineer.get_full_name|default:item.engineer.username }}
+                                        {% else %}
+                                            <span class="text-muted">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
                                 <td class="text-capitalize">{{ item.get_priority_display }}</td>
                                 <td class="text-capitalize">{{ item.get_status_display }}</td>
-                                <td>{{ item.due_date|date:"M d, Y" }}</td>
+                                <td>
+                                    {% if item.due_date %}
+                                        <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
+                                            {{ item.due_date|date:"M d, Y" }}
+                                        </span>
+                                        {% if item.is_overdue %}
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2">Overdue</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">&mdash;</span>
+                                    {% endif %}
+                                </td>
                                 <td class="text-end">
-                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-detail' item.pk %}">View</a>
+                                    <div class="d-inline-flex gap-2">
+                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-detail' item.pk %}">View</a>
+                                        {% if role == 'admin' %}
+                                            <a class="btn btn-sm btn-primary" href="{% url 'hub:request-manage' item.pk %}">Manage</a>
+                                        {% endif %}
+                                    </div>
                                     {% if role == 'admin' %}
-                                        <a class="btn btn-sm btn-primary" href="{% url 'hub:request-manage' item.pk %}">Manage</a>
+                                        <form method="post" action="{% url 'hub:request-nudge' item.pk %}" class="d-flex align-items-center gap-2 justify-content-end mt-2 flex-wrap">
+                                            {% csrf_token %}
+                                            <label class="visually-hidden" for="notify-target-{{ item.pk }}">Notify recipient</label>
+                                            <select id="notify-target-{{ item.pk }}" name="target" class="form-select form-select-sm w-auto" required>
+                                                <option value="" selected disabled>Notify&hellip;</option>
+                                                {% if item.engineer %}
+                                                    <option value="engineer">Engineer</option>
+                                                {% endif %}
+                                                <option value="account_manager">Account Manager</option>
+                                            </select>
+                                            <button class="btn btn-sm btn-outline-secondary" type="submit">Nudge</button>
+                                        </form>
                                     {% endif %}
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">No requests yet.</td>
+                                <td colspan="{% if role == 'admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
                             </tr>
                         {% endfor %}
                     </tbody>

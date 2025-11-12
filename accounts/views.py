@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
@@ -24,11 +25,16 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         return self.request.user
 
     def form_valid(self, form):
+        password_changed = bool(form.cleaned_data.get("new_password1"))
         response = super().form_valid(form)
         user = self.request.user
         user.profile_completed = True
         user.save(update_fields=["profile_completed"])
-        messages.success(self.request, "Profile updated successfully.")
+        if password_changed:
+            update_session_auth_hash(self.request, self.object)
+            messages.success(self.request, "Profile updated successfully. Your password has been changed.")
+        else:
+            messages.success(self.request, "Profile updated successfully.")
         return response
 
 

@@ -122,6 +122,35 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
         return super().form_valid(form)
 
 
+class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor"), pk=pk)
+        target = request.POST.get("target")
+
+        if target not in {"engineer", "account_manager"}:
+            messages.error(request, "Choose who should receive the follow-up notification.")
+            return redirect("hub:dashboard")
+
+        if target == "engineer":
+            if not request_obj.engineer:
+                messages.error(request, "This request does not have an assigned engineer yet.")
+                return redirect("hub:dashboard")
+            recipient = request_obj.engineer
+            target_label = "Engineer"
+        else:
+            recipient = request_obj.requestor
+            target_label = "Account Manager"
+
+        sender_name = request.user.get_full_name() or request.user.username
+        Notification.objects.create(
+            recipient=recipient,
+            message=f"{sender_name} requested an update on {request_obj.reference_code}.",
+            related_request=request_obj,
+        )
+        messages.success(request, f"{target_label} notified for {request_obj.reference_code}.")
+        return redirect("hub:dashboard")
+
+
 class NotificationListView(LoginRequiredMixin, ListView):
     model = Notification
     template_name = "hub/notifications.html"

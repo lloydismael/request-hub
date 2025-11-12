@@ -1,5 +1,7 @@
 from django import forms
+from django.contrib.auth import password_validation
 from django.contrib.auth.forms import AuthenticationForm
+from django.core.exceptions import ValidationError
 
 from .models import User
 
@@ -30,6 +32,28 @@ ROLE_DEFAULT_USERNAMES = {role: aliases.get("admin", "") for role, aliases in RO
 
 
 class ProfileForm(forms.ModelForm):
+    current_password = forms.CharField(
+        label="Current password",
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "current-password"}),
+        help_text="Enter your current password to set a new one.",
+    )
+    new_password1 = forms.CharField(
+        label="New password",
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "new-password"}),
+        help_text=password_validation.password_validators_help_text_html(),
+    )
+    new_password2 = forms.CharField(
+        label="Confirm new password",
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "new-password"}),
+        help_text="Enter the same password as before for verification.",
+    )
+
     class Meta:
         model = User
         fields = ["first_name", "last_name", "email", "phone_number", "profile_photo"]
@@ -40,6 +64,58 @@ class ProfileForm(forms.ModelForm):
             "phone_number": forms.TextInput(attrs={"class": "form-control"}),
             "profile_photo": forms.ClearableFileInput(attrs={"class": "form-control"}),
         }
+
+    field_order = [
+        "first_name",
+        "last_name",
+        "email",
+        "phone_number",
+        "profile_photo",
+        "current_password",
+        "new_password1",
+        "new_password2",
+    ]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        current_password = cleaned_data.get("current_password")
+        new_password1 = cleaned_data.get("new_password1")
+        new_password2 = cleaned_data.get("new_password2")
+        user = self.instance
+
+        if new_password1 or new_password2:
+            if not current_password:
+                self.add_error("current_password", "Enter your current password to set a new one.")
+            elif not user.check_password(current_password):
+                self.add_error("current_password", "Current password is incorrect.")
+
+            if not new_password1:
+                self.add_error("new_password1", "Enter a new password.")
+            if new_password1 and new_password1 != new_password2:
+                self.add_error("new_password2", "Passwords do not match.")
+
+            if new_password1 and not self.errors.get("new_password1"):
+                try:
+                    password_validation.validate_password(new_password1, user)
+                except ValidationError as exc:
+                    self.add_error("new_password1", exc)
+        elif current_password:
+            self.add_error("new_password1", "Enter a new password.")
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        new_password = self.cleaned_data.get("new_password1")
+
+        if new_password:
+            user.set_password(new_password)
+
+        if commit:
+            user.save()
+            self.save_m2m()
+
+        return user
 
 
 class RoleAuthenticationForm(AuthenticationForm):
