@@ -1,0 +1,6 @@
+Django==4.2.11
+psycopg2-binary==2.9.9
+Pillow==10.2.0
+python-dotenv==1.0.1
+gunicorn==21.2.0
+whitenoise==6.7.0

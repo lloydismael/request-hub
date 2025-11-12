@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Request Hub{% endblock %}
+{% block content %}
+<section class="row justify-content-center text-center mb-5">
+    <div class="col-lg-8">
+        <div class="glass-card p-5">
+            <h1 class="display-6 fw-bold mb-3">Welcome to Request Hub</h1>
+            <p class="lead mb-0">Choose how you want to collaborate today—manage tickets, deliver solutions, or support customers with confidence.</p>
+        </div>
+    </div>
+</section>
+<section class="row g-4">
+    {% for card in role_cards %}
+        <div class="col-md-4">
+            <div class="glass-card h-100 p-4 d-flex flex-column justify-content-between">
+                <div>
+                    <h2 class="h4 mb-3">{{ card.label }}</h2>
+                    <p class="text-muted">{{ card.description }}</p>
+                </div>
+                <div class="small text-muted mb-3">Default login: <code>{{ default_username }}</code> / <code>{{ default_password }}</code></div>
+                <a class="btn btn-primary mt-auto" href="{% url 'login' %}?role={{ card.role }}">Continue as {{ card.label }}</a>
+            </div>
+        </div>
+    {% endfor %}
+</section>
+{% endblock %}

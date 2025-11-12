@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Notifications · Request Hub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="glass-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1 class="h5 mb-0">Notifications</h1>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for notification in notifications %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start {% if not notification.is_read %}bg-body-secondary{% endif %}">
+                        <div>
+                            <div class="fw-semibold">{{ notification.message }}</div>
+                            <div class="text-muted small">{{ notification.created_at|date:"M d, Y H:i" }}</div>
+                        </div>
+                        {% if not notification.is_read %}
+                            <form method="post" action="{% url 'hub:notification-read' notification.pk %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Mark as read</button>
+                            </form>
+                        {% endif %}
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-center text-muted">No notifications yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

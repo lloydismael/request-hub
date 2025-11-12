@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Login · Request Hub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-4">
+        <div class="glass-card p-4">
+            <h1 class="h4 text-center mb-3">Sign in to Request Hub</h1>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors|join:" " }}
+                    </div>
+                {% endif %}
+                <div class="mb-3">
+                    <label class="form-label" for="id_username">Username</label>
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                        <div class="invalid-feedback d-block">{{ form.username.errors|join:" " }}</div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="id_password">Password</label>
+                    {{ form.password }}
+                    {% if form.password.errors %}
+                        <div class="invalid-feedback d-block">{{ form.password.errors|join:" " }}</div>
+                    {% endif %}
+                </div>
+                <div class="mb-4">
+                    <span class="form-label d-block mb-2">Sign in as</span>
+                    <div class="d-flex flex-wrap gap-3">
+                        {% for radio in form.role %}
+                            <div class="form-check">
+                                {{ radio.tag }}
+                                <label class="form-check-label ms-2" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% if form.role.errors %}
+                        <div class="invalid-feedback d-block">{{ form.role.errors|join:" " }}</div>
+                    {% endif %}
+                </div>
+                <button class="btn btn-primary w-100" type="submit">Login</button>
+            </form>
+            <p class="small text-muted text-center mt-3 mb-0">Default credentials: <code>user</code> <span class="fw-semibold">Admin</span> / <code>password</code> <span class="fw-semibold">Admin</span>. Choose a role above to sign in with the correct workspace.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

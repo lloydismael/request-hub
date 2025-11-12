@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Request {{ request_obj.reference_code }} · Request Hub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="glass-card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h4 mb-0">{{ request_obj.reference_code }}</h1>
+                <span class="badge rounded-pill bg-primary text-uppercase fw-semibold">{{ request_obj.get_status_display }}</span>
+            </div>
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Account Name</p>
+                    <p class="mb-0">{{ request_obj.account.name }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Account Manager</p>
+                    <p class="mb-0">{{ request_obj.account_manager }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Product Category</p>
+                    <p class="mb-0">{{ request_obj.product_category }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Engagement Type</p>
+                    <p class="mb-0">{{ request_obj.get_engagement_type_display }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Priority</p>
+                    <p class="mb-0 text-capitalize">{{ request_obj.get_priority_display }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Engineer</p>
+                    <p class="mb-0">{{ request_obj.engineer.get_full_name|default:request_obj.engineer.username|default:"Unassigned" }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Start Date</p>
+                    <p class="mb-0">{{ request_obj.start_date|date:"M d, Y" }}</p>
+                </div>
+                <div class="col-sm-6">
+                    <p class="text-muted mb-1">Due Date</p>
+                    <p class="mb-0">{{ request_obj.due_date|date:"M d, Y" }}</p>
+                </div>
+                {% if request_obj.end_date %}
+                    <div class="col-sm-6">
+                        <p class="text-muted mb-1">End Date</p>
+                        <p class="mb-0">{{ request_obj.end_date|date:"M d, Y" }}</p>
+                    </div>
+                {% endif %}
+            </div>
+            <hr class="my-4">
+            <h2 class="h6 text-uppercase text-muted">Description</h2>
+            <p class="mb-0">{{ request_obj.description|default:"No additional details provided." }}</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="{% url 'hub:dashboard' %}">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

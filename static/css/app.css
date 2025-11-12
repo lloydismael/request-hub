@@ -1,0 +1,66 @@
+:root {
+    --brand-primary: #2f6cf3;
+    --brand-secondary: rgba(255, 255, 255, 0.45);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.18);
+}
+
+body {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #0b1120 100%);
+    min-height: 100vh;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    color: #111827;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(120deg, #1d4ed8, #3b82f6);
+}
+
+.glass-card {
+    border-radius: 18px;
+    background: var(--glass-bg);
+    box-shadow: 0 10px 30px rgba(31, 41, 55, 0.35);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-border);
+}
+
+.table > :not(caption) > * > * {
+    background-color: transparent;
+}
+
+.table tbody tr {
+    border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+.btn-primary {
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+    border-radius: 999px;
+}
+
+.btn-outline-primary {
+    border-radius: 999px;
+}
+
+.alert {
+    border-radius: 14px;
+}
+
+.navbar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.form-control, .form-select {
+    border-radius: 12px;
+    border-color: rgba(15, 23, 42, 0.1);
+    background-color: rgba(255, 255, 255, 0.8);
+}
+
+.list-group-item {
+    border: none;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}

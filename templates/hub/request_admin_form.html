@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Manage Request {{ object.reference_code }} · Request Hub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="glass-card p-4">
+            <h1 class="h5 mb-3">Manage Request {{ object.reference_code }}</h1>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <button class="btn btn-primary" type="submit">Save changes</button>
+                <a class="btn btn-outline-secondary" href="{% url 'hub:dashboard' %}">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
