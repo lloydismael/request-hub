@@ -88,6 +88,11 @@ class Request(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+    def get_absolute_url(self):
+        from django.urls import reverse
+
+        return reverse("hub:request-detail", args=[self.pk])
+
     def clean(self):
         super().clean()
         if self.engineer and self.status == self.Status.ONGOING:
@@ -144,3 +149,16 @@ class Notification(models.Model):
         if not self.is_read:
             self.is_read = True
             self.save(update_fields=["is_read"])
+
+
+class StatusLog(models.Model):
+    request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="status_logs")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="status_logs")
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.request.reference_code or 'Request'}: {self.author.get_full_name() or self.author.username}"

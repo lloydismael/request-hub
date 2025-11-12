@@ -30,6 +30,7 @@ Request Hub is a role-based request management portal for coordinating work betw
 
 Quick-start demo credentials (per role selection):
 - Admin: `Admin` / `Admin`
+- Admin (secondary): `Admin1` / `Admin1`
 - Engineer: `Admin` / `Admin`
 - Account manager: `Admin` / `Admin`
 

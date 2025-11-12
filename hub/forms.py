@@ -1,7 +1,7 @@
 from django import forms
 
 from accounts.models import User
-from .models import Account, Request
+from .models import Account, Request, StatusLog
 
 
 class RequestForm(forms.ModelForm):
@@ -78,3 +78,18 @@ class RequestAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["engineer"].queryset = self.fields["engineer"].queryset.order_by("first_name", "last_name")
+
+
+class StatusLogForm(forms.ModelForm):
+    class Meta:
+        model = StatusLog
+        fields = ["message"]
+        widgets = {
+            "message": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Add an update"}),
+        }
+
+    def clean_message(self):
+        message = self.cleaned_data.get("message", "").strip()
+        if not message:
+            raise forms.ValidationError("Message cannot be empty.")
+        return message

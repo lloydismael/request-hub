@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Account, Notification, Request
+from .models import Account, Notification, Request, StatusLog
 
 
 @admin.register(Account)
@@ -29,3 +29,10 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ("recipient", "message", "created_at", "is_read")
     list_filter = ("is_read",)
     search_fields = ("message", "recipient__username")
+
+
+@admin.register(StatusLog)
+class StatusLogAdmin(admin.ModelAdmin):
+    list_display = ("request", "author", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("request__reference_code", "author__username", "message")

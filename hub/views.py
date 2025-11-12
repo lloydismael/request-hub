@@ -9,7 +9,7 @@ from django.views.generic import DetailView, ListView, TemplateView, UpdateView
 
 from accounts.models import User
 
-from .forms import RequestAdminForm, RequestForm
+from .forms import RequestAdminForm, RequestForm, StatusLogForm
 from .models import Notification, Request
 from .mixins import AdminRequiredMixin
 
@@ -72,6 +72,43 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         if user.role == User.Roles.ENGINEER:
             return qs.filter(engineer=user)
         return qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        request_obj = context["request_obj"]
+        context["status_logs"] = request_obj.status_logs.select_related("author")
+        can_comment = self._user_can_comment(self.request.user, request_obj)
+        context["can_comment"] = can_comment
+        if can_comment:
+            context["log_form"] = kwargs.get("log_form") or StatusLogForm()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self._user_can_comment(request.user, self.object):
+            return redirect("hub:request-detail", pk=self.object.pk)
+        form = StatusLogForm(request.POST)
+        if form.is_valid():
+            log = form.save(commit=False)
+            log.request = self.object
+            log.author = request.user
+            log.save()
+            messages.success(request, "Status log saved.")
+            return redirect("hub:request-detail", pk=self.object.pk)
+        context = self.get_context_data(log_form=form)
+        return self.render_to_response(context)
+
+    @staticmethod
+    def _user_can_comment(user, request_obj):
+        if not user.is_authenticated:
+            return False
+        if user.role == User.Roles.ADMIN:
+            return True
+        if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
+            return True
+        if user.role == User.Roles.REQUESTOR and request_obj.requestor_id == user.id:
+            return True
+        return False
 
 
 class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView):
