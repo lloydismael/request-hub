@@ -12,6 +12,13 @@ class RequestForm(forms.ModelForm):
         choices=[(name, name) for name in ACCOUNT_MANAGER_NAMES],
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+    engineer = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Assign Engineer",
+        empty_label="Select engineer (optional)",
+    )
 
     class Meta:
         model = Request
@@ -19,19 +26,20 @@ class RequestForm(forms.ModelForm):
             "account_name",
             "account_manager",
             "product_category",
-            "priority",
             "engagement_type",
             "description",
+            "engineer",
         ]
         widgets = {
             "product_category": forms.Select(attrs={"class": "form-select"}),
-            "priority": forms.Select(attrs={"class": "form-select"}),
             "engagement_type": forms.Select(attrs={"class": "form-select"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        self.fields["engineer"].queryset = engineer_qs
         if self.instance.pk:
             self.fields["account_name"].initial = self.instance.account.name
 
@@ -45,6 +53,7 @@ class RequestForm(forms.ModelForm):
         account_name = self.cleaned_data["account_name"]
         account, _ = Account.objects.get_or_create(name=account_name)
         self.instance.account = account
+        self.instance.engineer = self.cleaned_data.get("engineer")
         return super().save(commit=commit)
 
 
