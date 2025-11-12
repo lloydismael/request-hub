@@ -32,7 +32,9 @@ Quick-start demo credentials (per role selection):
 - Admin: `Admin` / `Admin`
 - Admin (secondary): `Admin1` / `Admin1`
 - Engineer: `Admin` / `Admin`
+- Engineer (alternate): `Admin1` / `Admin1`
 - Account manager: `Admin` / `Admin`
+- Account manager (alternate): `Admin1` / `Admin1`
 
 Additional seeded requestors and engineers remain available with the password `RequestHub123`. Update all passwords immediately after first login.
 

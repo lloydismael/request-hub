@@ -11,11 +11,22 @@ ROLE_LABELS = {
 
 ROLE_CHOICES = [(key, label) for key, label in ROLE_LABELS.items()]
 
-ROLE_DEFAULT_USERNAMES = {
-    User.Roles.ADMIN: "Admin",
-    User.Roles.ENGINEER: "engineer_admin",
-    User.Roles.REQUESTOR: "account_admin",
+ROLE_ALIAS_MAP = {
+    User.Roles.ADMIN: {
+        "admin": "Admin",
+        "admin1": "Admin1",
+    },
+    User.Roles.ENGINEER: {
+        "admin": "engineer_admin",
+        "admin1": "engineer_admin1",
+    },
+    User.Roles.REQUESTOR: {
+        "admin": "account_admin",
+        "admin1": "manager_admin1",
+    },
 }
+
+ROLE_DEFAULT_USERNAMES = {role: aliases.get("admin", "") for role, aliases in ROLE_ALIAS_MAP.items()}
 
 
 class ProfileForm(forms.ModelForm):
@@ -46,9 +57,11 @@ class RoleAuthenticationForm(AuthenticationForm):
             data = data.copy()
             role_value = data.get("role") or role_initial
             username_input = data.get(username_field)
-            alias = ROLE_DEFAULT_USERNAMES.get(role_value)
-            if alias and username_input and username_input.strip().lower() == "admin":
-                data[username_field] = alias
+            if role_value and username_input:
+                alias_map = ROLE_ALIAS_MAP.get(role_value, {})
+                alias = alias_map.get(username_input.strip().lower())
+                if alias:
+                    data[username_field] = alias
             kwargs["data"] = data
 
         super().__init__(request=request, *args, **kwargs)
