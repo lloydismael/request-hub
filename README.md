@@ -60,3 +60,7 @@ Use the provided management command to monitor SLA breaches:
 docker compose exec web python manage.py check_sla
 ```
 Schedule this command (e.g., Windows Task Scheduler, cron) to run daily.
+
+## Azure App Service
+
+Refer to `docs/azure-app-service-deployment.md` for container deployment steps, recommended App Service settings, and CLI snippets.
