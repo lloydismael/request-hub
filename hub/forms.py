@@ -4,14 +4,55 @@ from accounts.models import User
 from .models import Account, Request, StatusLog
 
 
+class AvatarSelect(forms.Select):
+    """Select widget that stores avatar metadata on each option."""
+
+    def __init__(self, *args, **kwargs):
+        self.avatar_mapping = {}
+        super().__init__(*args, **kwargs)
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        option_value = option.get("value")
+        if option_value:
+            meta = self.avatar_mapping.get(str(option_value))
+            if meta:
+                if meta.get("url"):
+                    option["attrs"]["data-avatar"] = meta["url"]
+                if meta.get("initial"):
+                    option["attrs"]["data-initial"] = meta["initial"]
+        return option
+
+
+def _build_avatar_mapping(users):
+    mapping = {}
+    for user in users:
+        display_name = (user.get_full_name() or user.username or "?").strip()
+        initial = display_name[:1].upper() if display_name else "?"
+        avatar_url = ""
+        if getattr(user, "profile_photo", None):
+            try:
+                avatar_url = user.profile_photo.url
+            except ValueError:
+                avatar_url = ""
+        mapping[str(user.pk)] = {"url": avatar_url, "initial": initial}
+    return mapping
+
+
+def _user_display(user):
+    full_name = user.get_full_name().strip() if user.get_full_name() else ""
+    return full_name or user.username
+
+
 class RequestForm(forms.ModelForm):
     account_name = forms.CharField(label="Account Name", widget=forms.TextInput(attrs={"class": "form-control"}))
     engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
-        required=False,
-        widget=forms.Select(attrs={"class": "form-select"}),
+        required=True,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
         label="Assign Engineer",
-        empty_label="Select engineer (optional)",
+        empty_label="Select engineer",
+        error_messages={"required": "Please choose an engineer for this request."},
     )
 
     class Meta:
@@ -33,6 +74,10 @@ class RequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
         self.fields["engineer"].queryset = engineer_qs
+        widget = self.fields["engineer"].widget
+        if isinstance(widget, AvatarSelect):
+            widget.avatar_mapping = _build_avatar_mapping(engineer_qs)
+        self.fields["engineer"].label_from_instance = _user_display
         if self.instance.pk:
             self.fields["account_name"].initial = self.instance.account.name
 
@@ -54,7 +99,7 @@ class RequestAdminForm(forms.ModelForm):
     engineer = forms.ModelChoiceField(
         queryset=User.objects.filter(role=User.Roles.ENGINEER),
         required=False,
-        widget=forms.Select(attrs={"class": "form-select"}),
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
     )
 
     class Meta:
@@ -78,6 +123,10 @@ class RequestAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["engineer"].queryset = self.fields["engineer"].queryset.order_by("first_name", "last_name")
+        widget = self.fields["engineer"].widget
+        if isinstance(widget, AvatarSelect):
+            widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
+        self.fields["engineer"].label_from_instance = _user_display
 
 
 class StatusLogForm(forms.ModelForm):

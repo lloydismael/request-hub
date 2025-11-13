@@ -3,7 +3,7 @@
 {% block title %}Dashboard · Request Hub{% endblock %}
 {% block content %}
 <div class="row g-4">
-    <div class="col-12 {% if role == 'admin' %}col-xl-10{% else %}col-xl-9{% endif %}">
+    <div class="col-12 {% if role == 'admin' %}col-xl-12{% else %}col-xl-9{% endif %}">
         <div class="glass-card p-4 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">{% if role == 'requestor' %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
@@ -173,42 +173,44 @@
             </div>
         </div>
     </div>
-    <div class="col-12 {% if role == 'admin' %}col-xl-2{% else %}col-xl-3{% endif %}">
-        <div class="glass-card glass-card--compact {% if role == 'admin' %}glass-card--mini{% endif %} p-4 mb-4">
-            <h2 class="h6 text-uppercase text-muted">Notifications</h2>
-            <ul class="list-unstyled mt-3 mb-0">
-                {% for notification in notifications %}
-                    <li class="mb-3">
-                        <div class="d-flex justify-content-between">
-                            <span class="text-body">{{ notification.message }}</span>
-                            <span class="text-muted small">{{ notification.created_at|timesince }} ago</span>
-                        </div>
-                    </li>
-                {% empty %}
-                    <li class="text-muted">No new notifications</li>
-                {% endfor %}
-            </ul>
-            <a class="btn btn-link btn-sm mt-3 px-0" href="{% url 'hub:notifications' %}">View all</a>
-        </div>
-        {% if role == 'requestor' %}
-            <div class="glass-card p-4">
-                <h2 class="h5 mb-3">Create Request</h2>
-                <form method="post">
-                    {% csrf_token %}
-                    {% for field in form %}
-                        <div class="mb-3">
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}
-                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                            {% endif %}
-                        </div>
+    {% if role != 'admin' %}
+        <div class="col-12 col-xl-3">
+            <div class="glass-card glass-card--compact p-4 mb-4">
+                <h2 class="h6 text-uppercase text-muted">Notifications</h2>
+                <ul class="list-unstyled mt-3 mb-0">
+                    {% for notification in notifications %}
+                        <li class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-body">{{ notification.message }}</span>
+                                <span class="text-muted small">{{ notification.created_at|timesince }} ago</span>
+                            </div>
+                        </li>
+                    {% empty %}
+                        <li class="text-muted">No new notifications</li>
                     {% endfor %}
-                    <button class="btn btn-primary w-100" type="submit">Submit Request</button>
-                </form>
+                </ul>
+                <a class="btn btn-link btn-sm mt-3 px-0" href="{% url 'hub:notifications' %}">View all</a>
             </div>
-        {% endif %}
-    </div>
+            {% if role == 'requestor' %}
+                <div class="glass-card p-4">
+                    <h2 class="h5 mb-3">Create Request</h2>
+                    <form method="post">
+                        {% csrf_token %}
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}
+                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        <button class="btn btn-primary w-100" type="submit">Submit Request</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
