@@ -1,11 +1,12 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
+from urllib.parse import quote
 
 from accounts.models import User
 
@@ -169,6 +170,93 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         response = super().delete(request, *args, **kwargs)
         messages.success(request, "Request deleted successfully.")
         return response
+
+
+class RequestTeamsRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor"), pk=pk)
+
+        engineer_email = (
+            request_obj.engineer.email if request_obj.engineer and request_obj.engineer.email else None
+        )
+        manager_email = (
+            request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
+        )
+
+        if not engineer_email or not manager_email:
+            messages.error(
+                request,
+                "Unable to start a Teams chat. Ensure the engineer and account manager both have emails configured.",
+            )
+            return redirect("hub:dashboard")
+
+        participants = [engineer_email, manager_email]
+        users_param = quote(",".join(participants))
+        group_name = f"{request_obj.reference_code} · {request_obj.account.name}"
+        topic_param = quote(group_name)
+        teams_url = (
+            "https://teams.microsoft.com/l/chat/0/0?users="
+            f"{users_param}&topicName={topic_param}"
+        )
+
+        messages.info(request, "Opening Microsoft Teams in a new tab…")
+        return redirect(teams_url)
+
+
+class RequestOutlookRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
+    FIELD_TEMPLATE = (
+        "Reference: {reference}\n"
+        "Account: {account}\n"
+        "Account Manager: {manager}\n"
+        "Engineer: {engineer}\n"
+        "Priority: {priority}\n"
+        "Status: {status}\n"
+        "Due Date: {due_date}\n"
+        "Engagement Type: {engagement}\n"
+        "Description: {description}"
+    )
+
+    def post(self, request, pk):
+        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor", "account"), pk=pk)
+
+        engineer_email = (
+            request_obj.engineer.email if request_obj.engineer and request_obj.engineer.email else None
+        )
+        manager_email = (
+            request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
+        )
+
+        if not engineer_email or not manager_email:
+            messages.error(
+                request,
+                "Unable to draft an email. Ensure the engineer and account manager both have emails configured.",
+            )
+            return redirect("hub:dashboard")
+
+        recipients = ",".join({engineer_email, manager_email})
+        subject = quote(f"{request_obj.reference_code} · {request_obj.account.name}")
+
+        body_content = self.FIELD_TEMPLATE.format(
+            reference=request_obj.reference_code,
+            account=request_obj.account.name,
+            manager=request_obj.account_manager,
+            engineer=request_obj.engineer.get_full_name() if request_obj.engineer else "Unassigned",
+            priority=request_obj.get_priority_display(),
+            status=request_obj.get_status_display(),
+            due_date=request_obj.due_date.strftime("%b %d, %Y") if request_obj.due_date else "Not set",
+            engagement=request_obj.get_engagement_type_display(),
+            description=request_obj.description or "No additional details provided.",
+        )
+
+        body = quote("Hello Team,\n\nPlease find the request details below:\n\n" + body_content + "\n\nRegards,\n" + (request.user.get_full_name() or request.user.username))
+
+        outlook_url = f"mailto:{recipients}?subject={subject}&body={body}"
+        messages.info(request, "Drafting email in your default mail client…")
+        return render(
+            request,
+            "hub/outlook_redirect.html",
+            {"mailto_url": outlook_url},
+        )
 
 
 class NotificationListView(LoginRequiredMixin, ListView):

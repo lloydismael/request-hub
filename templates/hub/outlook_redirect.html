@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Launch Outlook · Request Hub{% endblock %}
+
+{% block content %}
+<div class="glass-card p-4 text-center">
+    <h1 class="h4 mb-3">Launching Outlook…</h1>
+    <p class="text-muted">If nothing happens, use the options below to open the email draft manually.</p>
+    <div class="d-flex justify-content-center gap-3 flex-wrap my-4">
+        <a class="btn btn-primary" href="{{ mailto_url }}">Open Email Draft</a>
+        <a class="btn btn-outline-secondary" href="{% url 'hub:dashboard' %}">Return to Dashboard</a>
+    </div>
+    <p class="small text-muted">Your default mail client will populate the request details automatically.</p>
+</div>
+<script>
+    window.addEventListener('DOMContentLoaded', function () {
+        window.location.href = "{{ mailto_url|escapejs }}";
+    });
+</script>
+{% endblock %}

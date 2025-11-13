@@ -114,3 +114,16 @@ body {
 .glass-card--compact .list-unstyled {
     margin-bottom: 0;
 }
+
+.glass-card--mini {
+    padding: 1rem !important;
+}
+
+.glass-card--mini h2 {
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+}
+
+.glass-card--mini .list-unstyled {
+    font-size: 0.9rem;
+}
