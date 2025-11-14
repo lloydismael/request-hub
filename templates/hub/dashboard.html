@@ -28,9 +28,13 @@
                             {% elif role == 'requestor' %}
                                 <th>Assigned Engineer</th>
                             {% endif %}
-                            <th>Priority</th>
+                            {% if role != 'requestor' %}
+                                <th>Priority</th>
+                            {% endif %}
                             <th>Status</th>
-                            <th>Due</th>
+                            {% if role != 'requestor' %}
+                                <th>Due</th>
+                            {% endif %}
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -118,20 +122,24 @@
                                             {% endif %}
                                         </td>
                                 {% endif %}
-                                <td class="text-capitalize">{{ item.get_priority_display }}</td>
+                                {% if role != 'requestor' %}
+                                    <td class="text-capitalize">{{ item.get_priority_display }}</td>
+                                {% endif %}
                                 <td class="text-capitalize">{{ item.get_status_display }}</td>
-                                <td>
-                                    {% if item.due_date %}
-                                        <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
-                                            {{ item.due_date|date:"M d, Y" }}
-                                        </span>
-                                        {% if item.is_overdue %}
-                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2">Overdue</span>
+                                {% if role != 'requestor' %}
+                                    <td>
+                                        {% if item.due_date %}
+                                            <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
+                                                {{ item.due_date|date:"M d, Y" }}
+                                            </span>
+                                            {% if item.is_overdue %}
+                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2">Overdue</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">&mdash;</span>
                                         {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">&mdash;</span>
-                                    {% endif %}
-                                </td>
+                                    </td>
+                                {% endif %}
                                 <td class="text-end">
                                     <div class="d-inline-flex gap-2">
                                         <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-detail' item.pk %}">View</a>
@@ -168,7 +176,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="{% if role == 'admin' %}8{% elif role == 'engineer' %}7{% elif role == 'requestor' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
+                                <td colspan="{% if role == 'admin' %}8{% elif role == 'engineer' %}7{% elif role == 'requestor' %}5{% else %}6{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
