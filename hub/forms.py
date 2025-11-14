@@ -1,6 +1,7 @@
 from django import forms
 
 from accounts.models import User
+from .constants import ACCOUNT_NAME_SUGGESTIONS
 from .models import Account, Request, StatusLog
 
 
@@ -45,7 +46,18 @@ def _user_display(user):
 
 
 class RequestForm(forms.ModelForm):
-    account_name = forms.CharField(label="Account Name", widget=forms.TextInput(attrs={"class": "form-control"}))
+    account_name = forms.CharField(
+        label="Account Name",
+        help_text="Select from the list or type a new account name.",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "list": "account-name-options",
+                "placeholder": "Start typing to search accounts",
+                "autocomplete": "off",
+            }
+        ),
+    )
     engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
         required=True,
@@ -80,6 +92,7 @@ class RequestForm(forms.ModelForm):
         self.fields["engineer"].label_from_instance = _user_display
         if self.instance.pk:
             self.fields["account_name"].initial = self.instance.account.name
+        self.account_name_suggestions = ACCOUNT_NAME_SUGGESTIONS
 
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()

@@ -8,7 +8,10 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">{% if role == 'requestor' %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
                 {% if role == 'admin' %}
-                    <span class="badge bg-danger-subtle text-danger">Overdue: {{ overdue_count }}</span>
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-export' %}">Export CSV</a>
+                        <span class="badge bg-danger-subtle text-danger">Overdue: {{ overdue_count }}</span>
+                    </div>
                 {% endif %}
             </div>
             <div class="table-responsive">
@@ -200,6 +203,13 @@
                             <div class="mb-3">
                                 <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
+                                {% if field.name == 'account_name' and account_name_choices %}
+                                    <datalist id="account-name-options">
+                                        {% for option in account_name_choices %}
+                                            <option value="{{ option }}">
+                                        {% endfor %}
+                                    </datalist>
+                                {% endif %}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                                 {% if field.errors %}
                                     <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>

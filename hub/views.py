@@ -1,6 +1,8 @@
+import csv
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -11,6 +13,7 @@ from urllib.parse import quote
 from accounts.models import User
 
 from .forms import RequestAdminForm, RequestForm, StatusLogForm
+from .constants import ACCOUNT_NAME_SUGGESTIONS
 from .models import Notification, Request
 from .mixins import AdminRequiredMixin
 
@@ -27,6 +30,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if user.role == User.Roles.REQUESTOR:
             context["requests"] = Request.objects.filter(requestor=user).select_related("account", "engineer")
             context["form"] = kwargs.get("form") or RequestForm()
+            context["account_name_choices"] = ACCOUNT_NAME_SUGGESTIONS
         elif user.role == User.Roles.ENGINEER:
             context["requests"] = (
                 Request.objects.filter(engineer=user)
@@ -257,6 +261,62 @@ class RequestOutlookRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
             "hub/outlook_redirect.html",
             {"mailto_url": outlook_url},
         )
+
+
+class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
+    """Allow administrators to export all requests to a CSV download."""
+
+    columns = (
+        "Reference",
+        "Account",
+        "Account Manager",
+        "Account Manager Email",
+        "Engineer",
+        "Engineer Email",
+        "Priority",
+        "Status",
+        "Engagement",
+        "Start Date",
+        "Due Date",
+        "End Date",
+        "Description",
+        "Created",
+        "Updated",
+    )
+
+    def get(self, request, *args, **kwargs):
+        timestamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="requests-{timestamp}.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(self.columns)
+
+        queryset = Request.objects.select_related("account", "requestor", "engineer").order_by("reference_code")
+        for req in queryset:
+            requestor = req.requestor
+            engineer = req.engineer
+            writer.writerow(
+                [
+                    req.reference_code,
+                    req.account.name if req.account else "",
+                    requestor.get_full_name() or requestor.username if requestor else "",
+                    requestor.email if requestor else "",
+                    engineer.get_full_name() or engineer.username if engineer else "",
+                    engineer.email if engineer else "",
+                    req.get_priority_display(),
+                    req.get_status_display(),
+                    req.get_engagement_type_display(),
+                    req.start_date.strftime("%Y-%m-%d") if req.start_date else "",
+                    req.due_date.strftime("%Y-%m-%d") if req.due_date else "",
+                    req.end_date.strftime("%Y-%m-%d") if req.end_date else "",
+                    (req.description or "").replace("\r\n", " ").replace("\n", " "),
+                    req.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    req.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
+                ]
+            )
+
+        return response
 
 
 class NotificationListView(LoginRequiredMixin, ListView):
