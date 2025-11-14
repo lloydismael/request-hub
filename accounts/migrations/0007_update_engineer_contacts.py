@@ -37,20 +37,59 @@ def split_name(name: str):
     return first, last
 
 
+def _get_user(User, slug_username_value: str, email_username: str, corporate_email: str):
+    return (
+        User.objects.filter(username=email_username).first()
+        or User.objects.filter(username=corporate_email).first()
+        or User.objects.filter(username=slug_username_value).first()
+        or User.objects.filter(email__iexact=corporate_email).first()
+    )
+
+
 def apply_roster(apps, schema_editor, *, use_phildata_emails: bool):
     User = apps.get_model("accounts", "User")
     for full_name, corporate_email in ENGINEERS:
-        username = slug_username(full_name)
         first, last = split_name(full_name)
-        email = corporate_email if use_phildata_emails else f"{username}@example.com"
-        defaults = {
-            "role": "engineer",
-            "first_name": first,
-            "last_name": last,
-            "email": email,
-            "password": make_password("RequestHub123"),
-        }
-        User.objects.update_or_create(username=username, defaults=defaults)
+        slug_value = slug_username(full_name)
+        email_username = corporate_email.lower()
+        if use_phildata_emails:
+            username_value = corporate_email
+            email_value = corporate_email
+            password_value = make_password("@Password")
+        else:
+            username_value = slug_value
+            email_value = f"{slug_value}@example.com"
+            password_value = make_password("RequestHub123")
+
+        user = _get_user(User, slug_value, email_username, corporate_email)
+
+        if user:
+            user.username = username_value
+            user.email = email_value
+            user.first_name = first
+            user.last_name = last
+            user.role = "engineer"
+            user.password = password_value
+            user.profile_completed = False
+            user.save(update_fields=[
+                "username",
+                "email",
+                "first_name",
+                "last_name",
+                "role",
+                "password",
+                "profile_completed",
+            ])
+        else:
+            User.objects.create(
+                username=username_value,
+                role="engineer",
+                first_name=first,
+                last_name=last,
+                email=email_value,
+                password=password_value,
+                profile_completed=False,
+            )
 
 
 def set_engineer_contacts(apps, schema_editor):
