@@ -150,6 +150,17 @@ class Notification(models.Model):
             self.is_read = True
             self.save(update_fields=["is_read"])
 
+    @property
+    def icon_class(self) -> str:
+        message_lower = (self.message or "").lower()
+        if "assigned to request" in message_lower:
+            return "bi-person-check"
+        if "posted an update" in message_lower:
+            return "bi-chat-left-text"
+        if "completed" in message_lower or "closed" in message_lower:
+            return "bi-clipboard-check"
+        return "bi-bell"
+
 
 class StatusLog(models.Model):
     request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="status_logs")

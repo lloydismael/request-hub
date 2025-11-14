@@ -9,17 +9,27 @@
             </div>
             <ul class="list-group list-group-flush">
                 {% for notification in notifications %}
-                    <li class="list-group-item d-flex justify-content-between align-items-start {% if not notification.is_read %}bg-body-secondary{% endif %}">
-                        <div>
-                            <div class="fw-semibold">{{ notification.message }}</div>
-                            <div class="text-muted small">{{ notification.created_at|date:"M d, Y H:i" }}</div>
+                    <li class="list-group-item {% if not notification.is_read %}bg-body-secondary{% endif %}">
+                        <div class="d-flex align-items-start gap-3">
+                            <span class="badge rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 2.5rem; height: 2.5rem;">
+                                <i class="bi {{ notification.icon_class }}"></i>
+                            </span>
+                            <div class="me-auto">
+                                <div class="fw-semibold">{{ notification.message }}</div>
+                                <div class="text-muted small">{{ notification.created_at|date:"M d, Y H:i" }}</div>
+                            </div>
+                            <div class="d-flex flex-column align-items-end gap-2">
+                                {% if notification.related_request %}
+                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-detail' notification.related_request.pk %}">View</a>
+                                {% endif %}
+                                {% if not notification.is_read %}
+                                    <form method="post" action="{% url 'hub:notification-read' notification.pk %}">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-outline-secondary" type="submit">Mark as read</button>
+                                    </form>
+                                {% endif %}
+                            </div>
                         </div>
-                        {% if not notification.is_read %}
-                            <form method="post" action="{% url 'hub:notification-read' notification.pk %}">
-                                {% csrf_token %}
-                                <button class="btn btn-sm btn-outline-primary" type="submit">Mark as read</button>
-                            </form>
-                        {% endif %}
                     </li>
                 {% empty %}
                     <li class="list-group-item text-center text-muted">No notifications yet.</li>

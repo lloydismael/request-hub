@@ -33,6 +33,9 @@
                             {% endif %}
                             <th>Status</th>
                             {% if role != 'requestor' %}
+                                {% if role == 'admin' %}
+                                    <th>Created</th>
+                                {% endif %}
                                 <th>Due</th>
                             {% endif %}
                             <th class="text-end">Actions</th>
@@ -127,6 +130,11 @@
                                 {% endif %}
                                 <td class="text-capitalize">{{ item.get_status_display }}</td>
                                 {% if role != 'requestor' %}
+                                    {% if role == 'admin' %}
+                                        <td>
+                                            <span class="badge bg-light text-dark border">{{ item.created_at|date:"M d, Y" }}</span>
+                                        </td>
+                                    {% endif %}
                                     <td>
                                         {% if item.due_date %}
                                             <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
@@ -155,6 +163,7 @@
                                             </form>
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% elif role == 'requestor' %}
+                                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-edit' item.pk %}">Edit</a>
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% endif %}
                                     </div>

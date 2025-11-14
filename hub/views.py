@@ -98,6 +98,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             log.request = self.object
             log.author = request.user
             log.save()
+            self._notify_status_update(log)
             messages.success(request, "Status log saved.")
             return redirect("hub:request-detail", pk=self.object.pk)
         context = self.get_context_data(log_form=form)
@@ -115,12 +116,65 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return True
         return False
 
+    def _notify_status_update(self, log):
+        request_obj = log.request
+        author = log.author
+        author_name = author.get_full_name() or author.username
+        recipients = {}
+
+        if request_obj.engineer:
+            recipients[request_obj.engineer.pk] = request_obj.engineer
+        if request_obj.requestor:
+            recipients[request_obj.requestor.pk] = request_obj.requestor
+
+        for admin in User.objects.filter(role=User.Roles.ADMIN):
+            recipients[admin.pk] = admin
+
+        for user in recipients.values():
+            if user.pk == author.pk:
+                continue
+            Notification.objects.create(
+                recipient=user,
+                message=f"{author_name} posted an update on {request_obj.reference_code or 'a request'}.",
+                related_request=request_obj,
+            )
+
 
 class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView):
     model = Request
     form_class = RequestAdminForm
     template_name = "hub/request_admin_form.html"
     success_url = reverse_lazy("hub:dashboard")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Request updated.")
+        return super().form_valid(form)
+
+
+class RequestUpdateView(LoginRequiredMixin, UpdateView):
+    model = Request
+    form_class = RequestForm
+    template_name = "hub/request_update.html"
+    success_url = reverse_lazy("hub:dashboard")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role != User.Roles.REQUESTOR:
+            return redirect("hub:dashboard")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .filter(requestor=self.request.user)
+            .select_related("account", "engineer")
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["account_name_choices"] = context["form"].account_name_suggestions
+        context["is_edit"] = True
+        return context
 
     def form_valid(self, form):
         messages.success(self.request, "Request updated.")
