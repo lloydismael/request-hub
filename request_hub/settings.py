@@ -11,6 +11,10 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-development-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 
+primary_domain = os.getenv("DJANGO_PRIMARY_DOMAIN", "esgrequesthub.dreadops.site").strip()
+if primary_domain and primary_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(primary_domain)
+
 website_hostname = os.getenv("WEBSITE_HOSTNAME")
 if website_hostname and website_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(website_hostname)
@@ -18,6 +22,11 @@ if website_hostname and website_hostname not in ALLOWED_HOSTS:
 csrf_hosts = [host.strip() for host in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if host.strip()]
 if website_hostname:
     csrf_hosts.append(f"https://{website_hostname}")
+if primary_domain:
+    for scheme in ("https", "http"):
+        origin = f"{scheme}://{primary_domain}"
+        if origin not in csrf_hosts:
+            csrf_hosts.append(origin)
 if csrf_hosts:
     CSRF_TRUSTED_ORIGINS = csrf_hosts
 
