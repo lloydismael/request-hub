@@ -24,6 +24,18 @@ body {
     border: 1px solid var(--glass-border);
 }
 
+.glass-card--expanded {
+    min-height: 70vh;
+}
+
+body.admin-dashboard main.container {
+    max-width: min(100%, 1600px);
+}
+
+body.admin-dashboard .glass-card--expanded {
+    width: 100%;
+}
+
 .table > :not(caption) > * > * {
     background-color: transparent;
 }

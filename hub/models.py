@@ -1,21 +1,9 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-
-
-def add_working_days(start: date, days: int) -> date:
-    current = start
-    added = 0
-    while added < days:
-        current += timedelta(days=1)
-        if current.weekday() < 5:  # Monday-Friday
-            added += 1
-    return current
-
-
 class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -113,9 +101,9 @@ class Request(models.Model):
         creating = self.pk is None
         if creating and not self.start_date:
             self.start_date = timezone.now().date()
-        sla_days = self.SLA_DAYS.get(self.priority, 5)
-        if not self.due_date:
-            self.due_date = add_working_days(self.start_date, sla_days)
+        computed_due = self.compute_due_date()
+        if computed_due:
+            self.due_date = computed_due
         self.full_clean()
         super().save(*args, **kwargs)
         if creating and not self.reference_code:
@@ -127,6 +115,25 @@ class Request(models.Model):
         if self.status == self.Status.COMPLETED or not self.due_date:
             return False
         return timezone.now().date() > self.due_date
+
+    def compute_due_date(self):
+        sla_days = self.SLA_DAYS.get(self.priority)
+        if sla_days is None:
+            return None
+        base_date = self.start_date or timezone.now().date()
+        return base_date + timedelta(days=sla_days)
+
+    @property
+    def days_since_creation(self) -> int:
+        """Return inclusive day count from creation date until completion or today."""
+        created_dt = self.created_at
+        if timezone.is_aware(created_dt):
+            created_date = timezone.localtime(created_dt).date()
+        else:
+            created_date = created_dt.date()
+        reference_date = self.end_date or timezone.now().date()
+        days_elapsed = (reference_date - created_date).days
+        return max(days_elapsed, 0) + 1
 
     def __str__(self) -> str:
         return f"{self.reference_code or 'Request'} - {self.account.name}"

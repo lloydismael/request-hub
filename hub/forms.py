@@ -61,9 +61,9 @@ class RequestForm(forms.ModelForm):
         ),
     )
     needed_by = forms.DateField(
-        label="Date",
+        label="Request Date",
+        required=False,
         widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-        error_messages={"required": "Please specify when the request is needed."},
     )
     engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
@@ -100,8 +100,11 @@ class RequestForm(forms.ModelForm):
         self.fields["engineer"].label_from_instance = _user_display
         if self.instance.pk:
             self.fields["account_name"].initial = self.instance.account.name
-            if self.instance.due_date:
-                self.fields["needed_by"].initial = self.instance.due_date
+        due_field = self.fields["needed_by"]
+        if self.instance.pk and self.instance.start_date:
+            due_field.initial = self.instance.start_date
+        else:
+            due_field.initial = timezone.now().date()
         self.account_name_suggestions = ACCOUNT_NAME_SUGGESTIONS
 
     def clean_account_name(self):
@@ -110,18 +113,14 @@ class RequestForm(forms.ModelForm):
             raise forms.ValidationError("Account name is required.")
         return value
 
-    def clean_needed_by(self):
-        needed_by = self.cleaned_data["needed_by"]
-        if needed_by < timezone.now().date():
-            raise forms.ValidationError("Needed-by date cannot be in the past.")
-        return needed_by
-
     def save(self, commit=True):
         account_name = self.cleaned_data["account_name"]
         account, _ = Account.objects.get_or_create(name=account_name)
         self.instance.account = account
         self.instance.engineer = self.cleaned_data.get("engineer")
-        self.instance.due_date = self.cleaned_data.get("needed_by")
+        request_date = self.cleaned_data.get("needed_by")
+        if request_date:
+            self.instance.start_date = request_date
         return super().save(commit=commit)
 
 
@@ -157,6 +156,36 @@ class RequestAdminForm(forms.ModelForm):
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
         self.fields["engineer"].label_from_instance = _user_display
+        due_field = self.fields["due_date"]
+        due_field.disabled = True
+        due_field.required = False
+        due_field.widget.attrs["disabled"] = "disabled"
+        due_field.help_text = "Automatically calculated based on priority."
+
+
+class RequestStatusForm(forms.ModelForm):
+    class Meta:
+        model = Request
+        fields = ["status"]
+        widgets = {
+            "status": forms.Select(attrs={"class": "form-select form-select-sm"}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        status = cleaned_data.get("status")
+        if status == Request.Status.ONGOING:
+            # Reset end date before model validation so toggling back to ongoing passes clean()
+            self.instance.end_date = None
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.status == Request.Status.ONGOING:
+            instance.end_date = None
+        if commit:
+            instance.save()
+        return instance
 
 
 class StatusLogForm(forms.ModelForm):

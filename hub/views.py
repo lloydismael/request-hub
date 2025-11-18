@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from accounts.models import User
 
-from .forms import RequestAdminForm, RequestForm, StatusLogForm
+from .forms import RequestAdminForm, RequestForm, RequestStatusForm, StatusLogForm
 from .constants import ACCOUNT_NAME_SUGGESTIONS
 from .models import Notification, Request
 from .mixins import AdminRequiredMixin
@@ -86,6 +86,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         context["can_comment"] = can_comment
         if can_comment:
             context["log_form"] = kwargs.get("log_form") or StatusLogForm()
+        if (
+            self.request.user.role == User.Roles.ENGINEER
+            and request_obj.engineer_id == self.request.user.id
+        ):
+            context["status_form"] = kwargs.get("status_form") or RequestStatusForm(instance=request_obj)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -179,6 +184,26 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         messages.success(self.request, "Request updated.")
         return super().form_valid(form)
+
+
+class RequestStatusUpdateView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "requestor"),
+            pk=pk,
+        )
+
+        if request.user.role != User.Roles.ENGINEER or request_obj.engineer_id != request.user.id:
+            messages.error(request, "You are not allowed to update this request's status.")
+            return redirect("hub:request-detail", pk=pk)
+
+        form = RequestStatusForm(request.POST, instance=request_obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Request status updated.")
+        else:
+            messages.error(request, "Unable to update status. Please try again.")
+        return redirect("hub:request-detail", pk=pk)
 
 
 class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):

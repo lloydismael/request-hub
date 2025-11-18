@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Dashboard · Request Hub{% endblock %}
+{% block body_class %}{% if role == 'admin' %}admin-dashboard{% endif %}{% endblock %}
 {% block content %}
 <div class="row g-4">
     <div class="col-12 {% if role == 'admin' %}col-xl-12{% else %}col-xl-9{% endif %}">
-        <div class="glass-card p-4 mb-4">
+    <div class="glass-card p-4 mb-4 {% if role == 'admin' %}glass-card--expanded{% endif %}">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">{% if role == 'requestor' %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
                 {% if role == 'admin' %}
@@ -32,10 +33,12 @@
                                 <th>Priority</th>
                             {% endif %}
                             <th>Status</th>
+                            {% if role == 'admin' %}
+                                <th>Created</th>
+                            {% endif %}
+                            <th>End Date</th>
+                            <th>Days</th>
                             {% if role != 'requestor' %}
-                                {% if role == 'admin' %}
-                                    <th>Created</th>
-                                {% endif %}
                                 <th>Due</th>
                             {% endif %}
                             <th class="text-end">Actions</th>
@@ -129,12 +132,22 @@
                                     <td class="text-capitalize">{{ item.get_priority_display }}</td>
                                 {% endif %}
                                 <td class="text-capitalize">{{ item.get_status_display }}</td>
-                                {% if role != 'requestor' %}
-                                    {% if role == 'admin' %}
-                                        <td>
-                                            <span class="badge bg-light text-dark border">{{ item.created_at|date:"M d, Y" }}</span>
-                                        </td>
+                                {% if role == 'admin' %}
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ item.created_at|date:"M d, Y" }}</span>
+                                    </td>
+                                {% endif %}
+                                <td>
+                                    {% if item.end_date %}
+                                        <span class="badge bg-light text-dark border">{{ item.end_date|date:"M d, Y" }}</span>
+                                    {% else %}
+                                        <span class="text-muted">&mdash;</span>
                                     {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ item.days_since_creation }}</span>
+                                </td>
+                                {% if role != 'requestor' %}
                                     <td>
                                         {% if item.due_date %}
                                             <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
@@ -185,7 +198,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="{% if role == 'admin' %}8{% elif role == 'engineer' %}7{% elif role == 'requestor' %}5{% else %}6{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
+                                <td colspan="{% if role == 'admin' %}11{% elif role == 'engineer' %}9{% elif role == 'requestor' %}7{% else %}8{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
