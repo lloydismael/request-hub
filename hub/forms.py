@@ -166,23 +166,33 @@ class RequestAdminForm(forms.ModelForm):
 class RequestStatusForm(forms.ModelForm):
     class Meta:
         model = Request
-        fields = ["status"]
+        fields = ["status", "end_date"]
         widgets = {
             "status": forms.Select(attrs={"class": "form-select form-select-sm"}),
+            "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
         status = cleaned_data.get("status")
+        end_date = cleaned_data.get("end_date")
         if status == Request.Status.ONGOING:
             # Reset end date before model validation so toggling back to ongoing passes clean()
             self.instance.end_date = None
+            cleaned_data["end_date"] = None
+        elif status == Request.Status.COMPLETED:
+            if not end_date:
+                self.add_error("end_date", "Select the completion date before closing the ticket.")
+            else:
+                self.instance.end_date = end_date
         return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
         if instance.status == Request.Status.ONGOING:
             instance.end_date = None
+        else:
+            instance.end_date = self.cleaned_data.get("end_date")
         if commit:
             instance.save()
         return instance

@@ -73,25 +73,36 @@ TEMPLATES = [
 WSGI_APPLICATION = "request_hub.wsgi.application"
 ASGI_APPLICATION = "request_hub.asgi.application"
 
-DB_NAME = os.getenv("DB_NAME")
-if DB_NAME:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": DB_NAME,
-            "USER": os.getenv("DB_USER", "requesthub"),
-            "PASSWORD": os.getenv("DB_PASSWORD", "requesthub"),
-            "HOST": os.getenv("DB_HOST", "db"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-        }
+DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_USER = os.getenv("DB_USER", "admin123@requesthub-postgre")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "@Password123")
+DB_HOST = os.getenv("DB_HOST", "requesthub-postgre.postgres.database.azure.com")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
+DB_SSLROOTCERT = os.getenv("DB_SSLROOTCERT")
+DB_CONN_MAX_AGE = int(os.getenv("DB_CONN_MAX_AGE", "60"))
+
+db_options = {}
+if DB_SSLMODE:
+    db_options["sslmode"] = DB_SSLMODE
+if DB_SSLROOTCERT:
+    db_options["sslrootcert"] = DB_SSLROOTCERT
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": DB_NAME,
+        "USER": DB_USER,
+        "PASSWORD": DB_PASSWORD,
+        "HOST": DB_HOST,
+        "PORT": DB_PORT,
+        "CONN_MAX_AGE": DB_CONN_MAX_AGE,
+        "OPTIONS": db_options,
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
+
+if not db_options:
+    DATABASES["default"].pop("OPTIONS")
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

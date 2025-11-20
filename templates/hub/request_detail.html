@@ -12,9 +12,13 @@
                 <div class="d-flex align-items-center gap-2">
                     <span class="badge rounded-pill bg-primary text-uppercase fw-semibold">{{ request_obj.get_status_display }}</span>
                     {% if status_form %}
-                        <form method="post" action="{% url 'hub:request-status' request_obj.pk %}" class="d-flex align-items-center gap-2">
+                        <form method="post" action="{% url 'hub:request-status' request_obj.pk %}" class="d-flex align-items-center gap-2 flex-wrap">
                             {% csrf_token %}
                             {{ status_form.status }}
+                            <div class="d-flex align-items-center gap-2">
+                                <label class="visually-hidden" for="id_end_date">Completed Date</label>
+                                {{ status_form.end_date }}
+                            </div>
                             <button class="btn btn-sm btn-outline-primary" type="submit">Update</button>
                         </form>
                     {% endif %}
