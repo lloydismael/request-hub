@@ -74,8 +74,8 @@ WSGI_APPLICATION = "request_hub.wsgi.application"
 ASGI_APPLICATION = "request_hub.asgi.application"
 
 DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER", "admin123@requesthub-postgre")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "@Password123")
+DB_USER = os.getenv("DB_USER", "lloydi@phildata.com")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_HOST = os.getenv("DB_HOST", "requesthub-postgre.postgres.database.azure.com")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
