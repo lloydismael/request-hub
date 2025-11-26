@@ -74,8 +74,8 @@ WSGI_APPLICATION = "request_hub.wsgi.application"
 ASGI_APPLICATION = "request_hub.asgi.application"
 
 DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER", "lloydi@phildata.com")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_USER = os.getenv("DB_USER", "admin123")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "@Password123")
 DB_HOST = os.getenv("DB_HOST", "requesthub-postgre.postgres.database.azure.com")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
@@ -121,8 +121,24 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+media_url_setting = os.getenv("DJANGO_MEDIA_URL", "media/").strip()
+if not media_url_setting.startswith("/"):
+    media_url_setting = f"/{media_url_setting}"
+if not media_url_setting.endswith("/"):
+    media_url_setting = f"{media_url_setting}/"
+MEDIA_URL = media_url_setting
+
+media_root_setting = os.getenv("DJANGO_MEDIA_ROOT")
+if media_root_setting:
+    MEDIA_ROOT = Path(media_root_setting).expanduser()
+else:
+    MEDIA_ROOT = BASE_DIR / "media"
+
+try:
+    MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # Some deployment targets provide a read-only mount during build; skip creation errors.
+    pass
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"

@@ -1,3 +1,5 @@
+import os
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -15,5 +17,7 @@ urlpatterns = [
     path("", include(("hub.urls", "hub"), namespace="hub")),
 ]
 
-if settings.DEBUG:
+serve_media = settings.DEBUG or os.getenv("DJANGO_SERVE_MEDIA", "false").lower() == "true"
+
+if serve_media:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

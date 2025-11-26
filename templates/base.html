@@ -19,6 +19,9 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto">
                         <li class="nav-item"><a class="nav-link" href="{% url 'hub:dashboard' %}">Dashboard</a></li>
+                        {% if request.user.role == 'admin' %}
+                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:management' %}">Management</a></li>
+                        {% endif %}
                         <li class="nav-item"><a class="nav-link" href="{% url 'hub:notifications' %}">Notifications</a></li>
                     </ul>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -38,9 +41,11 @@
                     </div>
                 </div>
             {% else %}
-                <div class="d-flex ms-auto">
-                    <a class="btn btn-sm btn-outline-light" href="{% url 'login' %}">Sign In</a>
-                </div>
+                {% if not hide_sign_in_nav %}
+                    <div class="d-flex ms-auto">
+                        <a class="btn btn-sm btn-outline-light" href="{% url 'login' %}">Sign In</a>
+                    </div>
+                {% endif %}
             {% endif %}
         </div>
     </nav>

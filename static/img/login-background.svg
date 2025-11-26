@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="122" y1="74" x2="1285" y2="878" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0A4BD7"/>
+      <stop offset="0.45" stop-color="#0F3AA2"/>
+      <stop offset="1" stop-color="#031A4F"/>
+    </linearGradient>
+    <linearGradient id="blob1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4DD0FF" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#1269FF" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="blob2" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#89E2FF" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#2D74FF" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="blob3" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#56A6FF" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#0A46D8" stop-opacity="0.2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="900" fill="url(#bgGradient)"/>
+  <g opacity="0.7" filter="url(#filter0_f)">
+    <ellipse cx="250" cy="160" rx="240" ry="200" fill="url(#blob1)"/>
+  </g>
+  <g opacity="0.55" filter="url(#filter1_f)">
+    <ellipse cx="1200" cy="200" rx="220" ry="180" fill="url(#blob2)"/>
+  </g>
+  <g opacity="0.6" filter="url(#filter2_f)">
+    <ellipse cx="720" cy="760" rx="360" ry="220" fill="url(#blob3)"/>
+  </g>
+  <path d="M278.659 587.321C338.446 597.307 398.942 548.087 423.364 517.034C472.746 456.099 533.109 444.439 565.236 454.441C636.762 476.616 641.827 558.822 704.904 575.431C777.292 594.788 839.023 516.222 911.745 548.817C964.04 572.071 1020.35 629.957 1052.89 749.363C1093.82 898.008 1097.42 932.334 1105.11 965.526L76.5977 965.526C64.2112 907.819 67.2923 830.632 120.012 756.05C192.512 655.224 210.812 576.128 278.659 587.321Z" fill="rgba(255,255,255,0.05)"/>
+  <g opacity="0.35">
+    <circle cx="320" cy="360" r="36" fill="rgba(255,255,255,0.4)"/>
+    <circle cx="355" cy="390" r="16" fill="rgba(255,255,255,0.3)"/>
+    <path d="M410 320C420 328 424 344 416 354C408 365 390 366 379 358C368 350 364 334 372 323C380 312 398 311 410 320Z" fill="rgba(255,255,255,0.28)"/>
+  </g>
+  <g opacity="0.35">
+    <rect x="992" y="340" width="80" height="34" rx="17" fill="rgba(255,255,255,0.28)"/>
+    <rect x="1094" y="380" width="54" height="24" rx="12" fill="rgba(255,255,255,0.22)"/>
+    <rect x="1032" y="420" width="92" height="28" rx="14" fill="rgba(255,255,255,0.24)"/>
+  </g>
+  <defs>
+    <filter id="filter0_f" x="-60" y="-140" width="620" height="600" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="60"/>
+    </filter>
+    <filter id="filter1_f" x="880" y="-100" width="640" height="600" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="60"/>
+    </filter>
+    <filter id="filter2_f" x="240" y="420" width="960" height="680" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="80"/>
+    </filter>
+  </defs>
+</svg>

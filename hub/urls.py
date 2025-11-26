@@ -13,6 +13,7 @@ from .views import (
     RequestStatusUpdateView,
     RequestTeamsRedirectView,
     RequestUpdateView,
+    UserManagementView,
 )
 
 app_name = "hub"
@@ -30,4 +31,5 @@ urlpatterns = [
     path("requests/<int:pk>/delete/", RequestDeleteView.as_view(), name="request-delete"),
     path("notifications/", NotificationListView.as_view(), name="notifications"),
     path("notifications/<int:pk>/read/", NotificationReadView.as_view(), name="notification-read"),
+    path("management/", UserManagementView.as_view(), name="management"),
 ]

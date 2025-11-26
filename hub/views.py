@@ -2,6 +2,8 @@ import csv
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
+from django.forms import modelformset_factory
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -10,6 +12,7 @@ from django.views import View
 from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
 from urllib.parse import quote
 
+from accounts.forms import UserManagementForm
 from accounts.models import User
 
 from .forms import RequestAdminForm, RequestForm, RequestStatusForm, StatusLogForm
@@ -154,6 +157,17 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
     def form_valid(self, form):
         messages.success(self.request, "Request updated.")
         return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        referer = self.request.META.get("HTTP_REFERER")
+        fallback = reverse("hub:dashboard")
+        if not referer or referer == self.request.build_absolute_uri():
+            context["back_url"] = fallback
+        else:
+            context["back_url"] = referer
+        context["hide_sign_in_nav"] = True
+        return context
 
 
 class RequestUpdateView(LoginRequiredMixin, UpdateView):
@@ -396,6 +410,131 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
             )
 
         return response
+
+
+class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
+    template_name = "hub/management.html"
+    formset_class = modelformset_factory(User, form=UserManagementForm, extra=1, can_delete=True)
+
+    def get_queryset(self):
+        return User.objects.order_by("date_joined", "username")
+
+    def get(self, request, *args, **kwargs):
+        formset = self.formset_class(queryset=self.get_queryset())
+        self._prepare_formset(formset)
+        return render(request, self.template_name, self._build_context(formset))
+
+    def post(self, request, *args, **kwargs):
+        formset = self.formset_class(request.POST, queryset=self.get_queryset())
+        self._prepare_formset(formset)
+        if formset.is_valid():
+            current_admins = User.objects.filter(role=User.Roles.ADMIN).count()
+            admin_delta = 0
+            pending_error = False
+            admin_removal_candidates = []
+
+            for form in formset:
+                if not form.cleaned_data:
+                    continue
+
+                is_delete = form.cleaned_data.get("DELETE")
+                if is_delete:
+                    if form.instance.pk and form.instance.is_superuser:
+                        form.add_error("DELETE", "Superuser accounts cannot be deleted.")
+                        pending_error = True
+                        continue
+                    if form.instance.pk and form.instance.role == User.Roles.ADMIN:
+                        admin_delta -= 1
+                        admin_removal_candidates.append((form, "delete"))
+                    continue
+
+                if not form.instance.pk and not form.has_changed():
+                    continue
+
+                new_role = form.cleaned_data.get("role")
+                original_role = form.instance.role if form.instance.pk else None
+
+                if form.instance.pk and form.instance.is_superuser and new_role != User.Roles.ADMIN:
+                    form.add_error("role", "Superuser accounts must remain administrators.")
+                    pending_error = True
+
+                if form.instance.pk:
+                    if original_role == User.Roles.ADMIN and new_role != User.Roles.ADMIN:
+                        admin_delta -= 1
+                        admin_removal_candidates.append((form, "role"))
+                    elif original_role != User.Roles.ADMIN and new_role == User.Roles.ADMIN:
+                        admin_delta += 1
+                else:
+                    if new_role == User.Roles.ADMIN:
+                        admin_delta += 1
+
+            if pending_error:
+                return render(request, self.template_name, self._build_context(formset))
+
+            if current_admins + admin_delta <= 0:
+                if admin_removal_candidates:
+                    form, field = admin_removal_candidates[0]
+                    if field == "delete":
+                        form.add_error("DELETE", "At least one administrator must remain.")
+                    else:
+                        form.add_error("role", "At least one administrator must remain.")
+                else:
+                    messages.error(request, "At least one administrator must remain.")
+                return render(request, self.template_name, self._build_context(formset))
+
+            created_count = 0
+            updated_count = 0
+            deleted_count = 0
+
+            with transaction.atomic():
+                for form in formset:
+                    if not form.cleaned_data:
+                        continue
+
+                    if form.cleaned_data.get("DELETE"):
+                        if form.instance.pk:
+                            form.instance.delete()
+                            deleted_count += 1
+                        continue
+
+                    if not form.has_changed() and form.instance.pk:
+                        continue
+
+                    is_new = not form.instance.pk
+                    form.save()
+                    if is_new:
+                        created_count += 1
+                    else:
+                        updated_count += 1
+
+            if created_count or updated_count or deleted_count:
+                parts = []
+                if created_count:
+                    parts.append(f"created {created_count} user account{'s' if created_count != 1 else ''}")
+                if updated_count:
+                    parts.append(f"updated {updated_count} user account{'s' if updated_count != 1 else ''}")
+                if deleted_count:
+                    parts.append(f"removed {deleted_count} user account{'s' if deleted_count != 1 else ''}")
+                messages.success(request, ", ".join(parts).capitalize() + ".")
+            else:
+                messages.info(request, "No changes detected.")
+            return redirect("hub:management")
+
+        return render(request, self.template_name, self._build_context(formset))
+
+    def _build_context(self, formset):
+        return {
+            "formset": formset,
+            "total_users": User.objects.count(),
+        }
+
+    @staticmethod
+    def _prepare_formset(formset):
+        for form in formset:
+            delete_field = form.fields.get("DELETE")
+            if delete_field:
+                existing_class = delete_field.widget.attrs.get("class", "")
+                delete_field.widget.attrs["class"] = (existing_class + " form-check-input").strip()
 
 
 class NotificationListView(LoginRequiredMixin, ListView):

@@ -130,6 +130,13 @@ class RequestAdminForm(forms.ModelForm):
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
     )
+    backup_engineer = forms.ModelChoiceField(
+        queryset=User.objects.filter(role=User.Roles.ENGINEER),
+        required=False,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Backup Engineer",
+        empty_label="Select backup engineer (optional)",
+    )
 
     class Meta:
         model = Request
@@ -137,6 +144,7 @@ class RequestAdminForm(forms.ModelForm):
             "priority",
             "status",
             "engineer",
+            "backup_engineer",
             "due_date",
             "end_date",
             "description",
@@ -156,6 +164,14 @@ class RequestAdminForm(forms.ModelForm):
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
         self.fields["engineer"].label_from_instance = _user_display
+        
+        # Setup backup engineer field
+        self.fields["backup_engineer"].queryset = self.fields["backup_engineer"].queryset.order_by("first_name", "last_name")
+        backup_widget = self.fields["backup_engineer"].widget
+        if isinstance(backup_widget, AvatarSelect):
+            backup_widget.avatar_mapping = _build_avatar_mapping(self.fields["backup_engineer"].queryset)
+        self.fields["backup_engineer"].label_from_instance = _user_display
+        
         due_field = self.fields["due_date"]
         due_field.disabled = True
         due_field.required = False

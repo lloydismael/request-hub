@@ -46,7 +46,7 @@
                     </thead>
                     <tbody>
                         {% for item in requests %}
-                            <tr class="{% if item.is_overdue %}table-danger{% endif %}">
+                            <tr class="{% if item.is_overdue or role != 'requestor' and item.missed_sla %}table-danger{% endif %}">
                                 <td>{{ item.reference_code }}</td>
                                 <td>{{ item.account.name }}</td>
                                 {% if role == 'admin' %}
@@ -137,9 +137,9 @@
                                         <span class="badge bg-light text-dark border">{{ item.created_at|date:"M d, Y" }}</span>
                                     </td>
                                 {% endif %}
-                                <td>
+                                <td class="{% if role != 'requestor' and item.missed_sla %}table-danger{% endif %}">
                                     {% if item.end_date %}
-                                        <span class="badge bg-light text-dark border">{{ item.end_date|date:"M d, Y" }}</span>
+                                        <span class="badge {% if role != 'requestor' and item.missed_sla %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">{{ item.end_date|date:"M d, Y" }}</span>
                                     {% else %}
                                         <span class="text-muted">&mdash;</span>
                                     {% endif %}

@@ -1,11 +1,15 @@
+from django import forms
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
+from django.views import View
 from django.views.generic import TemplateView, UpdateView
 
-from accounts.models import User
+from accounts.models import StoredFile, User
 
 from .forms import (
     ProfileForm,
@@ -67,10 +71,23 @@ class RoleLoginView(LoginView):
     template_name = "accounts/login.html"
     redirect_authenticated_user = True
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        role_param = self.request.GET.get("role") or self.request.POST.get("role")
-        valid_roles = {choice for choice, _ in ROLE_CHOICES}
-        if role_param in valid_roles:
-            kwargs["role_initial"] = role_param
-        return kwargs
+    def confirm_login_allowed(self, user):
+        selected_role = self.cleaned_data.get("role")
+        if selected_role and user.role != selected_role:
+            raise forms.ValidationError(
+                "Selected role does not match the provided credentials.",
+                code="invalid_role",
+            )
+        super().confirm_login_allowed(user)
+
+
+class StoredFileServeView(LoginRequiredMixin, View):
+    def get(self, request, name):
+        stored_file = get_object_or_404(StoredFile, name=name)
+        if not stored_file.data:
+            raise Http404
+        response = HttpResponse(stored_file.data, content_type=stored_file.content_type or "application/octet-stream")
+        filename = stored_file.original_name or name.split("/")[-1]
+        response["Content-Disposition"] = f"inline; filename=\"{filename}\""
+        response["Cache-Control"] = "private, max-age=86400"
+        return response

@@ -68,6 +68,14 @@ class Request(models.Model):
         null=True,
         limit_choices_to={"role": "engineer"},
     )
+    backup_engineer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="backup_requests_assigned",
+        blank=True,
+        null=True,
+        limit_choices_to={"role": "engineer"},
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -125,15 +133,31 @@ class Request(models.Model):
 
     @property
     def days_since_creation(self) -> int:
-        """Return inclusive day count from creation date until completion or today."""
+        """Return inclusive working-day count from creation date until completion or today."""
         created_dt = self.created_at
         if timezone.is_aware(created_dt):
-            created_date = timezone.localtime(created_dt).date()
+            start_date = timezone.localtime(created_dt).date()
         else:
-            created_date = created_dt.date()
-        reference_date = self.end_date or timezone.now().date()
-        days_elapsed = (reference_date - created_date).days
-        return max(days_elapsed, 0) + 1
+            start_date = created_dt.date()
+        end_date = self.end_date or timezone.now().date()
+
+        if end_date < start_date:
+            return 0
+
+        total_days = (end_date - start_date).days + 1
+        working_days = 0
+        for offset in range(total_days):
+            current_day = start_date + timedelta(days=offset)
+            if current_day.weekday() < 5:  # Monday=0, Sunday=6
+                working_days += 1
+        return working_days
+
+    @property
+    def missed_sla(self) -> bool:
+        """Return True when the completion date exceeds the computed SLA target."""
+        if not self.end_date or not self.due_date:
+            return False
+        return self.end_date > self.due_date
 
     def __str__(self) -> str:
         return f"{self.reference_code or 'Request'} - {self.account.name}"
