@@ -3,6 +3,7 @@ import csv
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
+from django.db.models import Count
 from django.forms import modelformset_factory
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -49,6 +50,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 status=Request.Status.ONGOING,
                 due_date__lt=timezone.now().date(),
             ).count()
+            status_totals = (
+                Request.objects.values("status").order_by().annotate(total=Count("id"))
+            )
+            totals_lookup = {entry["status"]: entry["total"] for entry in status_totals}
+            context["status_counts"] = {
+                "all": sum(totals_lookup.values()),
+                "ongoing": totals_lookup.get(Request.Status.ONGOING, 0),
+                "completed": totals_lookup.get(Request.Status.COMPLETED, 0),
+            }
         return context
 
     def post(self, request, *args, **kwargs):
