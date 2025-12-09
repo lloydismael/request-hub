@@ -2,6 +2,8 @@ from django import forms
 
 from django.utils import timezone
 
+from typing import Iterable, List
+
 from accounts.models import User
 from .constants import ACCOUNT_NAME_SUGGESTIONS
 from .models import Account, Request, StatusLog
@@ -69,9 +71,9 @@ class RequestForm(forms.ModelForm):
         queryset=User.objects.none(),
         required=True,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
-        label="Assign Engineer",
-        empty_label="Select engineer",
-        error_messages={"required": "Please choose an engineer for this request."},
+        label="Preferred Engineer",
+        empty_label="Select preferred engineer",
+        error_messages={"required": "Please choose a preferred engineer for this request."},
     )
 
     class Meta:
@@ -105,13 +107,35 @@ class RequestForm(forms.ModelForm):
             due_field.initial = self.instance.start_date
         else:
             due_field.initial = timezone.now().date()
-        self.account_name_suggestions = ACCOUNT_NAME_SUGGESTIONS
+
+        existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
+        combined = []
+        seen = set()
+        for raw_name in list(ACCOUNT_NAME_SUGGESTIONS) + list(existing_accounts):
+            cleaned = (raw_name or "").strip()
+            if not cleaned:
+                continue
+            normalized = cleaned.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            combined.append(cleaned)
+        self.account_name_suggestions = tuple(combined)
 
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
         if not value:
             raise forms.ValidationError("Account name is required.")
         return value
+
+    def clean_needed_by(self):
+        request_date = self.cleaned_data.get("needed_by")
+        if not request_date:
+            return request_date
+        today = timezone.now().date()
+        if request_date < today:
+            raise forms.ValidationError("Select today or a future date for the request.")
+        return request_date
 
     def save(self, commit=True):
         account_name = self.cleaned_data["account_name"]
@@ -173,10 +197,8 @@ class RequestAdminForm(forms.ModelForm):
         self.fields["backup_engineer"].label_from_instance = _user_display
         
         due_field = self.fields["due_date"]
-        due_field.disabled = True
         due_field.required = False
-        due_field.widget.attrs["disabled"] = "disabled"
-        due_field.help_text = "Automatically calculated based on priority."
+        due_field.help_text = "Leave blank to keep the SLA-based due date."
 
 
 class RequestStatusForm(forms.ModelForm):
@@ -218,6 +240,7 @@ class StatusLogForm(forms.ModelForm):
     class Meta:
         model = StatusLog
         fields = ["message"]
+        labels = {"message": "Add status update"}
         widgets = {
             "message": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Add an update"}),
         }
@@ -227,3 +250,167 @@ class StatusLogForm(forms.ModelForm):
         if not message:
             raise forms.ValidationError("Message cannot be empty.")
         return message
+
+
+class AdminRequestFilterForm(forms.Form):
+    reference_code = forms.CharField(
+        label="ID",
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "form-control form-control-sm", "placeholder": "Search ID"}
+        ),
+    )
+    account = forms.ModelChoiceField(
+        label="Account",
+        required=False,
+        queryset=Account.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    account_manager = forms.ModelChoiceField(
+        label="Requestor",
+        required=False,
+        queryset=User.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    engineer = forms.ModelChoiceField(
+        label="Assigned Engineer",
+        required=False,
+        queryset=User.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    priority = forms.ChoiceField(
+        label="Priority",
+        required=False,
+        choices=[("", "All priorities"), *Request.Priority.choices],
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    status = forms.ChoiceField(
+        label="Status",
+        required=False,
+        choices=[("", "All statuses"), *Request.Status.choices],
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    created_from = forms.DateField(
+        label="Created From",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+    )
+    created_to = forms.DateField(
+        label="Created To",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+    )
+    end_from = forms.DateField(
+        label="End Date From",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+    )
+    end_to = forms.DateField(
+        label="End Date To",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+    )
+    days_min = forms.IntegerField(
+        label="Days Min",
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "placeholder": "≥"}),
+    )
+    days_max = forms.IntegerField(
+        label="Days Max",
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "placeholder": "≤"}),
+    )
+    due_from = forms.DateField(
+        label="Due Date From",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+    )
+    due_to = forms.DateField(
+        label="Due Date To",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["account"].queryset = Account.objects.order_by("name")
+        self.fields["account"].empty_label = "All accounts"
+        requestor_qs = User.objects.filter(role=User.Roles.REQUESTOR).order_by("first_name", "last_name")
+        self.fields["account_manager"].queryset = requestor_qs
+        self.fields["account_manager"].empty_label = "All requestors"
+        self.fields["account_manager"].label_from_instance = _user_display
+        engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        self.fields["engineer"].queryset = engineer_qs
+        self.fields["engineer"].empty_label = "All engineers"
+        self.fields["engineer"].label_from_instance = _user_display
+
+    def filter_queryset(self, queryset):
+        if not self.is_valid():
+            return queryset
+        data = self.cleaned_data
+        if data.get("reference_code"):
+            queryset = queryset.filter(reference_code__icontains=data["reference_code"].strip())
+        if data.get("account"):
+            queryset = queryset.filter(account=data["account"])
+        if data.get("account_manager"):
+            queryset = queryset.filter(requestor=data["account_manager"])
+        if data.get("engineer"):
+            queryset = queryset.filter(engineer=data["engineer"])
+        if data.get("priority"):
+            queryset = queryset.filter(priority=data["priority"])
+        if data.get("status"):
+            queryset = queryset.filter(status=data["status"])
+        if data.get("created_from"):
+            queryset = queryset.filter(created_at__date__gte=data["created_from"])
+        if data.get("created_to"):
+            queryset = queryset.filter(created_at__date__lte=data["created_to"])
+        if data.get("end_from"):
+            queryset = queryset.filter(end_date__gte=data["end_from"])
+        if data.get("end_to"):
+            queryset = queryset.filter(end_date__lte=data["end_to"])
+        if data.get("due_from"):
+            queryset = queryset.filter(due_date__gte=data["due_from"])
+        if data.get("due_to"):
+            queryset = queryset.filter(due_date__lte=data["due_to"])
+        return queryset
+
+    def filter_sequence(self, requests: Iterable[Request]) -> List[Request]:
+        if not self.is_valid():
+            return list(requests)
+        data = self.cleaned_data
+        results = list(requests)
+        days_min = data.get("days_min")
+        if days_min is not None:
+            results = [req for req in results if req.days_since_creation >= days_min]
+        days_max = data.get("days_max")
+        if days_max is not None:
+            results = [req for req in results if req.days_since_creation <= days_max]
+        return results
+
+    def has_active_filters(self) -> bool:
+        if not self.is_valid():
+            return False
+        for value in self.cleaned_data.values():
+            if value not in {None, ""}:
+                return True
+        return False
+
+
+class AccountManagementForm(forms.ModelForm):
+    class Meta:
+        model = Account
+        fields = ["name"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Account name"}),
+        }
+        labels = {
+            "name": "Account Name",
+        }
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise forms.ValidationError("Account name cannot be blank.")
+        return name

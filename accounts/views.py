@@ -4,7 +4,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
 from django.http import Http404, HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import TemplateView, UpdateView
@@ -30,13 +30,32 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         password_changed = bool(form.cleaned_data.get("new_password1"))
+        delete_photo_requested = form.data.get("delete_photo")
+        photo_deleted = False
+
+        if delete_photo_requested:
+            existing_photo = form.instance.profile_photo
+            if existing_photo:
+                existing_photo.delete(save=False)
+                photo_deleted = True
+            form.instance.profile_photo = None
+            if "profile_photo" in form.cleaned_data:
+                form.cleaned_data["profile_photo"] = None
+
         response = super().form_valid(form)
         user = self.request.user
         user.profile_completed = True
         user.save(update_fields=["profile_completed"])
         if password_changed:
             update_session_auth_hash(self.request, self.object)
-            messages.success(self.request, "Profile updated successfully. Your password has been changed.")
+        message_details = []
+        if password_changed:
+            message_details.append("Your password has been changed")
+        if photo_deleted:
+            message_details.append("Profile photo deleted")
+        if message_details:
+            details_text = " ".join(f"{detail}." for detail in message_details)
+            messages.success(self.request, f"Profile updated successfully. {details_text}")
         else:
             messages.success(self.request, "Profile updated successfully.")
         return response
@@ -44,6 +63,11 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
 class LandingView(TemplateView):
     template_name = "landing.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect("hub:dashboard")
+        return redirect("login")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

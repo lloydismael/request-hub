@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block title %}Reports · Request Hub{% endblock %}
+{% block content %}
+<div class="glass-card p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h1 class="h4 mb-1">Operational Report</h1>
+            <p class="text-muted mb-0">A consolidated view of request activity across requestors and engineers.</p>
+        </div>
+        <div class="text-end small text-muted">
+            <div>Total Requests: <span class="fw-semibold">{{ totals.requests }}</span></div>
+            <div>Ongoing vs Completed: <span class="fw-semibold">{{ totals.ongoing }}</span> / <span class="fw-semibold">{{ totals.completed }}</span></div>
+        </div>
+    </div>
+    <div class="row g-3 mt-3">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="report-summary-card bg-primary-subtle text-primary border border-primary-subtle">
+                <span class="report-summary-card__label">Active Requests</span>
+                <span class="report-summary-card__value">{{ totals.ongoing }}</span>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="report-summary-card bg-success-subtle text-success border border-success-subtle">
+                <span class="report-summary-card__label">Completed Requests</span>
+                <span class="report-summary-card__value">{{ totals.completed }}</span>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="report-summary-card bg-warning-subtle text-warning border border-warning-subtle">
+                <span class="report-summary-card__label">Requestors</span>
+                <span class="report-summary-card__value">{{ totals.account_managers }}</span>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="report-summary-card bg-info-subtle text-info border border-info-subtle">
+                <span class="report-summary-card__label">Active Engineers</span>
+                <span class="report-summary-card__value">{{ totals.engineers }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-xl-6">
+        <div class="glass-card p-4 h-100">
+            <h2 class="h6 text-uppercase text-muted">Requests by Requestor</h2>
+            {% if account_manager_stats %}
+                <canvas id="accountManagerChart" height="240"></canvas>
+                <p class="text-muted small mt-3 mb-0">Figures include every recorded request and highlight which requestors create the most tickets.</p>
+            {% else %}
+                <p class="text-muted mb-0">No requests recorded yet for requestors.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="glass-card p-4 h-100">
+            <h2 class="h6 text-uppercase text-muted">Requests handled by Engineers</h2>
+            {% if engineer_stats %}
+                <canvas id="engineerChart" height="240"></canvas>
+                <p class="text-muted small mt-3 mb-0">Includes unassigned requests to indicate potential backlog.</p>
+            {% else %}
+                <p class="text-muted mb-0">No engineer assignments captured yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-1">
+    <div class="col-12 col-xl-6">
+        <div class="glass-card p-4 h-100">
+            <h3 class="h6 text-uppercase text-muted">Count of Engagement Type</h3>
+            {% if engagement_chart_has_data %}
+                <canvas id="engagementChart" height="240"></canvas>
+                <p class="text-muted small mt-3 mb-0">Displays Opportunity, Support, Training, and Inquiry request volumes.</p>
+            {% else %}
+                <p class="text-muted mb-0">No engagement type data available yet.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="glass-card p-4 h-100">
+            <h3 class="h6 text-uppercase text-muted">Count of Product Category</h3>
+            {% if product_chart_has_data %}
+                <canvas id="productChart" height="240"></canvas>
+                <p class="text-muted small mt-3 mb-0">Tracks Azure, M365, and other product categories for quick comparison.</p>
+            {% else %}
+                <p class="text-muted mb-0">No product category data recorded yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-1">
+    <div class="col-12 col-xl-6">
+        <div class="glass-card p-4 h-100">
+            <h3 class="h6 text-uppercase text-muted">Requestor Breakdown</h3>
+            {% if account_manager_stats %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Requestor</th>
+                                <th scope="col" class="text-end">Total Requests</th>
+                                <th scope="col" class="text-end">Completed</th>
+                                <th scope="col" class="text-end">Ongoing</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in account_manager_stats %}
+                                <tr>
+                                    <td>{{ row.name }}</td>
+                                    <td class="text-end fw-semibold">{{ row.total }}</td>
+                                    <td class="text-end">{{ row.completed }}</td>
+                                    <td class="text-end">{{ row.ongoing }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No requestors have created requests yet.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="glass-card p-4 h-100">
+            <h3 class="h6 text-uppercase text-muted">Engineer Allocation</h3>
+            {% if engineer_stats %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Engineer</th>
+                                <th scope="col" class="text-end">Total Requests</th>
+                                <th scope="col" class="text-end">Completed</th>
+                                <th scope="col" class="text-end">Ongoing</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in engineer_stats %}
+                                <tr>
+                                    <td>{{ row.name }}</td>
+                                    <td class="text-end fw-semibold">{{ row.total }}</td>
+                                    <td class="text-end">{{ row.completed }}</td>
+                                    <td class="text-end">{{ row.ongoing }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No engineer workload captured yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if status_breakdown %}
+    <div class="glass-card p-4 mt-4">
+        <h3 class="h6 text-uppercase text-muted">Request Status Overview</h3>
+        <div class="d-flex flex-wrap gap-3 mt-2">
+            {% for status in status_breakdown %}
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ status.label }}: {{ status.total }}</span>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+
+{{ account_manager_chart|json_script:"account-manager-data" }}
+{{ engineer_chart|json_script:"engineer-data" }}
+{{ engagement_chart|json_script:"engagement-data" }}
+{{ product_chart|json_script:"product-data" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    (function () {
+        const accountManagerNode = document.getElementById("account-manager-data");
+        const engineerNode = document.getElementById("engineer-data");
+        const engagementNode = document.getElementById("engagement-data");
+        const productNode = document.getElementById("product-data");
+
+        const totalLabelsPlugin = {
+            id: "totalLabels",
+            afterDatasetsDraw(chart) {
+                const pluginOptions = chart.options?.plugins?.totalLabels;
+                if (!pluginOptions?.display) {
+                    return;
+                }
+                const totals = pluginOptions.totals || [];
+                const metaIndex = chart.data.datasets.length - 1;
+                const meta = chart.getDatasetMeta(metaIndex);
+                if (!meta) {
+                    return;
+                }
+                const ctx = chart.ctx;
+                meta.data.forEach((element, index) => {
+                    const totalValue = totals[index];
+                    if (totalValue == null) {
+                        return;
+                    }
+                    const { x, y } = element.tooltipPosition();
+                    if (!Number.isFinite(y)) {
+                        return;
+                    }
+                    ctx.save();
+                    ctx.fillStyle = pluginOptions.color || "#212529";
+                    ctx.font = pluginOptions.font || "600 12px 'Inter', sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "bottom";
+                    ctx.fillText(totalValue, x, y - 4);
+                    ctx.restore();
+                });
+            },
+        };
+
+        const buildDatasets = (payload, palette) => [
+            {
+                key: "completed",
+                label: "Completed",
+                backgroundColor: palette.completed.background,
+                borderColor: palette.completed.border,
+                data: Array.isArray(payload.completed) ? payload.completed : [],
+                borderWidth: 1.5,
+                stack: "requests",
+                order: 1,
+            },
+            {
+                key: "ongoing",
+                label: "Ongoing",
+                backgroundColor: palette.ongoing.background,
+                borderColor: palette.ongoing.border,
+                data: Array.isArray(payload.ongoing) ? payload.ongoing : [],
+                borderWidth: 1.5,
+                stack: "requests",
+                order: 2,
+            },
+        ];
+
+        const buildOptions = totals => ({
+            scales: {
+                x: {
+                    stacked: true,
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0,
+                    },
+                },
+            },
+            plugins: {
+                legend: {
+                    position: "bottom",
+                    labels: {
+                        boxWidth: 16,
+                        boxHeight: 16,
+                    },
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody(items) {
+                            if (!items.length) {
+                                return "";
+                            }
+                            const index = items[0].dataIndex;
+                            const totalValue = Array.isArray(totals) ? totals[index] : null;
+                            if (totalValue == null) {
+                                return "";
+                            }
+                            return `Total Requests: ${totalValue}`;
+                        },
+                    },
+                },
+                totalLabels: {
+                    display: true,
+                    totals: totals,
+                },
+            },
+        });
+
+        if (accountManagerNode && accountManagerNode.textContent) {
+            const accountManagerPayload = JSON.parse(accountManagerNode.textContent);
+            const managerCanvas = document.getElementById("accountManagerChart");
+            if (managerCanvas && accountManagerPayload.labels.length) {
+                const datasets = buildDatasets(accountManagerPayload, {
+                    completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
+                    ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
+                });
+
+                new Chart(managerCanvas, {
+                    type: "bar",
+                    data: {
+                        labels: accountManagerPayload.labels,
+                        datasets,
+                    },
+                    options: buildOptions(accountManagerPayload.totals),
+                    plugins: [totalLabelsPlugin],
+                });
+            }
+        }
+
+        if (engineerNode && engineerNode.textContent) {
+            const engineerPayload = JSON.parse(engineerNode.textContent);
+            const engineerCanvas = document.getElementById("engineerChart");
+            if (engineerCanvas && engineerPayload.labels.length) {
+                const datasets = buildDatasets(engineerPayload, {
+                    completed: { background: "rgba(13,110,253,0.35)", border: "rgba(13,110,253,0.8)" },
+                    ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
+                });
+
+                new Chart(engineerCanvas, {
+                    type: "bar",
+                    data: {
+                        labels: engineerPayload.labels,
+                        datasets,
+                    },
+                    options: buildOptions(engineerPayload.totals),
+                    plugins: [totalLabelsPlugin],
+                });
+            }
+        }
+
+        if (engagementNode && engagementNode.textContent) {
+            const engagementPayload = JSON.parse(engagementNode.textContent);
+            const engagementCanvas = document.getElementById("engagementChart");
+            const hasData = Array.isArray(engagementPayload.totals) && engagementPayload.totals.some(value => value > 0);
+            if (engagementCanvas && hasData) {
+                const datasets = buildDatasets(engagementPayload, {
+                    completed: { background: "rgba(13,110,253,0.35)", border: "rgba(13,110,253,0.8)" },
+                    ongoing: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
+                });
+
+                new Chart(engagementCanvas, {
+                    type: "bar",
+                    data: {
+                        labels: engagementPayload.labels,
+                        datasets,
+                    },
+                    options: buildOptions(engagementPayload.totals),
+                    plugins: [totalLabelsPlugin],
+                });
+            }
+        }
+
+        if (productNode && productNode.textContent) {
+            const productPayload = JSON.parse(productNode.textContent);
+            const productCanvas = document.getElementById("productChart");
+            const hasData = Array.isArray(productPayload.totals) && productPayload.totals.some(value => value > 0);
+            if (productCanvas && hasData) {
+                const datasets = buildDatasets(productPayload, {
+                    completed: { background: "rgba(13,110,253,0.35)", border: "rgba(13,110,253,0.8)" },
+                    ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
+                });
+
+                new Chart(productCanvas, {
+                    type: "bar",
+                    data: {
+                        labels: productPayload.labels,
+                        datasets,
+                    },
+                    options: buildOptions(productPayload.totals),
+                    plugins: [totalLabelsPlugin],
+                });
+            }
+        }
+    })();
+</script>
+{% endblock %}

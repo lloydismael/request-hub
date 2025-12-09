@@ -16,7 +16,11 @@ If you have changes locally, rebuild and push the image:
 ```powershell
 # From the project root
 $env:DOCKER_BUILDKIT=1
-$tag = "lloydismael12/request-hub:v1.1"
+# Inspect existing tags to avoid duplicates
+docker images lloydismael12/request-hub --format "{{.Tag}}" | sort
+# Update this to the next unused version (e.g., v9.2 if v9.1 already exists)
+$nextVersion = "v9.2"
+$tag = "lloydismael12/request-hub:$nextVersion"
 docker build -t $tag -t lloydismael12/request-hub:latest .
 docker push $tag
 docker push lloydismael12/request-hub:latest
@@ -46,13 +50,13 @@ az webapp create ^
   --name $APP ^
   --resource-group $RESOURCE_GROUP ^
   --plan $PLAN ^
-  --deployment-container-image-name lloydismael12/request-hub:v1.1
+  --deployment-container-image-name lloydismael12/request-hub:$nextVersion
 ```
 
 If you prefer using ACR:
 1. `az acr create ...`
 2. Push the image to ACR.
-3. Supply `--deployment-container-image-name <acrLoginServer>/request-hub:v1.1` and configure registry credentials via `az webapp config container set`.
+3. Supply `--deployment-container-image-name <acrLoginServer>/request-hub:$nextVersion` and configure registry credentials via `az webapp config container set`.
 
 ## 3. Configure App Settings
 
@@ -94,18 +98,19 @@ az webapp log tail --name $APP --resource-group $RESOURCE_GROUP
 
 ## 6. Ongoing Updates
 
-1. Rebuild and push the Docker image with a new tag (`v1.2`, for example).
+1. Rebuild and push the Docker image with the next tag in sequence (increment `$nextVersion`, e.g., `v9.3`).
 2. Point App Service to the new tag:
 
 ```powershell
 az webapp config container set ^
   --name $APP ^
   --resource-group $RESOURCE_GROUP ^
-  --docker-custom-image-name lloydismael12/request-hub:v1.2
+  --docker-custom-image-name lloydismael12/request-hub:$nextVersion
 az webapp restart --name $APP --resource-group $RESOURCE_GROUP
 ```
 
-3. Consider enabling continuous deployment via GitHub Actions or Azure Container Registry Webhooks for automated updates.
+3. Continue incrementing patch versions up to `v9.9`; after that, bump to `v10.0` and repeat the cycle.
+4. Consider enabling continuous deployment via GitHub Actions or Azure Container Registry Webhooks for automated updates.
 
 ## Notes on Database Connectivity
 

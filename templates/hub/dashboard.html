@@ -1,15 +1,19 @@
 {% extends "base.html" %}
 {% load static %}
+{% load tz %}
 {% block title %}Dashboard · Request Hub{% endblock %}
 {% block body_class %}{% if role == 'admin' %}admin-dashboard{% endif %}{% endblock %}
 {% block content %}
 <div class="row g-4">
     <div class="col-12 {% if role == 'admin' %}col-xl-12{% else %}col-xl-9{% endif %}">
-    <div class="glass-card p-4 mb-4 {% if role == 'admin' %}glass-card--expanded{% endif %}">
+    <div class="glass-card p-4 mb-5 {% if role == 'admin' %}glass-card--expanded{% endif %}">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
                 <h2 class="h5 mb-0">{% if role == 'requestor' %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
+                        <a class="btn btn-sm {% if show_filters or filters_active %}btn-light text-primary{% else %}btn-outline-light{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
+                            <i class="bi {% if show_filters or filters_active %}bi-funnel-fill{% else %}bi-funnel{% endif %}"></i>
+                        </a>
                         <span class="badge bg-primary-subtle text-primary border border-primary-subtle">All: {{ status_counts.all }}</span>
                         <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Ongoing: {{ status_counts.ongoing }}</span>
                         <span class="badge bg-success-subtle text-success border border-success-subtle">Completed: {{ status_counts.completed }}</span>
@@ -18,46 +22,341 @@
                     </div>
                 {% endif %}
             </div>
-            <div class="table-responsive">
+            {% if role == 'admin' %}
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-5 g-3 mb-4 dashboard-metrics">
+                    <div class="col">
+                        <a href="{{ metric_links.open }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'open' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'open' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Open</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.open }}</span>
+                                <span class="dashboard-metric-card__hint">Tickets currently in progress</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.overdue }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'overdue' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'overdue' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Overdue</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.overdue }}</span>
+                                <span class="dashboard-metric-card__hint">Days beyond SLA threshold</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.due_soon }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'due_soon' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'due_soon' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Due Soon</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.due_soon }}</span>
+                                <span class="dashboard-metric-card__hint">Due within 3 days</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.completed_recent }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'completed_recent' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'completed_recent' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Closed (30d)</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.completed_recent }}</span>
+                                <span class="dashboard-metric-card__hint">Completed in last 30 days</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.new_this_week }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'new_this_week' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'new_this_week' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">New (7d)</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.new_this_week }}</span>
+                                <span class="dashboard-metric-card__hint">Raised during past week</span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            {% elif role == 'engineer' %}
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4 dashboard-metrics">
+                    <div class="col">
+                        <a href="{{ metric_links.ongoing }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'ongoing' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'ongoing' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Ongoing</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.ongoing }}</span>
+                                <span class="dashboard-metric-card__hint">Assigned tickets in progress</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.due_soon }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'due_soon' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'due_soon' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Due Soon</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.due_soon }}</span>
+                                <span class="dashboard-metric-card__hint">Due within 3 days</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.overdue }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'overdue' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'overdue' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Overdue</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.overdue }}</span>
+                                <span class="dashboard-metric-card__hint">Days beyond SLA threshold</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.completed }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'completed' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'completed' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Completed</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.completed }}</span>
+                                <span class="dashboard-metric-card__hint">Closed requests</span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            {% elif role == 'requestor' %}
+                <div class="row row-cols-1 row-cols-sm-2 g-3 mb-4 dashboard-metrics">
+                    <div class="col">
+                        <a href="{{ metric_links.ongoing }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'ongoing' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'ongoing' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Ongoing</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.ongoing }}</span>
+                                <span class="dashboard-metric-card__hint">Requests still in progress</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="{{ metric_links.completed }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'completed' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'completed' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Completed</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.completed }}</span>
+                                <span class="dashboard-metric-card__hint">Finished requests</span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+            {% if role == 'admin' and show_filters %}
+                <form method="get" class="row g-3 align-items-end mb-4 dashboard-filter-form">
+                    <input type="hidden" name="show_filters" value="1">
+                    {% if current_sort %}
+                        <input type="hidden" name="sort" value="{{ current_sort }}">
+                    {% endif %}
+                    {% if current_direction %}
+                        <input type="hidden" name="direction" value="{{ current_direction }}">
+                    {% endif %}
+                    {% if active_metric_filter and active_metric_filter != 'open' %}
+                        <input type="hidden" name="metric_filter" value="{{ active_metric_filter }}">
+                    {% endif %}
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.reference_code.label }}</label>
+                        {{ filter_form.reference_code }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.account.label }}</label>
+                        {{ filter_form.account }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.account_manager.label }}</label>
+                        {{ filter_form.account_manager }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.engineer.label }}</label>
+                        {{ filter_form.engineer }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.priority.label }}</label>
+                        {{ filter_form.priority }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.status.label }}</label>
+                        {{ filter_form.status }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.created_from.label }}</label>
+                        {{ filter_form.created_from }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.created_to.label }}</label>
+                        {{ filter_form.created_to }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.end_from.label }}</label>
+                        {{ filter_form.end_from }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.end_to.label }}</label>
+                        {{ filter_form.end_to }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.due_from.label }}</label>
+                        {{ filter_form.due_from }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.due_to.label }}</label>
+                        {{ filter_form.due_to }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.days_min.label }}</label>
+                        {{ filter_form.days_min }}
+                    </div>
+                    <div class="col-xl-2 col-md-3">
+                        <label class="form-label small text-uppercase fw-semibold">{{ filter_form.days_max.label }}</label>
+                        {{ filter_form.days_max }}
+                    </div>
+                    <div class="col-12 d-flex gap-2">
+                        <button class="btn btn-primary btn-sm" type="submit">Apply filters</button>
+                        <a class="btn btn-outline-secondary btn-sm" href="{% url 'hub:dashboard' %}?show_filters=1">Clear filters</a>
+                    </div>
+                </form>
+            {% endif %}
+            <div class="table-responsive dashboard-table-wrapper">
                 <table class="table align-middle">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Account</th>
                             {% if role == 'admin' %}
-                                <th>Account Manager</th>
-                                <th>Assigned Engineer</th>
+                                <th>
+                                    <a href="{{ sort_links.reference_code }}" class="table-sort-link{% if current_sort == 'reference_code' %} table-sort-link--active{% endif %}">
+                                        ID
+                                        {% if current_sort == 'reference_code' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ sort_links.account }}" class="table-sort-link{% if current_sort == 'account' %} table-sort-link--active{% endif %}">
+                                        Account
+                                        {% if current_sort == 'account' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                            {% else %}
+                                <th>ID</th>
+                                <th>Account</th>
+                            {% endif %}
+                            {% if role == 'admin' %}
+                                <th>
+                                    <a href="{{ sort_links.account_manager }}" class="table-sort-link{% if current_sort == 'account_manager' %} table-sort-link--active{% endif %}">
+                                        Requestor
+                                        {% if current_sort == 'account_manager' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ sort_links.engineer }}" class="table-sort-link{% if current_sort == 'engineer' %} table-sort-link--active{% endif %}">
+                                        Assigned Engineer
+                                        {% if current_sort == 'engineer' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
                             {% elif role == 'engineer' %}
-                                <th>Account Manager</th>
+                                <th>Requestor</th>
                             {% elif role == 'requestor' %}
                                 <th>Assigned Engineer</th>
                             {% endif %}
                             {% if role != 'requestor' %}
-                                <th>Priority</th>
+                                {% if role == 'admin' %}
+                                    <th>
+                                        <a href="{{ sort_links.priority }}" class="table-sort-link{% if current_sort == 'priority' %} table-sort-link--active{% endif %}">
+                                            Priority
+                                            {% if current_sort == 'priority' %}
+                                                <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                {% else %}
+                                    <th>Priority</th>
+                                {% endif %}
                             {% endif %}
-                            <th>Status</th>
                             {% if role == 'admin' %}
-                                <th>Created</th>
+                                <th>
+                                    <a href="{{ sort_links.status }}" class="table-sort-link{% if current_sort == 'status' %} table-sort-link--active{% endif %}">
+                                        Status
+                                        {% if current_sort == 'status' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                            {% else %}
+                                <th>Status</th>
                             {% endif %}
-                            <th>End Date</th>
-                            <th>Days</th>
+                            {% if role == 'admin' %}
+                                <th>
+                                    <a href="{{ sort_links.created }}" class="table-sort-link{% if current_sort == 'created' %} table-sort-link--active{% endif %}">
+                                        Created
+                                        {% if current_sort == 'created' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                            {% endif %}
+                            {% if role == 'admin' %}
+                                <th class="text-nowrap">
+                                    <a href="{{ sort_links.end_date }}" class="table-sort-link{% if current_sort == 'end_date' %} table-sort-link--active{% endif %}">
+                                        End Date
+                                        {% if current_sort == 'end_date' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ sort_links.days }}" class="table-sort-link{% if current_sort == 'days' %} table-sort-link--active{% endif %}">
+                                        Days
+                                        {% if current_sort == 'days' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                            {% else %}
+                                <th>End Date</th>
+                                <th>Days</th>
+                            {% endif %}
                             {% if role != 'requestor' %}
-                                <th>Due</th>
+                                {% if role == 'admin' %}
+                                    <th>
+                                        <a href="{{ sort_links.due }}" class="table-sort-link{% if current_sort == 'due' %} table-sort-link--active{% endif %}">
+                                            Due
+                                            {% if current_sort == 'due' %}
+                                                <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                {% else %}
+                                    <th>Due</th>
+                                {% endif %}
                             {% endif %}
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in requests %}
-                            <tr class="{% if item.is_overdue or role != 'requestor' and item.missed_sla %}table-danger{% endif %}">
+                            <tr class="{% if item.is_overdue or role != 'requestor' and item.missed_sla or item.sla_overrun %}table-danger{% endif %}">
                                 <td>{{ item.reference_code }}</td>
                                 <td>{{ item.account.name }}</td>
                                 {% if role == 'admin' %}
-                                    <td>
+                                    <td class="text-nowrap">
                                         {% with manager=item.requestor %}
                                             {% if manager %}
                                                 {% with manager_name=manager.get_full_name|default:manager.username %}
-                                                    <div class="d-flex align-items-center gap-2">
+                                                    <div class="table-cell-nowrap">
                                                         {% if manager.profile_photo %}
                                                             <img src="{{ manager.profile_photo.url }}" alt="{{ manager_name }}" class="table-avatar">
                                                         {% else %}
@@ -67,14 +366,14 @@
                                                     </div>
                                                 {% endwith %}
                                             {% else %}
-                                                <span class="text-muted">Unknown</span>
+                                                <span class="text-muted text-nowrap">Unknown</span>
                                             {% endif %}
                                         {% endwith %}
                                     </td>
-                                    <td>
+                                    <td class="text-nowrap">
                                         {% if item.engineer %}
                                             {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
-                                                <div class="d-flex align-items-center gap-2">
+                                                <div class="table-cell-nowrap">
                                                     {% if item.engineer.profile_photo %}
                                                         <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
                                                     {% else %}
@@ -84,7 +383,7 @@
                                                 </div>
                                             {% endwith %}
                                         {% else %}
-                                            <span class="text-muted">Unassigned</span>
+                                            <span class="text-muted text-nowrap">Unassigned</span>
                                         {% endif %}
                                     </td>
                                     {% elif role == 'engineer' %}
@@ -137,36 +436,53 @@
                                 <td class="text-capitalize">{{ item.get_status_display }}</td>
                                 {% if role == 'admin' %}
                                     <td>
-                                        <span class="badge bg-light text-dark border">{{ item.created_at|date:"M d, Y" }}</span>
+                                        <span class="badge bg-light text-dark border">{{ item.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</span>
                                     </td>
                                 {% endif %}
-                                <td class="{% if role != 'requestor' and item.missed_sla %}table-danger{% endif %}">
+                                <td class="{% if role != 'requestor' and item.missed_sla %}table-danger{% endif %} text-nowrap">
                                     {% if item.end_date %}
-                                        <span class="badge {% if role != 'requestor' and item.missed_sla %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">{{ item.end_date|date:"M d, Y" }}</span>
+                                        <span class="badge {% if role != 'requestor' and item.missed_sla %}bg-danger text-white{% elif item.due_date and not item.missed_sla %}bg-success-subtle text-success border border-success-subtle{% else %}bg-light text-dark border{% endif %}">{{ item.end_date|date:"M d, Y" }}</span>
                                     {% else %}
                                         <span class="text-muted">&mdash;</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ item.days_since_creation }}</span>
+                                    {% if role == 'admin' %}
+                                        <span class="badge {{ item.admin_days_badge_classes }}">
+                                            {{ item.days_since_creation }}
+                                        </span>
+                                    {% else %}
+                                        {% with exceeded=item.sla_overrun %}
+                                            <span class="badge {% if exceeded %}bg-danger text-white{% else %}bg-primary-subtle text-primary border border-primary-subtle{% endif %}">
+                                                {{ item.days_since_creation }}
+                                            </span>
+                                        {% endwith %}
+                                    {% endif %}
                                 </td>
                                 {% if role != 'requestor' %}
                                     <td>
-                                        {% if item.due_date %}
-                                            <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
-                                                {{ item.due_date|date:"M d, Y" }}
-                                            </span>
-                                            {% if item.is_overdue %}
-                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2">Overdue</span>
+                                        {% if role == 'admin' %}
+                                            {% if item.start_date %}
+                                                <span class="badge bg-light text-dark border">{{ item.start_date|date:"M d, Y" }}</span>
+                                            {% else %}
+                                                <span class="text-muted">&mdash;</span>
                                             {% endif %}
                                         {% else %}
-                                            <span class="text-muted">&mdash;</span>
+                                            {% if item.due_date %}
+                                                <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
+                                                    {{ item.due_date|date:"M d, Y" }}
+                                                </span>
+                                                {% if item.is_overdue %}
+                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2">Overdue</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">&mdash;</span>
+                                            {% endif %}
                                         {% endif %}
                                     </td>
                                 {% endif %}
                                 <td class="text-end">
                                     <div class="d-inline-flex gap-2">
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-detail' item.pk %}">View</a>
                                         {% if role == 'admin' %}
                                             <a class="btn btn-sm btn-primary" href="{% url 'hub:request-manage' item.pk %}">Manage</a>
                                             <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
@@ -179,24 +495,12 @@
                                             </form>
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% elif role == 'requestor' %}
-                                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-edit' item.pk %}">Edit</a>
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
+                                        {% else %}
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
                                         {% endif %}
                                     </div>
-                                    {% if role == 'admin' %}
-                                        <form method="post" action="{% url 'hub:request-nudge' item.pk %}" class="d-flex align-items-center gap-2 justify-content-end mt-2 flex-wrap">
-                                            {% csrf_token %}
-                                            <label class="visually-hidden" for="notify-target-{{ item.pk }}">Notify recipient</label>
-                                            <select id="notify-target-{{ item.pk }}" name="target" class="form-select form-select-sm w-auto" required>
-                                                <option value="" selected disabled>Notify&hellip;</option>
-                                                {% if item.engineer %}
-                                                    <option value="engineer">Engineer</option>
-                                                {% endif %}
-                                                <option value="account_manager">Account Manager</option>
-                                            </select>
-                                            <button class="btn btn-sm btn-outline-secondary" type="submit">Nudge</button>
-                                        </form>
-                                    {% endif %}
                                 </td>
                             </tr>
                         {% empty %}
@@ -256,4 +560,39 @@
         </div>
     {% endif %}
 </div>
+{% if role == 'admin' %}
+    <script>
+        (function () {
+            const wrapper = document.querySelector(".dashboard-table-wrapper");
+            if (!wrapper) {
+                return;
+            }
+
+            const resetKey = "dashboardTableReset";
+            const resetScroll = () => {
+                wrapper.scrollLeft = 0;
+            };
+
+            if (sessionStorage.getItem(resetKey) === "1") {
+                sessionStorage.removeItem(resetKey);
+                requestAnimationFrame(resetScroll);
+            } else {
+                resetScroll();
+            }
+
+            const markForReset = () => {
+                sessionStorage.setItem(resetKey, "1");
+            };
+
+            document.querySelectorAll(".dashboard-metric-card-link, .table-sort-link").forEach((node) => {
+                node.addEventListener("click", markForReset, { passive: true });
+            });
+
+            const filterForm = document.querySelector(".dashboard-filter-form");
+            if (filterForm) {
+                filterForm.addEventListener("submit", markForReset);
+            }
+        })();
+    </script>
+{% endif %}
 {% endblock %}

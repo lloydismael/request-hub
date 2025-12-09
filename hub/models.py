@@ -1,9 +1,12 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+MANILA_TZ = ZoneInfo("Asia/Manila")
 class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -109,9 +112,10 @@ class Request(models.Model):
         creating = self.pk is None
         if creating and not self.start_date:
             self.start_date = timezone.now().date()
-        computed_due = self.compute_due_date()
-        if computed_due:
-            self.due_date = computed_due
+        if self.due_date is None:
+            computed_due = self.compute_due_date()
+            if computed_due:
+                self.due_date = computed_due
         self.full_clean()
         super().save(*args, **kwargs)
         if creating and not self.reference_code:
@@ -129,28 +133,52 @@ class Request(models.Model):
         if sla_days is None:
             return None
         base_date = self.start_date or timezone.now().date()
-        return base_date + timedelta(days=sla_days)
+        days_remaining = sla_days
+        candidate = base_date
+        while days_remaining > 0:
+            candidate += timedelta(days=1)
+            if candidate.weekday() < 5:  # Monday-Friday are working days
+                days_remaining -= 1
+        return candidate
 
     @property
     def days_since_creation(self) -> int:
-        """Return inclusive working-day count from creation date until completion or today."""
-        created_dt = self.created_at
-        if timezone.is_aware(created_dt):
-            start_date = timezone.localtime(created_dt).date()
+        """Return full working days since creation, counting only 24-hour intervals in Manila time."""
+        created_dt = timezone.localtime(self.created_at, MANILA_TZ)
+        if self.end_date:
+            end_dt = datetime.combine(self.end_date, time(23, 59, 59, tzinfo=MANILA_TZ))
         else:
-            start_date = created_dt.date()
-        end_date = self.end_date or timezone.now().date()
+            end_dt = timezone.now().astimezone(MANILA_TZ)
 
-        if end_date < start_date:
+        if end_dt <= created_dt:
             return 0
 
-        total_days = (end_date - start_date).days + 1
+        total_seconds = (end_dt - created_dt).total_seconds()
+        full_days = int(total_seconds // 86400)
+        if full_days <= 0:
+            return 0
+
         working_days = 0
-        for offset in range(total_days):
-            current_day = start_date + timedelta(days=offset)
+        for offset in range(1, full_days + 1):
+            current_day = (created_dt + timedelta(days=offset)).date()
             if current_day.weekday() < 5:  # Monday=0, Sunday=6
                 working_days += 1
         return working_days
+
+    @property
+    def sla_threshold_days(self) -> int | None:
+        return self.SLA_DAYS.get(self.priority)
+
+    @property
+    def sla_overrun(self) -> bool:
+        threshold = self.sla_threshold_days
+        if threshold is None:
+            return False
+        if self.status == self.Status.COMPLETED:
+            return self.missed_sla
+        if self.status != self.Status.ONGOING:
+            return False
+        return self.days_since_creation > threshold
 
     @property
     def missed_sla(self) -> bool:
@@ -158,6 +186,47 @@ class Request(models.Model):
         if not self.end_date or not self.due_date:
             return False
         return self.end_date > self.due_date
+
+    @property
+    def admin_days_rag(self) -> str:
+        """Return the RAG (red/amber/green) state for the admin days badge."""
+        days = self.days_since_creation
+        priority = self.priority
+
+        if priority == self.Priority.HIGH:
+            if days >= 5:
+                return "red"
+            if days > 3:
+                return "amber"
+            return "green"
+
+        if priority == self.Priority.MEDIUM:
+            if days >= 10:
+                return "red"
+            if days > 5:
+                return "amber"
+            return "green"
+
+        return "neutral"
+
+    @property
+    def admin_days_badge_classes(self) -> str:
+        """Return Bootstrap classes for the admin days badge based on the RAG state."""
+        mapping = {
+            "green": "bg-success-subtle text-success border border-success-subtle",
+            "amber": "bg-warning-subtle text-warning border border-warning-subtle",
+            "red": "bg-danger text-white",
+        }
+        return mapping.get(self.admin_days_rag, "bg-light text-dark border")
+
+    @property
+    def admin_days_overdue(self) -> bool:
+        if self.status != self.Status.ONGOING:
+            return False
+        days = self.days_since_creation
+        if self.priority == self.Priority.HIGH:
+            return days > 4
+        return days > 5
 
     def __str__(self) -> str:
         return f"{self.reference_code or 'Request'} - {self.account.name}"
@@ -169,6 +238,8 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     related_request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="notifications", null=True, blank=True)
+    actor = models.CharField(max_length=255, blank=True)
+    source = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -184,6 +255,9 @@ class Notification(models.Model):
     @property
     def icon_class(self) -> str:
         message_lower = (self.message or "").lower()
+        source_lower = (self.source or "").lower()
+        if "new request" in source_lower or "new request" in message_lower:
+            return "bi-plus-circle"
         if "assigned to request" in message_lower:
             return "bi-person-check"
         if "posted an update" in message_lower:

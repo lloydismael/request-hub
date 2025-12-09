@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tz %}
 {% block title %}Request {{ request_obj.reference_code }} · Request Hub{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
@@ -7,7 +8,7 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h1 class="h4 mb-0">{{ request_obj.reference_code }}</h1>
-                    <p class="text-muted mb-0">Created {{ request_obj.created_at|date:"M d, Y" }}</p>
+                    <p class="text-muted mb-0">Created {{ request_obj.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }} (GMT+8)</p>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="badge rounded-pill bg-primary text-uppercase fw-semibold">{{ request_obj.get_status_display }}</span>
@@ -33,7 +34,7 @@
                     <p class="mb-0">{{ request_obj.account.name }}</p>
                 </div>
                 <div class="col-sm-6">
-                    <p class="text-muted mb-1">Account Manager</p>
+                    <p class="text-muted mb-1">Requestor</p>
                     <p class="mb-0">{{ request_obj.account_manager }}</p>
                 </div>
                 <div class="col-sm-6">
@@ -88,7 +89,7 @@
                                     <div class="fw-semibold">{{ log.author.get_full_name|default:log.author.username }}</div>
                                     <div class="text-body">{{ log.message }}</div>
                                 </div>
-                                <small class="text-muted ms-3">{{ log.created_at|date:"M d, Y H:i" }}</small>
+                                    <small class="text-muted ms-3">{{ log.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</small>
                             </div>
                         </li>
                     {% endfor %}

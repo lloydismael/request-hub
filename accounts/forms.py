@@ -8,7 +8,7 @@ from .models import User
 ROLE_LABELS = {
     User.Roles.ADMIN: "Admin",
     User.Roles.ENGINEER: "Engineer",
-    User.Roles.REQUESTOR: "Account Manager",
+    User.Roles.REQUESTOR: "Requestor",
 }
 
 ROLE_CHOICES = [(key, label) for key, label in ROLE_LABELS.items()]
@@ -62,7 +62,7 @@ class ProfileForm(forms.ModelForm):
             "last_name": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
             "phone_number": forms.TextInput(attrs={"class": "form-control"}),
-            "profile_photo": forms.ClearableFileInput(attrs={"class": "form-control"}),
+            "profile_photo": forms.FileInput(attrs={"class": "form-control"}),
         }
 
     field_order = [
@@ -128,13 +128,32 @@ class RoleAuthenticationForm(AuthenticationForm):
             data = data.copy()
             username_input = data.get(username_field)
             if username_input:
-                normalized = username_input.strip().lower()
+                normalized = username_input.strip()
+                normalized_lower = normalized.lower()
+                matched_alias = None
+                matched_role = None
                 for role_value, alias_map in ROLE_ALIAS_MAP.items():
-                    alias = alias_map.get(normalized)
+                    alias = alias_map.get(normalized_lower)
                     if alias:
-                        data[username_field] = alias
-                        self._matched_role = role_value
+                        matched_alias = alias
+                        matched_role = role_value
                         break
+
+                if matched_alias:
+                    data[username_field] = matched_alias
+                    self._matched_role = matched_role
+                else:
+                    case_insensitive_match = (
+                        User.objects.filter(username__iexact=normalized)
+                        .values_list("username", "role")
+                        .first()
+                    )
+                    if case_insensitive_match:
+                        actual_username, role_value = case_insensitive_match
+                        data[username_field] = actual_username
+                        self._matched_role = self._matched_role or role_value
+                    else:
+                        data[username_field] = normalized_lower
             kwargs["data"] = data
 
         super().__init__(request=request, *args, **kwargs)
@@ -239,7 +258,7 @@ class UserManagementForm(forms.ModelForm):
         username = (self.cleaned_data.get("username") or "").strip()
         if not username:
             raise forms.ValidationError("Username cannot be blank.")
-        return username
+        return username.lower()
 
     def clean_first_name(self):
         first_name = self.cleaned_data.get("first_name")

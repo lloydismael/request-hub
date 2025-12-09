@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tz %}
 
 {% block title %}Management · Request Hub{% endblock %}
 
@@ -6,12 +7,38 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
     <div>
         <h1 class="h3 mb-1">Management</h1>
-        <p class="text-muted mb-0">Create, update, or remove user accounts for the workspace.</p>
+        <p class="text-muted mb-0">Create, update, or remove user accounts and managed accounts for the workspace.</p>
     </div>
-    <span class="badge text-bg-secondary">Total Users: {{ total_users }}</span>
+    <div class="d-flex flex-wrap gap-2">
+        <span class="badge text-bg-secondary">Users: {{ total_users }}</span>
+        <span class="badge text-bg-secondary">Accounts: {{ total_accounts }}</span>
+    </div>
 </div>
 
-<form method="post" class="glass-card p-4" novalidate>
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab != 'accounts' %}active{% endif %}" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-pane" type="button" role="tab" aria-controls="users-pane" aria-selected="{% if active_tab != 'accounts' %}true{% else %}false{% endif %}">Users</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'accounts' %}active{% endif %}" id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts-pane" type="button" role="tab" aria-controls="accounts-pane" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}">Accounts</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade {% if active_tab != 'accounts' %}show active{% endif %}" id="users-pane" role="tabpanel" aria-labelledby="users-tab" tabindex="0">
+        <form method="post" class="glass-card p-4" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="active_tab" value="users">
+            {% for hidden in formset.management_form %}
+                {{ hidden }}
+            {% endfor %}
+            {% if formset.non_form_errors %}
+                <div class="alert alert-danger">
+                    {% for error in formset.non_form_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
     {% csrf_token %}
     {% for hidden in formset.management_form %}
         {{ hidden }}
@@ -106,7 +133,7 @@
                                 {% if form.instance.pk %}
                                     <span class="text-muted small">Last login:
                                         {% if form.instance.last_login %}
-                                            {{ form.instance.last_login|date:"M d, Y H:i" }}
+                                            {{ form.instance.last_login|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
                                         {% else %}
                                             Never
                                         {% endif %}
@@ -139,8 +166,81 @@
         </table>
     </div>
 
-    <div class="d-flex justify-content-end mt-4">
-        <button type="submit" class="btn btn-primary">Save Changes</button>
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
     </div>
-</form>
+    <div class="tab-pane fade {% if active_tab == 'accounts' %}show active{% endif %}" id="accounts-pane" role="tabpanel" aria-labelledby="accounts-tab" tabindex="0">
+        <form method="post" class="glass-card p-4" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="active_tab" value="accounts">
+            {% for hidden in account_formset.management_form %}
+                {{ hidden }}
+            {% endfor %}
+            {% if account_formset.non_form_errors %}
+                <div class="alert alert-danger">
+                    {% for error in account_formset.non_form_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" style="min-width: 260px;">Account Name</th>
+                            <th scope="col" style="min-width: 160px;" class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in account_formset %}
+                            <tr class="align-middle">
+                                {% for hidden in form.hidden_fields %}
+                                    {{ hidden }}
+                                {% endfor %}
+                                <td>
+                                    {{ form.name }}
+                                    {% for error in form.name.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                    {% if form.non_field_errors %}
+                                        {% for error in form.non_field_errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if form.instance.pk %}
+                                        <div class="d-inline-flex align-items-center gap-2">
+                                            <label class="form-check mb-0">
+                                                {{ form.DELETE }}
+                                                <span class="form-check-label">Delete</span>
+                                            </label>
+                                            <span class="badge text-bg-light">Created {{ form.instance.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }} (GMT+8)</span>
+                                        </div>
+                                    {% else %}
+                                        <span class="badge text-bg-success">New account</span>
+                                        <small class="text-muted ms-2">Leave blank to skip creating an account.</small>
+                                    {% endif %}
+                                    {% for error in form.DELETE.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted py-4">No accounts found.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-primary">Save Account Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

@@ -9,7 +9,7 @@ def add_primary_account_manager(apps, schema_editor):
         defaults={
             "role": "requestor",
             "first_name": "Admin",
-            "last_name": "Account Manager",
+            "last_name": "Requestor",
             "email": "account_admin@example.com",
             "password": make_password("Admin"),
             "is_active": True,
