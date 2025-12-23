@@ -48,6 +48,7 @@ class User(AbstractUser):
     )
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
     profile_completed = models.BooleanField(default=False)
+    must_change_password = models.BooleanField(default=False)
 
     def must_complete_profile(self) -> bool:
         required_fields = [self.email, self.phone_number, self.profile_photo]

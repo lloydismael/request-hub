@@ -2,11 +2,19 @@
 {% load static %}
 {% load tz %}
 {% block title %}Dashboard · Request Hub{% endblock %}
-{% block body_class %}{% if role == 'admin' %}admin-dashboard{% endif %}{% endblock %}
+{% block body_class %}
+    {% if role == 'admin' %}
+        admin-dashboard
+    {% elif role == 'requestor' %}
+        requestor-dashboard
+    {% elif role == 'engineer' %}
+        engineer-dashboard
+    {% endif %}
+{% endblock %}
 {% block content %}
 <div class="row g-4">
-    <div class="col-12 {% if role == 'admin' %}col-xl-12{% else %}col-xl-9{% endif %}">
-    <div class="glass-card p-4 mb-5 {% if role == 'admin' %}glass-card--expanded{% endif %}">
+    <div class="{% if role == 'admin' %}col-12 col-xl-12{% elif role == 'engineer' %}col-12 col-xl-12{% else %}col-12{% endif %}">
+    <div class="glass-card p-4 mb-5 {% if role == 'admin' %}glass-card--expanded{% elif role == 'requestor' %}glass-card--expanded{% endif %}">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
                 <h2 class="h5 mb-0">{% if role == 'requestor' %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
                 {% if role == 'admin' %}
@@ -22,6 +30,25 @@
                     </div>
                 {% endif %}
             </div>
+            {% if role == 'requestor' %}
+                <div class="requestor-summary mb-4">
+                    <div class="requestor-summary__metrics">
+                        <div class="requestor-summary__metric">
+                            <span class="requestor-summary__label">Total Requests</span>
+                            <span class="requestor-summary__value">{{ metrics.ongoing|add:metrics.completed }}</span>
+                        </div>
+                        <div class="requestor-summary__metric">
+                            <span class="requestor-summary__label">Ongoing</span>
+                            <span class="requestor-summary__value requestor-summary__value--ongoing">{{ metrics.ongoing }}</span>
+                        </div>
+                        <div class="requestor-summary__metric">
+                            <span class="requestor-summary__label">Completed</span>
+                            <span class="requestor-summary__value requestor-summary__value--completed">{{ metrics.completed }}</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary requestor-summary__cta" id="new-request-btn">New Request</button>
+                </div>
+            {% endif %}
             {% if role == 'admin' %}
                 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-5 g-3 mb-4 dashboard-metrics">
                     <div class="col">
@@ -205,8 +232,8 @@
                     </div>
                 </form>
             {% endif %}
-            <div class="table-responsive dashboard-table-wrapper">
-                <table class="table align-middle">
+            <div class="table-responsive dashboard-table-wrapper{% if role == 'requestor' %} dashboard-table-wrapper--requestor{% endif %}">
+                <table class="table align-middle{% if role == 'requestor' %} table-hover table-requestor{% endif %}">
                     <thead>
                         <tr>
                             {% if role == 'admin' %}
@@ -373,14 +400,22 @@
                                     <td class="text-nowrap">
                                         {% if item.engineer %}
                                             {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
+                                                {% with first=item.engineer.first_name last=item.engineer.last_name %}
                                                 <div class="table-cell-nowrap">
                                                     {% if item.engineer.profile_photo %}
                                                         <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
                                                     {% else %}
                                                         <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
                                                     {% endif %}
-                                                    <span>{{ engineer_name }}</span>
+                                                        <span>
+                                                            {% if first or last %}
+                                                                {{ first|default_if_none:"" }}{% if last %} {{ last|default_if_none:"" }}{% endif %}
+                                                            {% else %}
+                                                                {{ engineer_name }}
+                                                            {% endif %}
+                                                        </span>
                                                 </div>
+                                                {% endwith %}
                                             {% endwith %}
                                         {% else %}
                                             <span class="text-muted text-nowrap">Unassigned</span>
@@ -416,14 +451,22 @@
                                         <td>
                                             {% if item.engineer %}
                                                 {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
+                                                    {% with first=item.engineer.first_name last=item.engineer.last_name %}
                                                     <div class="d-flex align-items-center gap-2">
                                                         {% if item.engineer.profile_photo %}
                                                             <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
                                                         {% else %}
                                                             <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
                                                         {% endif %}
-                                                        <span>{{ engineer_name }}</span>
+                                                            <span>
+                                                                {% if first or last %}
+                                                                    {{ first|default_if_none:"" }}{% if last %} {{ last|default_if_none:"" }}{% endif %}
+                                                                {% else %}
+                                                                    {{ engineer_name }}
+                                                                {% endif %}
+                                                            </span>
                                                     </div>
+                                                    {% endwith %}
                                                 {% endwith %}
                                             {% else %}
                                                 <span class="text-muted">Unassigned</span>
@@ -433,7 +476,19 @@
                                 {% if role != 'requestor' %}
                                     <td class="text-capitalize">{{ item.get_priority_display }}</td>
                                 {% endif %}
-                                <td class="text-capitalize">{{ item.get_status_display }}</td>
+                                <td>
+                                    {% if role == 'requestor' %}
+                                        {% if item.status == 'ongoing' %}
+                                            <span class="status-badge status-badge--ongoing">{{ item.get_status_display }}</span>
+                                        {% elif item.status == 'completed' %}
+                                            <span class="status-badge status-badge--completed">{{ item.get_status_display }}</span>
+                                        {% else %}
+                                            <span class="status-badge">{{ item.get_status_display }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-capitalize">{{ item.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
                                 {% if role == 'admin' %}
                                     <td>
                                         <span class="badge bg-light text-dark border">{{ item.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</span>
@@ -452,18 +507,32 @@
                                             {{ item.days_since_creation }}
                                         </span>
                                     {% else %}
-                                        {% with exceeded=item.sla_overrun %}
-                                            <span class="badge {% if exceeded %}bg-danger text-white{% else %}bg-primary-subtle text-primary border border-primary-subtle{% endif %}">
+                                        {% if role == 'requestor' %}
+                                            <span class="badge bg-light text-dark border">
                                                 {{ item.days_since_creation }}
                                             </span>
-                                        {% endwith %}
+                                        {% else %}
+                                            {% with exceeded=item.sla_overrun %}
+                                                <span class="badge {% if exceeded %}bg-danger text-white{% else %}bg-primary-subtle text-primary border border-primary-subtle{% endif %}">
+                                                    {{ item.days_since_creation }}
+                                                </span>
+                                            {% endwith %}
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 {% if role != 'requestor' %}
                                     <td>
                                         {% if role == 'admin' %}
-                                            {% if item.start_date %}
-                                                <span class="badge bg-light text-dark border">{{ item.start_date|date:"M d, Y" }}</span>
+                                            {% if item.due_date %}
+                                                {% if item.is_overdue or item.missed_sla %}
+                                                    <span class="badge bg-danger text-white">
+                                                        {{ item.due_date|date:"M d, Y" }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-light text-dark border">
+                                                        {{ item.due_date|date:"M d, Y" }}
+                                                    </span>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="text-muted">&mdash;</span>
                                             {% endif %}
@@ -472,9 +541,6 @@
                                                 <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
                                                     {{ item.due_date|date:"M d, Y" }}
                                                 </span>
-                                                {% if item.is_overdue %}
-                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2">Overdue</span>
-                                                {% endif %}
                                             {% else %}
                                                 <span class="text-muted">&mdash;</span>
                                             {% endif %}
@@ -489,16 +555,26 @@
                                                 {% csrf_token %}
                                                 <button class="btn btn-sm btn-outline-success" type="submit">Outlook</button>
                                             </form>
-                                            <form method="post" action="{% url 'hub:request-teams' item.pk %}" class="d-inline">
-                                                {% csrf_token %}
-                                                <button class="btn btn-sm btn-outline-info" type="submit">Teams</button>
-                                            </form>
+                                            {% if item.teams_chat_url %}
+                                                <a class="btn btn-sm btn-outline-info" href="{{ item.teams_chat_url }}" target="_blank" rel="noopener">Teams</a>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-outline-info" type="button" disabled title="Add requestor and engineer emails to start a chat">Teams</button>
+                                            {% endif %}
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% elif role == 'requestor' %}
                                             <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% else %}
                                             <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
+                                            <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <button class="btn btn-sm btn-outline-success" type="submit">Outlook</button>
+                                            </form>
+                                            {% if item.teams_chat_url %}
+                                                <a class="btn btn-sm btn-outline-info" href="{{ item.teams_chat_url }}" target="_blank" rel="noopener">Teams</a>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-outline-info" type="button" disabled title="Add requestor and engineer emails to start a chat">Teams</button>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 </td>
@@ -513,30 +589,32 @@
             </div>
         </div>
     </div>
-    {% if role != 'admin' %}
-        <div class="col-12 col-xl-3">
-            <div class="glass-card glass-card--compact p-4 mb-4">
-                <h2 class="h6 text-uppercase text-muted">Notifications</h2>
-                <ul class="list-unstyled mt-3 mb-0">
-                    {% for notification in notifications %}
-                        <li class="mb-3">
-                            <div class="d-flex justify-content-between">
-                                <span class="text-body">{{ notification.message }}</span>
-                                <span class="text-muted small">{{ notification.created_at|timesince }} ago</span>
-                            </div>
-                        </li>
-                    {% empty %}
-                        <li class="text-muted">No new notifications</li>
-                    {% endfor %}
-                </ul>
-                <a class="btn btn-link btn-sm mt-3 px-0" href="{% url 'hub:notifications' %}">View all</a>
+</div>
+{% if role == 'requestor' %}
+    <div class="requestor-modal" id="create-request-modal" aria-hidden="true" data-open-on-load="{% if form_has_errors %}true{% else %}false{% endif %}">
+        <div class="requestor-modal__backdrop" id="create-request-backdrop"></div>
+        <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-request-title">
+            <div class="requestor-modal__header">
+                <h2 class="h5 mb-0" id="create-request-title">Create Request</h2>
+                <button type="button" class="btn-close" id="close-request-btn" aria-label="Close"></button>
             </div>
-            {% if role == 'requestor' %}
-                <div class="glass-card p-4">
-                    <h2 class="h5 mb-3">Create Request</h2>
-                    <form method="post">
-                        {% csrf_token %}
-                        {% for field in form %}
+            <div class="requestor-modal__body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form.errors %}
+                        <div class="alert alert-danger" role="alert">Please resolve the highlighted fields before submitting the request.</div>
+                    {% endif %}
+                    {% for field in form %}
+                        {% if field.name == 'priority' %}
+                            <div class="mb-3" data-priority-group{% if form.engagement_type.value != 'support' %} style="display:none;"{% endif %}>
+                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}
+                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                        {% else %}
                             <div class="mb-3">
                                 <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
@@ -552,14 +630,17 @@
                                     <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
                                 {% endif %}
                             </div>
-                        {% endfor %}
-                        <button class="btn btn-primary w-100" type="submit">Submit Request</button>
-                    </form>
-                </div>
-            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    <div class="d-flex gap-2 justify-content-end mt-4">
+                        <button type="button" class="btn btn-outline-secondary" id="cancel-request-btn">Cancel</button>
+                        <button class="btn btn-primary" type="submit">Submit Request</button>
+                    </div>
+                </form>
+            </div>
         </div>
-    {% endif %}
-</div>
+    </div>
+{% endif %}
 {% if role == 'admin' %}
     <script>
         (function () {
@@ -591,6 +672,96 @@
             const filterForm = document.querySelector(".dashboard-filter-form");
             if (filterForm) {
                 filterForm.addEventListener("submit", markForReset);
+            }
+        })();
+    </script>
+{% endif %}
+{% if role == 'requestor' %}
+    <script>
+        (function () {
+            const modal = document.getElementById("create-request-modal");
+            if (!modal) {
+                return;
+            }
+            const openBtn = document.getElementById("new-request-btn");
+            const closeBtns = [
+                document.getElementById("close-request-btn"),
+                document.getElementById("cancel-request-btn"),
+                document.getElementById("create-request-backdrop"),
+            ].filter(Boolean);
+
+            const body = document.body;
+            const dialog = modal.querySelector(".requestor-modal__dialog");
+
+            const lockScroll = () => {
+                body.classList.add("requestor-modal-open");
+            };
+
+            const unlockScroll = () => {
+                body.classList.remove("requestor-modal-open");
+            };
+
+            const openModal = () => {
+                modal.classList.add("requestor-modal--visible");
+                lockScroll();
+                if (dialog) {
+                    dialog.scrollTop = 0;
+                }
+            };
+
+            const closeModal = () => {
+                if (!modal.classList.contains("requestor-modal--visible")) {
+                    return;
+                }
+                modal.classList.remove("requestor-modal--visible");
+                unlockScroll();
+            };
+
+            if (openBtn) {
+                openBtn.addEventListener("click", openModal, { passive: true });
+            }
+
+            closeBtns.forEach((button) => {
+                button.addEventListener("click", closeModal, { passive: true });
+            });
+
+            const engagementSelect = modal.querySelector("#id_engagement_type");
+            const priorityGroup = modal.querySelector('[data-priority-group]');
+            const prioritySelect = modal.querySelector('[data-priority-select="true"]');
+            const defaultPriority = prioritySelect ? prioritySelect.getAttribute('data-default-priority') || "" : "";
+
+            const syncPriorityVisibility = () => {
+                if (!priorityGroup || !prioritySelect || !engagementSelect) {
+                    return;
+                }
+                const shouldShow = engagementSelect.value === "support";
+                priorityGroup.style.display = shouldShow ? "" : "none";
+                if (shouldShow) {
+                    prioritySelect.setAttribute("required", "required");
+                } else {
+                    prioritySelect.removeAttribute("required");
+                }
+                if (!shouldShow) {
+                    prioritySelect.value = defaultPriority;
+                } else if (!prioritySelect.value) {
+                    prioritySelect.value = defaultPriority;
+                }
+            };
+
+            if (engagementSelect) {
+                engagementSelect.addEventListener("change", syncPriorityVisibility, { passive: true });
+            }
+
+            syncPriorityVisibility();
+
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeModal();
+                }
+            });
+
+            if (modal.dataset.openOnLoad === "true") {
+                openModal();
             }
         })();
     </script>

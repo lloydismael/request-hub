@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Activity Logs · Request Hub{% endblock %}
+{% block content %}
+<div class="glass-card p-4 mb-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+        <div>
+            <h1 class="h4 mb-1">Engineer Activity Logs</h1>
+            <p class="text-muted mb-0">Capture what you worked on, where it happened, and whether the effort is billable.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-start">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                Total Entries: {{ logs|length }}
+            </span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                Billable Hours: {{ hours_summary.billable|default:0|floatformat:1 }}
+            </span>
+            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                Not Billable: {{ hours_summary.non_billable|default:0|floatformat:1 }}
+            </span>
+            <span class="badge bg-info-subtle text-info border border-info-subtle">
+                Total Hours: {{ hours_summary.total|default:0|floatformat:1 }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 align-items-start">
+    <div class="col-12 col-xl-4 col-xxl-3">
+        <div class="glass-card p-4 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h1 class="h5 mb-0">{% if editing_log %}Edit Activity Log{% else %}Log Activity{% endif %}</h1>
+            </div>
+            {% if editing_log %}
+                <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
+                    <span>Updating entry from {{ editing_log.request_date|date:"M d, Y" }}.</span>
+                    <a href="{% url 'hub:activity-logs' %}" class="alert-link">Cancel</a>
+                </div>
+            {% endif %}
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors|join:" " }}
+                    </div>
+                {% endif %}
+                {% if editing_log %}
+                    <input type="hidden" name="log_id" value="{{ editing_log.pk }}">
+                {% endif %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex justify-content-end gap-2">
+                    {% if editing_log %}
+                        <a href="{% url 'hub:activity-logs' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Update Log</button>
+                    {% else %}
+                        <button type="submit" class="btn btn-primary">Save Log</button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="col-12 col-xl-8 col-xxl-9">
+        <div class="glass-card p-4 h-100 d-flex flex-column">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                <div>
+                    <h2 class="h5 mb-1">Recent Activity</h2>
+                    <p class="text-muted mb-0">Track your daily work for downstream productivity reporting.</p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge bg-light text-dark border">Sorted by most recent</span>
+                </div>
+            </div>
+            <div class="table-responsive flex-grow-1">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Account</th>
+                            <th scope="col">Request</th>
+                            <th scope="col">Activity</th>
+                            <th scope="col">Hours</th>
+                            <th scope="col">Location</th>
+                            <th scope="col">Billable</th>
+                            <th scope="col" class="text-end">Status</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                            <tr{% if editing_log and editing_log.pk == log.pk %} class="table-warning"{% endif %}>
+                                <td class="text-nowrap">{{ log.request_date|date:"M d, Y" }}</td>
+                                <td class="text-nowrap">{{ log.account.name }}</td>
+                                <td class="text-nowrap">
+                                    {% if log.request %}
+                                        <a href="{% url 'hub:request-manage-collab' log.request.pk %}" class="text-decoration-none">{{ log.request.reference_code }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td style="min-width: 260px;">
+                                    <div class="fw-semibold">{{ log.get_activity_type_display }}</div>
+                                    <div class="text-muted small">{{ log.details }}</div>
+                                </td>
+                                <td>{{ log.actual_hours|floatformat:1 }}</td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">{{ log.get_location_display }}</span>
+                                </td>
+                                <td>
+                                    {% if log.is_billable %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Billable</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary text-white">Not billable</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if log.status == 'completed' %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">{{ log.get_status_display }}</span>
+                                    {% elif log.status == 'in_progress' %}
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ log.get_status_display }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ log.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="?edit={{ log.pk }}" class="btn btn-outline-primary btn-sm">Edit</a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">No activity logs yet. Add your first entry using the form.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

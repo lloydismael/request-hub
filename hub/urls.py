@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     DashboardView,
+    EngineerActivityLogView,
     NotificationListView,
     NotificationFollowRedirectView,
     NotificationReadView,
@@ -24,6 +25,7 @@ app_name = "hub"
 
 urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
+    path("activity-logs/", EngineerActivityLogView.as_view(), name="activity-logs"),
     path("requests/export/csv/", RequestExportCSVView.as_view(), name="request-export"),
     path("requests/<int:pk>/", RequestDetailView.as_view(), name="request-detail"),
     path("requests/<int:pk>/edit/", RequestUpdateView.as_view(), name="request-edit"),

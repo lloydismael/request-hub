@@ -23,14 +23,24 @@
                     </datalist>
                 {% endif %}
                 {% for field in form %}
-                    <div class="mb-3">
-                        <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                        {% if field.errors %}
-                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                        {% endif %}
-                    </div>
+                    {% if field.name == 'priority' %}
+                        <div class="mb-3" data-priority-group{% if form.engagement_type.value != 'support' %} style="display:none;"{% endif %}>
+                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}
+                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="mb-3">
+                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}
+                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        </div>
+                    {% endif %}
                 {% endfor %}
                 <div class="d-flex flex-wrap gap-2 justify-content-end">
                     <button class="btn btn-primary" type="submit">Save changes</button>
@@ -99,4 +109,40 @@
         </div>
     </div>
 </div>
+<script>
+    (function () {
+        const detailsFormInput = document.querySelector('form[method="post"][novalidate] input[name="form_type"][value="details"]');
+        const detailsForm = detailsFormInput ? detailsFormInput.closest('form') : null;
+        if (!detailsForm) {
+            return;
+        }
+        const engagementSelect = detailsForm.querySelector('#id_engagement_type');
+        const priorityGroup = detailsForm.querySelector('[data-priority-group]');
+        const prioritySelect = detailsForm.querySelector('[data-priority-select="true"]');
+        const defaultPriority = prioritySelect ? prioritySelect.getAttribute('data-default-priority') || '' : '';
+
+        const syncPriorityVisibility = () => {
+            if (!engagementSelect || !priorityGroup || !prioritySelect) {
+                return;
+            }
+            const shouldShow = engagementSelect.value === 'support';
+            priorityGroup.style.display = shouldShow ? '' : 'none';
+            if (shouldShow) {
+                prioritySelect.setAttribute('required', 'required');
+                if (!prioritySelect.value) {
+                    prioritySelect.value = defaultPriority;
+                }
+            } else {
+                prioritySelect.removeAttribute('required');
+                prioritySelect.value = defaultPriority;
+            }
+        };
+
+        if (engagementSelect) {
+            engagementSelect.addEventListener('change', syncPriorityVisibility, { passive: true });
+        }
+
+        syncPriorityVisibility();
+    })();
+</script>
 {% endblock %}

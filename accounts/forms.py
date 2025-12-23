@@ -102,6 +102,11 @@ class ProfileForm(forms.ModelForm):
         elif current_password:
             self.add_error("new_password1", "Enter a new password.")
 
+        if user.must_change_password and not new_password1:
+            self.add_error("new_password1", "Set a new password to continue.")
+            if not current_password:
+                self.add_error("current_password", "Enter your current password to set a new one.")
+
         return cleaned_data
 
     def save(self, commit=True):
@@ -110,6 +115,8 @@ class ProfileForm(forms.ModelForm):
 
         if new_password:
             user.set_password(new_password)
+            if user.must_change_password:
+                user.must_change_password = False
 
         if commit:
             user.save()
@@ -242,9 +249,11 @@ class UserManagementForm(forms.ModelForm):
         password = self.cleaned_data.get("password1")
         if password:
             user.set_password(password)
+            user.must_change_password = True
         elif not self.instance.pk:
             # Guard against saving a new user without credentials.
             user.set_unusable_password()
+            user.must_change_password = True
 
         if not self.instance.pk:
             user.is_active = True

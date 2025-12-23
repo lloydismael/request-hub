@@ -4,9 +4,11 @@ from django.utils import timezone
 
 from typing import Iterable, List
 
+from django.db.models import Q
+
 from accounts.models import User
 from .constants import ACCOUNT_NAME_SUGGESTIONS
-from .models import Account, Request, StatusLog
+from .models import Account, EngineerActivityLog, Request, StatusLog
 
 
 class AvatarSelect(forms.Select):
@@ -67,13 +69,18 @@ class RequestForm(forms.ModelForm):
         required=False,
         widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
     )
+    priority = forms.ChoiceField(
+        label="Priority",
+        choices=Request.Priority.choices,
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select", "data-priority-select": "true"}),
+    )
     engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
-        required=True,
+        required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
         label="Preferred Engineer",
         empty_label="Select preferred engineer",
-        error_messages={"required": "Please choose a preferred engineer for this request."},
     )
 
     class Meta:
@@ -83,30 +90,54 @@ class RequestForm(forms.ModelForm):
             "needed_by",
             "product_category",
             "engagement_type",
+            "priority",
             "description",
             "engineer",
         ]
         widgets = {
             "product_category": forms.Select(attrs={"class": "form-select"}),
             "engagement_type": forms.Select(attrs={"class": "form-select"}),
+            "priority": forms.Select(attrs={"class": "form-select", "data-priority-select": "true"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor_role=None, **kwargs):
+        self.actor_role = actor_role
         super().__init__(*args, **kwargs)
         engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
-        self.fields["engineer"].queryset = engineer_qs
-        widget = self.fields["engineer"].widget
+        engineer_field = self.fields["engineer"]
+        engineer_field.queryset = engineer_qs
+        widget = engineer_field.widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(engineer_qs)
-        self.fields["engineer"].label_from_instance = _user_display
+        engineer_field.label_from_instance = _user_display
+        if actor_role == User.Roles.ENGINEER:
+            engineer_field.label = "Turn Over Request"
+            engineer_field.empty_label = "Keep current assignment"
+        else:
+            engineer_field.label = "Preferred Engineer"
+            engineer_field.empty_label = "Select preferred engineer"
+        priority_field = self.fields["priority"]
+        if not self.is_bound:
+            if self.instance.pk and self.instance.priority:
+                priority_field.initial = self.instance.priority
+            else:
+                priority_field.initial = Request.Priority.MEDIUM
+        priority_widget = priority_field.widget
+        if self.is_bound:
+            default_priority = getattr(self.instance, "priority", None) or Request.Priority.MEDIUM
+        else:
+            default_priority = priority_field.initial or Request.Priority.MEDIUM
+        priority_widget.attrs["data-default-priority"] = default_priority
         if self.instance.pk:
             self.fields["account_name"].initial = self.instance.account.name
         due_field = self.fields["needed_by"]
+        today = timezone.now().date()
         if self.instance.pk and self.instance.start_date:
             due_field.initial = self.instance.start_date
         else:
-            due_field.initial = timezone.now().date()
+            due_field.initial = today
+        due_field.widget.attrs.pop("min", None)
 
         existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
         combined = []
@@ -122,6 +153,15 @@ class RequestForm(forms.ModelForm):
             combined.append(cleaned)
         self.account_name_suggestions = tuple(combined)
 
+        if self.is_bound and self.errors:
+            for name, field in self.fields.items():
+                if name in self.errors:
+                    widget = field.widget
+                    existing_classes = widget.attrs.get("class", "")
+                    class_list = existing_classes.split()
+                    if "is-invalid" not in class_list:
+                        widget.attrs["class"] = (existing_classes + " is-invalid").strip()
+
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
         if not value:
@@ -133,15 +173,47 @@ class RequestForm(forms.ModelForm):
         if not request_date:
             return request_date
         today = timezone.now().date()
-        if request_date < today:
-            raise forms.ValidationError("Select today or a future date for the request.")
         return request_date
+
+    def clean(self):
+        cleaned_data = super().clean()
+        engagement = cleaned_data.get("engagement_type")
+        priority = cleaned_data.get("priority")
+        if engagement == Request.Engagement.SUPPORT:
+            if not priority:
+                self.add_error("priority", "Select the priority for support requests.")
+        else:
+            existing_priority = self.instance.priority if getattr(self.instance, "priority", None) else Request.Priority.MEDIUM
+            cleaned_data["priority"] = existing_priority or Request.Priority.MEDIUM
+        return cleaned_data
+
+    def clean_engineer(self):
+        engineer = self.cleaned_data.get("engineer")
+        if not engineer:
+            return engineer
+
+        ongoing_requests = Request.objects.filter(
+            engineer=engineer,
+            status=Request.Status.ONGOING,
+        )
+
+        if self.instance.pk:
+            ongoing_requests = ongoing_requests.exclude(pk=self.instance.pk)
+
+        if ongoing_requests.count() >= 5:
+            raise forms.ValidationError(
+                "This engineer already has five ongoing requests. Please select another engineer.",
+            )
+
+        return engineer
 
     def save(self, commit=True):
         account_name = self.cleaned_data["account_name"]
         account, _ = Account.objects.get_or_create(name=account_name)
         self.instance.account = account
         self.instance.engineer = self.cleaned_data.get("engineer")
+        priority_value = self.cleaned_data.get("priority") or Request.Priority.MEDIUM
+        self.instance.priority = priority_value
         request_date = self.cleaned_data.get("needed_by")
         if request_date:
             self.instance.start_date = request_date
@@ -250,6 +322,137 @@ class StatusLogForm(forms.ModelForm):
         if not message:
             raise forms.ValidationError("Message cannot be empty.")
         return message
+
+
+class EngineerActivityLogForm(forms.ModelForm):
+    activity_type = forms.ChoiceField(
+        label="Type of Activity",
+        choices=EngineerActivityLog.ActivityType.choices,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    is_billable = forms.TypedChoiceField(
+        label="Billable",
+        choices=(
+            ("true", "Billable"),
+            ("false", "Not billable"),
+        ),
+        coerce=lambda value: str(value).lower() in {"true", "1", "yes"},
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta:
+        model = EngineerActivityLog
+        fields = [
+            "request",
+            "account",
+            "request_date",
+            "activity_type",
+            "actual_hours",
+            "details",
+            "location",
+            "is_billable",
+            "status",
+        ]
+        labels = {
+            "request": "Related Request",
+            "account": "Account",
+            "request_date": "Date of Request",
+            "actual_hours": "Actual Hours",
+            "details": "Details",
+            "location": "Work Location",
+            "status": "Status",
+        }
+        widgets = {
+            "request": forms.Select(attrs={"class": "form-select"}),
+            "account": forms.Select(attrs={"class": "form-select"}),
+            "request_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "actual_hours": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25"}),
+            "details": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "location": forms.Select(attrs={"class": "form-select"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def __init__(self, *args, engineer=None, **kwargs):
+        self.engineer = engineer
+        if self.engineer is None:
+            raise ValueError("EngineerActivityLogForm requires an engineer instance.")
+        super().__init__(*args, **kwargs)
+
+        account_field = self.fields["account"]
+        account_field.required = False
+        account_field.queryset = Account.objects.order_by("name")
+
+        request_field = self.fields["request"]
+        request_field.required = False
+        related_requests = Request.objects.filter(
+            Q(engineer=self.engineer) | Q(backup_engineer=self.engineer)
+        ).order_by("-created_at").select_related("account")
+        request_field.queryset = related_requests
+        request_field.empty_label = "Select request (optional)"
+
+        if not self.is_bound:
+            if self.instance.pk:
+                self.fields["is_billable"].initial = "true" if self.instance.is_billable else "false"
+                self.fields["activity_type"].initial = self.instance.activity_type
+                self.fields["request_date"].initial = self.instance.request_date
+            else:
+                self.fields["request_date"].initial = timezone.now().date()
+                self.fields["is_billable"].initial = "true"
+                self.fields["activity_type"].initial = EngineerActivityLog.ActivityType.INTERNAL_SUPPORT
+        else:
+            raw_billable = self.data.get(self.add_prefix("is_billable"))
+            if raw_billable is None:
+                self.fields["is_billable"].initial = "true"
+
+        if self.is_bound and self.errors:
+            for name, field in self.fields.items():
+                if name in self.errors:
+                    widget = field.widget
+                    css = widget.attrs.get("class", "")
+                    if "is-invalid" not in css.split():
+                        widget.attrs["class"] = (css + " is-invalid").strip()
+
+    def clean_details(self):
+        value = (self.cleaned_data.get("details") or "").strip()
+        if not value:
+            raise forms.ValidationError("Provide the activity details.")
+        return value
+
+    def clean_actual_hours(self):
+        value = self.cleaned_data.get("actual_hours")
+        if value is None:
+            return value
+        if value <= 0:
+            raise forms.ValidationError("Actual hours must be greater than zero.")
+        return value
+
+    def clean_request_date(self):
+        request_date = self.cleaned_data.get("request_date")
+        if request_date and request_date > timezone.now().date():
+            raise forms.ValidationError("Date of request cannot be in the future.")
+        return request_date
+
+    def clean_request(self):
+        request_obj = self.cleaned_data.get("request")
+        if not request_obj:
+            return request_obj
+        allowed_ids = set(self.fields["request"].queryset.values_list("id", flat=True))
+        if request_obj.pk not in allowed_ids:
+            raise forms.ValidationError("Select a request assigned to you.")
+        return request_obj
+
+    def clean(self):
+        cleaned_data = super().clean()
+        request_obj = cleaned_data.get("request")
+        account = cleaned_data.get("account")
+        if request_obj:
+            if account and account != request_obj.account:
+                self.add_error("account", "Account does not match the selected request.")
+            else:
+                cleaned_data["account"] = request_obj.account
+        if not cleaned_data.get("account"):
+            self.add_error("account", "Select an account or choose a request.")
+        return cleaned_data
 
 
 class AdminRequestFilterForm(forms.Form):

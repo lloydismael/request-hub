@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/PD favicon.png' %}">
 </head>
 <body class="bg-light {% block body_class %}{% endblock %}">
     <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm">
@@ -20,6 +21,9 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto">
                         <li class="nav-item"><a class="nav-link" href="{% url 'hub:dashboard' %}">Dashboard</a></li>
+                        {% if request.user.role == 'engineer' %}
+                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:activity-logs' %}">Activity Logs</a></li>
+                        {% endif %}
                         {% if request.user.role == 'admin' %}
                             <li class="nav-item"><a class="nav-link" href="{% url 'hub:management' %}">Management</a></li>
                             <li class="nav-item"><a class="nav-link" href="{% url 'hub:report' %}">Reports</a></li>
@@ -63,12 +67,40 @@
 
     <main class="container py-4">
         {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} glass-card" role="alert">{{ message }}</div>
+            {% if "request-success" in message.tags %}
+                <div class="request-success-toast" role="status" aria-live="polite" data-request-success-toast>
+                    <span class="request-success-toast__icon" aria-hidden="true">
+                        <svg class="request-success-toast__svg" viewBox="0 0 48 48" focusable="false">
+                            <circle class="request-success-toast__circle" cx="24" cy="24" r="22"></circle>
+                            <path class="request-success-toast__check" d="M16 24.5l6 6 12-12"></path>
+                        </svg>
+                    </span>
+                    <span class="request-success-toast__message">{{ message }}</span>
+                </div>
+            {% elif "login-success" in message.tags %}
+                <div class="login-success-overlay" data-login-success-overlay data-redirect-delay="1800" aria-live="polite" role="status">
+                    <div class="login-success-card">
+                        <div class="login-success-card__ring">
+                            <div class="login-success-card__icon">
+                                <i class="bi bi-check2"></i>
+                            </div>
+                        </div>
+                        <h2 class="login-success-card__title">Welcome back!</h2>
+                        <p class="login-success-card__subtitle">{{ message }}</p>
+                        <div class="login-success-card__progress">
+                            <div class="login-success-card__progress-bar"></div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-{{ message.tags }} glass-card" role="alert">{{ message }}</div>
+            {% endif %}
         {% endfor %}
         {% block content %}{% endblock %}
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'js/login-success.js' %}" defer></script>
     <script>
         (function () {
             function enhanceSelect(select) {
@@ -111,6 +143,46 @@
 
             document.addEventListener("DOMContentLoaded", function () {
                 document.querySelectorAll('select[data-avatar-select="true"]').forEach(enhanceSelect);
+
+                var successToasts = document.querySelectorAll('[data-request-success-toast]');
+                successToasts.forEach(function (toast) {
+                    var hideTimeoutId = null;
+
+                    var removeToast = function () {
+                        toast.remove();
+                    };
+
+                    var hideToast = function () {
+                        toast.classList.add('request-success-toast--hide');
+                        // Fallback removal in case transitionend does not fire
+                        setTimeout(removeToast, 400);
+                    };
+
+                    var scheduleHide = function () {
+                        if (hideTimeoutId !== null) {
+                            clearTimeout(hideTimeoutId);
+                        }
+                        hideTimeoutId = setTimeout(hideToast, 3000);
+                    };
+
+                    toast.addEventListener('transitionend', function (event) {
+                        if (event.propertyName === 'opacity' && toast.classList.contains('request-success-toast--hide')) {
+                            removeToast();
+                        }
+                    });
+
+                    var computedAnimation = window.getComputedStyle(toast).animationName;
+                    if (computedAnimation && computedAnimation !== 'none') {
+                        toast.addEventListener('animationend', function handleAnimationEnd(event) {
+                            if (event.animationName === 'request-success-toast-pop') {
+                                toast.removeEventListener('animationend', handleAnimationEnd);
+                                scheduleHide();
+                            }
+                        });
+                    } else {
+                        scheduleHide();
+                    }
+                });
             });
         })();
     </script>

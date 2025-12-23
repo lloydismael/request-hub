@@ -1,11 +1,12 @@
 import csv
+from decimal import Decimal
 from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -21,16 +22,101 @@ from accounts.models import User
 from .forms import (
     AccountManagementForm,
     AdminRequestFilterForm,
+    EngineerActivityLogForm,
     RequestAdminForm,
     RequestForm,
     RequestStatusForm,
     StatusLogForm,
 )
 from .constants import ACCOUNT_NAME_RAW
-from .models import Account, Notification, Request, StatusLog
-from .mixins import AdminRequiredMixin
+from .models import Account, EngineerActivityLog, Notification, Request, StatusLog
+from .mixins import AdminRequiredMixin, AdminOrEngineerRequiredMixin, EngineerRequiredMixin
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
+
+
+class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, TemplateView):
+    template_name = "hub/activity_logs.html"
+    form_class = EngineerActivityLogForm
+
+    def get_queryset(self):
+        return (
+            EngineerActivityLog.objects.filter(engineer=self.request.user)
+            .select_related("account", "request")
+            .order_by("-request_date", "-created_at")
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = kwargs.get("form")
+        logs = kwargs.get("logs")
+        editing_log = kwargs.get("editing_log")
+        if form is None:
+            form = self.form_class(engineer=self.request.user)
+        if logs is None:
+            logs = list(self.get_queryset())
+        else:
+            logs = list(logs)
+
+        total_hours = Decimal("0")
+        billable_hours = Decimal("0")
+        for log in logs:
+            hours = log.actual_hours or Decimal("0")
+            total_hours += hours
+            if log.is_billable:
+                billable_hours += hours
+
+        context.update(
+            {
+                "form": form,
+                "logs": logs,
+                "hours_summary": {
+                    "total": total_hours,
+                    "billable": billable_hours,
+                    "non_billable": total_hours - billable_hours,
+                },
+                "editing_log": editing_log,
+            }
+        )
+        return context
+
+    def get(self, request, *args, **kwargs):
+        edit_id = request.GET.get("edit")
+        editing_log = None
+        form = None
+        if edit_id:
+            try:
+                editing_log = self.get_queryset().get(pk=edit_id)
+            except (EngineerActivityLog.DoesNotExist, ValueError):
+                messages.error(request, "We could not find that activity log to edit.")
+                return redirect("hub:activity-logs")
+            form = self.form_class(engineer=request.user, instance=editing_log)
+        context = self.get_context_data(form=form, editing_log=editing_log)
+        return self.render_to_response(context)
+
+    def post(self, request, *args, **kwargs):
+        log_id = request.POST.get("log_id")
+        instance = None
+        if log_id:
+            try:
+                instance = self.get_queryset().get(pk=log_id)
+            except (EngineerActivityLog.DoesNotExist, ValueError):
+                messages.error(request, "Unable to update the selected activity log.")
+                return redirect("hub:activity-logs")
+
+        form = self.form_class(data=request.POST, engineer=request.user, instance=instance)
+        if form.is_valid():
+            activity_log = form.save(commit=False)
+            activity_log.engineer = request.user
+            activity_log.save()
+            if instance:
+                messages.success(request, "Activity log updated successfully.")
+            else:
+                messages.success(request, "Activity logged successfully.")
+            return redirect("hub:activity-logs")
+        logs = self.get_queryset()
+        context = self.get_context_data(form=form, logs=logs, editing_log=instance)
+        return self.render_to_response(context)
 
 
 def summarize_request_changes(original, updated, changed_fields):
@@ -206,15 +292,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
         if user.role == User.Roles.REQUESTOR:
-            form = kwargs.get("form") or RequestForm()
+            form = kwargs.get("form")
+            if form is None:
+                form = RequestForm(actor_role=User.Roles.REQUESTOR)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
-            metric_filter_keys = {"open", "overdue", "due_soon", "completed_recent", "new_this_week"}
-            if not metric_filter:
-                metric_filter = "open"
-            if metric_filter not in metric_filter_keys:
-                metric_filter = "open"
             metric_keys = {"ongoing", "completed"}
             if metric_filter not in metric_keys:
                 metric_filter = ""
@@ -250,6 +333,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["form_has_errors"] = form.is_bound and bool(form.errors)
         elif user.role == User.Roles.ENGINEER:
             metric_filter = self.request.GET.get("metric_filter") or ""
             valid_metrics = {"ongoing", "due_soon", "overdue", "completed"}
@@ -346,7 +430,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "created": lambda req: req.created_at,
                 "end_date": lambda req: _admin_sort_date_key(req.end_date),
                 "days": lambda req: req.days_since_creation,
-                "due": lambda req: _admin_sort_date_key(req.start_date),
+                "due": lambda req: _admin_sort_date_key(req.due_date),
             }
 
             default_sort = "created"
@@ -362,7 +446,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             key_fn = sort_map[sort_key]
             requests.sort(key=key_fn, reverse=reverse)
 
-            null_field_map = {"end_date": "end_date", "due": "start_date"}
+            null_field_map = {"end_date": "end_date", "due": "due_date"}
             if sort_key in null_field_map:
                 field_name = null_field_map[sort_key]
                 ordered = [req for req in requests if getattr(req, field_name) is not None]
@@ -475,7 +559,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if request.user.role != User.Roles.REQUESTOR:
             return redirect("hub:dashboard")
-        form = RequestForm(request.POST)
+        form = RequestForm(request.POST, actor_role=User.Roles.REQUESTOR)
         if form.is_valid():
             req = form.save(commit=False)
             req.requestor = request.user
@@ -485,7 +569,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req._actor_source = "Dashboard · New Request"
             req.save()
             self._notify_admins_new_request(req)
-            messages.success(request, "Request submitted successfully.")
+            messages.success(request, "Request submitted", extra_tags="request-success")
             return redirect("hub:dashboard")
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
@@ -663,6 +747,11 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "hub/request_update.html"
     success_url = reverse_lazy("hub:dashboard")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.setdefault("actor_role", self.request.user.role)
+        return kwargs
+
     def dispatch(self, request, *args, **kwargs):
         if request.user.role != User.Roles.REQUESTOR:
             return redirect("hub:dashboard")
@@ -755,7 +844,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
 
     def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
         if form is None:
-            form = RequestForm(instance=request_obj)
+            form = RequestForm(instance=request_obj, actor_role=self.request.user.role)
         status_allowed = self.request.user.role == User.Roles.ENGINEER
         if status_allowed and status_form is None:
             status_form = RequestStatusForm(instance=request_obj)
@@ -783,7 +872,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         }
 
     def _handle_details_update(self, request, request_obj):
-        form = RequestForm(request.POST, instance=request_obj)
+        form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role)
         if form.is_valid():
             source_label = self._source_label("Manage Request")
             form.instance._actor_user = request.user
@@ -944,38 +1033,23 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         return response
 
 
-class RequestTeamsRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
+class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor"), pk=pk)
+        teams_url = request_obj.teams_chat_url
 
-        engineer_email = (
-            request_obj.engineer.email if request_obj.engineer and request_obj.engineer.email else None
-        )
-        manager_email = (
-            request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
-        )
-
-        if not engineer_email or not manager_email:
+        if not teams_url:
             messages.error(
                 request,
                 "Unable to start a Teams chat. Ensure the engineer and requestor both have emails configured.",
             )
             return redirect("hub:dashboard")
 
-        participants = [engineer_email, manager_email]
-        users_param = quote(",".join(participants))
-        group_name = f"{request_obj.reference_code} · {request_obj.account.name}"
-        topic_param = quote(group_name)
-        teams_url = (
-            "https://teams.microsoft.com/l/chat/0/0?users="
-            f"{users_param}&topicName={topic_param}"
-        )
-
         messages.info(request, "Opening Microsoft Teams in a new tab…")
         return redirect(teams_url)
 
 
-class RequestOutlookRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
+class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor", "account"), pk=pk)
 
@@ -1004,8 +1078,14 @@ class RequestOutlookRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
 
         if request_obj.engineer:
             engineer_display = request_obj.engineer.get_full_name() or request_obj.engineer.username or "Engineer"
+            acknowledgement_line = (
+                f"{engineer_display} is looped in and will reach out with updates or any follow-up questions."
+            )
         else:
-            engineer_display = "Engineer"
+            engineer_display = "our engineering team"
+            acknowledgement_line = (
+                "Our engineering team will assign a specialist and follow up with updates as the request progresses."
+            )
 
         engagement_display = request_obj.get_engagement_type_display()
         product_display = request_obj.get_product_category_display()
@@ -1021,26 +1101,25 @@ class RequestOutlookRedirectView(AdminRequiredMixin, LoginRequiredMixin, View):
 
         body_template = (
             "Hello {requestor_name},\n\n"
-            "Thank you for submitting your request via Request Hub. We have received the following details:\n\n"
+            "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it:\n\n"
+            "Reference: {reference}\n"
             "Request Type: {request_type}\n"
             "Product: {product}\n"
-            "Details: {details}\n\n"
-            "Your request has been endorsed and assigned to the appropriate resource for review and action. "
-            "The assigned team member will reach out to you if further information is needed or once progress has been made.\n"
-            "Should you have any urgent concerns or wish to follow up, feel free to reply to this message.\n\n"
-            "Hello {engineer_name},\n"
-            "For your handling on this request.\n\n"
-            "Regards,\n"
+            "Summary: {details}\n\n"
+            "{acknowledgement_line}\n"
+            "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n\n"
+            "Best regards,\n"
             "{sender_name}"
         )
 
         body = quote(
             body_template.format(
                 requestor_name=requestor_name,
+                reference=request_obj.reference_code,
                 request_type=engagement_display,
                 product=product_display,
                 details=details_line,
-                engineer_name=engineer_display,
+                acknowledgement_line=acknowledgement_line,
                 sender_name=sender_name,
             )
         )
@@ -1115,7 +1194,18 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        report_view = (self.request.GET.get("report_view") or "operational").lower()
+        if report_view not in {"operational", "activity"}:
+            report_view = "operational"
+        context["report_view"] = report_view
 
+        if report_view == "activity":
+            context.update(self._build_activity_log_context())
+        else:
+            context.update(self._build_operational_context())
+        return context
+
+    def _build_operational_context(self):
         total_requests = Request.objects.count()
         account_manager_qs = (
             Request.objects.values("account_manager")
@@ -1244,48 +1334,179 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
         engagement_chart_has_data = any(value > 0 for value in engagement_chart_payload["totals"])
         product_chart_has_data = any(value > 0 for value in product_chart_payload["totals"])
 
-        context.update(
-            {
-                "totals": {
-                    "requests": total_requests,
-                    "account_managers": (
-                        Request.objects.exclude(account_manager__isnull=True)
-                        .exclude(account_manager__exact="")
-                        .values("account_manager")
-                        .distinct()
-                        .count()
-                    ),
-                    "engineers": (
-                        Request.objects.exclude(engineer__isnull=True)
-                        .values("engineer")
-                        .distinct()
-                        .count()
-                    ),
-                    "ongoing": Request.objects.filter(status=Request.Status.ONGOING).count(),
-                    "completed": Request.objects.filter(status=Request.Status.COMPLETED).count(),
-                },
-                "account_manager_chart": {
-                    "labels": [item["name"] for item in account_manager_data],
-                    "totals": [item["total"] for item in account_manager_data],
-                    "ongoing": [item["ongoing"] for item in account_manager_data],
-                    "completed": [item["completed"] for item in account_manager_data],
-                },
-                "engineer_chart": {
-                    "labels": [item["name"] for item in engineer_data],
-                    "totals": [item["total"] for item in engineer_data],
-                    "ongoing": [item["ongoing"] for item in engineer_data],
-                    "completed": [item["completed"] for item in engineer_data],
-                },
-                "engagement_chart": engagement_chart_payload,
-                "engagement_chart_has_data": engagement_chart_has_data,
-                "product_chart": product_chart_payload,
-                "product_chart_has_data": product_chart_has_data,
-                "account_manager_stats": account_manager_data,
-                "engineer_stats": engineer_data,
-                "status_breakdown": status_breakdown,
-            }
+        return {
+            "totals": {
+                "requests": total_requests,
+                "account_managers": (
+                    Request.objects.exclude(account_manager__isnull=True)
+                    .exclude(account_manager__exact="")
+                    .values("account_manager")
+                    .distinct()
+                    .count()
+                ),
+                "engineers": (
+                    Request.objects.exclude(engineer__isnull=True)
+                    .values("engineer")
+                    .distinct()
+                    .count()
+                ),
+                "ongoing": Request.objects.filter(status=Request.Status.ONGOING).count(),
+                "completed": Request.objects.filter(status=Request.Status.COMPLETED).count(),
+            },
+            "account_manager_chart": {
+                "labels": [item["name"] for item in account_manager_data],
+                "totals": [item["total"] for item in account_manager_data],
+                "ongoing": [item["ongoing"] for item in account_manager_data],
+                "completed": [item["completed"] for item in account_manager_data],
+            },
+            "engineer_chart": {
+                "labels": [item["name"] for item in engineer_data],
+                "totals": [item["total"] for item in engineer_data],
+                "ongoing": [item["ongoing"] for item in engineer_data],
+                "completed": [item["completed"] for item in engineer_data],
+            },
+            "engagement_chart": engagement_chart_payload,
+            "engagement_chart_has_data": engagement_chart_has_data,
+            "product_chart": product_chart_payload,
+            "product_chart_has_data": product_chart_has_data,
+            "account_manager_stats": account_manager_data,
+            "engineer_stats": engineer_data,
+            "status_breakdown": status_breakdown,
+        }
+
+    def _build_activity_log_context(self):
+        logs_qs = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+
+        total_hours = logs_qs.aggregate(total=Sum("actual_hours")) or {}
+        billable_hours = logs_qs.filter(is_billable=True).aggregate(total=Sum("actual_hours")) or {}
+        non_billable_hours = logs_qs.filter(is_billable=False).aggregate(total=Sum("actual_hours")) or {}
+
+        total_hours_value = total_hours.get("total") or Decimal("0")
+        billable_hours_value = billable_hours.get("total") or Decimal("0")
+        non_billable_hours_value = non_billable_hours.get("total") or Decimal("0")
+
+        engineer_hours = (
+            logs_qs.values(
+                "engineer",
+                "engineer__first_name",
+                "engineer__last_name",
+                "engineer__username",
+            )
+            .annotate(
+                total_hours=Sum("actual_hours"),
+                billable_hours=Sum("actual_hours", filter=Q(is_billable=True)),
+            )
+            .order_by("engineer__first_name", "engineer__last_name", "engineer__username")
         )
-        return context
+
+        engineer_chart = {
+            "labels": [],
+            "billable": [],
+            "non_billable": [],
+        }
+        engineer_table = []
+        for row in engineer_hours:
+            if row["engineer"] is None:
+                display_name = "Unassigned"
+            else:
+                first = (row.get("engineer__first_name") or "").strip()
+                last = (row.get("engineer__last_name") or "").strip()
+                full_name = f"{first} {last}".strip()
+                display_name = full_name or row.get("engineer__username") or "Engineer"
+            total_val = row.get("total_hours") or Decimal("0")
+            billable_val = row.get("billable_hours") or Decimal("0")
+            non_billable_val = total_val - billable_val
+            engineer_chart["labels"].append(display_name)
+            engineer_chart["billable"].append(float(billable_val))
+            engineer_chart["non_billable"].append(float(non_billable_val))
+            engineer_table.append(
+                {
+                    "name": display_name,
+                    "total_hours": total_val,
+                    "billable_hours": billable_val,
+                    "non_billable_hours": non_billable_val,
+                }
+            )
+
+        activity_label_map = dict(EngineerActivityLog.ActivityType.choices)
+        activity_hours = (
+            logs_qs.values("activity_type")
+            .annotate(
+                total_hours=Sum("actual_hours"),
+                billable_hours=Sum("actual_hours", filter=Q(is_billable=True)),
+            )
+            .order_by("activity_type")
+        )
+
+        activity_chart = {
+            "labels": [],
+            "billable": [],
+            "non_billable": [],
+        }
+        activity_table = []
+        for row in activity_hours:
+            activity_key = row.get("activity_type")
+            label = activity_label_map.get(activity_key, "Unspecified")
+            total_val = row.get("total_hours") or Decimal("0")
+            billable_val = row.get("billable_hours") or Decimal("0")
+            non_billable_val = total_val - billable_val
+            activity_chart["labels"].append(label)
+            activity_chart["billable"].append(float(billable_val))
+            activity_chart["non_billable"].append(float(non_billable_val))
+            activity_table.append(
+                {
+                    "label": label,
+                    "total_hours": total_val,
+                    "billable_hours": billable_val,
+                    "non_billable_hours": non_billable_val,
+                }
+            )
+
+        location_label_map = dict(EngineerActivityLog.Location.choices)
+        location_hours = (
+            logs_qs.values("location")
+            .annotate(total_hours=Sum("actual_hours"))
+            .order_by("location")
+        )
+        location_chart = {
+            "labels": [],
+            "totals": [],
+        }
+        for row in location_hours:
+            location_key = row.get("location")
+            label = location_label_map.get(location_key, "Unspecified")
+            total_val = row.get("total_hours") or Decimal("0")
+            location_chart["labels"].append(label)
+            location_chart["totals"].append(float(total_val))
+
+        billable_chart = {
+            "labels": ["Billable", "Not Billable"],
+            "totals": [
+                float(billable_hours_value),
+                float(non_billable_hours_value),
+            ],
+        }
+
+        recent_logs = list(
+            logs_qs.order_by("-request_date", "-created_at")[:50]
+        )
+
+        return {
+            "activity_totals": {
+                "entries": logs_qs.count(),
+                "total_hours": total_hours_value,
+                "billable_hours": billable_hours_value,
+                "non_billable_hours": non_billable_hours_value,
+                "unique_accounts": logs_qs.values("account").distinct().count(),
+            },
+            "activity_engineer_chart": engineer_chart,
+            "activity_engineer_table": engineer_table,
+            "activity_type_chart": activity_chart,
+            "activity_type_table": activity_table,
+            "activity_location_chart": location_chart,
+            "activity_billable_chart": billable_chart,
+            "activity_logs": recent_logs,
+        }
 
 
 class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):

@@ -1,8 +1,10 @@
 from datetime import datetime, time, timedelta
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -28,6 +30,7 @@ class Request(models.Model):
         TRAINING = "training", "Training"
         SUPPORT = "support", "Support"
         INQUIRY = "inquiry", "Inquiry"
+        DEPLOYMENT = "deployment", "Deployment"
 
     class Status(models.TextChoices):
         ONGOING = "ongoing", "Ongoing"
@@ -55,6 +58,9 @@ class Request(models.Model):
             ("VMware", "VMware"),
             ("Omnissa", "Omnissa"),
             ("Hybrid", "Hybrid"),
+            ("Dell", "Dell"),
+            ("HP", "HP"),
+            ("Network", "Network"),
             ("Others", "Others"),
         ],
     )
@@ -228,8 +234,84 @@ class Request(models.Model):
             return days > 4
         return days > 5
 
+    @property
+    def teams_chat_url(self) -> str:
+        engineer_email = (
+            self.engineer.email if self.engineer and self.engineer.email else None
+        )
+        manager_email = (
+            self.requestor.email if self.requestor and self.requestor.email else None
+        )
+        if not engineer_email or not manager_email:
+            return ""
+        participants = ",".join([engineer_email, manager_email])
+        topic = f"{self.reference_code} · {self.account.name}"
+        return (
+            "https://teams.microsoft.com/l/chat/0/0?users="
+            f"{quote(participants)}&topicName={quote(topic)}"
+        )
+
     def __str__(self) -> str:
         return f"{self.reference_code or 'Request'} - {self.account.name}"
+
+
+class EngineerActivityLog(models.Model):
+    class Location(models.TextChoices):
+        WFA = "wfa", "WFA"
+        OFFICE = "office", "Office"
+        ONSITE = "onsite", "Onsite"
+
+    class ActivityType(models.TextChoices):
+        LEARNING = "learning", "Learning"
+        INTERNAL_SUPPORT = "internal_support", "Internal Support"
+        ON_CALL_SUPPORT = "on_call_support", "On-Call Support"
+        PRE_SALES = "pre_sales", "Pre-Sales"
+        PROJECT_MANAGEMENT = "project_management", "Project Management"
+        TRAINING = "training", "Training"
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planned"
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
+
+    engineer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="activity_logs",
+        limit_choices_to={"role": "engineer"},
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.PROTECT,
+        related_name="activity_logs",
+    )
+    request = models.ForeignKey(
+        "Request",
+        on_delete=models.SET_NULL,
+        related_name="activity_logs",
+        blank=True,
+        null=True,
+    )
+    request_date = models.DateField()
+    activity_type = models.CharField(
+        max_length=40,
+        choices=ActivityType.choices,
+        default=ActivityType.INTERNAL_SUPPORT,
+    )
+    actual_hours = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0)])
+    details = models.TextField()
+    location = models.CharField(max_length=20, choices=Location.choices)
+    is_billable = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.IN_PROGRESS)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-request_date", "-created_at"]
+
+    def __str__(self) -> str:
+        engineer_name = self.engineer.get_full_name() or self.engineer.username or "Engineer"
+        return f"{engineer_name} · {self.activity_type} · {self.request_date:%Y-%m-%d}"
 
 
 class Notification(models.Model):

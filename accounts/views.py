@@ -9,6 +9,7 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import TemplateView, UpdateView
 
+from accounts.middleware import FORCE_PASSWORD_CHANGE_SESSION_KEY
 from accounts.models import StoredFile, User
 
 from .forms import (
@@ -47,6 +48,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         user.profile_completed = True
         user.save(update_fields=["profile_completed"])
         if password_changed:
+            self.request.session.pop(FORCE_PASSWORD_CHANGE_SESSION_KEY, None)
             update_session_auth_hash(self.request, self.object)
         message_details = []
         if password_changed:
@@ -103,6 +105,11 @@ class RoleLoginView(LoginView):
                 code="invalid_role",
             )
         super().confirm_login_allowed(user)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Login successful. Redirecting to your dashboard…", extra_tags="login-success")
+        return response
 
 
 class StoredFileServeView(LoginRequiredMixin, View):

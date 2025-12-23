@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Account, Notification, Request, StatusLog
+from .models import Account, EngineerActivityLog, Notification, Request, StatusLog
 
 
 @admin.register(Account)
@@ -36,3 +36,11 @@ class StatusLogAdmin(admin.ModelAdmin):
     list_display = ("request", "author", "created_at")
     list_filter = ("created_at",)
     search_fields = ("request__reference_code", "author__username", "message")
+
+
+@admin.register(EngineerActivityLog)
+class EngineerActivityLogAdmin(admin.ModelAdmin):
+    list_display = ("request_date", "engineer", "account", "activity_type", "actual_hours", "is_billable", "status")
+    list_filter = ("status", "is_billable", "location", "request_date", "account")
+    search_fields = ("activity_type", "details", "account__name", "engineer__username", "engineer__first_name", "engineer__last_name")
+    autocomplete_fields = ("engineer", "account", "request")
