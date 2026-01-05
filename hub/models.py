@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
@@ -107,7 +108,33 @@ class Request(models.Model):
             )
             if self.pk:
                 assigned = assigned.exclude(pk=self.pk)
-            if assigned.count() >= 5:
+
+            max_allowed = 5
+            if (
+                self.engagement_type == self.Engagement.DEPLOYMENT
+                and self.start_date
+                and (self.due_date or self.start_date)
+            ):
+                deployment_end = self.due_date or self.start_date
+                overlap_filter = Q(start_date__lte=deployment_end) & (
+                    Q(due_date__gte=self.start_date) | Q(due_date__isnull=True)
+                )
+                overlapping_deployments = assigned.filter(
+                    engagement_type=self.Engagement.DEPLOYMENT
+                ).filter(overlap_filter)
+                if overlapping_deployments.exists():
+                    max_allowed = 3
+
+            if assigned.count() >= max_allowed:
+                if max_allowed == 3:
+                    raise ValidationError(
+                        {
+                            "engineer": (
+                                "Selected engineer already handles three overlapping deployment assignments for the chosen window. "
+                                "Pick another engineer or adjust the deployment dates."
+                            )
+                        }
+                    )
                 raise ValidationError({"engineer": "Selected engineer already has 5 ongoing requests."})
         if self.end_date and self.status != self.Status.COMPLETED:
             raise ValidationError({"end_date": "Mark the request as completed before setting an end date."})
@@ -246,9 +273,21 @@ class Request(models.Model):
             return ""
         participants = ",".join([engineer_email, manager_email])
         topic = f"{self.reference_code} · {self.account.name}"
+        engineer_display = (
+            self.engineer.get_full_name()
+            if self.engineer and self.engineer.get_full_name()
+            else (self.engineer.username if self.engineer and self.engineer.username else "our support engineering team")
+        )
+        message = (
+            f"I'm {engineer_display}, and I've been assigned as the engineer to handle your request. "
+            "I'll be working closely with you to ensure everything is addressed promptly and accurately.\n\n"
+            "If you have any additional details or questions regarding your request, please feel free to share it with me. "
+            "I'll keep you updated on the progress and next steps.\n\n"
+            "Looking forward to assisting you!"
+        )
         return (
             "https://teams.microsoft.com/l/chat/0/0?users="
-            f"{quote(participants)}&topicName={quote(topic)}"
+            f"{quote(participants)}&topicName={quote(topic)}&message={quote(message)}"
         )
 
     def __str__(self) -> str:
@@ -268,6 +307,7 @@ class EngineerActivityLog(models.Model):
         PRE_SALES = "pre_sales", "Pre-Sales"
         PROJECT_MANAGEMENT = "project_management", "Project Management"
         TRAINING = "training", "Training"
+        DEPLOYMENT = "deployment", "Deployment"
 
     class Status(models.TextChoices):
         PLANNED = "planned", "Planned"

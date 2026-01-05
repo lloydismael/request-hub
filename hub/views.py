@@ -1,10 +1,13 @@
 import csv
 from decimal import Decimal
 from datetime import date
+from typing import Optional
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.sessions.models import Session
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.forms import modelformset_factory
@@ -117,6 +120,141 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
         logs = self.get_queryset()
         context = self.get_context_data(form=form, logs=logs, editing_log=instance)
         return self.render_to_response(context)
+
+
+class EngineerActivityLogDeleteView(EngineerRequiredMixin, LoginRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        log = get_object_or_404(
+            EngineerActivityLog.objects.filter(engineer=request.user),
+            pk=pk,
+        )
+        log.delete()
+        messages.success(request, "Activity log deleted successfully.")
+        return redirect("hub:activity-logs")
+
+
+class ReportExportView(AdminRequiredMixin, LoginRequiredMixin, View):
+    """Export operational or activity report data as CSV."""
+
+    def get(self, request, *args, **kwargs):
+        report_view = (request.GET.get("report_view") or "operational").lower()
+        if report_view == "activity":
+            return self._export_activity_logs()
+        return self._export_operational_report()
+
+    @staticmethod
+    def _format_user(user: Optional[User]) -> str:
+        if not user:
+            return ""
+        full_name = user.get_full_name()
+        return full_name or user.username
+
+    @staticmethod
+    def _format_date(value):
+        if not value:
+            return ""
+        return value.strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _format_datetime(value):
+        if not value:
+            return ""
+        localized = timezone.localtime(value)
+        return localized.strftime("%Y-%m-%d %H:%M:%S")
+
+    def _export_operational_report(self):
+        filename = f"operational-report-{timezone.now().strftime('%Y%m%d-%H%M%S')}.csv"
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Reference",
+                "Requestor",
+                "Account",
+                "Engagement",
+                "Product Category",
+                "Priority",
+                "Status",
+                "Engineer",
+                "Backup Engineer",
+                "Start Date",
+                "Due Date",
+                "Created",
+            ]
+        )
+
+        queryset = (
+            Request.objects.select_related("requestor", "account", "engineer", "backup_engineer")
+            .order_by("created_at")
+        )
+        status_labels = dict(Request.Status.choices)
+        engagement_labels = dict(Request.Engagement.choices)
+        for request_obj in queryset:
+            writer.writerow(
+                [
+                    request_obj.reference_code,
+                    self._format_user(getattr(request_obj, "requestor", None)),
+                    request_obj.account.name if request_obj.account else "",
+                    engagement_labels.get(request_obj.engagement_type, request_obj.engagement_type or ""),
+                    request_obj.product_category or "",
+                    request_obj.get_priority_display(),
+                    status_labels.get(request_obj.status, request_obj.status or ""),
+                    self._format_user(getattr(request_obj, "engineer", None)),
+                    self._format_user(getattr(request_obj, "backup_engineer", None)),
+                    self._format_date(request_obj.start_date),
+                    self._format_date(request_obj.due_date),
+                    self._format_datetime(request_obj.created_at),
+                ]
+            )
+
+        return response
+
+    def _export_activity_logs(self):
+        filename = f"activity-logs-{timezone.now().strftime('%Y%m%d-%H%M%S')}.csv"
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Request Date",
+                "Engineer",
+                "Account",
+                "Request Reference",
+                "Activity Type",
+                "Details",
+                "Hours",
+                "Location",
+                "Billable",
+                "Created",
+            ]
+        )
+
+        logs = (
+            EngineerActivityLog.objects.select_related("engineer", "account", "request")
+            .order_by("-request_date", "-created_at")
+        )
+        activity_labels = dict(EngineerActivityLog.ActivityType.choices)
+        location_labels = dict(EngineerActivityLog.Location.choices)
+        for log in logs:
+            writer.writerow(
+                [
+                    self._format_date(log.request_date),
+                    self._format_user(log.engineer),
+                    log.account.name if log.account else "",
+                    log.request.reference_code if log.request else "",
+                    activity_labels.get(log.activity_type, log.activity_type or ""),
+                    log.details or "",
+                    f"{log.actual_hours}",
+                    location_labels.get(log.location, log.location or ""),
+                    "Yes" if log.is_billable else "No",
+                    self._format_datetime(log.created_at),
+                ]
+            )
+
+        return response
 
 
 def summarize_request_changes(original, updated, changed_fields):
@@ -403,7 +541,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "open",
                 "overdue",
                 "due_soon",
-                "completed_recent",
+                "completed",
                 "new_this_week",
             ]
             metric_filter = self.request.GET.get("metric_filter")
@@ -542,11 +680,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 for req in requests
                 if req.due_date and 0 <= (req.due_date - today).days <= 3
             ]
-        if metric_filter == "completed_recent":
+        if metric_filter == "completed":
             return [
                 req
                 for req in requests
-                if req.status == Request.Status.COMPLETED and req.end_date and (today - req.end_date).days <= 30
+                if req.status == Request.Status.COMPLETED
             ]
         if metric_filter == "new_this_week":
             return [
@@ -1092,10 +1230,9 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         description_clean = (request_obj.description or "").strip()
         if description_clean:
-            normalized_description = description_clean.replace("\r", " ").replace("\n", " ")
-            details_line = f"{request_obj.reference_code} - {normalized_description}"
+            description_line = description_clean.replace("\r", " ").replace("\n", " ")
         else:
-            details_line = request_obj.reference_code
+            description_line = "No description provided."
 
         sender_name = request.user.get_full_name() or request.user.username
 
@@ -1105,7 +1242,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
             "Reference: {reference}\n"
             "Request Type: {request_type}\n"
             "Product: {product}\n"
-            "Summary: {details}\n\n"
+            "Description: {description}\n\n"
             "{acknowledgement_line}\n"
             "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n\n"
             "Best regards,\n"
@@ -1118,7 +1255,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
                 reference=request_obj.reference_code,
                 request_type=engagement_display,
                 product=product_display,
-                details=details_line,
+                description=description_line,
                 acknowledgement_line=acknowledgement_line,
                 sender_name=sender_name,
             )
@@ -1528,6 +1665,12 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         active_tab = request.POST.get("active_tab", "users")
         self._sync_account_baseline()
+        if active_tab != "accounts":
+            user_action_value = request.POST.get("user_action")
+            if user_action_value:
+                action_response = self._handle_user_action_request(request, user_action_value)
+                if action_response:
+                    return action_response
         formset = self.formset_class(request.POST, queryset=self.get_queryset())
         account_formset = self.account_form_class(request.POST, queryset=Account.objects.order_by("name"))
         self._prepare_formset(formset)
@@ -1672,6 +1815,7 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             "total_users": User.objects.count(),
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
+            "default_password": getattr(settings, "DEFAULT_USER_PASSWORD", "@Password"),
         }
 
     @staticmethod
@@ -1703,6 +1847,54 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             to_create.append(Account(name=normalized))
         if to_create:
             Account.objects.bulk_create(to_create, ignore_conflicts=True)
+
+    def _handle_user_action_request(self, request, action_value):
+        action, separator, raw_user_id = (action_value or "").partition(":")
+        if not separator:
+            messages.error(request, "We could not determine the requested action.")
+            return redirect("hub:management")
+
+        try:
+            target_user = User.objects.get(pk=int(raw_user_id))
+        except (User.DoesNotExist, ValueError):
+            messages.error(request, "We could not find the selected user account.")
+            return redirect("hub:management")
+
+        if action == "reset_password":
+            return self._reset_user_password(request, target_user)
+
+        messages.error(request, "Unknown action requested.")
+        return redirect("hub:management")
+
+    @staticmethod
+    def _clear_user_sessions(target_user: User) -> int:
+        removed = 0
+        user_id = str(target_user.pk)
+        session_qs = Session.objects.filter(expire_date__gte=timezone.now())
+        for session in session_qs:
+            try:
+                data = session.get_decoded()
+            except Exception:
+                continue
+            if str(data.get("_auth_user_id")) == user_id:
+                session.delete()
+                removed += 1
+        return removed
+
+    def _reset_user_password(self, request, target_user: User):
+        default_password = getattr(settings, "DEFAULT_USER_PASSWORD", "@Password")
+        target_user.set_password(default_password)
+        target_user.must_change_password = True
+        target_user.save(update_fields=["password", "must_change_password"])
+        removed_sessions = self._clear_user_sessions(target_user)
+        display_name = target_user.get_full_name() or target_user.username
+        message = (
+            f"Reset password for {display_name}. The default password has been restored and they must set a new password on next sign-in."
+        )
+        if removed_sessions:
+            message += f" Ended {removed_sessions} session{'s' if removed_sessions != 1 else ''}."
+        messages.success(request, message)
+        return redirect("hub:management")
 
 
 class NotificationListView(LoginRequiredMixin, ListView):

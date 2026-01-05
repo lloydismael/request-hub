@@ -39,132 +39,129 @@
                     {% endfor %}
                 </div>
             {% endif %}
-    {% csrf_token %}
-    {% for hidden in formset.management_form %}
-        {{ hidden }}
-    {% endfor %}
 
-    {% if formset.non_form_errors %}
-        <div class="alert alert-danger">
-            {% for error in formset.non_form_errors %}
-                <div>{{ error }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
+            <div class="alert alert-info" role="alert">
+                Reset password returns the account to the default password <code>{{ default_password }}</code> and forces the user to create a new password at their next sign-in.
+            </div>
 
-    <div class="table-responsive">
-        <table class="table align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th scope="col" style="min-width: 220px;">Name</th>
-                    <th scope="col" style="min-width: 140px;">Username</th>
-                    <th scope="col" style="min-width: 200px;">Email</th>
-                    <th scope="col" style="min-width: 160px;">Account Type</th>
-                    <th scope="col" style="min-width: 200px;">Password</th>
-                    <th scope="col" style="min-width: 160px;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for form in formset %}
-                    <tr class="align-top">
-                        {% for hidden in form.hidden_fields %}
-                            {{ hidden }}
-                        {% endfor %}
-                        <td>
-                            <div class="row g-2">
-                                <div class="col-12">
-                                    {{ form.first_name }}
-                                    {% for error in form.first_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
-                                </div>
-                                <div class="col-12">
-                                    {{ form.last_name }}
-                                    {% for error in form.last_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            {% if form.non_field_errors %}
-                                {% for error in form.non_field_errors %}
-                                    <div class="invalid-feedback d-block">{{ error }}</div>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" style="min-width: 220px;">Name</th>
+                            <th scope="col" style="min-width: 140px;">Username</th>
+                            <th scope="col" style="min-width: 200px;">Email</th>
+                            <th scope="col" style="min-width: 160px;">Account Type</th>
+                            <th scope="col" style="min-width: 200px;">Password</th>
+                            <th scope="col" style="min-width: 220px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in formset %}
+                            <tr class="align-top">
+                                {% for hidden in form.hidden_fields %}
+                                    {{ hidden }}
                                 {% endfor %}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {{ form.username }}
-                            {% for error in form.username.errors %}
-                                <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </td>
-                        <td>
-                            {{ form.email }}
-                            {% for error in form.email.errors %}
-                                <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </td>
-                        <td>
-                            {{ form.role }}
-                            {% for error in form.role.errors %}
-                                <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </td>
-                        <td>
-                            <div class="row g-2">
-                                <div class="col-12">
-                                    {{ form.password1 }}
-                                    {% if form.password1.help_text %}
-                                        <small class="text-muted">{{ form.password1.help_text }}</small>
+                                <td>
+                                    <div class="row g-2">
+                                        <div class="col-12">
+                                            {{ form.first_name }}
+                                            {% for error in form.first_name.errors %}
+                                                <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col-12">
+                                            {{ form.last_name }}
+                                            {% for error in form.last_name.errors %}
+                                                <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% if form.non_field_errors %}
+                                        {% for error in form.non_field_errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
                                     {% endif %}
-                                    {% for error in form.password1.errors %}
+                                </td>
+                                <td>
+                                    {{ form.username }}
+                                    {% for error in form.username.errors %}
                                         <div class="invalid-feedback d-block">{{ error }}</div>
                                     {% endfor %}
-                                </div>
-                                <div class="col-12">
-                                    {{ form.password2 }}
-                                    {% for error in form.password2.errors %}
+                                </td>
+                                <td>
+                                    {{ form.email }}
+                                    {% for error in form.email.errors %}
                                         <div class="invalid-feedback d-block">{{ error }}</div>
                                     {% endfor %}
-                                </div>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="d-flex flex-column gap-2">
-                                {% if form.instance.pk %}
-                                    <span class="text-muted small">Last login:
-                                        {% if form.instance.last_login %}
-                                            {{ form.instance.last_login|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                </td>
+                                <td>
+                                    {{ form.role }}
+                                    {% for error in form.role.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    <div class="row g-2">
+                                        <div class="col-12">
+                                            {{ form.password1 }}
+                                            {% if form.password1.help_text %}
+                                                <small class="text-muted">{{ form.password1.help_text }}</small>
+                                            {% endif %}
+                                            {% for error in form.password1.errors %}
+                                                <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col-12">
+                                            {{ form.password2 }}
+                                            {% for error in form.password2.errors %}
+                                                <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-2">
+                                        {% if form.instance.pk %}
+                                            <span class="text-muted small">Last login:
+                                                {% if form.instance.last_login %}
+                                                    {{ form.instance.last_login|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                                {% else %}
+                                                    Never
+                                                {% endif %}
+                                            </span>
+                                            {% if form.instance.is_superuser %}
+                                                <span class="badge text-bg-warning">Superuser</span>
+                                            {% elif request.user.pk == form.instance.pk %}
+                                                <span class="badge text-bg-primary">You</span>
+                                            {% endif %}
+                                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" name="user_action" value="reset_password:{{ form.instance.pk }}">
+                                                    Reset Password
+                                                </button>
+                                            </div>
+                                            <label class="form-check mt-2">
+                                                {{ form.DELETE }}
+                                                <span class="form-check-label">Mark for removal</span>
+                                            </label>
+                                            {% for error in form.DELETE.errors %}
+                                                <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         {% else %}
-                                            Never
+                                            <span class="badge text-bg-success">New user</span>
+                                            <small class="text-muted">Leave the row blank if you do not want to add a new account.</small>
                                         {% endif %}
-                                    </span>
-                                    {% if form.instance.is_superuser %}
-                                        <span class="badge text-bg-warning">Superuser</span>
-                                    {% elif request.user.pk == form.instance.pk %}
-                                        <span class="badge text-bg-primary">You</span>
-                                    {% endif %}
-                                    <label class="form-check mt-2">
-                                        {{ form.DELETE }}
-                                        <span class="form-check-label">Mark for removal</span>
-                                    </label>
-                                    {% for error in form.DELETE.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
-                                {% else %}
-                                    <span class="badge text-bg-success">New user</span>
-                                    <small class="text-muted">Leave the row blank if you do not want to add a new account.</small>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted py-4">No users found.</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">No users found.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
 
             <div class="d-flex justify-content-end mt-4">
                 <button type="submit" class="btn btn-primary">Save Changes</button>

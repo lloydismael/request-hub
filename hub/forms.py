@@ -69,6 +69,28 @@ class RequestForm(forms.ModelForm):
         required=False,
         widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
     )
+    deployment_start = forms.DateField(
+        label="Deployment Start",
+        required=False,
+        widget=forms.DateInput(
+            attrs={
+                "type": "date",
+                "class": "form-control",
+                "data-deployment-start": "true",
+            }
+        ),
+    )
+    deployment_end = forms.DateField(
+        label="Deployment End",
+        required=False,
+        widget=forms.DateInput(
+            attrs={
+                "type": "date",
+                "class": "form-control",
+                "data-deployment-end": "true",
+            }
+        ),
+    )
     priority = forms.ChoiceField(
         label="Priority",
         choices=Request.Priority.choices,
@@ -104,6 +126,18 @@ class RequestForm(forms.ModelForm):
     def __init__(self, *args, actor_role=None, **kwargs):
         self.actor_role = actor_role
         super().__init__(*args, **kwargs)
+        desired_order = [
+            "account_name",
+            "needed_by",
+            "product_category",
+            "engagement_type",
+            "deployment_start",
+            "deployment_end",
+            "priority",
+            "description",
+            "engineer",
+        ]
+        self.order_fields(desired_order)
         engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
         engineer_field = self.fields["engineer"]
         engineer_field.queryset = engineer_qs
@@ -138,6 +172,15 @@ class RequestForm(forms.ModelForm):
         else:
             due_field.initial = today
         due_field.widget.attrs.pop("min", None)
+
+        deployment_start_field = self.fields["deployment_start"]
+        deployment_end_field = self.fields["deployment_end"]
+        if self.instance.pk and self.instance.engagement_type == Request.Engagement.DEPLOYMENT:
+            deployment_start_field.initial = self.instance.start_date
+            deployment_end_field.initial = self.instance.due_date or self.instance.start_date
+        elif not self.is_bound:
+            deployment_start_field.initial = today
+            deployment_end_field.initial = today
 
         existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
         combined = []
@@ -185,6 +228,21 @@ class RequestForm(forms.ModelForm):
         else:
             existing_priority = self.instance.priority if getattr(self.instance, "priority", None) else Request.Priority.MEDIUM
             cleaned_data["priority"] = existing_priority or Request.Priority.MEDIUM
+
+        deployment_start = cleaned_data.get("deployment_start")
+        deployment_end = cleaned_data.get("deployment_end")
+        if engagement == Request.Engagement.DEPLOYMENT:
+            if not deployment_start:
+                self.add_error("deployment_start", "Select the deployment start date.")
+            if not deployment_end:
+                self.add_error("deployment_end", "Select the deployment end date.")
+            if deployment_start and deployment_end and deployment_end < deployment_start:
+                self.add_error("deployment_end", "Deployment end date cannot be earlier than the start date.")
+            if deployment_start:
+                cleaned_data["needed_by"] = deployment_start
+        else:
+            cleaned_data["deployment_start"] = None
+            cleaned_data["deployment_end"] = None
         return cleaned_data
 
     def clean_engineer(self):
@@ -200,7 +258,24 @@ class RequestForm(forms.ModelForm):
         if self.instance.pk:
             ongoing_requests = ongoing_requests.exclude(pk=self.instance.pk)
 
-        if ongoing_requests.count() >= 5:
+        engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
+        deployment_start = self.cleaned_data.get("deployment_start")
+        deployment_end = self.cleaned_data.get("deployment_end")
+        max_allowed = 5
+        if engagement == Request.Engagement.DEPLOYMENT and deployment_start and deployment_end:
+            base_filter = Q(start_date__lte=deployment_end)
+            overlap_filter = base_filter & (Q(due_date__gte=deployment_start) | Q(due_date__isnull=True))
+            overlapping_deployments = ongoing_requests.filter(
+                engagement_type=Request.Engagement.DEPLOYMENT
+            ).filter(overlap_filter)
+            if overlapping_deployments.exists():
+                max_allowed = 3
+
+        if ongoing_requests.count() >= max_allowed:
+            if max_allowed == 3:
+                raise forms.ValidationError(
+                    "This engineer already has three overlapping deployment assignments for the selected window. Choose another engineer or adjust the deployment dates.",
+                )
             raise forms.ValidationError(
                 "This engineer already has five ongoing requests. Please select another engineer.",
             )
@@ -217,6 +292,14 @@ class RequestForm(forms.ModelForm):
         request_date = self.cleaned_data.get("needed_by")
         if request_date:
             self.instance.start_date = request_date
+        deployment_start = self.cleaned_data.get("deployment_start")
+        deployment_end = self.cleaned_data.get("deployment_end")
+        if deployment_start:
+            self.instance.start_date = deployment_start
+        if deployment_end:
+            self.instance.due_date = deployment_end
+        elif self.cleaned_data.get("engagement_type") != Request.Engagement.DEPLOYMENT:
+            self.instance.due_date = None
         return super().save(commit=commit)
 
 

@@ -149,9 +149,15 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "hub:dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
+AUTHENTICATION_BACKENDS = [
+    "accounts.backends.CaseInsensitiveUsernameBackend",
+]
+
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 PROFILE_COMPLETION_EXEMPT_URLS = [
     "accounts:update",
     "logout",
 ]
+
+DEFAULT_USER_PASSWORD = os.getenv("DJANGO_DEFAULT_USER_PASSWORD", "@Password")

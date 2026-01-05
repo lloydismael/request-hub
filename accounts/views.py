@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -87,7 +88,7 @@ class LandingView(TemplateView):
             for role, _ in ROLE_CHOICES
         ]
         context["default_username"] = "Admin"
-        context["default_password"] = "Admin"
+        context["default_password"] = getattr(settings, "DEFAULT_USER_PASSWORD", "@Password")
         context["role_default_usernames"] = ROLE_DEFAULT_USERNAMES
         return context
 

@@ -32,6 +32,46 @@
                                 <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
                             {% endif %}
                         </div>
+                    {% elif field.name == 'needed_by' %}
+                        <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
+                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}
+                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        </div>
+                    {% elif field.name == 'deployment_start' %}
+                        <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' %} style="display:none;"{% endif %}>
+                            <label class="form-label" for="id_{{ field.name }}">Deployment Calendar</label>
+                            <div class="deployment-calendar" data-deployment-calendar>
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-sm-6">
+                                        <label class="form-label" for="{{ field.id_for_label }}">Start</label>
+                                        {{ field }}
+                                        {% if field.errors %}
+                                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% with end_field=form.deployment_end %}
+                                        <div class="col-sm-6">
+                                            <label class="form-label" for="{{ end_field.id_for_label }}">End</label>
+                                            {{ end_field }}
+                                            {% if end_field.errors %}
+                                                <div class="invalid-feedback d-block">{{ end_field.errors|join:" " }}</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endwith %}
+                                </div>
+                                <div class="deployment-calendar__summary text-muted small mt-2" data-deployment-summary>
+                                    <span class="me-2">Selected window:</span>
+                                    <span class="badge bg-secondary-subtle text-secondary border" data-deployment-start-chip hidden>Start</span>
+                                    <span class="badge bg-secondary-subtle text-secondary border" data-deployment-end-chip hidden>End</span>
+                                    <span data-deployment-summary-text>No dates selected yet.</span>
+                                </div>
+                            </div>
+                        </div>
+                    {% elif field.name == 'deployment_end' %}
+                        {# Rendered with deployment_start #}
                     {% else %}
                         <div class="mb-3">
                             <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
@@ -120,6 +160,56 @@
         const priorityGroup = detailsForm.querySelector('[data-priority-group]');
         const prioritySelect = detailsForm.querySelector('[data-priority-select="true"]');
         const defaultPriority = prioritySelect ? prioritySelect.getAttribute('data-default-priority') || '' : '';
+        const requestDateGroup = detailsForm.querySelector('[data-request-date-group]');
+        const deploymentGroup = detailsForm.querySelector('[data-deployment-group]');
+        const deploymentCalendar = detailsForm.querySelector('[data-deployment-calendar]');
+        const deploymentStartInput = detailsForm.querySelector('[data-deployment-start]');
+        const deploymentEndInput = detailsForm.querySelector('[data-deployment-end]');
+        const deploymentSummary = detailsForm.querySelector('[data-deployment-summary]');
+        const deploymentSummaryText = detailsForm.querySelector('[data-deployment-summary-text]');
+        const deploymentStartChip = detailsForm.querySelector('[data-deployment-start-chip]');
+        const deploymentEndChip = detailsForm.querySelector('[data-deployment-end-chip]');
+
+        const formatDate = (value) => {
+            if (!value) {
+                return '';
+            }
+            const date = new Date(`${value}T00:00:00`);
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+            return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+        };
+
+        const updateDeploymentSummary = () => {
+            if (!deploymentCalendar || !deploymentSummary) {
+                return;
+            }
+            const startValue = deploymentStartInput ? deploymentStartInput.value : '';
+            const endValue = deploymentEndInput ? deploymentEndInput.value : '';
+            const hasStart = Boolean(startValue);
+            const hasEnd = Boolean(endValue);
+            const isComplete = hasStart && hasEnd;
+            if (deploymentStartChip) {
+                deploymentStartChip.textContent = hasStart ? formatDate(startValue) : 'Start';
+                deploymentStartChip.hidden = !hasStart;
+            }
+            if (deploymentEndChip) {
+                deploymentEndChip.textContent = hasEnd ? formatDate(endValue) : 'End';
+                deploymentEndChip.hidden = !hasEnd;
+            }
+            if (deploymentSummaryText) {
+                if (isComplete) {
+                    deploymentSummaryText.textContent = '';
+                } else if (hasStart || hasEnd) {
+                    deploymentSummaryText.textContent = 'Select both dates to complete the range.';
+                } else {
+                    deploymentSummaryText.textContent = 'No dates selected yet.';
+                }
+            }
+            deploymentCalendar.classList.toggle('deployment-calendar--active', isComplete);
+            deploymentSummary.classList.toggle('deployment-calendar__summary--active', isComplete);
+        };
 
         const syncPriorityVisibility = () => {
             if (!engagementSelect || !priorityGroup || !prioritySelect) {
@@ -138,11 +228,37 @@
             }
         };
 
+        const syncDeploymentVisibility = () => {
+            if (!engagementSelect) {
+                return;
+            }
+            const isDeployment = engagementSelect.value === 'deployment';
+            if (requestDateGroup) {
+                requestDateGroup.style.display = isDeployment ? 'none' : '';
+            }
+            if (deploymentGroup) {
+                deploymentGroup.style.display = isDeployment ? '' : 'none';
+            }
+            updateDeploymentSummary();
+        };
+
         if (engagementSelect) {
-            engagementSelect.addEventListener('change', syncPriorityVisibility, { passive: true });
+            engagementSelect.addEventListener('change', () => {
+                syncPriorityVisibility();
+                syncDeploymentVisibility();
+            }, { passive: true });
+        }
+
+        if (deploymentStartInput) {
+            deploymentStartInput.addEventListener('change', updateDeploymentSummary);
+        }
+        if (deploymentEndInput) {
+            deploymentEndInput.addEventListener('change', updateDeploymentSummary);
         }
 
         syncPriorityVisibility();
+        syncDeploymentVisibility();
+        updateDeploymentSummary();
     })();
 </script>
 {% endblock %}

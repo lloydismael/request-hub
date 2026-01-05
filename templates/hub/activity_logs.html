@@ -1,23 +1,24 @@
 {% extends "base.html" %}
+{% block body_class %}engineer-dashboard engineer-activity-logs{% endblock %}
 {% block title %}Activity Logs · Request Hub{% endblock %}
 {% block content %}
-<div class="glass-card p-4 mb-4">
-    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+<div class="activity-summary-card mb-4">
+    <div class="activity-summary-card__body">
         <div>
             <h1 class="h4 mb-1">Engineer Activity Logs</h1>
             <p class="text-muted mb-0">Capture what you worked on, where it happened, and whether the effort is billable.</p>
         </div>
-        <div class="d-flex flex-wrap gap-2 align-items-start">
-            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+        <div class="activity-summary-card__metrics">
+            <span class="activity-summary-pill activity-summary-pill--entries">
                 Total Entries: {{ logs|length }}
             </span>
-            <span class="badge bg-success-subtle text-success border border-success-subtle">
+            <span class="activity-summary-pill activity-summary-pill--billable">
                 Billable Hours: {{ hours_summary.billable|default:0|floatformat:1 }}
             </span>
-            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+            <span class="activity-summary-pill activity-summary-pill--nonbillable">
                 Not Billable: {{ hours_summary.non_billable|default:0|floatformat:1 }}
             </span>
-            <span class="badge bg-info-subtle text-info border border-info-subtle">
+            <span class="activity-summary-pill activity-summary-pill--total">
                 Total Hours: {{ hours_summary.total|default:0|floatformat:1 }}
             </span>
         </div>
@@ -132,7 +133,13 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="?edit={{ log.pk }}" class="btn btn-outline-primary btn-sm">Edit</a>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <a href="?edit={{ log.pk }}" class="btn btn-outline-primary btn-sm">Edit</a>
+                                        <form method="post" action="{% url 'hub:activity-log-delete' log.pk %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this activity log?');">Delete</button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         {% empty %}

@@ -13,10 +13,12 @@ from .views import (
     RequestExportCSVView,
     RequestNudgeView,
     RequestOutlookRedirectView,
+    EngineerActivityLogDeleteView,
     RequestStatusUpdateView,
     RequestTeamsRedirectView,
     RequestUpdateView,
     RequestReportView,
+    ReportExportView,
     UserManagementView,
     RequestCollaborativeManageView,
 )
@@ -26,6 +28,7 @@ app_name = "hub"
 urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("activity-logs/", EngineerActivityLogView.as_view(), name="activity-logs"),
+    path("activity-logs/<int:pk>/delete/", EngineerActivityLogDeleteView.as_view(), name="activity-log-delete"),
     path("requests/export/csv/", RequestExportCSVView.as_view(), name="request-export"),
     path("requests/<int:pk>/", RequestDetailView.as_view(), name="request-detail"),
     path("requests/<int:pk>/edit/", RequestUpdateView.as_view(), name="request-edit"),
@@ -42,4 +45,5 @@ urlpatterns = [
     path("notifications/<int:pk>/delete/", NotificationDeleteView.as_view(), name="notification-delete"),
     path("management/", UserManagementView.as_view(), name="management"),
     path("reports/", RequestReportView.as_view(), name="report"),
+    path("reports/export/", ReportExportView.as_view(), name="report-export"),
 ]

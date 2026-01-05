@@ -79,11 +79,11 @@
                         </a>
                     </div>
                     <div class="col">
-                        <a href="{{ metric_links.completed_recent }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'completed_recent' %}true{% else %}false{% endif %}">
-                            <div class="dashboard-metric-card {% if active_metric_filter == 'completed_recent' %}dashboard-metric-card--active{% endif %}">
-                                <span class="dashboard-metric-card__label">Closed (30d)</span>
-                                <span class="dashboard-metric-card__value">{{ metrics.completed_recent }}</span>
-                                <span class="dashboard-metric-card__hint">Completed in last 30 days</span>
+                        <a href="{{ metric_links.completed }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'completed' %}true{% else %}false{% endif %}">
+                            <div class="dashboard-metric-card {% if active_metric_filter == 'completed' %}dashboard-metric-card--active{% endif %}">
+                                <span class="dashboard-metric-card__label">Completed</span>
+                                <span class="dashboard-metric-card__value">{{ metrics.completed }}</span>
+                                <span class="dashboard-metric-card__hint">All completed requests</span>
                             </div>
                         </a>
                     </div>
@@ -614,6 +614,47 @@
                                     <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
                                 {% endif %}
                             </div>
+                        {% elif field.name == 'needed_by' %}
+                            <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
+                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}
+                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                        {% elif field.name == 'deployment_start' %}
+                            <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' %} style="display:none;"{% endif %}>
+                                <label class="form-label" for="id_{{ field.name }}">Deployment Calendar</label>
+                                <div class="deployment-calendar" data-deployment-calendar>
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-sm-6">
+                                            <label class="form-label" for="{{ field.id_for_label }}">Start</label>
+                                            {{ field }}
+                                            {% if field.errors %}
+                                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                                            {% endif %}
+                                        </div>
+                                        {% with end_field=form.deployment_end %}
+                                            <div class="col-sm-6">
+                                                <label class="form-label" for="{{ end_field.id_for_label }}">End</label>
+                                                {{ end_field }}
+                                                {% if end_field.errors %}
+                                                    <div class="invalid-feedback d-block">{{ end_field.errors|join:" " }}</div>
+                                                {% endif %}
+                                            </div>
+                                        {% endwith %}
+                                    </div>
+                                    <div class="deployment-calendar__summary text-muted small mt-2" data-deployment-summary>
+                                        <span class="me-2">Selected window:</span>
+                                        <span class="badge bg-secondary-subtle text-secondary border" data-deployment-start-chip hidden>Start</span>
+                                        <span class="badge bg-secondary-subtle text-secondary border" data-deployment-end-chip hidden>End</span>
+                                        <span data-deployment-summary-text>No dates selected yet.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif field.name == 'deployment_end' %}
+                            {# Rendered together with deployment_start #}
                         {% else %}
                             <div class="mb-3">
                                 <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
@@ -729,6 +770,60 @@
             const priorityGroup = modal.querySelector('[data-priority-group]');
             const prioritySelect = modal.querySelector('[data-priority-select="true"]');
             const defaultPriority = prioritySelect ? prioritySelect.getAttribute('data-default-priority') || "" : "";
+            const requestDateGroup = modal.querySelector('[data-request-date-group]');
+            const deploymentGroup = modal.querySelector('[data-deployment-group]');
+            const deploymentCalendar = modal.querySelector('[data-deployment-calendar]');
+            const deploymentStartInput = modal.querySelector('[data-deployment-start]');
+            const deploymentEndInput = modal.querySelector('[data-deployment-end]');
+            const deploymentSummary = modal.querySelector('[data-deployment-summary]');
+            const deploymentSummaryText = modal.querySelector('[data-deployment-summary-text]');
+            const deploymentStartChip = modal.querySelector('[data-deployment-start-chip]');
+            const deploymentEndChip = modal.querySelector('[data-deployment-end-chip]');
+
+            const formatDate = (value) => {
+                if (!value) {
+                    return "";
+                }
+                const date = new Date(`${value}T00:00:00`);
+                if (Number.isNaN(date.getTime())) {
+                    return value;
+                }
+                return new Intl.DateTimeFormat("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                }).format(date);
+            };
+
+            const updateDeploymentSummary = () => {
+                if (!deploymentSummary || !deploymentCalendar) {
+                    return;
+                }
+                const startValue = deploymentStartInput ? deploymentStartInput.value : "";
+                const endValue = deploymentEndInput ? deploymentEndInput.value : "";
+                const hasStart = Boolean(startValue);
+                const hasEnd = Boolean(endValue);
+                const isComplete = hasStart && hasEnd;
+                if (deploymentStartChip) {
+                    deploymentStartChip.textContent = hasStart ? formatDate(startValue) : "Start";
+                    deploymentStartChip.hidden = !hasStart;
+                }
+                if (deploymentEndChip) {
+                    deploymentEndChip.textContent = hasEnd ? formatDate(endValue) : "End";
+                    deploymentEndChip.hidden = !hasEnd;
+                }
+                if (deploymentSummaryText) {
+                    if (isComplete) {
+                        deploymentSummaryText.textContent = "";
+                    } else if (hasStart || hasEnd) {
+                        deploymentSummaryText.textContent = "Select both dates to complete the range.";
+                    } else {
+                        deploymentSummaryText.textContent = "No dates selected yet.";
+                    }
+                }
+                deploymentCalendar.classList.toggle("deployment-calendar--active", isComplete);
+                deploymentSummary.classList.toggle("deployment-calendar__summary--active", isComplete);
+            };
 
             const syncPriorityVisibility = () => {
                 if (!priorityGroup || !prioritySelect || !engagementSelect) {
@@ -748,11 +843,37 @@
                 }
             };
 
+            const syncDeploymentVisibility = () => {
+                if (!engagementSelect) {
+                    return;
+                }
+                const isDeployment = engagementSelect.value === "deployment";
+                if (requestDateGroup) {
+                    requestDateGroup.style.display = isDeployment ? "none" : "";
+                }
+                if (deploymentGroup) {
+                    deploymentGroup.style.display = isDeployment ? "" : "none";
+                }
+                updateDeploymentSummary();
+            };
+
             if (engagementSelect) {
-                engagementSelect.addEventListener("change", syncPriorityVisibility, { passive: true });
+                engagementSelect.addEventListener("change", () => {
+                    syncPriorityVisibility();
+                    syncDeploymentVisibility();
+                }, { passive: true });
+            }
+
+            if (deploymentStartInput) {
+                deploymentStartInput.addEventListener("change", updateDeploymentSummary);
+            }
+            if (deploymentEndInput) {
+                deploymentEndInput.addEventListener("change", updateDeploymentSummary);
             }
 
             syncPriorityVisibility();
+            syncDeploymentVisibility();
+            updateDeploymentSummary();
 
             document.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") {

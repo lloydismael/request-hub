@@ -7,9 +7,16 @@
             <h1 class="h4 mb-1">Reports</h1>
             <p class="text-muted mb-0">Switch between operational metrics and engineer activity insights.</p>
         </div>
-        <div class="btn-group" role="group" aria-label="Report view toggle">
-            <a href="?report_view=operational" class="btn btn-sm {% if report_view == 'operational' %}btn-primary active{% else %}btn-outline-primary{% endif %}">Operational Report</a>
-            <a href="?report_view=activity" class="btn btn-sm {% if report_view == 'activity' %}btn-primary active{% else %}btn-outline-primary{% endif %}">Activity Logs</a>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="btn-group" role="group" aria-label="Report view toggle">
+                <a href="?report_view=operational" class="btn btn-sm {% if report_view == 'operational' %}btn-primary active{% else %}btn-outline-primary{% endif %}">Operational Report</a>
+                <a href="?report_view=activity" class="btn btn-sm {% if report_view == 'activity' %}btn-primary active{% else %}btn-outline-primary{% endif %}">Activity Logs</a>
+            </div>
+            {% if report_view == 'activity' %}
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:report-export' %}?report_view=activity">Export CSV</a>
+            {% else %}
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:report-export' %}?report_view=operational">Export CSV</a>
+            {% endif %}
         </div>
     </div>
 </div>
