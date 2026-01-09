@@ -7,7 +7,6 @@ from typing import Iterable, List
 from django.db.models import Q
 
 from accounts.models import User
-from .constants import ACCOUNT_NAME_SUGGESTIONS
 from .models import Account, EngineerActivityLog, Request, StatusLog
 
 
@@ -104,6 +103,13 @@ class RequestForm(forms.ModelForm):
         label="Preferred Engineer",
         empty_label="Select preferred engineer",
     )
+    backup_engineer = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Backup Engineer",
+        empty_label="Select backup engineer (optional)",
+    )
 
     class Meta:
         model = Request
@@ -115,6 +121,7 @@ class RequestForm(forms.ModelForm):
             "priority",
             "description",
             "engineer",
+            "backup_engineer",
         ]
         widgets = {
             "product_category": forms.Select(attrs={"class": "form-select"}),
@@ -126,6 +133,9 @@ class RequestForm(forms.ModelForm):
     def __init__(self, *args, actor_role=None, **kwargs):
         self.actor_role = actor_role
         super().__init__(*args, **kwargs)
+        include_backup = actor_role == User.Roles.ENGINEER
+        if not include_backup:
+            self.fields.pop("backup_engineer", None)
         desired_order = [
             "account_name",
             "needed_by",
@@ -137,6 +147,8 @@ class RequestForm(forms.ModelForm):
             "description",
             "engineer",
         ]
+        if include_backup:
+            desired_order.append("backup_engineer")
         self.order_fields(desired_order)
         engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
         engineer_field = self.fields["engineer"]
@@ -151,6 +163,13 @@ class RequestForm(forms.ModelForm):
         else:
             engineer_field.label = "Preferred Engineer"
             engineer_field.empty_label = "Select preferred engineer"
+        if include_backup:
+            backup_field = self.fields["backup_engineer"]
+            backup_field.queryset = engineer_qs
+            backup_widget = backup_field.widget
+            if isinstance(backup_widget, AvatarSelect):
+                backup_widget.avatar_mapping = _build_avatar_mapping(engineer_qs)
+            backup_field.label_from_instance = _user_display
         priority_field = self.fields["priority"]
         if not self.is_bound:
             if self.instance.pk and self.instance.priority:
@@ -183,18 +202,13 @@ class RequestForm(forms.ModelForm):
             deployment_end_field.initial = today
 
         existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
-        combined = []
-        seen = set()
-        for raw_name in list(ACCOUNT_NAME_SUGGESTIONS) + list(existing_accounts):
+        suggestions = []
+        for raw_name in existing_accounts:
             cleaned = (raw_name or "").strip()
             if not cleaned:
                 continue
-            normalized = cleaned.lower()
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            combined.append(cleaned)
-        self.account_name_suggestions = tuple(combined)
+            suggestions.append(cleaned)
+        self.account_name_suggestions = tuple(suggestions)
 
         if self.is_bound and self.errors:
             for name, field in self.fields.items():
@@ -300,6 +314,8 @@ class RequestForm(forms.ModelForm):
             self.instance.due_date = deployment_end
         elif self.cleaned_data.get("engagement_type") != Request.Engagement.DEPLOYMENT:
             self.instance.due_date = None
+        if "backup_engineer" in self.cleaned_data:
+            self.instance.backup_engineer = self.cleaned_data.get("backup_engineer")
         return super().save(commit=commit)
 
 

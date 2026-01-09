@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
+
 class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -86,6 +87,7 @@ class Request(models.Model):
         null=True,
         limit_choices_to={"role": "engineer"},
     )
+    teams_chat_topic = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -149,11 +151,28 @@ class Request(models.Model):
             computed_due = self.compute_due_date()
             if computed_due:
                 self.due_date = computed_due
+        if not self.teams_chat_topic:
+            self.teams_chat_topic = self._build_teams_chat_topic(reference_code=self.reference_code)
         self.full_clean()
         super().save(*args, **kwargs)
         if creating and not self.reference_code:
             self.reference_code = f"REQ-{self.pk:05d}"
-            Request.objects.filter(pk=self.pk).update(reference_code=self.reference_code)
+            update_payload = {"reference_code": self.reference_code}
+            topic = self._build_teams_chat_topic(reference_code=self.reference_code)
+            if topic != self.teams_chat_topic:
+                self.teams_chat_topic = topic
+                update_payload["teams_chat_topic"] = topic
+            Request.objects.filter(pk=self.pk).update(**update_payload)
+        elif creating:
+            updated_topic = self._build_teams_chat_topic(reference_code=self.reference_code)
+            if updated_topic != self.teams_chat_topic:
+                self.teams_chat_topic = updated_topic
+                Request.objects.filter(pk=self.pk).update(teams_chat_topic=updated_topic)
+        else:
+            updated_topic = self._build_teams_chat_topic(reference_code=self.reference_code)
+            if updated_topic and updated_topic != self.teams_chat_topic:
+                self.teams_chat_topic = updated_topic
+                Request.objects.filter(pk=self.pk).update(teams_chat_topic=updated_topic)
 
     @property
     def is_overdue(self) -> bool:
@@ -269,10 +288,18 @@ class Request(models.Model):
         manager_email = (
             self.requestor.email if self.requestor and self.requestor.email else None
         )
+        backup_email = (
+            self.backup_engineer.email
+            if self.backup_engineer and self.backup_engineer.email
+            else None
+        )
         if not engineer_email or not manager_email:
             return ""
-        participants = ",".join([engineer_email, manager_email])
-        topic = f"{self.reference_code} · {self.account.name}"
+        participant_set = {engineer_email, manager_email, "JeanM@phildata.com"}
+        if backup_email:
+            participant_set.add(backup_email)
+        participants = ",".join(sorted(email for email in participant_set if email))
+        topic = self.teams_chat_topic or self._build_teams_chat_topic(reference_code=self.reference_code)
         engineer_display = (
             self.engineer.get_full_name()
             if self.engineer and self.engineer.get_full_name()
@@ -292,6 +319,41 @@ class Request(models.Model):
 
     def __str__(self) -> str:
         return f"{self.reference_code or 'Request'} - {self.account.name}"
+
+    def _build_teams_chat_topic(self, reference_code: str | None = None) -> str:
+        reference = reference_code or self.reference_code or "Request"
+        account_name = self.account.name if self.account else ""
+        if account_name:
+            return f"{reference} · {account_name}"
+        return reference
+
+
+class RequestCommunication(models.Model):
+    class Channel(models.TextChoices):
+        OUTLOOK = "outlook", "Outlook"
+        TEAMS = "teams", "Teams"
+
+    request = models.ForeignKey(
+        "Request",
+        on_delete=models.CASCADE,
+        related_name="communications",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="request_communications",
+    )
+    channel = models.CharField(max_length=20, choices=Channel.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["request", "user", "channel"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_channel_display()} · {self.request.reference_code or 'Request'}"
 
 
 class EngineerActivityLog(models.Model):

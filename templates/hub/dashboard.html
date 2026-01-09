@@ -568,10 +568,13 @@
                                             <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
                                             <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
                                                 {% csrf_token %}
-                                                <button class="btn btn-sm btn-outline-success" type="submit">Outlook</button>
+                                                <button class="btn btn-sm btn-outline-success" type="submit"{% if item.outlook_limit_reached %} disabled title="Outlook draft already launched for this request."{% endif %}>Outlook</button>
                                             </form>
                                             {% if item.teams_chat_url %}
-                                                <a class="btn btn-sm btn-outline-info" href="{{ item.teams_chat_url }}" target="_blank" rel="noopener">Teams</a>
+                                                <form method="post" action="{% url 'hub:request-teams' item.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button class="btn btn-sm btn-outline-info" type="submit"{% if item.teams_limit_reached %} disabled title="Teams chat already launched for this request."{% endif %}>Teams</button>
+                                                </form>
                                             {% else %}
                                                 <button class="btn btn-sm btn-outline-info" type="button" disabled title="Add requestor and engineer emails to start a chat">Teams</button>
                                             {% endif %}

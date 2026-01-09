@@ -32,7 +32,14 @@ from .forms import (
     StatusLogForm,
 )
 from .constants import ACCOUNT_NAME_RAW
-from .models import Account, EngineerActivityLog, Notification, Request, StatusLog
+from .models import (
+    Account,
+    EngineerActivityLog,
+    Notification,
+    Request,
+    RequestCommunication,
+    StatusLog,
+)
 from .mixins import AdminRequiredMixin, AdminOrEngineerRequiredMixin, EngineerRequiredMixin
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
@@ -483,6 +490,23 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 .select_related("account", "requestor")
                 .order_by("status", "due_date")
             )
+
+            request_ids = [req.pk for req in requests]
+            outlook_limited: set[int] = set()
+            teams_limited: set[int] = set()
+            if request_ids:
+                communications = RequestCommunication.objects.filter(
+                    request_id__in=request_ids,
+                    user=user,
+                ).only("request_id", "channel")
+                for comm in communications:
+                    if comm.channel == RequestCommunication.Channel.OUTLOOK:
+                        outlook_limited.add(comm.request_id)
+                    elif comm.channel == RequestCommunication.Channel.TEAMS:
+                        teams_limited.add(comm.request_id)
+            for req in requests:
+                setattr(req, "outlook_limit_reached", req.pk in outlook_limited)
+                setattr(req, "teams_limit_reached", req.pk in teams_limited)
 
             today = timezone.now().astimezone(MANILA_TZ).date()
             metrics = {
@@ -1189,7 +1213,25 @@ class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin,
 
 class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
-        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor", "account"), pk=pk)
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
+
+        if request.user.role == User.Roles.ENGINEER:
+            if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
+                messages.error(request, "You are not allowed to draft emails for this request.")
+                return redirect(redirect_target)
+            already_launched = RequestCommunication.objects.filter(
+                request=request_obj,
+                user=request.user,
+                channel=RequestCommunication.Channel.OUTLOOK,
+            ).exists()
+            if already_launched:
+                messages.warning(request, "You already launched the Outlook draft for this request.")
+                return redirect(redirect_target)
 
         engineer_email = (
             request_obj.engineer.email if request_obj.engineer and request_obj.engineer.email else None
@@ -1197,15 +1239,26 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         manager_email = (
             request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
         )
+        backup_email = (
+            request_obj.backup_engineer.email
+            if request_obj.backup_engineer and request_obj.backup_engineer.email
+            else None
+        )
 
         if not engineer_email or not manager_email:
             messages.error(
                 request,
                 "Unable to draft an email. Ensure the engineer and requestor both have emails configured.",
             )
-            return redirect("hub:dashboard")
+            return redirect(redirect_target)
 
-        recipients = ",".join({engineer_email, manager_email})
+        to_addresses = {engineer_email, manager_email}
+        cc_addresses = {"ESGRequestHub@phildata.com"}
+        if backup_email:
+            cc_addresses.add(backup_email)
+
+        recipients = ",".join(sorted(to_addresses))
+        cc_field = ",".join(sorted(cc_addresses))
         subject = quote(f"{request_obj.reference_code} · {request_obj.account.name}")
 
         requestor = request_obj.requestor
@@ -1213,17 +1266,6 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
             requestor_name = requestor.get_full_name() or requestor.username
         else:
             requestor_name = request_obj.account_manager or "Requestor"
-
-        if request_obj.engineer:
-            engineer_display = request_obj.engineer.get_full_name() or request_obj.engineer.username or "Engineer"
-            acknowledgement_line = (
-                f"{engineer_display} is looped in and will reach out with updates or any follow-up questions."
-            )
-        else:
-            engineer_display = "our engineering team"
-            acknowledgement_line = (
-                "Our engineering team will assign a specialist and follow up with updates as the request progresses."
-            )
 
         engagement_display = request_obj.get_engagement_type_display()
         product_display = request_obj.get_product_category_display()
@@ -1243,7 +1285,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
             "Request Type: {request_type}\n"
             "Product: {product}\n"
             "Description: {description}\n\n"
-            "{acknowledgement_line}\n"
+            "I will reach out with updates or any follow-up questions.\n"
             "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n\n"
             "Best regards,\n"
             "{sender_name}"
@@ -1256,17 +1298,70 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
                 request_type=engagement_display,
                 product=product_display,
                 description=description_line,
-                acknowledgement_line=acknowledgement_line,
                 sender_name=sender_name,
             )
         )
 
-        outlook_url = f"mailto:{recipients}?subject={subject}&body={body}"
+        RequestCommunication.objects.create(
+            request=request_obj,
+            user=request.user,
+            channel=RequestCommunication.Channel.OUTLOOK,
+        )
+
+        mailto_parts = [f"mailto:{recipients}", f"subject={subject}", f"body={body}"]
+        if cc_field:
+            mailto_parts.insert(1, f"cc={quote(cc_field)}")
+
+        outlook_url = "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
         messages.info(request, "Drafting email in your default mail client…")
         return render(
             request,
             "hub/outlook_redirect.html",
             {"mailto_url": outlook_url},
+        )
+
+
+class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
+
+        if request.user.role == User.Roles.ENGINEER:
+            if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
+                messages.error(request, "You are not allowed to start a Teams chat for this request.")
+                return redirect(redirect_target)
+            already_launched = RequestCommunication.objects.filter(
+                request=request_obj,
+                user=request.user,
+                channel=RequestCommunication.Channel.TEAMS,
+            ).exists()
+            if already_launched:
+                messages.warning(request, "You already launched the Teams chat for this request.")
+                return redirect(redirect_target)
+
+        teams_url = request_obj.teams_chat_url
+        if not teams_url:
+            messages.error(
+                request,
+                "Unable to start a Teams chat. Ensure the engineer and requestor have email addresses configured.",
+            )
+            return redirect(redirect_target)
+
+        RequestCommunication.objects.create(
+            request=request_obj,
+            user=request.user,
+            channel=RequestCommunication.Channel.TEAMS,
+        )
+
+        messages.info(request, "Launching Microsoft Teams…")
+        return render(
+            request,
+            "hub/teams_redirect.html",
+            {"teams_url": teams_url},
         )
 
 
@@ -1836,17 +1931,18 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
 
     @staticmethod
     def _sync_account_baseline():
-        existing_names = set(
-            Account.objects.values_list("name", flat=True)
-        )
-        to_create = []
+        if Account.objects.exists():
+            return
+
+        seed_accounts = []
         for raw_name in ACCOUNT_NAME_RAW:
             normalized = (raw_name or "").strip()
-            if not normalized or normalized in existing_names:
+            if not normalized:
                 continue
-            to_create.append(Account(name=normalized))
-        if to_create:
-            Account.objects.bulk_create(to_create, ignore_conflicts=True)
+            seed_accounts.append(Account(name=normalized))
+
+        if seed_accounts:
+            Account.objects.bulk_create(seed_accounts, ignore_conflicts=True)
 
     def _handle_user_action_request(self, request, action_value):
         action, separator, raw_user_id = (action_value or "").partition(":")

@@ -179,7 +179,7 @@
     <div class="glass-card p-4 mt-4">
         <h3 class="h6 text-uppercase text-muted">Recent Engineer Activity</h3>
         {% if activity_logs %}
-            <div class="table-responsive">
+            <div class="table-responsive activity-log-scroll">
                 <table class="table align-middle">
                     <thead>
                         <tr>
@@ -721,6 +721,15 @@
                         options: {
                             plugins: {
                                 legend: { position: "bottom" },
+                                tooltip: {
+                                    callbacks: {
+                                        label(context) {
+                                            const raw = context.raw ?? context.parsed;
+                                            const formatted = typeof raw === "number" ? `${raw.toFixed(1)} hrs` : raw;
+                                            return `${context.label}: ${formatted}`;
+                                        },
+                                    },
+                                },
                             },
                         },
                     });
@@ -745,6 +754,15 @@
                         options: {
                             plugins: {
                                 legend: { position: "bottom" },
+                                tooltip: {
+                                    callbacks: {
+                                        label(context) {
+                                            const raw = context.raw ?? context.parsed;
+                                            const formatted = typeof raw === "number" ? `${raw.toFixed(1)} hrs` : raw;
+                                            return `${context.label}: ${formatted}`;
+                                        },
+                                    },
+                                },
                             },
                         },
                     });
