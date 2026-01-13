@@ -1,6 +1,6 @@
 import csv
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Min, Q, Sum
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -587,7 +587,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "account": lambda req: (req.account.name.lower() if req.account else ""),
                 "account_manager": _admin_sort_account_manager_key,
                 "engineer": _admin_sort_engineer_key,
-                "priority": lambda req: req.priority or "",
+                "engagement": lambda req: req.engagement_type or "",
                 "status": lambda req: req.status or "",
                 "created": lambda req: req.created_at,
                 "end_date": lambda req: _admin_sort_date_key(req.end_date),
@@ -614,6 +614,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ordered = [req for req in requests if getattr(req, field_name) is not None]
                 ordered.extend(req for req in requests if getattr(req, field_name) is None)
                 requests = ordered
+
+            self._annotate_acknowledgement_status(requests)
 
             today = timezone.now().astimezone(MANILA_TZ).date()
             all_requests = list(requests)
@@ -717,6 +719,79 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 if (today - req.created_at.date()).days <= 7
             ]
         return requests
+
+    @staticmethod
+    def _format_duration(delta: timedelta) -> str:
+        total_seconds = int(delta.total_seconds())
+        if total_seconds <= 0:
+            return "<1 minute"
+        minutes = total_seconds // 60
+        if minutes < 1:
+            return "<1 minute"
+        hours, rem_minutes = divmod(minutes, 60)
+        parts = []
+        if hours:
+            parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+        if rem_minutes:
+            parts.append(f"{rem_minutes} minute{'s' if rem_minutes != 1 else ''}")
+        if not parts:
+            return "<1 minute"
+        return " ".join(parts)
+
+    def _annotate_acknowledgement_status(self, requests: list[Request]) -> None:
+        if not requests:
+            return
+        request_ids = [req.pk for req in requests if req.pk]
+        if not request_ids:
+            return
+
+        ack_rows = (
+            RequestCommunication.objects.filter(
+                request_id__in=request_ids,
+                user__role=User.Roles.ENGINEER,
+                channel__in=[
+                    RequestCommunication.Channel.OUTLOOK,
+                    RequestCommunication.Channel.TEAMS,
+                ],
+            )
+            .values("request_id")
+            .annotate(first_ack=Min("created_at"))
+        )
+        ack_map = {row["request_id"]: row["first_ack"] for row in ack_rows}
+
+        now = timezone.now()
+        amber_threshold = timedelta(minutes=45)
+        sla_threshold = timedelta(hours=1)
+
+        for req in requests:
+            ack_time = ack_map.get(req.pk)
+            status = ""
+            tooltip = ""
+            if ack_time:
+                delta = ack_time - req.created_at
+                if delta.total_seconds() < 0:
+                    delta = timedelta(seconds=0)
+                if delta <= sla_threshold:
+                    status = "green"
+                    tooltip = f"Acknowledged within SLA ({self._format_duration(delta)})"
+                else:
+                    status = "red"
+                    tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(delta)})"
+            else:
+                age = now - req.created_at
+                if age.total_seconds() < 0:
+                    age = timedelta(seconds=0)
+                if age >= sla_threshold:
+                    status = "red"
+                    tooltip = f"No acknowledgement after {self._format_duration(age)}"
+                elif age >= amber_threshold:
+                    status = "amber"
+                    tooltip = f"Awaiting acknowledgement ({self._format_duration(age)} elapsed)"
+                else:
+                    tooltip = f"Awaiting acknowledgement ({self._format_duration(age)} elapsed)"
+
+            req.ack_sla_status = status
+            req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
 
     def post(self, request, *args, **kwargs):
         if request.user.role != User.Roles.REQUESTOR:

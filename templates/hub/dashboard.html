@@ -290,9 +290,9 @@
                             {% if role != 'requestor' %}
                                 {% if role == 'admin' %}
                                     <th>
-                                        <a href="{{ sort_links.priority }}" class="table-sort-link{% if current_sort == 'priority' %} table-sort-link--active{% endif %}">
-                                            Priority
-                                            {% if current_sort == 'priority' %}
+                                        <a href="{{ sort_links.engagement }}" class="table-sort-link{% if current_sort == 'engagement' %} table-sort-link--active{% endif %}">
+                                            Engagement
+                                            {% if current_sort == 'engagement' %}
                                                 <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
                                             {% else %}
                                                 <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
@@ -376,7 +376,13 @@
                     <tbody>
                         {% for item in requests %}
                             <tr class="{% if item.is_overdue or role != 'requestor' and item.missed_sla or item.sla_overrun %}table-danger{% endif %}">
-                                <td>{{ item.reference_code }}</td>
+                                {% if role == 'admin' %}
+                                    <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
+                                        {{ item.reference_code }}
+                                    </td>
+                                {% else %}
+                                    <td>{{ item.reference_code }}</td>
+                                {% endif %}
                                 <td>{{ item.account.name }}</td>
                                 {% if role == 'admin' %}
                                     <td class="text-nowrap">
@@ -474,7 +480,11 @@
                                         </td>
                                 {% endif %}
                                 {% if role != 'requestor' %}
-                                    <td class="text-capitalize">{{ item.get_priority_display }}</td>
+                                    {% if role == 'admin' %}
+                                        <td class="text-capitalize">{{ item.get_engagement_type_display }}</td>
+                                    {% else %}
+                                        <td class="text-capitalize">{{ item.get_priority_display }}</td>
+                                    {% endif %}
                                 {% endif %}
                                 <td>
                                     {% if role == 'requestor' %}
