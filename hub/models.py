@@ -246,16 +246,16 @@ class Request(models.Model):
         priority = self.priority
 
         if priority == self.Priority.HIGH:
-            if days >= 5:
-                return "red"
             if days > 3:
+                return "red"
+            if days >= 2:
                 return "amber"
             return "green"
 
         if priority == self.Priority.MEDIUM:
-            if days >= 10:
-                return "red"
             if days > 5:
+                return "red"
+            if days >= 4:
                 return "amber"
             return "green"
 
@@ -277,7 +277,7 @@ class Request(models.Model):
             return False
         days = self.days_since_creation
         if self.priority == self.Priority.HIGH:
-            return days > 4
+            return days > 3
         return days > 5
 
     @property
