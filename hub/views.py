@@ -748,7 +748,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ack_rows = (
             RequestCommunication.objects.filter(
                 request_id__in=request_ids,
-                user__role=User.Roles.ENGINEER,
+                user__role__in=[User.Roles.ENGINEER, User.Roles.ADMIN],
                 channel__in=[
                     RequestCommunication.Channel.OUTLOOK,
                     RequestCommunication.Channel.TEAMS,
