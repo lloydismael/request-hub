@@ -120,12 +120,35 @@
                 wrapper.appendChild(avatar);
                 wrapper.appendChild(select);
 
+                function isSafeImageUrl(url) {
+                    if (!url) {
+                        return false;
+                    }
+                    url = url.trim();
+                    if (!url) {
+                        return false;
+                    }
+                    // Allow same-origin relative URLs
+                    if (url.startsWith("/") || url.startsWith("./") || url.startsWith("../")) {
+                        return true;
+                    }
+                    // For absolute URLs, only allow http and https schemes
+                    try {
+                        var parsed = new URL(url, window.location.origin);
+                        var protocol = parsed.protocol.toLowerCase();
+                        return protocol === "http:" || protocol === "https:";
+                    } catch (e) {
+                        // Invalid URL
+                        return false;
+                    }
+                }
+
                 function updateAvatar() {
                     var option = select.options[select.selectedIndex];
                     var url = option ? option.getAttribute("data-avatar") : "";
                     var initial = option ? option.getAttribute("data-initial") : "";
                     avatar.innerHTML = "";
-                    if (url) {
+                    if (isSafeImageUrl(url)) {
                         var img = document.createElement("img");
                         img.src = url;
                         img.alt = initial || "Profile";
