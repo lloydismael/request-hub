@@ -154,6 +154,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "ESG Request Hub <no-reply@esgrequesthub.dreadops.site>")
 
 PROFILE_COMPLETION_EXEMPT_URLS = [
     "accounts:update",

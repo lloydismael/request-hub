@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
+from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
 from django.forms import modelformset_factory
@@ -399,6 +400,69 @@ def notify_account_manager_request_update(actor_user, original, updated, changed
             actor=actor,
             source=source_label,
         )
+
+
+def notify_engineer_assignment_email(
+    request_obj: Request,
+    *,
+    actor_user: User,
+    request=None,
+    previous_engineer_id: int | None = None,
+    previous_backup_id: int | None = None,
+) -> None:
+    """Email the assigned engineer or backup when they receive a request."""
+
+    recipients: list[str] = []
+
+    if request_obj.engineer_id and request_obj.engineer_id != previous_engineer_id:
+        email = (request_obj.engineer.email or "").strip()
+        if email:
+            recipients.append(email)
+
+    if request_obj.backup_engineer_id and request_obj.backup_engineer_id != previous_backup_id:
+        email = (request_obj.backup_engineer.email or "").strip()
+        if email:
+            recipients.append(email)
+
+    if not recipients:
+        return
+
+    actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
+    due_display = request_obj.due_date.strftime("%b %d, %Y") if request_obj.due_date else "Not set"
+    detail_url = ""
+
+    if request:
+        try:
+            detail_url = request.build_absolute_uri(request_obj.get_absolute_url())
+        except Exception:
+            detail_url = ""
+
+    subject = f"[Request Hub] New assignment - {request_obj.reference_code or 'Request'}"
+    body_lines = [
+        "You have been assigned a request in Request Hub.",
+        "",
+        f"Reference: {request_obj.reference_code or 'Request'}",
+        f"Account: {request_obj.account.name if request_obj.account else 'Not set'}",
+        f"Engagement: {request_obj.get_engagement_type_display()}",
+        f"Priority: {request_obj.get_priority_display()}",
+        f"Due date: {due_display}",
+        f"Assigned by: {actor_name}",
+    ]
+
+    description = (request_obj.description or "").strip()
+    if description:
+        body_lines.extend(["", "Description:", description])
+
+    if detail_url:
+        body_lines.extend(["", f"View request: {detail_url}"])
+
+    send_mail(
+        subject,
+        "\n".join(body_lines),
+        settings.DEFAULT_FROM_EMAIL,
+        recipients,
+        fail_silently=True,
+    )
 
 
 def _admin_sort_account_manager_key(request_obj):
@@ -805,6 +869,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req._actor_user = request.user
             req._actor_source = "Dashboard · New Request"
             req.save()
+            notify_engineer_assignment_email(
+                req,
+                actor_user=request.user,
+                request=request,
+            )
             self._notify_admins_new_request(req)
             messages.success(request, "Request submitted", extra_tags="request-success")
             return redirect("hub:dashboard")
@@ -906,10 +975,19 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
         form.instance._actor_user = self.request.user
         form.instance._actor_source = "Admin · Manage Request"
         original = Request.objects.get(pk=form.instance.pk)
+        previous_engineer_id = original.engineer_id
+        previous_backup_id = original.backup_engineer_id
         changed_fields = list(form.changed_data)
         response = super().form_valid(form)
         if changed_fields:
             self._notify_request_update(original, self.object, changed_fields)
+        notify_engineer_assignment_email(
+            self.object,
+            actor_user=self.request.user,
+            request=self.request,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+        )
         messages.success(self.request, "Request updated.")
         return response
 
@@ -1361,9 +1439,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
             "Product: {product}\n"
             "Description: {description}\n\n"
             "I will reach out with updates or any follow-up questions.\n"
-            "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n\n"
-            "Best regards,\n"
-            "{sender_name}"
+            "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n\n"                      
         )
 
         body = quote(
