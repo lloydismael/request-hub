@@ -768,7 +768,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             return [
                 req
                 for req in requests
-                if req.due_date and 0 <= (req.due_date - today).days <= 3
+                if req.status == Request.Status.ONGOING
+                and req.due_date
+                and 0 <= (req.due_date - today).days <= 3
             ]
         if metric_filter == "completed":
             return [
@@ -1412,7 +1414,8 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         recipients = ",".join(sorted(to_addresses))
         cc_field = ",".join(sorted(cc_addresses))
-        subject = quote(f"{request_obj.reference_code} · {request_obj.account.name}")
+        account_name = request_obj.account.name if request_obj.account else "Request"
+        subject = quote(f"Re: {request_obj.reference_code} · {account_name}")
 
         requestor = request_obj.requestor
         if requestor:
@@ -1430,17 +1433,36 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
             description_line = "No description provided."
 
         sender_name = request.user.get_full_name() or request.user.username
+        assigned_engineer_name = ""
+        if request_obj.engineer:
+            assigned_engineer_name = request_obj.engineer.get_full_name() or request_obj.engineer.username or ""
+        elif request_obj.backup_engineer:
+            assigned_engineer_name = request_obj.backup_engineer.get_full_name() or request_obj.backup_engineer.username or ""
+        if not assigned_engineer_name:
+            assigned_engineer_name = "our engineering team"
 
-        body_template = (
-            "Hello {requestor_name},\n\n"
-            "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it:\n\n"
-            "Reference: {reference}\n"
-            "Request Type: {request_type}\n"
-            "Product: {product}\n"
-            "Description: {description}\n\n"
-            "I will reach out with updates or any follow-up questions.\n"
-            "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n\n"                      
-        )
+        if request.user.role == User.Roles.ENGINEER:
+            body_template = (
+                "Hello {requestor_name},\n\n"
+                "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it\n\n"
+                "Reference: {reference}\n"
+                "Request Type: {request_type}\n"
+                "Product: {product}\n"
+                "Description: {description}\n\n"
+                "I will reach out with updates or any follow-up questions.\n"
+                "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n"
+            )
+        else:
+            body_template = (
+                "Hello {requestor_name},\n\n"
+                "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it\n\n"
+                "Reference: {reference}\n"
+                "Request Type: {request_type}\n"
+                "Product: {product}\n"
+                "Description: {description}\n\n"
+                "{assigned_engineer} is looped in and will reach out with updates or any follow-up questions.\n"
+                "If you have additional information or questions, simply reply to this email and we'll continue the thread.\n"
+            )
 
         body = quote(
             body_template.format(
@@ -1450,6 +1472,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
                 product=product_display,
                 description=description_line,
                 sender_name=sender_name,
+                assigned_engineer=assigned_engineer_name,
             )
         )
 
@@ -1465,6 +1488,99 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         outlook_url = "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
         messages.info(request, "Drafting email in your default mail client…")
+        return render(
+            request,
+            "hub/outlook_redirect.html",
+            {"mailto_url": outlook_url},
+        )
+
+
+class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
+
+        if request_obj.status != Request.Status.COMPLETED:
+            messages.error(request, "Mark the request as completed before sending a closing email.")
+            return redirect(redirect_target)
+
+        if request.user.role == User.Roles.ENGINEER:
+            if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
+                messages.error(request, "You are not allowed to close out this request.")
+                return redirect(redirect_target)
+
+        engineer_email = None
+        if request_obj.engineer and request_obj.engineer.email:
+            engineer_email = request_obj.engineer.email
+        elif request.user.email:
+            engineer_email = request.user.email
+
+        manager_email = request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
+        backup_email = (
+            request_obj.backup_engineer.email
+            if request_obj.backup_engineer and request_obj.backup_engineer.email
+            else None
+        )
+
+        if not manager_email:
+            messages.error(request, "Unable to draft a closing email. Ensure the requestor has an email configured.")
+            return redirect(redirect_target)
+
+        if not engineer_email:
+            messages.error(request, "Unable to draft a closing email. Ensure the engineer has an email configured.")
+            return redirect(redirect_target)
+
+        to_addresses = {manager_email, engineer_email}
+        cc_addresses = {"ESGRequestHub@phildata.com"}
+        if backup_email:
+            cc_addresses.add(backup_email)
+
+        recipients = ",".join(sorted(addr for addr in to_addresses if addr))
+        cc_field = ",".join(sorted(cc_addresses))
+        subject = quote(f"{request_obj.reference_code} · {request_obj.account.name}")
+
+        requestor = request_obj.requestor
+        if requestor:
+            requestor_name = requestor.get_full_name() or requestor.username
+        else:
+            requestor_name = request_obj.account_manager or "Requestor"
+
+        description_clean = (request_obj.description or "").strip()
+        if description_clean:
+            description_line = description_clean.replace("\r", " ").replace("\n", " ")
+        else:
+            description_line = "No description provided."
+
+        body_template = (
+            "Hello {requestor_name},\n"
+            "This is to inform you that your request has been successfully fulfilled and is now marked as closed.\n\n"
+            "If you believe further action is required or have additional questions, please don't hesitate to reopen the request or submit a new one via Request Hub.\n\n"
+            "Thank you for your cooperation."
+        )
+
+        body = quote(
+            body_template.format(
+                requestor_name=requestor_name,
+                description=description_line,
+            )
+        )
+
+        RequestCommunication.objects.create(
+            request=request_obj,
+            user=request.user,
+            channel=RequestCommunication.Channel.OUTLOOK,
+        )
+
+        mailto_parts = [f"mailto:{recipients}", f"subject={subject}", f"body={body}"]
+        if cc_field:
+            mailto_parts.insert(1, f"cc={quote(cc_field)}")
+
+        outlook_url = "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
+        messages.info(request, "Drafting closing email in your default mail client…")
         return render(
             request,
             "hub/outlook_redirect.html",

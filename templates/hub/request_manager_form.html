@@ -107,8 +107,19 @@
                             {% endif %}
                         </div>
                     {% endfor %}
-                    <div class="col-12 d-flex justify-content-end">
+                    <div class="col-12 d-flex flex-wrap justify-content-end gap-2">
                         <button class="btn btn-outline-primary" type="submit">Update status</button>
+                        {% if request.user.role == 'engineer' and object.status == 'completed' %}
+                            <button
+                                class="btn btn-outline-secondary"
+                                type="submit"
+                                formaction="{% url 'hub:request-outlook-closing' object.pk %}"
+                                formmethod="post"
+                                formnovalidate
+                            >
+                                For Closing
+                            </button>
+                        {% endif %}
                     </div>
                 </form>
             </div>
