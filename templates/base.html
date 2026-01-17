@@ -29,10 +29,10 @@
                             <li class="nav-item"><a class="nav-link" href="{% url 'hub:report' %}">Reports</a></li>
                         {% endif %}
                         <li class="nav-item position-relative">
-                            <a class="nav-link {% if request.user.role == 'admin' and new_ticket_count %}nav-link-with-dot{% endif %}" href="{% url 'hub:notifications' %}">
+                            <a class="nav-link {% if request.user.role == 'admin' or request.user.role == 'engineer' and new_ticket_count %}nav-link-with-dot{% endif %}" href="{% url 'hub:notifications' %}">
                                 Notifications
-                                {% if request.user.role == 'admin' and new_ticket_count %}
-                                    <span class="notification-dot notification-dot--nav" title="New tickets awaiting triage" aria-label="{{ new_ticket_count }} new tickets awaiting triage">
+                                {% if request.user.role == 'admin' or request.user.role == 'engineer' and new_ticket_count %}
+                                    <span class="notification-dot notification-dot--nav" title="New assignments or tickets" aria-label="{{ new_ticket_count }} new items">
                                         <span class="notification-dot__count">{{ new_ticket_count }}</span>
                                     </span>
                                 {% endif %}

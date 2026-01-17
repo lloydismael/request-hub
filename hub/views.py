@@ -465,6 +465,39 @@ def notify_engineer_assignment_email(
     )
 
 
+def notify_engineer_assignment_notification(
+    request_obj: Request,
+    *,
+    actor_user: User,
+    previous_engineer_id: int | None = None,
+    previous_backup_id: int | None = None,
+) -> None:
+    """Create in-app notifications when an engineer or backup is newly assigned."""
+
+    recipients: dict[int, User] = {}
+    if request_obj.engineer and request_obj.engineer_id != previous_engineer_id:
+        recipients[request_obj.engineer_id] = request_obj.engineer
+    if request_obj.backup_engineer and request_obj.backup_engineer_id != previous_backup_id:
+        recipients[request_obj.backup_engineer_id] = request_obj.backup_engineer
+
+    recipients.pop(actor_user.pk, None)
+
+    if not recipients:
+        return
+
+    actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
+    account_name = request_obj.account.name if request_obj.account else "Account"
+    engagement = request_obj.get_engagement_type_display()
+    for recipient in recipients.values():
+        Notification.objects.create(
+            recipient=recipient,
+            message=f"You were assigned to {request_obj.reference_code} · {account_name} ({engagement}).",
+            related_request=request_obj,
+            actor=actor_name,
+            source="Assignment",
+        )
+
+
 def _admin_sort_account_manager_key(request_obj):
     manager_name = ""
     manager_user = getattr(request_obj, "requestor", None)
@@ -624,6 +657,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["new_ticket_count"] = user.notifications.filter(
+                is_read=False,
+                source__icontains="assignment",
+            ).count()
         else:
             metric_keys = [
                 "open",
@@ -871,6 +908,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req._actor_user = request.user
             req._actor_source = "Dashboard · New Request"
             req.save()
+            notify_engineer_assignment_notification(req, actor_user=request.user)
             notify_engineer_assignment_email(
                 req,
                 actor_user=request.user,
@@ -987,6 +1025,12 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
             self.object,
             actor_user=self.request.user,
             request=self.request,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+        )
+        notify_engineer_assignment_notification(
+            self.object,
+            actor_user=self.request.user,
             previous_engineer_id=previous_engineer_id,
             previous_backup_id=previous_backup_id,
         )
@@ -1195,6 +1239,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             form.instance._actor_user = request.user
             form.instance._actor_source = source_label
             original = Request.objects.get(pk=request_obj.pk)
+            previous_engineer_id = original.engineer_id
+            previous_backup_id = original.backup_engineer_id
             changed_fields = normalize_request_form_changed_fields(form.changed_data)
             form.save()
             if original.account_id != request_obj.account_id and "account" not in changed_fields:
@@ -1207,6 +1253,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                     changed_fields,
                     source_label,
                 )
+            notify_engineer_assignment_notification(
+                request_obj,
+                actor_user=request.user,
+                previous_engineer_id=previous_engineer_id,
+                previous_backup_id=previous_backup_id,
+            )
             messages.success(request, "Request details updated.")
             return HttpResponseRedirect(request.path)
         context = self.get_context_data(request_obj, form=form)

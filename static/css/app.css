@@ -793,7 +793,7 @@ body.requestor-dashboard .dashboard-metric-card--active {
     position: relative;
     margin: 6vh auto;
     max-width: 560px;
-    max-height: min(720px, 88vh);
+    max-height: min(1000px, 88vh);
     display: flex;
     flex-direction: column;
     background: rgba(255, 255, 255, 0.98);

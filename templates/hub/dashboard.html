@@ -330,16 +330,18 @@
                                 </th>
                             {% endif %}
                             {% if role == 'admin' %}
-                                <th class="text-nowrap">
-                                    <a href="{{ sort_links.end_date }}" class="table-sort-link{% if current_sort == 'end_date' %} table-sort-link--active{% endif %}">
-                                        End Date
-                                        {% if current_sort == 'end_date' %}
-                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
-                                        {% else %}
-                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
-                                        {% endif %}
-                                    </a>
-                                </th>
+                                {% if active_metric_filter != 'open' %}
+                                    <th class="text-nowrap">
+                                        <a href="{{ sort_links.end_date }}" class="table-sort-link{% if current_sort == 'end_date' %} table-sort-link--active{% endif %}">
+                                            End Date
+                                            {% if current_sort == 'end_date' %}
+                                                <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                {% endif %}
                                 <th>
                                     <a href="{{ sort_links.days }}" class="table-sort-link{% if current_sort == 'days' %} table-sort-link--active{% endif %}">
                                         Days
@@ -504,13 +506,15 @@
                                         <span class="badge bg-light text-dark border">{{ item.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</span>
                                     </td>
                                 {% endif %}
-                                <td class="{% if role != 'requestor' and item.missed_sla %}table-danger{% endif %} text-nowrap">
-                                    {% if item.end_date %}
-                                        <span class="badge {% if role != 'requestor' and item.missed_sla %}bg-danger text-white{% elif item.due_date and not item.missed_sla %}bg-success-subtle text-success border border-success-subtle{% else %}bg-light text-dark border{% endif %}">{{ item.end_date|date:"M d, Y" }}</span>
-                                    {% else %}
-                                        <span class="text-muted">&mdash;</span>
-                                    {% endif %}
-                                </td>
+                                {% if not role == 'admin' or active_metric_filter != 'open' %}
+                                    <td class="{% if role != 'requestor' and item.missed_sla %}table-danger{% endif %} text-nowrap">
+                                        {% if item.end_date %}
+                                            <span class="badge {% if role != 'requestor' and item.missed_sla %}bg-danger text-white{% elif item.due_date and not item.missed_sla %}bg-success-subtle text-success border border-success-subtle{% else %}bg-light text-dark border{% endif %}">{{ item.end_date|date:"M d, Y" }}</span>
+                                        {% else %}
+                                            <span class="text-muted">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
                                 <td>
                                     {% if role == 'admin' %}
                                         <span class="badge {{ item.admin_days_badge_classes }}">
