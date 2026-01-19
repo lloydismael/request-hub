@@ -19,6 +19,11 @@ website_hostname = os.getenv("WEBSITE_HOSTNAME")
 if website_hostname and website_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(website_hostname)
 
+# Allow common container metadata host seen in some environments (e.g., 169.254.x.x)
+metadata_host = "169.254.130.3"
+if metadata_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(metadata_host)
+
 csrf_hosts = [host.strip() for host in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if host.strip()]
 if website_hostname:
     csrf_hosts.append(f"https://{website_hostname}")
@@ -155,6 +160,13 @@ AUTHENTICATION_BACKENDS = [
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "ESG Request Hub <no-reply@esgrequesthub.dreadops.site>")
+
+# Azure Communication Services Email
+ACS_EMAIL_CONNECTION_STRING = os.getenv("ACS_EMAIL_CONNECTION_STRING", "").strip()
+ACS_EMAIL_SENDER = os.getenv(
+    "ACS_EMAIL_SENDER",
+    "DoNotReply@a2317fba-55e4-4b27-b26b-5b5d32235fec.azurecomm.net",
+).strip()
 
 PROFILE_COMPLETION_EXEMPT_URLS = [
     "accounts:update",
