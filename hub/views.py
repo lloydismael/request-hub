@@ -1,4 +1,5 @@
 import csv
+import logging
 from decimal import Decimal
 from datetime import date, timedelta
 from typing import Optional
@@ -44,6 +45,7 @@ from .models import (
 from .mixins import AdminRequiredMixin, AdminOrEngineerRequiredMixin, EngineerRequiredMixin
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
+logger = logging.getLogger(__name__)
 
 
 class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, TemplateView):
@@ -425,6 +427,7 @@ def notify_engineer_assignment_email(
             recipients.append(email)
 
     if not recipients:
+        logger.info("Assignment email skipped: no engineer/backup recipient for %s", request_obj.reference_code)
         return
 
     actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
@@ -455,6 +458,30 @@ def notify_engineer_assignment_email(
 
     if detail_url:
         body_lines.extend(["", f"View request: {detail_url}"])
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+
+    if not use_acs:
+        logger.warning("ACS email not configured; set ACS_EMAIL_CONNECTION_STRING and ACS_EMAIL_SENDER")
+
+    if use_acs:
+        try:
+            from azure.communication.email import EmailClient
+
+            client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+            message = {
+                "senderAddress": settings.ACS_EMAIL_SENDER,
+                "recipients": {"to": [{"address": addr} for addr in recipients]},
+                "content": {
+                    "subject": subject,
+                    "plainText": "\n".join(body_lines),
+                },
+            }
+            poller = client.begin_send(message)
+            poller.result()
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ACS email send failed; falling back to SMTP", exc_info=exc)
 
     send_mail(
         subject,
