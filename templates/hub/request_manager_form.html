@@ -70,6 +70,37 @@
                                 </div>
                             </div>
                         </div>
+                    {% elif field.name == 'engineer' %}
+                        <div class="mb-3">
+                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}
+                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                            {% endif %}
+                            {% if request.user.role == 'requestor' %}
+                                <div class="mt-2">
+                                    <div class="text-muted small mb-1">Backup Engineer</div>
+                                    <div class="avatar-select">
+                                        <span class="avatar-select__image">
+                                            {% if object.backup_engineer %}
+                                                {{ object.backup_engineer.get_full_name|default:object.backup_engineer.username|slice:':1'|upper }}
+                                            {% else %}
+                                                ?
+                                            {% endif %}
+                                        </span>
+                                        <div>
+                                            {% if object.backup_engineer %}
+                                                <div class="fw-semibold">{{ object.backup_engineer.get_full_name|default:object.backup_engineer.username }}</div>
+                                                
+                                            {% else %}
+                                                <div class="text-muted">Not assigned</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
                     {% elif field.name == 'deployment_end' %}
                         {# Rendered with deployment_start #}
                     {% else %}
