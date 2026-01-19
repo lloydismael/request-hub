@@ -188,6 +188,7 @@ class RequestForm(forms.ModelForm):
         today = timezone.now().date()
         if self.instance.pk and self.instance.start_date:
             due_field.initial = self.instance.start_date
+
         else:
             due_field.initial = today
         due_field.widget.attrs.pop("min", None)
@@ -218,6 +219,33 @@ class RequestForm(forms.ModelForm):
                     class_list = existing_classes.split()
                     if "is-invalid" not in class_list:
                         widget.attrs["class"] = (existing_classes + " is-invalid").strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Enforce per-engineer ongoing capacity rules during turn-over by engineers.
+        # If the target engineer already carries a deployment, they are capped at 3 ongoing requests.
+        # Otherwise they can handle up to 5 ongoing requests (even when receiving the first deployment).
+        if self.actor_role == User.Roles.ENGINEER:
+            new_engineer = cleaned_data.get("engineer")
+            if new_engineer and new_engineer != self.instance.engineer:
+                ongoing_qs = Request.objects.filter(engineer=new_engineer, status=Request.Status.ONGOING)
+                if self.instance.pk:
+                    ongoing_qs = ongoing_qs.exclude(pk=self.instance.pk)
+
+                has_deployment = ongoing_qs.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
+                capacity = 3 if has_deployment else 5
+                current_load = ongoing_qs.count()
+
+                if current_load >= capacity:
+                    name = new_engineer.get_full_name() or new_engineer.username or "Engineer"
+                    if has_deployment:
+                        msg = f"{name} is at the limit ({capacity}) while handling a deployment. Choose another engineer."
+                    else:
+                        msg = f"{name} already has {current_load} ongoing requests (limit {capacity}). Choose another engineer."
+                    self.add_error("engineer", msg)
+
+        return cleaned_data
 
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
