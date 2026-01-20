@@ -692,7 +692,7 @@
                     {% endfor %}
                     <div class="d-flex gap-2 justify-content-end mt-4">
                         <button type="button" class="btn btn-outline-secondary" id="cancel-request-btn">Cancel</button>
-                        <button class="btn btn-primary" type="submit">Submit Request</button>
+                        <button class="btn btn-primary" type="submit" id="submit-request-btn">Submit Request</button>
                     </div>
                 </form>
             </div>
@@ -900,6 +900,17 @@
 
             if (modal.dataset.openOnLoad === "true") {
                 openModal();
+            }
+
+            // Prevent double submissions by disabling the submit button once clicked.
+            const requestForm = modal.querySelector("form[method='post']");
+            const submitBtn = modal.querySelector("#submit-request-btn");
+            if (requestForm && submitBtn) {
+                requestForm.addEventListener("submit", () => {
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add("disabled");
+                    submitBtn.textContent = "Submitting...";
+                });
             }
         })();
     </script>

@@ -1280,6 +1280,13 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                     changed_fields,
                     source_label,
                 )
+            notify_engineer_assignment_email(
+                request_obj,
+                actor_user=request.user,
+                request=request,
+                previous_engineer_id=previous_engineer_id,
+                previous_backup_id=previous_backup_id,
+            )
             notify_engineer_assignment_notification(
                 request_obj,
                 actor_user=request.user,
