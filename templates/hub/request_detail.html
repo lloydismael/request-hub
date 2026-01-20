@@ -23,7 +23,7 @@
                             <button class="btn btn-sm btn-outline-primary" type="submit">Update</button>
                         </form>
                     {% endif %}
-                    {% if request.user.role == 'admin' or request.user.role == 'requestor' and request_obj.requestor_id == request.user.id %}
+                    {% if request.user.role == 'admin' or request.user.role in request.user.REQUESTOR_ROLES and request_obj.requestor_id == request.user.id %}
                         <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' request_obj.pk %}">Delete</a>
                     {% endif %}
                 </div>

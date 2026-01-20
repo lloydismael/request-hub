@@ -9,6 +9,7 @@ ROLE_LABELS = {
     User.Roles.ADMIN: "Admin",
     User.Roles.ENGINEER: "Engineer",
     User.Roles.REQUESTOR: "Requestor",
+    User.Roles.REQUESTOR_ESS: "Requestor-ESS",
 }
 
 ROLE_CHOICES = [(key, label) for key, label in ROLE_LABELS.items()]

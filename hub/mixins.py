@@ -5,15 +5,19 @@ from accounts.models import User
 
 class RoleRequiredMixin(UserPassesTestMixin):
     required_role: str = ""
+    required_roles: set[str] | None = None
 
     def test_func(self):
-        if not self.required_role:
+        roles = set(self.required_roles or set())
+        if self.required_role:
+            roles.add(self.required_role)
+        if not roles:
             return False
-        return self.request.user.role == self.required_role
+        return self.request.user.role in roles
 
 
 class RequestorRequiredMixin(RoleRequiredMixin):
-    required_role = User.Roles.REQUESTOR
+    required_roles = set(User.REQUESTOR_ROLES)
 
 
 class EngineerRequiredMixin(RoleRequiredMixin):

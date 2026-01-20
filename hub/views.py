@@ -24,6 +24,8 @@ from urllib.parse import quote
 from accounts.forms import UserManagementForm
 from accounts.models import User
 
+REQUESTOR_ROLES = set(User.REQUESTOR_ROLES)
+
 from .forms import (
     AccountManagementForm,
     AdminRequestFilterForm,
@@ -558,12 +560,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         context["role"] = user.role
+        context["is_requestor_role"] = user.role in REQUESTOR_ROLES
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
-        if user.role == User.Roles.REQUESTOR:
+        if user.role in REQUESTOR_ROLES:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=User.Roles.REQUESTOR)
+                form = RequestForm(actor_role=user.role)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
@@ -924,9 +927,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
 
     def post(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.REQUESTOR:
+        if request.user.role not in REQUESTOR_ROLES:
             return redirect("hub:dashboard")
-        form = RequestForm(request.POST, actor_role=User.Roles.REQUESTOR)
+        form = RequestForm(request.POST, actor_role=request.user.role)
         if form.is_valid():
             req = form.save(commit=False)
             req.requestor = request.user
@@ -977,7 +980,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         user = self.request.user
         qs = super().get_queryset()
-        if user.role == User.Roles.REQUESTOR:
+        if user.role in REQUESTOR_ROLES:
             return qs.filter(requestor=user)
         if user.role == User.Roles.ENGINEER:
             return qs.filter(engineer=user)
@@ -1022,7 +1025,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return True
         if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
             return True
-        if user.role == User.Roles.REQUESTOR and request_obj.requestor_id == user.id:
+        if user.role in REQUESTOR_ROLES and request_obj.requestor_id == user.id:
             return True
         return False
 
@@ -1141,7 +1144,7 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         return kwargs
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.REQUESTOR:
+        if request.user.role not in REQUESTOR_ROLES:
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
 
@@ -1183,7 +1186,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in {User.Roles.REQUESTOR, User.Roles.ENGINEER}:
+        if request.user.role not in REQUESTOR_ROLES | {User.Roles.ENGINEER}:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -1193,7 +1196,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         pk = self.kwargs["pk"]
         user = self.request.user
 
-        if user.role == User.Roles.REQUESTOR:
+        if user.role in REQUESTOR_ROLES:
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role == User.Roles.ENGINEER:
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
@@ -1225,7 +1228,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return self._handle_details_update(request, request_obj)
 
     def _actor_prefix(self) -> str:
-        return "Requestor" if self.request.user.role == User.Roles.REQUESTOR else "Engineer"
+        return "Requestor" if self.request.user.role in REQUESTOR_ROLES else "Engineer"
 
     def _source_label(self, suffix: str) -> str:
         return f"{self._actor_prefix()} · {suffix}"
@@ -1426,7 +1429,7 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         user = self.request.user
         if user.role == User.Roles.ADMIN:
             return qs
-        if user.role == User.Roles.REQUESTOR:
+        if user.role in REQUESTOR_ROLES:
             return qs.filter(requestor=user)
         return qs.none()
 

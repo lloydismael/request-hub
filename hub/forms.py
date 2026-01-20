@@ -193,6 +193,17 @@ class RequestForm(forms.ModelForm):
             due_field.initial = today
         due_field.widget.attrs.pop("min", None)
 
+        engagement_field = self.fields["engagement_type"]
+        if actor_role == User.Roles.REQUESTOR_ESS:
+            filtered_choices = [
+                choice
+                for choice in engagement_field.choices
+                if choice[0] != Request.Engagement.SUPPORT
+            ]
+            if self.instance.pk and self.instance.engagement_type == Request.Engagement.SUPPORT:
+                filtered_choices.append((Request.Engagement.SUPPORT, Request.Engagement.SUPPORT.label))
+            engagement_field.choices = filtered_choices
+
         deployment_start_field = self.fields["deployment_start"]
         deployment_end_field = self.fields["deployment_end"]
         if self.instance.pk and self.instance.engagement_type == Request.Engagement.DEPLOYMENT:
@@ -240,7 +251,10 @@ class RequestForm(forms.ModelForm):
                 if current_load >= capacity:
                     name = new_engineer.get_full_name() or new_engineer.username or "Engineer"
                     if has_deployment:
-                        msg = f"{name} is at the limit ({capacity}) while handling a deployment. Choose another engineer."
+                        msg = (
+                            f"{name} is at the deployment limit (max 3 ongoing while a deployment is active). "
+                            "Choose another engineer or wait until a deployment is completed."
+                        )
                     else:
                         msg = f"{name} already has {current_load} ongoing requests (limit {capacity}). Choose another engineer."
                     self.add_error("engineer", msg)

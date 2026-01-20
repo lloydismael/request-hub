@@ -48,7 +48,7 @@ class Request(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="requests_made",
-        limit_choices_to={"role": "requestor"},
+        limit_choices_to={"role__in": ["requestor", "requestor_ess"]},
     )
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="requests")
     account_manager = models.CharField(max_length=255)
@@ -111,29 +111,19 @@ class Request(models.Model):
             if self.pk:
                 assigned = assigned.exclude(pk=self.pk)
 
-            max_allowed = 5
-            if (
-                self.engagement_type == self.Engagement.DEPLOYMENT
-                and self.start_date
-                and (self.due_date or self.start_date)
-            ):
-                deployment_end = self.due_date or self.start_date
-                overlap_filter = Q(start_date__lte=deployment_end) & (
-                    Q(due_date__gte=self.start_date) | Q(due_date__isnull=True)
-                )
-                overlapping_deployments = assigned.filter(
-                    engagement_type=self.Engagement.DEPLOYMENT
-                ).filter(overlap_filter)
-                if overlapping_deployments.exists():
-                    max_allowed = 3
+            # Capacity: default 5 ongoing; when an engineer already has an ongoing deployment, cap at 3.
+            # This still allows assigning the first deployment even if they already carry up to 4 non-deployment requests.
+            has_ongoing_deployment = assigned.filter(engagement_type=self.Engagement.DEPLOYMENT).exists()
+            max_allowed = 3 if has_ongoing_deployment else 5
 
-            if assigned.count() >= max_allowed:
+            current_load = assigned.count()
+            if current_load >= max_allowed:
                 if max_allowed == 3:
                     raise ValidationError(
                         {
                             "engineer": (
-                                "Selected engineer already handles three overlapping deployment assignments for the chosen window. "
-                                "Pick another engineer or adjust the deployment dates."
+                                "Selected engineer is at the deployment capacity (max 3 ongoing while a deployment is active). "
+                                "Choose another engineer or wait until a deployment is completed."
                             )
                         }
                     )
