@@ -17,7 +17,7 @@ class RoleRequiredMixin(UserPassesTestMixin):
 
 
 class RequestorRequiredMixin(RoleRequiredMixin):
-    required_roles = set(User.REQUESTOR_ROLES)
+    required_roles = set(getattr(User, "REQUEST_CREATOR_ROLES", User.REQUESTOR_ROLES))
 
 
 class EngineerRequiredMixin(RoleRequiredMixin):

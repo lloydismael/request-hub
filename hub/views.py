@@ -25,6 +25,8 @@ from accounts.forms import UserManagementForm
 from accounts.models import User
 
 REQUESTOR_ROLES = set(User.REQUESTOR_ROLES)
+REQUEST_CREATOR_ROLES = set(getattr(User, "REQUEST_CREATOR_ROLES", User.REQUESTOR_ROLES))
+PM_ESS_ROLE = User.Roles.PM_ESS
 
 from .forms import (
     AccountManagementForm,
@@ -561,9 +563,54 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         context["role"] = user.role
         context["is_requestor_role"] = user.role in REQUESTOR_ROLES
+        context["is_pm_ess"] = user.role == PM_ESS_ROLE
+        context["is_requestor_ui"] = user.role in REQUESTOR_ROLES or user.role == PM_ESS_ROLE
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
-        if user.role in REQUESTOR_ROLES:
+        if user.role == PM_ESS_ROLE:
+            form = kwargs.get("form")
+            if form is None:
+                form = RequestForm(actor_role=user.role)
+            context["form"] = form
+            context["account_name_choices"] = form.account_name_suggestions
+            metric_filter = self.request.GET.get("metric_filter") or ""
+            metric_keys = {"ongoing", "completed"}
+            if metric_filter not in metric_keys:
+                metric_filter = ""
+
+            requests = list(
+                Request.objects.filter(requestor__role=User.Roles.REQUESTOR_ESS)
+                .select_related("account", "engineer", "requestor")
+                .order_by("-created_at")
+            )
+
+            metrics = {
+                "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
+                "completed": sum(1 for req in requests if req.status == Request.Status.COMPLETED),
+            }
+
+            filtered_requests = requests
+            if metric_filter == "ongoing":
+                filtered_requests = [req for req in requests if req.status == Request.Status.ONGOING]
+            elif metric_filter == "completed":
+                filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
+
+            metric_links = {}
+            for key in ["ongoing", "completed"]:
+                params = self.request.GET.copy()
+                if params.get("metric_filter") == key:
+                    params.pop("metric_filter", None)
+                else:
+                    params["metric_filter"] = key
+                encoded = params.urlencode()
+                metric_links[key] = f"?{encoded}" if encoded else "?"
+
+            context["requests"] = filtered_requests
+            context["metrics"] = metrics
+            context["metric_links"] = metric_links
+            context["active_metric_filter"] = metric_filter
+            context["form_has_errors"] = form.is_bound and bool(form.errors)
+        elif user.role in REQUEST_CREATOR_ROLES:
             form = kwargs.get("form")
             if form is None:
                 form = RequestForm(actor_role=user.role)
@@ -927,7 +974,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
 
     def post(self, request, *args, **kwargs):
-        if request.user.role not in REQUESTOR_ROLES:
+        if request.user.role not in REQUEST_CREATOR_ROLES:
             return redirect("hub:dashboard")
         form = RequestForm(request.POST, actor_role=request.user.role)
         if form.is_valid():
@@ -980,6 +1027,8 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         user = self.request.user
         qs = super().get_queryset()
+        if user.role == PM_ESS_ROLE:
+            return qs.filter(Q(requestor=user) | Q(requestor__role=User.Roles.REQUESTOR_ESS))
         if user.role in REQUESTOR_ROLES:
             return qs.filter(requestor=user)
         if user.role == User.Roles.ENGINEER:
@@ -1025,7 +1074,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return True
         if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
             return True
-        if user.role in REQUESTOR_ROLES and request_obj.requestor_id == user.id:
+        if user.role in REQUEST_CREATOR_ROLES and request_obj.requestor_id == user.id:
             return True
         return False
 
@@ -1144,7 +1193,7 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         return kwargs
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in REQUESTOR_ROLES:
+        if request.user.role not in REQUEST_CREATOR_ROLES:
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
 
@@ -1186,7 +1235,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in REQUESTOR_ROLES | {User.Roles.ENGINEER}:
+        if request.user.role not in REQUEST_CREATOR_ROLES | {User.Roles.ENGINEER, PM_ESS_ROLE}:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -1196,7 +1245,9 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         pk = self.kwargs["pk"]
         user = self.request.user
 
-        if user.role in REQUESTOR_ROLES:
+        if user.role == PM_ESS_ROLE:
+            queryset = queryset.filter(pk=pk).filter(Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user))
+        elif user.role in REQUEST_CREATOR_ROLES:
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role == User.Roles.ENGINEER:
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
@@ -1228,7 +1279,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return self._handle_details_update(request, request_obj)
 
     def _actor_prefix(self) -> str:
-        return "Requestor" if self.request.user.role in REQUESTOR_ROLES else "Engineer"
+        return "Requestor" if self.request.user.role in REQUEST_CREATOR_ROLES or self.request.user.role == PM_ESS_ROLE else "Engineer"
 
     def _source_label(self, suffix: str) -> str:
         return f"{self._actor_prefix()} · {suffix}"
@@ -1429,7 +1480,7 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         user = self.request.user
         if user.role == User.Roles.ADMIN:
             return qs
-        if user.role in REQUESTOR_ROLES:
+        if user.role in REQUEST_CREATOR_ROLES:
             return qs.filter(requestor=user)
         return qs.none()
 

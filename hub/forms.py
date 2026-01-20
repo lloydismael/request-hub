@@ -194,7 +194,7 @@ class RequestForm(forms.ModelForm):
         due_field.widget.attrs.pop("min", None)
 
         engagement_field = self.fields["engagement_type"]
-        if actor_role == User.Roles.REQUESTOR_ESS:
+        if actor_role in {User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}:
             filtered_choices = [
                 choice
                 for choice in engagement_field.choices

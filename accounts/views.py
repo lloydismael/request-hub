@@ -79,6 +79,7 @@ class LandingView(TemplateView):
             User.Roles.ENGINEER: "Review assigned tickets, respond to updates, and act on SLAs.",
             User.Roles.REQUESTOR: "Create new customer requests and monitor progress.",
             User.Roles.REQUESTOR_ESS: "Submit customer requests without Support engagements and track progress.",
+            User.Roles.PM_ESS: "Oversee Requestor-ESS requests, create tickets, and track status across accounts.",
         }
         context["role_cards"] = [
             {
