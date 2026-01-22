@@ -362,6 +362,13 @@ class RequestForm(forms.ModelForm):
 
 
 class RequestAdminForm(forms.ModelForm):
+    requestor = forms.ModelChoiceField(
+        queryset=User.objects.filter(role__in=User.REQUEST_CREATOR_ROLES),
+        required=True,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Requestor",
+        help_text="Switch the request owner (Requestor/Requestor-ESS/PM-ESS).",
+    )
     engineer = forms.ModelChoiceField(
         queryset=User.objects.filter(role=User.Roles.ENGINEER),
         required=False,
@@ -378,6 +385,7 @@ class RequestAdminForm(forms.ModelForm):
     class Meta:
         model = Request
         fields = [
+            "requestor",
             "priority",
             "status",
             "engineer",
@@ -395,7 +403,16 @@ class RequestAdminForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        allow_capacity_override = kwargs.pop("allow_capacity_override", False)
         super().__init__(*args, **kwargs)
+        # Flag used by Request.clean() to bypass engineer capacity validation when admin overrides.
+        self.instance._allow_capacity_override = allow_capacity_override
+        # Requestor field setup
+        self.fields["requestor"].queryset = self.fields["requestor"].queryset.order_by("first_name", "last_name")
+        req_widget = self.fields["requestor"].widget
+        if isinstance(req_widget, AvatarSelect):
+            req_widget.avatar_mapping = _build_avatar_mapping(self.fields["requestor"].queryset)
+        self.fields["requestor"].label_from_instance = _user_display
         self.fields["engineer"].queryset = self.fields["engineer"].queryset.order_by("first_name", "last_name")
         widget = self.fields["engineer"].widget
         if isinstance(widget, AvatarSelect):

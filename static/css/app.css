@@ -34,6 +34,10 @@ body {
     color: #111827;
 }
 
+main.container {
+    max-width: 1400px;
+}
+
 body.requestor-modal-open {
     overflow: hidden;
 }

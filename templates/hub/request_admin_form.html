@@ -17,6 +17,7 @@
             </div>
             <form method="post" novalidate>
                 {% csrf_token %}
+                <input type="hidden" name="override_capacity" value="0" data-override-flag>
                 {% for field in form %}
                     <div class="mb-3">
                         <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
@@ -86,4 +87,59 @@
         </div>
     </div>
 </div>
+{{ engineer_capacity_map|json_script:"engineer-capacity-data" }}
+<script>
+    (function () {
+        const form = document.querySelector('form[method="post"][novalidate]');
+        if (!form) {
+            return;
+        }
+
+        const overrideInput = form.querySelector('[data-override-flag]');
+        const engineerSelect = form.querySelector('#id_engineer');
+        const dataEl = document.getElementById('engineer-capacity-data');
+        let capacityMap = {};
+        if (dataEl && dataEl.textContent) {
+            try {
+                capacityMap = JSON.parse(dataEl.textContent);
+            } catch (err) {
+                capacityMap = {};
+            }
+        }
+
+        const resetOverride = () => {
+            if (overrideInput) {
+                overrideInput.value = '0';
+            }
+        };
+
+        if (engineerSelect) {
+            engineerSelect.addEventListener('change', resetOverride);
+        }
+
+        form.addEventListener('submit', (event) => {
+            if (!engineerSelect || !overrideInput) {
+                return;
+            }
+
+            const engineerId = engineerSelect.value;
+            if (!engineerId || !capacityMap[engineerId]) {
+                return;
+            }
+
+            const { load, capacity, name } = capacityMap[engineerId];
+            const isAtCapacity = typeof load === 'number' && typeof capacity === 'number' && load >= capacity;
+
+            if (isAtCapacity && overrideInput.value !== '1') {
+                const message = `${name} is at capacity (${load}/${capacity} ongoing). Proceed with override and assign anyway?`;
+                const confirmed = window.confirm(message);
+                if (!confirmed) {
+                    event.preventDefault();
+                    return;
+                }
+                overrideInput.value = '1';
+            }
+        });
+    })();
+</script>
 {% endblock %}

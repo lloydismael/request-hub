@@ -615,6 +615,10 @@
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% elif is_pm_ess %}
                                             <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
+                                            <form method="post" action="{% url 'hub:request-teams' item.pk %}" class="d-inline" target="_blank">
+                                                {% csrf_token %}
+                                                <button class="btn btn-sm btn-outline-info" type="submit"{% if not item.engineer or not item.engineer.email or not item.requestor or not item.requestor.email %} disabled title="Assign an engineer and ensure requestor email is set to start a chat."{% endif %}>Teams</button>
+                                            </form>
                                             {% if item.requestor_id == request.user.id %}
                                                 <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                             {% endif %}

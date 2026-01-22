@@ -1084,6 +1084,11 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
     template_name = "hub/request_admin_form.html"
     success_url = reverse_lazy("hub:dashboard")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["allow_capacity_override"] = self.request.method == "POST" and self.request.POST.get("override_capacity") == "1"
+        return kwargs
+
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if request.POST.get("form_type") == "status_log":
@@ -1132,6 +1137,7 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
             .order_by("-created_at")
         )
         context.setdefault("log_form", StatusLogForm())
+        context["engineer_capacity_map"] = self._build_engineer_capacity_map()
         return context
 
     def _handle_status_log_post(self, request):
@@ -1179,6 +1185,22 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
                 actor=actor,
                 source="Admin · Manage Request",
             )
+
+    def _build_engineer_capacity_map(self):
+        data = {}
+        engineers = User.objects.filter(role=User.Roles.ENGINEER)
+        for engineer in engineers:
+            assigned = Request.objects.filter(engineer=engineer, status=Request.Status.ONGOING)
+            if self.object.pk:
+                assigned = assigned.exclude(pk=self.object.pk)
+            has_deployment = assigned.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
+            capacity = 3 if has_deployment else 5
+            data[str(engineer.pk)] = {
+                "name": engineer.get_full_name() or engineer.username or "Engineer",
+                "load": assigned.count(),
+                "capacity": capacity,
+            }
+        return data
 
 
 class RequestUpdateView(LoginRequiredMixin, UpdateView):
@@ -1549,6 +1571,8 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         to_addresses = {engineer_email, manager_email}
         cc_addresses = {"ESGRequestHub@phildata.com"}
+        if request_obj.requestor and request_obj.requestor.role == User.Roles.REQUESTOR_ESS:
+            cc_addresses.add("ChristineF@phildata.com")
         if backup_email:
             cc_addresses.add(backup_email)
 
@@ -1681,7 +1705,10 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
 
         recipients = ",".join(sorted(addr for addr in to_addresses if addr))
         cc_field = ",".join(sorted(cc_addresses))
-        subject = quote(f"{request_obj.reference_code} · {request_obj.account.name}")
+
+        # Use the same subject pattern as the acknowledgement so Outlook threads replies together.
+        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name}"
+        subject = quote(ack_subject)
 
         requestor = request_obj.requestor
         if requestor:
@@ -1697,8 +1724,8 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
 
         body_template = (
             "Hello {requestor_name},\n"
-            "This is to inform you that your request has been successfully fulfilled and is now marked as closed.\n\n"
-            "If you believe further action is required or have additional questions, please don't hesitate to reopen the request or submit a new one via Request Hub.\n\n"
+            "Following up on our earlier acknowledgement for {reference}, this is to confirm the request has been fulfilled and is now marked as closed.\n\n"
+            "If you believe further action is required or have additional questions, please don't hesitate to reply to this thread, reopen the request, or submit a new one via Request Hub.\n\n"
             "Thank you for your cooperation."
         )
 
@@ -1706,6 +1733,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
             body_template.format(
                 requestor_name=requestor_name,
                 description=description_line,
+                reference=request_obj.reference_code,
             )
         )
 
@@ -1728,7 +1756,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         )
 
 
-class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
+class RequestTeamsRedirectView(LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(
             Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
@@ -1737,7 +1765,12 @@ class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin,
 
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
-        if request.user.role == User.Roles.ENGINEER:
+        role = request.user.role
+        if role not in {User.Roles.ADMIN, User.Roles.ENGINEER, PM_ESS_ROLE}:
+            messages.error(request, "You are not allowed to start a Teams chat for this request.")
+            return redirect(redirect_target)
+
+        if role == User.Roles.ENGINEER:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to start a Teams chat for this request.")
                 return redirect(redirect_target)
@@ -1750,7 +1783,37 @@ class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin,
                 messages.warning(request, "You already launched the Teams chat for this request.")
                 return redirect(redirect_target)
 
-        teams_url = request_obj.teams_chat_url
+        if role == PM_ESS_ROLE:
+            if not request_obj.requestor or request_obj.requestor.role != User.Roles.REQUESTOR_ESS:
+                messages.error(request, "Teams chat is only available for Requestor-ESS requests.")
+                return redirect(redirect_target)
+            if not request_obj.engineer or not request_obj.engineer.email:
+                messages.error(request, "Assign an engineer with an email before starting a Teams chat.")
+                return redirect(redirect_target)
+            if not request_obj.requestor.email:
+                messages.error(request, "Requestor email is missing; unable to start a Teams chat.")
+                return redirect(redirect_target)
+            already_launched = RequestCommunication.objects.filter(
+                request=request_obj,
+                user=request.user,
+                channel=RequestCommunication.Channel.TEAMS,
+            ).exists()
+            if already_launched:
+                messages.warning(request, "You already launched the Teams chat for this request.")
+                return redirect(redirect_target)
+
+            topic = request_obj._build_teams_chat_topic(reference_code=request_obj.reference_code)
+            participants = ",".join(sorted({email for email in [request_obj.engineer.email, request_obj.requestor.email] if email}))
+            if not participants:
+                messages.error(request, "Unable to start a Teams chat. Missing participant emails.")
+                return redirect(redirect_target)
+            teams_url = (
+                "https://teams.microsoft.com/l/chat/0/0?users="
+                f"{quote(participants)}&topicName={quote(topic)}"
+            )
+        else:
+            teams_url = request_obj.teams_chat_url
+
         if not teams_url:
             messages.error(
                 request,

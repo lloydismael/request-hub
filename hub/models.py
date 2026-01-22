@@ -103,7 +103,9 @@ class Request(models.Model):
 
     def clean(self):
         super().clean()
-        if self.engineer and self.status == self.Status.ONGOING:
+        bypass_capacity = getattr(self, "_allow_capacity_override", False)
+
+        if self.engineer and self.status == self.Status.ONGOING and not bypass_capacity:
             assigned = Request.objects.filter(
                 engineer=self.engineer,
                 status=self.Status.ONGOING,
