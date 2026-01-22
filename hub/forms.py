@@ -362,6 +362,12 @@ class RequestForm(forms.ModelForm):
 
 
 class RequestAdminForm(forms.ModelForm):
+    request_date = forms.DateField(
+        label="Request Date",
+        required=True,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        help_text="Date selected by the requestor; SLA and due date will align to this date.",
+    )
     requestor = forms.ModelChoiceField(
         queryset=User.objects.filter(role__in=User.REQUEST_CREATOR_ROLES),
         required=True,
@@ -385,6 +391,7 @@ class RequestAdminForm(forms.ModelForm):
     class Meta:
         model = Request
         fields = [
+            "request_date",
             "requestor",
             "priority",
             "status",
@@ -407,6 +414,9 @@ class RequestAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Flag used by Request.clean() to bypass engineer capacity validation when admin overrides.
         self.instance._allow_capacity_override = allow_capacity_override
+        # Request date initial
+        if self.instance and getattr(self.instance, "start_date", None):
+            self.fields["request_date"].initial = self.instance.start_date
         # Requestor field setup
         self.fields["requestor"].queryset = self.fields["requestor"].queryset.order_by("first_name", "last_name")
         req_widget = self.fields["requestor"].widget
@@ -429,6 +439,10 @@ class RequestAdminForm(forms.ModelForm):
         due_field = self.fields["due_date"]
         due_field.required = False
         due_field.help_text = "Leave blank to keep the SLA-based due date."
+
+    def save(self, commit=True):
+        self.instance.start_date = self.cleaned_data.get("request_date") or self.instance.start_date
+        return super().save(commit=commit)
 
 
 class RequestStatusForm(forms.ModelForm):

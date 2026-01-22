@@ -187,24 +187,25 @@ class Request(models.Model):
 
     @property
     def days_since_creation(self) -> int:
-        """Return full working days since creation, counting only 24-hour intervals in Manila time."""
-        created_dt = timezone.localtime(self.created_at, MANILA_TZ)
+        """Return working days since the requested start date (Request Date), not creation time."""
+        start_date = self.start_date or timezone.localtime(self.created_at, MANILA_TZ).date()
+        start_dt = datetime.combine(start_date, time(0, 0, tzinfo=MANILA_TZ))
         if self.end_date:
             end_dt = datetime.combine(self.end_date, time(23, 59, 59, tzinfo=MANILA_TZ))
         else:
             end_dt = timezone.now().astimezone(MANILA_TZ)
 
-        if end_dt <= created_dt:
+        if end_dt <= start_dt:
             return 0
 
-        total_seconds = (end_dt - created_dt).total_seconds()
+        total_seconds = (end_dt - start_dt).total_seconds()
         full_days = int(total_seconds // 86400)
         if full_days <= 0:
             return 0
 
         working_days = 0
         for offset in range(1, full_days + 1):
-            current_day = (created_dt + timedelta(days=offset)).date()
+            current_day = (start_dt + timedelta(days=offset)).date()
             if current_day.weekday() < 5:  # Monday=0, Sunday=6
                 working_days += 1
         return working_days

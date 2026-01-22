@@ -1,7 +1,7 @@
 import csv
 import logging
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -925,6 +925,67 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if not request_ids:
             return
 
+        def working_seconds_between(start_dt: datetime, end_dt: datetime) -> int:
+            """Return working seconds between two datetimes within 8:30–18:30, Monday–Friday (Manila)."""
+            if end_dt <= start_dt:
+                return 0
+
+            # Normalize to Manila timezone to align with working hours definition.
+            start = timezone.localtime(start_dt, MANILA_TZ)
+            end = timezone.localtime(end_dt, MANILA_TZ)
+
+            work_start_hour = 8
+            work_start_minute = 30
+            work_end_hour = 18
+            work_end_minute = 30
+
+            def next_work_start(dt: datetime) -> datetime:
+                dt = dt.astimezone(MANILA_TZ)
+                # Move to today's start if before work start.
+                candidate = dt.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0)
+                if dt.weekday() < 5 and dt < candidate:
+                    return candidate
+                # Otherwise move to next weekday 8:30.
+                offset_days = 1
+                next_day = dt + timedelta(days=offset_days)
+                while next_day.weekday() >= 5:  # skip weekends
+                    offset_days += 1
+                    next_day = dt + timedelta(days=offset_days)
+                return next_day.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0, tzinfo=MANILA_TZ)
+
+            total_seconds = 0
+            current = start
+
+            # If starting outside working hours, jump to next window.
+            work_start_today = current.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0)
+            work_end_today = current.replace(hour=work_end_hour, minute=work_end_minute, second=0, microsecond=0)
+            if current.weekday() >= 5 or current >= work_end_today or current < work_start_today:
+                current = next_work_start(current)
+
+            while current < end:
+                if current.weekday() >= 5:
+                    current = next_work_start(current)
+                    continue
+
+                work_start = current.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0)
+                work_end = current.replace(hour=work_end_hour, minute=work_end_minute, second=0, microsecond=0)
+
+                if current < work_start:
+                    current = work_start
+
+                if current >= work_end:
+                    current = next_work_start(current)
+                    continue
+
+                slice_end = min(work_end, end)
+                total_seconds += int((slice_end - current).total_seconds())
+                current = slice_end
+
+                if current >= work_end:
+                    current = next_work_start(current)
+
+            return total_seconds
+
         ack_rows = (
             RequestCommunication.objects.filter(
                 request_id__in=request_ids,
@@ -940,35 +1001,35 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ack_map = {row["request_id"]: row["first_ack"] for row in ack_rows}
 
         now = timezone.now()
-        amber_threshold = timedelta(minutes=45)
-        sla_threshold = timedelta(hours=1)
+        amber_threshold_seconds = int(timedelta(minutes=45).total_seconds())
+        sla_threshold_seconds = int(timedelta(hours=1).total_seconds())
 
         for req in requests:
             ack_time = ack_map.get(req.pk)
             status = ""
             tooltip = ""
             if ack_time:
-                delta = ack_time - req.created_at
-                if delta.total_seconds() < 0:
-                    delta = timedelta(seconds=0)
-                if delta <= sla_threshold:
+                delta_seconds = working_seconds_between(req.created_at, ack_time)
+                if delta_seconds <= 0:
+                    tooltip = "Awaiting acknowledgement within working hours"
+                elif delta_seconds <= sla_threshold_seconds:
                     status = "green"
-                    tooltip = f"Acknowledged within SLA ({self._format_duration(delta)})"
+                    tooltip = f"Acknowledged within SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
                 else:
                     status = "red"
-                    tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(delta)})"
+                    tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
             else:
-                age = now - req.created_at
-                if age.total_seconds() < 0:
-                    age = timedelta(seconds=0)
-                if age >= sla_threshold:
+                age_seconds = working_seconds_between(req.created_at, now)
+                if age_seconds <= 0:
+                    tooltip = "Awaiting acknowledgement (outside working hours)"
+                elif age_seconds >= sla_threshold_seconds:
                     status = "red"
-                    tooltip = f"No acknowledgement after {self._format_duration(age)}"
-                elif age >= amber_threshold:
+                    tooltip = f"No acknowledgement after {self._format_duration(timedelta(seconds=age_seconds))} (working hours)"
+                elif age_seconds >= amber_threshold_seconds:
                     status = "amber"
-                    tooltip = f"Awaiting acknowledgement ({self._format_duration(age)} elapsed)"
+                    tooltip = f"Awaiting acknowledgement ({self._format_duration(timedelta(seconds=age_seconds))} elapsed in working hours)"
                 else:
-                    tooltip = f"Awaiting acknowledgement ({self._format_duration(age)} elapsed)"
+                    tooltip = f"Awaiting acknowledgement ({self._format_duration(timedelta(seconds=age_seconds))} elapsed in working hours)"
 
             req.ack_sla_status = status
             req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
