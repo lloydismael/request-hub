@@ -1,7 +1,7 @@
 import csv
 import logging
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -23,6 +23,10 @@ from urllib.parse import quote
 
 from accounts.forms import UserManagementForm
 from accounts.models import User
+
+REQUESTOR_ROLES = set(User.REQUESTOR_ROLES)
+REQUEST_CREATOR_ROLES = set(getattr(User, "REQUEST_CREATOR_ROLES", User.REQUESTOR_ROLES))
+PM_ESS_ROLE = User.Roles.PM_ESS
 
 from .forms import (
     AccountManagementForm,
@@ -558,12 +562,58 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         context["role"] = user.role
+        context["is_requestor_role"] = user.role in REQUESTOR_ROLES
+        context["is_pm_ess"] = user.role == PM_ESS_ROLE
+        context["is_requestor_ui"] = user.role in REQUESTOR_ROLES or user.role == PM_ESS_ROLE
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
-        if user.role == User.Roles.REQUESTOR:
+        if user.role == PM_ESS_ROLE:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=User.Roles.REQUESTOR)
+                form = RequestForm(actor_role=user.role)
+            context["form"] = form
+            context["account_name_choices"] = form.account_name_suggestions
+            metric_filter = self.request.GET.get("metric_filter") or ""
+            metric_keys = {"ongoing", "completed"}
+            if metric_filter not in metric_keys:
+                metric_filter = ""
+
+            requests = list(
+                Request.objects.filter(requestor__role=User.Roles.REQUESTOR_ESS)
+                .select_related("account", "engineer", "requestor")
+                .order_by("-created_at")
+            )
+
+            metrics = {
+                "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
+                "completed": sum(1 for req in requests if req.status == Request.Status.COMPLETED),
+            }
+
+            filtered_requests = requests
+            if metric_filter == "ongoing":
+                filtered_requests = [req for req in requests if req.status == Request.Status.ONGOING]
+            elif metric_filter == "completed":
+                filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
+
+            metric_links = {}
+            for key in ["ongoing", "completed"]:
+                params = self.request.GET.copy()
+                if params.get("metric_filter") == key:
+                    params.pop("metric_filter", None)
+                else:
+                    params["metric_filter"] = key
+                encoded = params.urlencode()
+                metric_links[key] = f"?{encoded}" if encoded else "?"
+
+            context["requests"] = filtered_requests
+            context["metrics"] = metrics
+            context["metric_links"] = metric_links
+            context["active_metric_filter"] = metric_filter
+            context["form_has_errors"] = form.is_bound and bool(form.errors)
+        elif user.role in REQUEST_CREATOR_ROLES:
+            form = kwargs.get("form")
+            if form is None:
+                form = RequestForm(actor_role=user.role)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
@@ -875,6 +925,67 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if not request_ids:
             return
 
+        def working_seconds_between(start_dt: datetime, end_dt: datetime) -> int:
+            """Return working seconds between two datetimes within 8:30–18:30, Monday–Friday (Manila)."""
+            if end_dt <= start_dt:
+                return 0
+
+            # Normalize to Manila timezone to align with working hours definition.
+            start = timezone.localtime(start_dt, MANILA_TZ)
+            end = timezone.localtime(end_dt, MANILA_TZ)
+
+            work_start_hour = 8
+            work_start_minute = 30
+            work_end_hour = 18
+            work_end_minute = 30
+
+            def next_work_start(dt: datetime) -> datetime:
+                dt = dt.astimezone(MANILA_TZ)
+                # Move to today's start if before work start.
+                candidate = dt.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0)
+                if dt.weekday() < 5 and dt < candidate:
+                    return candidate
+                # Otherwise move to next weekday 8:30.
+                offset_days = 1
+                next_day = dt + timedelta(days=offset_days)
+                while next_day.weekday() >= 5:  # skip weekends
+                    offset_days += 1
+                    next_day = dt + timedelta(days=offset_days)
+                return next_day.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0, tzinfo=MANILA_TZ)
+
+            total_seconds = 0
+            current = start
+
+            # If starting outside working hours, jump to next window.
+            work_start_today = current.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0)
+            work_end_today = current.replace(hour=work_end_hour, minute=work_end_minute, second=0, microsecond=0)
+            if current.weekday() >= 5 or current >= work_end_today or current < work_start_today:
+                current = next_work_start(current)
+
+            while current < end:
+                if current.weekday() >= 5:
+                    current = next_work_start(current)
+                    continue
+
+                work_start = current.replace(hour=work_start_hour, minute=work_start_minute, second=0, microsecond=0)
+                work_end = current.replace(hour=work_end_hour, minute=work_end_minute, second=0, microsecond=0)
+
+                if current < work_start:
+                    current = work_start
+
+                if current >= work_end:
+                    current = next_work_start(current)
+                    continue
+
+                slice_end = min(work_end, end)
+                total_seconds += int((slice_end - current).total_seconds())
+                current = slice_end
+
+                if current >= work_end:
+                    current = next_work_start(current)
+
+            return total_seconds
+
         ack_rows = (
             RequestCommunication.objects.filter(
                 request_id__in=request_ids,
@@ -890,43 +1001,43 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ack_map = {row["request_id"]: row["first_ack"] for row in ack_rows}
 
         now = timezone.now()
-        amber_threshold = timedelta(minutes=45)
-        sla_threshold = timedelta(hours=1)
+        amber_threshold_seconds = int(timedelta(minutes=45).total_seconds())
+        sla_threshold_seconds = int(timedelta(hours=1).total_seconds())
 
         for req in requests:
             ack_time = ack_map.get(req.pk)
             status = ""
             tooltip = ""
             if ack_time:
-                delta = ack_time - req.created_at
-                if delta.total_seconds() < 0:
-                    delta = timedelta(seconds=0)
-                if delta <= sla_threshold:
+                delta_seconds = working_seconds_between(req.created_at, ack_time)
+                if delta_seconds <= 0:
+                    tooltip = "Awaiting acknowledgement within working hours"
+                elif delta_seconds <= sla_threshold_seconds:
                     status = "green"
-                    tooltip = f"Acknowledged within SLA ({self._format_duration(delta)})"
+                    tooltip = f"Acknowledged within SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
                 else:
                     status = "red"
-                    tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(delta)})"
+                    tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
             else:
-                age = now - req.created_at
-                if age.total_seconds() < 0:
-                    age = timedelta(seconds=0)
-                if age >= sla_threshold:
+                age_seconds = working_seconds_between(req.created_at, now)
+                if age_seconds <= 0:
+                    tooltip = "Awaiting acknowledgement (outside working hours)"
+                elif age_seconds >= sla_threshold_seconds:
                     status = "red"
-                    tooltip = f"No acknowledgement after {self._format_duration(age)}"
-                elif age >= amber_threshold:
+                    tooltip = f"No acknowledgement after {self._format_duration(timedelta(seconds=age_seconds))} (working hours)"
+                elif age_seconds >= amber_threshold_seconds:
                     status = "amber"
-                    tooltip = f"Awaiting acknowledgement ({self._format_duration(age)} elapsed)"
+                    tooltip = f"Awaiting acknowledgement ({self._format_duration(timedelta(seconds=age_seconds))} elapsed in working hours)"
                 else:
-                    tooltip = f"Awaiting acknowledgement ({self._format_duration(age)} elapsed)"
+                    tooltip = f"Awaiting acknowledgement ({self._format_duration(timedelta(seconds=age_seconds))} elapsed in working hours)"
 
             req.ack_sla_status = status
             req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
 
     def post(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.REQUESTOR:
+        if request.user.role not in REQUEST_CREATOR_ROLES:
             return redirect("hub:dashboard")
-        form = RequestForm(request.POST, actor_role=User.Roles.REQUESTOR)
+        form = RequestForm(request.POST, actor_role=request.user.role)
         if form.is_valid():
             req = form.save(commit=False)
             req.requestor = request.user
@@ -977,7 +1088,9 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         user = self.request.user
         qs = super().get_queryset()
-        if user.role == User.Roles.REQUESTOR:
+        if user.role == PM_ESS_ROLE:
+            return qs.filter(Q(requestor=user) | Q(requestor__role=User.Roles.REQUESTOR_ESS))
+        if user.role in REQUESTOR_ROLES:
             return qs.filter(requestor=user)
         if user.role == User.Roles.ENGINEER:
             return qs.filter(engineer=user)
@@ -1022,7 +1135,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return True
         if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
             return True
-        if user.role == User.Roles.REQUESTOR and request_obj.requestor_id == user.id:
+        if user.role in REQUEST_CREATOR_ROLES and request_obj.requestor_id == user.id:
             return True
         return False
 
@@ -1031,6 +1144,11 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
     form_class = RequestAdminForm
     template_name = "hub/request_admin_form.html"
     success_url = reverse_lazy("hub:dashboard")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["allow_capacity_override"] = self.request.method == "POST" and self.request.POST.get("override_capacity") == "1"
+        return kwargs
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -1080,6 +1198,7 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
             .order_by("-created_at")
         )
         context.setdefault("log_form", StatusLogForm())
+        context["engineer_capacity_map"] = self._build_engineer_capacity_map()
         return context
 
     def _handle_status_log_post(self, request):
@@ -1128,6 +1247,22 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
                 source="Admin · Manage Request",
             )
 
+    def _build_engineer_capacity_map(self):
+        data = {}
+        engineers = User.objects.filter(role=User.Roles.ENGINEER)
+        for engineer in engineers:
+            assigned = Request.objects.filter(engineer=engineer, status=Request.Status.ONGOING)
+            if self.object.pk:
+                assigned = assigned.exclude(pk=self.object.pk)
+            has_deployment = assigned.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
+            capacity = 3 if has_deployment else 5
+            data[str(engineer.pk)] = {
+                "name": engineer.get_full_name() or engineer.username or "Engineer",
+                "load": assigned.count(),
+                "capacity": capacity,
+            }
+        return data
+
 
 class RequestUpdateView(LoginRequiredMixin, UpdateView):
     model = Request
@@ -1141,7 +1276,7 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         return kwargs
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.REQUESTOR:
+        if request.user.role not in REQUEST_CREATOR_ROLES:
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
 
@@ -1183,7 +1318,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in {User.Roles.REQUESTOR, User.Roles.ENGINEER}:
+        if request.user.role not in REQUEST_CREATOR_ROLES | {User.Roles.ENGINEER, PM_ESS_ROLE}:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -1193,7 +1328,9 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         pk = self.kwargs["pk"]
         user = self.request.user
 
-        if user.role == User.Roles.REQUESTOR:
+        if user.role == PM_ESS_ROLE:
+            queryset = queryset.filter(pk=pk).filter(Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user))
+        elif user.role in REQUEST_CREATOR_ROLES:
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role == User.Roles.ENGINEER:
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
@@ -1225,7 +1362,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return self._handle_details_update(request, request_obj)
 
     def _actor_prefix(self) -> str:
-        return "Requestor" if self.request.user.role == User.Roles.REQUESTOR else "Engineer"
+        return "Requestor" if self.request.user.role in REQUEST_CREATOR_ROLES or self.request.user.role == PM_ESS_ROLE else "Engineer"
 
     def _source_label(self, suffix: str) -> str:
         return f"{self._actor_prefix()} · {suffix}"
@@ -1426,7 +1563,7 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         user = self.request.user
         if user.role == User.Roles.ADMIN:
             return qs
-        if user.role == User.Roles.REQUESTOR:
+        if user.role in REQUEST_CREATOR_ROLES:
             return qs.filter(requestor=user)
         return qs.none()
 
@@ -1495,6 +1632,8 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         to_addresses = {engineer_email, manager_email}
         cc_addresses = {"ESGRequestHub@phildata.com"}
+        if request_obj.requestor and request_obj.requestor.role == User.Roles.REQUESTOR_ESS:
+            cc_addresses.add("ChristineF@phildata.com")
         if backup_email:
             cc_addresses.add(backup_email)
 
@@ -1627,7 +1766,10 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
 
         recipients = ",".join(sorted(addr for addr in to_addresses if addr))
         cc_field = ",".join(sorted(cc_addresses))
-        subject = quote(f"{request_obj.reference_code} · {request_obj.account.name}")
+
+        # Use the same subject pattern as the acknowledgement so Outlook threads replies together.
+        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name}"
+        subject = quote(ack_subject)
 
         requestor = request_obj.requestor
         if requestor:
@@ -1643,8 +1785,8 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
 
         body_template = (
             "Hello {requestor_name},\n"
-            "This is to inform you that your request has been successfully fulfilled and is now marked as closed.\n\n"
-            "If you believe further action is required or have additional questions, please don't hesitate to reopen the request or submit a new one via Request Hub.\n\n"
+            "Following up on our earlier acknowledgement for {reference}, this is to confirm the request has been fulfilled and is now marked as closed.\n\n"
+            "If you believe further action is required or have additional questions, please don't hesitate to reply to this thread, reopen the request, or submit a new one via Request Hub.\n\n"
             "Thank you for your cooperation."
         )
 
@@ -1652,6 +1794,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
             body_template.format(
                 requestor_name=requestor_name,
                 description=description_line,
+                reference=request_obj.reference_code,
             )
         )
 
@@ -1674,7 +1817,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         )
 
 
-class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
+class RequestTeamsRedirectView(LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(
             Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
@@ -1683,7 +1826,12 @@ class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin,
 
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
-        if request.user.role == User.Roles.ENGINEER:
+        role = request.user.role
+        if role not in {User.Roles.ADMIN, User.Roles.ENGINEER, PM_ESS_ROLE}:
+            messages.error(request, "You are not allowed to start a Teams chat for this request.")
+            return redirect(redirect_target)
+
+        if role == User.Roles.ENGINEER:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to start a Teams chat for this request.")
                 return redirect(redirect_target)
@@ -1696,7 +1844,37 @@ class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin,
                 messages.warning(request, "You already launched the Teams chat for this request.")
                 return redirect(redirect_target)
 
-        teams_url = request_obj.teams_chat_url
+        if role == PM_ESS_ROLE:
+            if not request_obj.requestor or request_obj.requestor.role != User.Roles.REQUESTOR_ESS:
+                messages.error(request, "Teams chat is only available for Requestor-ESS requests.")
+                return redirect(redirect_target)
+            if not request_obj.engineer or not request_obj.engineer.email:
+                messages.error(request, "Assign an engineer with an email before starting a Teams chat.")
+                return redirect(redirect_target)
+            if not request_obj.requestor.email:
+                messages.error(request, "Requestor email is missing; unable to start a Teams chat.")
+                return redirect(redirect_target)
+            already_launched = RequestCommunication.objects.filter(
+                request=request_obj,
+                user=request.user,
+                channel=RequestCommunication.Channel.TEAMS,
+            ).exists()
+            if already_launched:
+                messages.warning(request, "You already launched the Teams chat for this request.")
+                return redirect(redirect_target)
+
+            topic = request_obj._build_teams_chat_topic(reference_code=request_obj.reference_code)
+            participants = ",".join(sorted({email for email in [request_obj.engineer.email, request_obj.requestor.email] if email}))
+            if not participants:
+                messages.error(request, "Unable to start a Teams chat. Missing participant emails.")
+                return redirect(redirect_target)
+            teams_url = (
+                "https://teams.microsoft.com/l/chat/0/0?users="
+                f"{quote(participants)}&topicName={quote(topic)}"
+            )
+        else:
+            teams_url = request_obj.teams_chat_url
+
         if not teams_url:
             messages.error(
                 request,

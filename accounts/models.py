@@ -32,6 +32,8 @@ class StoredFile(models.Model):
 class User(AbstractUser):
     class Roles(models.TextChoices):
         REQUESTOR = "requestor", "Requestor"
+        REQUESTOR_ESS = "requestor_ess", "Requestor-ESS"
+        PM_ESS = "pm_ess", "PM-ESS"
         ENGINEER = "engineer", "Engineer"
         ADMIN = "admin", "Admin"
 
@@ -47,6 +49,8 @@ class User(AbstractUser):
         null=True,
     )
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
+    REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)
+    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
 

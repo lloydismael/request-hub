@@ -78,7 +78,7 @@
                             {% if field.errors %}
                                 <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
                             {% endif %}
-                            {% if request.user.role == 'requestor' %}
+                            {% if request.user.role in request.user.REQUESTOR_ROLES %}
                                 <div class="mt-2">
                                     <div class="text-muted small mb-1">Backup Engineer</div>
                                     <div class="avatar-select">

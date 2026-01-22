@@ -193,6 +193,17 @@ class RequestForm(forms.ModelForm):
             due_field.initial = today
         due_field.widget.attrs.pop("min", None)
 
+        engagement_field = self.fields["engagement_type"]
+        if actor_role in {User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}:
+            filtered_choices = [
+                choice
+                for choice in engagement_field.choices
+                if choice[0] != Request.Engagement.SUPPORT
+            ]
+            if self.instance.pk and self.instance.engagement_type == Request.Engagement.SUPPORT:
+                filtered_choices.append((Request.Engagement.SUPPORT, Request.Engagement.SUPPORT.label))
+            engagement_field.choices = filtered_choices
+
         deployment_start_field = self.fields["deployment_start"]
         deployment_end_field = self.fields["deployment_end"]
         if self.instance.pk and self.instance.engagement_type == Request.Engagement.DEPLOYMENT:
@@ -240,7 +251,10 @@ class RequestForm(forms.ModelForm):
                 if current_load >= capacity:
                     name = new_engineer.get_full_name() or new_engineer.username or "Engineer"
                     if has_deployment:
-                        msg = f"{name} is at the limit ({capacity}) while handling a deployment. Choose another engineer."
+                        msg = (
+                            f"{name} is at the deployment limit (max 3 ongoing while a deployment is active). "
+                            "Choose another engineer or wait until a deployment is completed."
+                        )
                     else:
                         msg = f"{name} already has {current_load} ongoing requests (limit {capacity}). Choose another engineer."
                     self.add_error("engineer", msg)
@@ -348,6 +362,19 @@ class RequestForm(forms.ModelForm):
 
 
 class RequestAdminForm(forms.ModelForm):
+    request_date = forms.DateField(
+        label="Request Date",
+        required=True,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        help_text="Date selected by the requestor; SLA and due date will align to this date.",
+    )
+    requestor = forms.ModelChoiceField(
+        queryset=User.objects.filter(role__in=User.REQUEST_CREATOR_ROLES),
+        required=True,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Requestor",
+        help_text="Switch the request owner (Requestor/Requestor-ESS/PM-ESS).",
+    )
     engineer = forms.ModelChoiceField(
         queryset=User.objects.filter(role=User.Roles.ENGINEER),
         required=False,
@@ -364,6 +391,8 @@ class RequestAdminForm(forms.ModelForm):
     class Meta:
         model = Request
         fields = [
+            "request_date",
+            "requestor",
             "priority",
             "status",
             "engineer",
@@ -381,7 +410,19 @@ class RequestAdminForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        allow_capacity_override = kwargs.pop("allow_capacity_override", False)
         super().__init__(*args, **kwargs)
+        # Flag used by Request.clean() to bypass engineer capacity validation when admin overrides.
+        self.instance._allow_capacity_override = allow_capacity_override
+        # Request date initial
+        if self.instance and getattr(self.instance, "start_date", None):
+            self.fields["request_date"].initial = self.instance.start_date
+        # Requestor field setup
+        self.fields["requestor"].queryset = self.fields["requestor"].queryset.order_by("first_name", "last_name")
+        req_widget = self.fields["requestor"].widget
+        if isinstance(req_widget, AvatarSelect):
+            req_widget.avatar_mapping = _build_avatar_mapping(self.fields["requestor"].queryset)
+        self.fields["requestor"].label_from_instance = _user_display
         self.fields["engineer"].queryset = self.fields["engineer"].queryset.order_by("first_name", "last_name")
         widget = self.fields["engineer"].widget
         if isinstance(widget, AvatarSelect):
@@ -398,6 +439,10 @@ class RequestAdminForm(forms.ModelForm):
         due_field = self.fields["due_date"]
         due_field.required = False
         due_field.help_text = "Leave blank to keep the SLA-based due date."
+
+    def save(self, commit=True):
+        self.instance.start_date = self.cleaned_data.get("request_date") or self.instance.start_date
+        return super().save(commit=commit)
 
 
 class RequestStatusForm(forms.ModelForm):

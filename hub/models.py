@@ -48,7 +48,7 @@ class Request(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="requests_made",
-        limit_choices_to={"role": "requestor"},
+        limit_choices_to={"role__in": ["requestor", "requestor_ess", "pm_ess"]},
     )
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="requests")
     account_manager = models.CharField(max_length=255)
@@ -103,7 +103,9 @@ class Request(models.Model):
 
     def clean(self):
         super().clean()
-        if self.engineer and self.status == self.Status.ONGOING:
+        bypass_capacity = getattr(self, "_allow_capacity_override", False)
+
+        if self.engineer and self.status == self.Status.ONGOING and not bypass_capacity:
             assigned = Request.objects.filter(
                 engineer=self.engineer,
                 status=self.Status.ONGOING,
@@ -111,29 +113,19 @@ class Request(models.Model):
             if self.pk:
                 assigned = assigned.exclude(pk=self.pk)
 
-            max_allowed = 5
-            if (
-                self.engagement_type == self.Engagement.DEPLOYMENT
-                and self.start_date
-                and (self.due_date or self.start_date)
-            ):
-                deployment_end = self.due_date or self.start_date
-                overlap_filter = Q(start_date__lte=deployment_end) & (
-                    Q(due_date__gte=self.start_date) | Q(due_date__isnull=True)
-                )
-                overlapping_deployments = assigned.filter(
-                    engagement_type=self.Engagement.DEPLOYMENT
-                ).filter(overlap_filter)
-                if overlapping_deployments.exists():
-                    max_allowed = 3
+            # Capacity: default 5 ongoing; when an engineer already has an ongoing deployment, cap at 3.
+            # This still allows assigning the first deployment even if they already carry up to 4 non-deployment requests.
+            has_ongoing_deployment = assigned.filter(engagement_type=self.Engagement.DEPLOYMENT).exists()
+            max_allowed = 3 if has_ongoing_deployment else 5
 
-            if assigned.count() >= max_allowed:
+            current_load = assigned.count()
+            if current_load >= max_allowed:
                 if max_allowed == 3:
                     raise ValidationError(
                         {
                             "engineer": (
-                                "Selected engineer already handles three overlapping deployment assignments for the chosen window. "
-                                "Pick another engineer or adjust the deployment dates."
+                                "Selected engineer is at the deployment capacity (max 3 ongoing while a deployment is active). "
+                                "Choose another engineer or wait until a deployment is completed."
                             )
                         }
                     )
@@ -195,24 +187,25 @@ class Request(models.Model):
 
     @property
     def days_since_creation(self) -> int:
-        """Return full working days since creation, counting only 24-hour intervals in Manila time."""
-        created_dt = timezone.localtime(self.created_at, MANILA_TZ)
+        """Return working days since the requested start date (Request Date), not creation time."""
+        start_date = self.start_date or timezone.localtime(self.created_at, MANILA_TZ).date()
+        start_dt = datetime.combine(start_date, time(0, 0, tzinfo=MANILA_TZ))
         if self.end_date:
             end_dt = datetime.combine(self.end_date, time(23, 59, 59, tzinfo=MANILA_TZ))
         else:
             end_dt = timezone.now().astimezone(MANILA_TZ)
 
-        if end_dt <= created_dt:
+        if end_dt <= start_dt:
             return 0
 
-        total_seconds = (end_dt - created_dt).total_seconds()
+        total_seconds = (end_dt - start_dt).total_seconds()
         full_days = int(total_seconds // 86400)
         if full_days <= 0:
             return 0
 
         working_days = 0
         for offset in range(1, full_days + 1):
-            current_day = (created_dt + timedelta(days=offset)).date()
+            current_day = (start_dt + timedelta(days=offset)).date()
             if current_day.weekday() < 5:  # Monday=0, Sunday=6
                 working_days += 1
         return working_days
