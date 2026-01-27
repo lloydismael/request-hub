@@ -32,10 +32,31 @@
                                 <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
                             {% endif %}
                         </div>
+                    {% elif field.name == 'account_name' %}
+                        {% if request.user.role == 'engineer' %}
+                            <div class="mb-3">
+                                <label class="form-label">Account Name</label>
+                                <div class="form-control-plaintext">{{ field.value }}</div>
+                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}">
+                            </div>
+                        {% else %}
+                            <div class="mb-3">
+                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}
+                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% endif %}
                     {% elif field.name == 'needed_by' %}
                         <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
                             <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
+                            {% if request.user.role == 'engineer' %}
+                                <div class="form-control-plaintext">{{ field.value }}</div>
+                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}">
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
                             {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                             {% if field.errors %}
                                 <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
@@ -103,6 +124,22 @@
                         </div>
                     {% elif field.name == 'deployment_end' %}
                         {# Rendered with deployment_start #}
+                    {% elif field.name == 'description' %}
+                        {% if request.user.role == 'engineer' %}
+                            <div class="mb-3">
+                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                <div class="form-control-plaintext" style="white-space: pre-wrap;">{{ field.value }}</div>
+                                <textarea name="{{ field.name }}" hidden>{{ field.value }}</textarea>
+                            </div>
+                        {% else %}
+                            <div class="mb-3">
+                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}
+                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% endif %}
                     {% else %}
                         <div class="mb-3">
                             <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>

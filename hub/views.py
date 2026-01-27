@@ -1008,6 +1008,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             ack_time = ack_map.get(req.pk)
             status = ""
             tooltip = ""
+            if not req.engineer:
+                req.ack_sla_status = ""
+                req.ack_sla_tooltip = "Awaiting engineer assignment; acknowledgement SLA not started."
+                continue
             if ack_time:
                 delta_seconds = working_seconds_between(req.created_at, ack_time)
                 if delta_seconds <= 0:
@@ -2556,7 +2560,11 @@ class NotificationFollowRedirectView(LoginRequiredMixin, View):
         )
         notification.mark_read()
         if notification.related_request:
-            return redirect("hub:request-detail", pk=notification.related_request.pk)
+            req = notification.related_request
+            # Route to manage views instead of read-only detail.
+            if request.user.role == User.Roles.ADMIN:
+                return redirect("hub:request-manage", pk=req.pk)
+            return redirect("hub:request-manage-collab", pk=req.pk)
         return redirect("hub:notifications")
 
 
