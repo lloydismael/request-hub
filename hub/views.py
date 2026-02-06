@@ -766,6 +766,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "account_manager": _admin_sort_account_manager_key,
                 "engineer": _admin_sort_engineer_key,
                 "engagement": lambda req: req.engagement_type or "",
+                "product_category": lambda req: req.product_category or "",
                 "status": lambda req: req.status or "",
                 "created": lambda req: req.created_at,
                 "end_date": lambda req: _admin_sort_date_key(req.end_date),
@@ -1005,25 +1006,36 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         sla_threshold_seconds = int(timedelta(hours=1).total_seconds())
 
         for req in requests:
+            if not req.engineer:
+                req.ack_sla_status = ""
+                req.ack_sla_tooltip = "Awaiting engineer assignment; acknowledgement SLA starts after assignment."
+                continue
+
+            start_anchor = req.created_at
+            if req.updated_at and req.updated_at > req.created_at:
+                start_anchor = req.updated_at
+
             ack_time = ack_map.get(req.pk)
             status = ""
             tooltip = ""
-            if not req.engineer:
-                req.ack_sla_status = ""
-                req.ack_sla_tooltip = "Awaiting engineer assignment; acknowledgement SLA not started."
-                continue
             if ack_time:
-                delta_seconds = working_seconds_between(req.created_at, ack_time)
-                if delta_seconds <= 0:
-                    tooltip = "Awaiting acknowledgement within working hours"
-                elif delta_seconds <= sla_threshold_seconds:
+                delta_seconds = working_seconds_between(start_anchor, ack_time)
+                # If delta is negative, the start_anchor (likely updated_at) is later than ack_time.
+                # This happens on reassignment. We treat it as acknowledged.
+                if delta_seconds <= sla_threshold_seconds:
                     status = "green"
-                    tooltip = f"Acknowledged within SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
+                    if delta_seconds <= 0:
+                        # Fallback calculation using created_at to give a roughly meaningful duration
+                        fallback_delta = working_seconds_between(req.created_at, ack_time)
+                        duration_str = self._format_duration(timedelta(seconds=max(0, fallback_delta)))
+                        tooltip = f"Acknowledged previously ({duration_str} from creation)"
+                    else:
+                        tooltip = f"Acknowledged within SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
                 else:
                     status = "red"
                     tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
             else:
-                age_seconds = working_seconds_between(req.created_at, now)
+                age_seconds = working_seconds_between(start_anchor, now)
                 if age_seconds <= 0:
                     tooltip = "Awaiting acknowledgement (outside working hours)"
                 elif age_seconds >= sla_threshold_seconds:
@@ -1771,8 +1783,8 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         recipients = ",".join(sorted(addr for addr in to_addresses if addr))
         cc_field = ",".join(sorted(cc_addresses))
 
-        # Use the same subject pattern as the acknowledgement so Outlook threads replies together.
-        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name}"
+        # Use the same subject pattern as the acknowledgement so Outlook threads replies together, but add advisory notice.
+        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name} · Advisory Only (Do Not Reply)"
         subject = quote(ack_subject)
 
         requestor = request_obj.requestor
@@ -1787,10 +1799,13 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         else:
             description_line = "No description provided."
 
+        detail_url = request.build_absolute_uri(request_obj.get_absolute_url())
+
         body_template = (
-            "Hello {requestor_name},\n"
+            "Hello {requestor_name},\n\n"
             "Following up on our earlier acknowledgement for {reference}, this is to confirm the request has been fulfilled and is now marked as closed.\n\n"
-            "If you believe further action is required or have additional questions, please don't hesitate to reply to this thread, reopen the request, or submit a new one via Request Hub.\n\n"
+            "View request details: {detail_url}\n\n"
+            "If you believe further action is required or have additional questions, please submit a new one via Request Hub.\n\n"
             "Thank you for your cooperation."
         )
 
@@ -1799,6 +1814,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
                 requestor_name=requestor_name,
                 description=description_line,
                 reference=request_obj.reference_code,
+                detail_url=detail_url,
             )
         )
 

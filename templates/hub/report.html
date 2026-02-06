@@ -474,6 +474,7 @@
                     y: {
                         stacked: true,
                         beginAtZero: true,
+                        grace: "10%",
                         ticks: {
                             precision: 0,
                         },
@@ -535,7 +536,7 @@
                 const engineerCanvas = document.getElementById("engineerChart");
                 if (engineerCanvas && engineerPayload.labels.length) {
                     const datasets = buildDatasets(engineerPayload, {
-                        completed: { background: "rgba(13,110,253,0.35)", border: "rgba(13,110,253,0.8)" },
+                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
                         ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
                     });
 
@@ -557,8 +558,8 @@
                 const hasData = Array.isArray(engagementPayload.totals) && engagementPayload.totals.some(value => value > 0);
                 if (engagementCanvas && hasData) {
                     const datasets = buildDatasets(engagementPayload, {
-                        completed: { background: "rgba(13,110,253,0.35)", border: "rgba(13,110,253,0.8)" },
-                        ongoing: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
+                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
+                        ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
                     });
 
                     new Chart(engagementCanvas, {
@@ -579,7 +580,7 @@
                 const hasData = Array.isArray(productPayload.totals) && productPayload.totals.some(value => value > 0);
                 if (productCanvas && hasData) {
                     const datasets = buildDatasets(productPayload, {
-                        completed: { background: "rgba(13,110,253,0.35)", border: "rgba(13,110,253,0.8)" },
+                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
                         ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
                     });
 
