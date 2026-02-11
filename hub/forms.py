@@ -186,9 +186,23 @@ class RequestForm(forms.ModelForm):
             self.fields["account_name"].initial = self.instance.account.name
         due_field = self.fields["needed_by"]
         today = timezone.now().date()
+        
+        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}
+        is_requestor_new = (not self.instance.pk) and (actor_role in requestor_roles)
+
         if self.instance.pk and self.instance.start_date:
             due_field.initial = self.instance.start_date
-
+        elif is_requestor_new:
+            # Clear default, make required, and add guidance for requestors creating new requests
+            due_field.initial = None
+            due_field.required = True
+            help_msg = "Please select the date when this request is needed."
+            due_field.help_text = help_msg
+            due_field.widget.attrs.update({
+                "title": help_msg,
+                "data-bs-toggle": "tooltip",
+                "data-bs-placement": "top"
+            })
         else:
             due_field.initial = today
         due_field.widget.attrs.pop("min", None)

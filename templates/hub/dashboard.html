@@ -16,7 +16,18 @@
     <div class="{% if role == 'admin' %}col-12 col-xl-12{% elif role == 'engineer' %}col-12 col-xl-12{% else %}col-12{% endif %}">
     <div class="glass-card p-4 mb-5 {% if role == 'admin' %}glass-card--expanded{% elif is_requestor_ui %}glass-card--expanded{% endif %}">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
-                <h2 class="h5 mb-0">{% if is_requestor_ui %}My Requests{% elif role == 'engineer' %}Assigned Requests{% else %}All Requests{% endif %}</h2>
+                {% if role == 'engineer' %}
+                    <ul class="nav nav-pills">
+                        <li class="nav-item">
+                            <a class="nav-link {% if active_tab != 'backup' %}active{% endif %}" href="?tab=assigned">Assigned Requests</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="?tab=backup">Backup Requests</a>
+                        </li>
+                    </ul>
+                {% else %}
+                    <h2 class="h5 mb-0">{% if is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                {% endif %}
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
                         <a class="btn btn-sm {% if show_filters or filters_active %}btn-light text-primary{% else %}btn-outline-light{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
@@ -302,6 +313,16 @@
                                             {% endif %}
                                         </a>
                                     </th>
+                                    <th>
+                                        <a href="{{ sort_links.product_category }}" class="table-sort-link{% if current_sort == 'product_category' %} table-sort-link--active{% endif %}">
+                                            Product
+                                            {% if current_sort == 'product_category' %}
+                                                <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                            {% endif %}
+                                        </a>
+                                    </th>
                                 {% else %}
                                     <th>Priority</th>
                                 {% endif %}
@@ -383,7 +404,11 @@
                             <tr class="{% if not is_requestor_ui and item.is_overdue or not is_requestor_ui and item.sla_overrun or not is_requestor_ui and item.missed_sla %}table-danger{% endif %}">
                                 {% if role == 'admin' %}
                                     <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
-                                        {{ item.reference_code }}
+                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none">{{ item.reference_code }}</a>
+                                    </td>
+                                {% elif role == 'engineer' %}
+                                    <td>
+                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none fw-bold">{{ item.reference_code }}</a>
                                     </td>
                                 {% else %}
                                     <td>{{ item.reference_code }}</td>
@@ -514,6 +539,7 @@
                                 {% if not is_requestor_ui %}
                                     {% if role == 'admin' %}
                                         <td class="text-capitalize">{{ item.get_engagement_type_display }}</td>
+                                        <td class="text-capitalize">{{ item.get_product_category_display|default:item.product_category }}</td>
                                     {% else %}
                                         <td class="text-capitalize">{{ item.get_priority_display }}</td>
                                     {% endif %}
@@ -645,7 +671,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="{% if role == 'admin' %}11{% elif role == 'engineer' %}9{% elif is_pm_ess %}8{% elif is_requestor_ui %}7{% else %}8{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
+                                <td colspan="{% if role == 'admin' %}12{% elif role == 'engineer' %}9{% elif is_pm_ess %}8{% elif is_requestor_ui %}7{% else %}8{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -778,6 +804,70 @@
             if (filterForm) {
                 filterForm.addEventListener("submit", markForReset);
             }
+
+            const table = wrapper.querySelector("table");
+            const headerRow = table ? table.querySelector("thead tr") : null;
+            if (!table || !headerRow) {
+                return;
+            }
+
+            table.classList.add("table--resizable");
+
+            const minWidth = 120;
+            const headers = Array.from(headerRow.cells);
+
+            const applyWidth = (cellIndex, width) => {
+                const selector = `tr th:nth-child(${cellIndex}), tr td:nth-child(${cellIndex})`;
+                table.querySelectorAll(selector).forEach((cell) => {
+                    cell.style.width = `${width}px`;
+                    cell.style.maxWidth = `${width}px`;
+                });
+            };
+
+            headers.forEach((th, index) => {
+                if (index === headers.length - 1) {
+                    return;
+                }
+
+                const handle = document.createElement("span");
+                handle.className = "column-resize-handle";
+                th.appendChild(handle);
+
+                const startDrag = (event) => {
+                    event.preventDefault();
+
+                    const startX = event.touches ? event.touches[0].pageX : event.pageX;
+                    const startWidth = th.getBoundingClientRect().width;
+                    const columnIndex = index + 1;
+
+                    handle.classList.add("is-dragging");
+                    document.body.classList.add("is-column-resizing");
+
+                    const handleMove = (moveEvent) => {
+                        const clientX = moveEvent.touches ? moveEvent.touches[0].pageX : moveEvent.pageX;
+                        const delta = clientX - startX;
+                        const newWidth = Math.max(minWidth, startWidth + delta);
+                        applyWidth(columnIndex, newWidth);
+                    };
+
+                    const stopDrag = () => {
+                        handle.classList.remove("is-dragging");
+                        document.body.classList.remove("is-column-resizing");
+                        document.removeEventListener("mousemove", handleMove);
+                        document.removeEventListener("mouseup", stopDrag);
+                        document.removeEventListener("touchmove", handleMove);
+                        document.removeEventListener("touchend", stopDrag);
+                    };
+
+                    document.addEventListener("mousemove", handleMove);
+                    document.addEventListener("mouseup", stopDrag);
+                    document.addEventListener("touchmove", handleMove, { passive: false });
+                    document.addEventListener("touchend", stopDrag);
+                };
+
+                handle.addEventListener("mousedown", startDrag);
+                handle.addEventListener("touchstart", startDrag, { passive: false });
+            });
         })();
     </script>
 {% endif %}

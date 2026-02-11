@@ -655,15 +655,23 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["form_has_errors"] = form.is_bound and bool(form.errors)
         elif user.role == User.Roles.ENGINEER:
             metric_filter = self.request.GET.get("metric_filter") or ""
+            tab = self.request.GET.get("tab") or "assigned"
             valid_metrics = {"ongoing", "due_soon", "overdue", "completed"}
             if metric_filter not in valid_metrics:
                 metric_filter = ""
 
-            requests = list(
-                Request.objects.filter(engineer=user)
-                .select_related("account", "requestor")
-                .order_by("status", "due_date")
-            )
+            if tab == "backup":
+                requests = list(
+                    Request.objects.filter(backup_engineer=user)
+                    .select_related("account", "requestor")
+                    .order_by("status", "due_date")
+                )
+            else:
+                requests = list(
+                    Request.objects.filter(engineer=user)
+                    .select_related("account", "requestor")
+                    .order_by("status", "due_date")
+                )
 
             request_ids = [req.pk for req in requests]
             outlook_limited: set[int] = set()
@@ -734,6 +742,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["active_tab"] = tab
             context["new_ticket_count"] = user.notifications.filter(
                 is_read=False,
                 source__icontains="assignment",
@@ -766,6 +775,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "account_manager": _admin_sort_account_manager_key,
                 "engineer": _admin_sort_engineer_key,
                 "engagement": lambda req: req.engagement_type or "",
+                "product_category": lambda req: req.product_category or "",
                 "status": lambda req: req.status or "",
                 "created": lambda req: req.created_at,
                 "end_date": lambda req: _admin_sort_date_key(req.end_date),
@@ -1005,21 +1015,36 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         sla_threshold_seconds = int(timedelta(hours=1).total_seconds())
 
         for req in requests:
+            if not req.engineer:
+                req.ack_sla_status = ""
+                req.ack_sla_tooltip = "Awaiting engineer assignment; acknowledgement SLA starts after assignment."
+                continue
+
+            start_anchor = req.created_at
+            if req.updated_at and req.updated_at > req.created_at:
+                start_anchor = req.updated_at
+
             ack_time = ack_map.get(req.pk)
             status = ""
             tooltip = ""
             if ack_time:
-                delta_seconds = working_seconds_between(req.created_at, ack_time)
-                if delta_seconds <= 0:
-                    tooltip = "Awaiting acknowledgement within working hours"
-                elif delta_seconds <= sla_threshold_seconds:
+                delta_seconds = working_seconds_between(start_anchor, ack_time)
+                # If delta is negative, the start_anchor (likely updated_at) is later than ack_time.
+                # This happens on reassignment. We treat it as acknowledged.
+                if delta_seconds <= sla_threshold_seconds:
                     status = "green"
-                    tooltip = f"Acknowledged within SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
+                    if delta_seconds <= 0:
+                        # Fallback calculation using created_at to give a roughly meaningful duration
+                        fallback_delta = working_seconds_between(req.created_at, ack_time)
+                        duration_str = self._format_duration(timedelta(seconds=max(0, fallback_delta)))
+                        tooltip = f"Acknowledged previously ({duration_str} from creation)"
+                    else:
+                        tooltip = f"Acknowledged within SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
                 else:
                     status = "red"
                     tooltip = f"Acknowledged after 1-hour SLA ({self._format_duration(timedelta(seconds=delta_seconds))})"
             else:
-                age_seconds = working_seconds_between(req.created_at, now)
+                age_seconds = working_seconds_between(start_anchor, now)
                 if age_seconds <= 0:
                     tooltip = "Awaiting acknowledgement (outside working hours)"
                 elif age_seconds >= sla_threshold_seconds:
@@ -1138,6 +1163,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         if user.role in REQUEST_CREATOR_ROLES and request_obj.requestor_id == user.id:
             return True
         return False
+
 
 class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView):
     model = Request
@@ -1491,66 +1517,33 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
 
-class RequestStatusUpdateView(LoginRequiredMixin, View):
-    def post(self, request, pk):
-        request_obj = get_object_or_404(
-            Request.objects.select_related("engineer", "requestor"),
-            pk=pk,
-        )
+class StatusLogUpdateView(LoginRequiredMixin, UpdateView):
+    model = StatusLog
+    form_class = StatusLogForm
+    template_name = "hub/status_log_form.html"
 
-        if request.user.role != User.Roles.ENGINEER or request_obj.engineer_id != request.user.id:
-            messages.error(request, "You are not allowed to update this request's status.")
-            return redirect("hub:request-detail", pk=pk)
+    def get_queryset(self):
+        # Only allow the author to edit their own logs
+        return super().get_queryset().filter(author=self.request.user)
 
-        original = Request.objects.get(pk=request_obj.pk)
-        form = RequestStatusForm(request.POST, instance=request_obj)
-        if form.is_valid():
-            request_obj._actor_user = request.user
-            request_obj._actor_source = "Engineer · Status Update"
-            form.save()
-            changed_fields = []
-            if original.status != request_obj.status:
-                changed_fields.append("status")
-            if original.end_date != request_obj.end_date:
-                changed_fields.append("end_date")
-            if changed_fields:
-                summary_text = summarize_request_changes(original, request_obj, changed_fields)
-                create_change_status_log(request_obj, request.user, "Engineer · Status Update", summary_text)
-            messages.success(request, "Request status updated.")
+    def get_success_url(self):
+        request_obj = self.object.request
+        user = self.request.user
+        if user.role == User.Roles.ADMIN:
+            return reverse("hub:request-manage", args=[request_obj.pk])
+        # For engineers, PMs, and requestors
+        return reverse("hub:request-manage-collab", args=[request_obj.pk])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Determine back URL similarly to get_success_url
+        request_obj = self.object.request
+        user = self.request.user
+        if user.role == User.Roles.ADMIN:
+            context["back_url"] = reverse("hub:request-manage", args=[request_obj.pk])
         else:
-            messages.error(request, "Unable to update status. Please try again.")
-        return redirect("hub:request-detail", pk=pk)
-
-
-class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):
-    def post(self, request, pk):
-        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor"), pk=pk)
-        target = request.POST.get("target")
-
-        if target not in {"engineer", "account_manager"}:
-            messages.error(request, "Choose who should receive the follow-up notification.")
-            return redirect("hub:dashboard")
-
-        if target == "engineer":
-            if not request_obj.engineer:
-                messages.error(request, "This request does not have an assigned engineer yet.")
-                return redirect("hub:dashboard")
-            recipient = request_obj.engineer
-            target_label = "Engineer"
-        else:
-            recipient = request_obj.requestor
-            target_label = "Requestor"
-
-        sender_name = request.user.get_full_name() or request.user.username
-        Notification.objects.create(
-            recipient=recipient,
-            message=f"{sender_name} requested an update on {request_obj.reference_code}.",
-            related_request=request_obj,
-            actor=sender_name,
-            source="Admin · Nudge",
-        )
-        messages.success(request, f"{target_label} notified for {request_obj.reference_code}.")
-        return redirect("hub:dashboard")
+            context["back_url"] = reverse("hub:request-manage-collab", args=[request_obj.pk])
+        return context
 
 
 class RequestDeleteView(LoginRequiredMixin, DeleteView):
@@ -1669,7 +1662,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         if request.user.role == User.Roles.ENGINEER:
             body_template = (
                 "Hello {requestor_name},\n\n"
-                "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it\n\n"
+                "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it.\n\n"
                 "Reference: {reference}\n"
                 "Request Type: {request_type}\n"
                 "Product: {product}\n"
@@ -1767,8 +1760,8 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         recipients = ",".join(sorted(addr for addr in to_addresses if addr))
         cc_field = ",".join(sorted(cc_addresses))
 
-        # Use the same subject pattern as the acknowledgement so Outlook threads replies together.
-        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name}"
+        # Use the same subject pattern as the acknowledgement so Outlook threads replies together, but add advisory notice.
+        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name} · Advisory Only (Do Not Reply)"
         subject = quote(ack_subject)
 
         requestor = request_obj.requestor
@@ -1783,10 +1776,13 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         else:
             description_line = "No description provided."
 
+        detail_url = request.build_absolute_uri(request_obj.get_absolute_url())
+
         body_template = (
-            "Hello {requestor_name},\n"
+            "Hello {requestor_name},\n\n"
             "Following up on our earlier acknowledgement for {reference}, this is to confirm the request has been fulfilled and is now marked as closed.\n\n"
-            "If you believe further action is required or have additional questions, please don't hesitate to reply to this thread, reopen the request, or submit a new one via Request Hub.\n\n"
+            "View request details: {detail_url}\n\n"
+            "If you believe further action is required or have additional questions, please submit a new one via Request Hub.\n\n"
             "Thank you for your cooperation."
         )
 
@@ -1795,6 +1791,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
                 requestor_name=requestor_name,
                 description=description_line,
                 reference=request_obj.reference_code,
+                detail_url=detail_url,
             )
         )
 
@@ -2556,7 +2553,11 @@ class NotificationFollowRedirectView(LoginRequiredMixin, View):
         )
         notification.mark_read()
         if notification.related_request:
-            return redirect("hub:request-detail", pk=notification.related_request.pk)
+            req = notification.related_request
+            # Route to manage views instead of read-only detail.
+            if request.user.role == User.Roles.ADMIN:
+                return redirect("hub:request-manage", pk=req.pk)
+            return redirect("hub:request-manage-collab", pk=req.pk)
         return redirect("hub:notifications")
 
 

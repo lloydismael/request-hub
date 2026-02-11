@@ -20,6 +20,7 @@ from .views import (
     RequestUpdateView,
     RequestReportView,
     ReportExportView,
+    StatusLogUpdateView,
     UserManagementView,
     RequestCollaborativeManageView,
 )
@@ -36,6 +37,7 @@ urlpatterns = [
     path("requests/<int:pk>/status/", RequestStatusUpdateView.as_view(), name="request-status"),
     path("requests/<int:pk>/manage/", RequestAdminUpdateView.as_view(), name="request-manage"),
     path("requests/<int:pk>/manage/collab/", RequestCollaborativeManageView.as_view(), name="request-manage-collab"),
+    path("status-logs/<int:pk>/edit/", StatusLogUpdateView.as_view(), name="status-log-edit"),
     path("requests/<int:pk>/nudge/", RequestNudgeView.as_view(), name="request-nudge"),
     path("requests/<int:pk>/teams-chat/", RequestTeamsRedirectView.as_view(), name="request-teams"),
     path("requests/<int:pk>/outlook/", RequestOutlookRedirectView.as_view(), name="request-outlook"),

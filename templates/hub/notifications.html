@@ -38,7 +38,7 @@
                             </div>
                             <div class="d-flex flex-column align-items-end gap-2">
                                 {% if notification.related_request %}
-                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:notification-follow' notification.pk %}">View</a>
+                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:notification-follow' notification.pk %}">Manage</a>
                                 {% endif %}
                                 <form method="post" action="{% url 'hub:notification-delete' notification.pk %}">
                                     {% csrf_token %}

@@ -560,6 +560,12 @@ body.admin-dashboard .dashboard-table-wrapper table {
 body.admin-dashboard .dashboard-table-wrapper table th,
 body.admin-dashboard .dashboard-table-wrapper table td {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.admin-dashboard .dashboard-table-wrapper table.table--resizable th {
+    position: relative;
 }
 
 body.admin-dashboard .dashboard-table-wrapper table td .badge,
@@ -572,15 +578,48 @@ body.admin-dashboard .dashboard-table-wrapper table td {
     vertical-align: middle;
 }
 
-body.admin-dashboard .dashboard-table-wrapper table td.text-end,
-body.admin-dashboard .dashboard-table-wrapper table td.text-nowrap {
+body.admin-dashboard .dashboard-table-wrapper table td.text-end {
     overflow: visible;
+    text-overflow: clip;
 }
 
 body.admin-dashboard .dashboard-table-wrapper table td .badge,
 body.admin-dashboard .dashboard-table-wrapper table td span,
 body.admin-dashboard .dashboard-table-wrapper table td a {
     white-space: nowrap;
+}
+
+body.admin-dashboard .dashboard-table-wrapper .column-resize-handle {
+    position: absolute;
+    right: -5px;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    touch-action: none;
+}
+
+body.admin-dashboard .dashboard-table-wrapper .column-resize-handle::after {
+    content: "";
+    width: 3px;
+    height: 60%;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.16);
+    transition: background-color 0.2s ease, width 0.2s ease;
+}
+
+body.admin-dashboard .dashboard-table-wrapper table.table--resizable th:hover .column-resize-handle::after,
+body.admin-dashboard .dashboard-table-wrapper .column-resize-handle.is-dragging::after {
+    background: rgba(37, 99, 235, 0.75);
+    width: 4px;
+}
+
+body.is-column-resizing {
+    cursor: col-resize;
+    user-select: none;
 }
 
 body.requestor-dashboard .dashboard-table-wrapper table {
