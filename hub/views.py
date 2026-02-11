@@ -2566,3 +2566,66 @@ class NotificationDeleteView(LoginRequiredMixin, View):
         notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
         notification.delete()
         return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("hub:notifications")))
+
+
+class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(Request.objects.select_related("engineer", "backup_engineer"), pk=pk)
+
+        if not request_obj.engineer:
+            messages.error(request, "Cannot nudge: No engineer assigned.")
+            return redirect("hub:request-manage", pk=pk)
+
+        Notification.objects.create(
+            recipient=request_obj.engineer,
+            message=f"Reminder: Please update the status for {request_obj.reference_code}.",
+            related_request=request_obj,
+            actor="Admin",
+            source="Request Nudge",
+        )
+
+        if request_obj.backup_engineer:
+            Notification.objects.create(
+                recipient=request_obj.backup_engineer,
+                message=f"Reminder: Backup request {request_obj.reference_code} needs attention.",
+                related_request=request_obj,
+                actor="Admin",
+                source="Request Nudge",
+            )
+
+        messages.success(
+            request,
+            f"Nudge sent to {request_obj.engineer.get_full_name() or request_obj.engineer.username}.",
+        )
+        return redirect("hub:request-manage", pk=pk)
+
+
+class RequestStatusUpdateView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "requestor"),
+            pk=pk,
+        )
+
+        if request.user.role != User.Roles.ENGINEER or request_obj.engineer_id != request.user.id:
+            messages.error(request, "You are not allowed to update this request's status.")
+            return redirect("hub:request-detail", pk=pk)
+
+        original = Request.objects.get(pk=request_obj.pk)
+        form = RequestStatusForm(request.POST, instance=request_obj)
+        if form.is_valid():
+            request_obj._actor_user = request.user
+            request_obj._actor_source = "Engineer · Status Update"
+            form.save()
+            changed_fields = []
+            if original.status != request_obj.status:
+                changed_fields.append("status")
+            if original.end_date != request_obj.end_date:
+                changed_fields.append("end_date")
+            if changed_fields:
+                summary_text = summarize_request_changes(original, request_obj, changed_fields)
+                create_change_status_log(request_obj, request.user, "Engineer · Status Update", summary_text)
+            messages.success(request, "Request status updated.")
+        else:
+            messages.error(request, "Unable to update status. Please try again.")
+        return redirect("hub:request-detail", pk=pk)
