@@ -52,8 +52,8 @@
                         <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
                             <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
                             {% if request.user.role == 'engineer' %}
-                                <div class="form-control-plaintext">{{ field.value }}</div>
-                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}">
+                                <div class="form-control-plaintext">{{ field.value|default_if_none:'' }}</div>
+                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|date:'Y-m-d'|default_if_none:'' }}">
                             {% else %}
                                 {{ field }}
                             {% endif %}
@@ -201,9 +201,14 @@
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
                                     <div class="fw-semibold">{{ log.author.get_full_name|default:log.author.username }}</div>
-                                    <div class="text-body">{{ log.message }}</div>
+                                    <div class="text-body" style="white-space: pre-wrap;">{{ log.message }}</div>
                                 </div>
-                                <small class="text-muted ms-3">{{ log.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</small>
+                                <div class="d-flex flex-column align-items-end ms-3">
+                                    <small class="text-muted text-nowrap">{{ log.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</small>
+                                    {% if log.author.id == request.user.id %}
+                                        <a href="{% url 'hub:status-log-edit' log.pk %}" class="small text-decoration-none mt-1">Edit</a>
+                                    {% endif %}
+                                </div>
                             </div>
                         </li>
                     {% endfor %}
