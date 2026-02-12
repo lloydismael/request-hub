@@ -1331,3 +1331,462 @@ body.requestor-dashboard .dashboard-metric-card--active {
         grid-template-columns: repeat(1, minmax(0, 1fr));
     }
 }
+
+/* --- Login Theme Toggle & Dark Mode --- */
+
+/* Wrapper for positioning the toggle - Default to relative/inline for Navbar */
+.theme-toggle-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    z-index: 10;
+}
+
+/* If you specifically want absolute positioning on login page only, scope it */
+.page-login .theme-toggle-wrapper-absolute {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+}
+
+.checkbox {
+    opacity: 0;
+    position: absolute;
+}
+
+.checkbox-label {
+    background-color: #111;
+    width: 60px;
+    height: 30px;
+    border-radius: 50px;
+    position: relative;
+    padding: 5px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+}
+
+.checkbox-label .bi-moon-fill {
+    color: #f1c40f;
+    font-size: 14px;
+    margin-left: 5px;
+}
+
+.checkbox-label .bi-brightness-high-fill {
+    color: #f39c12;
+    font-size: 16px;
+    margin-right: 5px;
+}
+
+.checkbox-label .ball {
+    background-color: #fff;
+    width: 22px;
+    height: 22px;
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    border-radius: 50%;
+    transition: transform 0.2s linear;
+}
+
+#theme-checkbox:checked + .checkbox-label .ball {
+    transform: translateX(30px);
+}
+
+/* Transitions for Smooth Switching */
+body, 
+.login-card, 
+.login-card__submit, 
+.login-form__group label, 
+.form-control,
+.login-card__footer,
+.page-login .alert,
+.login-hero::before {
+    transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease, opacity 0.5s ease;
+}
+
+/* Dark Mode Styles */
+body.dark-mode {
+    background: #000000 !important; /* OLED Black */
+    background-image: none !important; 
+    color: #e5e5e5;
+}
+
+/* Dark Mode Login Card */
+body.dark-mode .login-card {
+    background: rgba(10, 10, 10, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(255, 255, 255, 0.05);
+    color: #e5e5e5;
+}
+
+/* Dark Mode Inputs */
+body.dark-mode .form-control {
+    background-color: #1a1a1a;
+    border-color: #333;
+    color: #fff;
+}
+
+body.dark-mode .form-control:focus {
+    background-color: #000;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(47, 108, 243, 0.25);
+}
+
+body.dark-mode .login-form__group label {
+    color: #b0b0b0;
+}
+
+/* Dark Mode Footer */
+body.dark-mode .login-card__footer {
+    color: #666;
+}
+
+/* Dark Mode Alert */
+body.dark-mode .page-login .alert {
+    background: rgba(199, 67, 67, 0.15);
+    border-color: rgba(199, 67, 67, 0.3);
+    color: #ff6b6b;
+}
+
+/* Hide the gradient overlay in login hero for pure black request */
+body.dark-mode .login-hero::before {
+    opacity: 0;
+}
+
+/* --- Global OLED Dark Mode Expansion --- */
+
+/* View Transitions for Circular Reveal */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+/* Navbar */
+body.dark-mode .navbar {
+    background: #000000 !important;
+    background-image: none !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.1) !important;
+    border-bottom: 1px solid #333;
+}
+
+/* Glass Cards & Containers */
+body.dark-mode .glass-card,
+body.dark-mode .glass-card--expanded,
+body.dark-mode .activity-summary-card,
+body.dark-mode .card,
+body.dark-mode .modal-content,
+body.dark-mode .dropdown-menu {
+    background: #000000 !important;
+    border: 1px solid #333 !important;
+    box-shadow: none !important;
+    color: #e5e5e5;
+}
+
+/* Tables */
+body.dark-mode .table {
+    color: #e5e5e5;
+    --bs-table-color: #ffffff;
+    --bs-table-bg: transparent;
+    --bs-table-border-color: #333;
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode .table tbody tr {
+    border-bottom-color: #333;
+}
+
+body.dark-mode .table-hover tbody tr:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .table thead th {
+    color: #fff;
+    border-bottom-color: #444;
+}
+
+/* Text Colors */
+body.dark-mode .text-muted {
+    color: #888 !important;
+}
+
+body.dark-mode .text-dark {
+    color: #e5e5e5 !important;
+}
+
+body.dark-mode h1, body.dark-mode h2, body.dark-mode h3, body.dark-mode h4, body.dark-mode h5, body.dark-mode h6 {
+    color: #ffffff;
+}
+
+/* Buttons and Inputs */
+body.dark-mode .btn-light {
+    background-color: #222;
+    border-color: #333;
+    color: #fff;
+}
+
+body.dark-mode .btn-outline-secondary {
+    color: #ccc;
+    border-color: #555;
+}
+
+body.dark-mode .btn-outline-secondary:hover {
+    background-color: #333;
+    border-color: #555;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background-color: #000;
+    border-color: #444;
+    color: #fff;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+    background-color: #111;
+    border-color: var(--brand-primary);
+    color: #fff;
+}
+
+/* Badges */
+body.dark-mode .badge.bg-light.text-dark {
+    background-color: #222 !important;
+    color: #ddd !important;
+    border-color: #444 !important; /* Assuming border class applies border */
+}
+
+/* Links */
+body.dark-mode a.text-reset {
+    color: #e5e5e5 !important;
+}
+
+/* Modals if any */
+body.dark-mode .modal-content {
+    background-color: #000;
+    border: 1px solid #333;
+    color: #fff;
+}
+
+body.dark-mode .modal-header,
+body.dark-mode .modal-footer {
+    border-color: #333;
+}
+
+/* Scrollbars */
+body.dark-mode *::-webkit-scrollbar-track {
+    background: #111;
+}
+
+body.dark-mode *::-webkit-scrollbar-thumb {
+    background-color: #444;
+    border: 2px solid #111;
+}
+
+/* Fix Missing Images & Text Contrast in Dark Mode */
+body.dark-mode img.login-card__logo {
+    background-color: rgba(255, 255, 255, 0.95);
+    padding: 12px;
+    border-radius: 12px;
+    filter: none; /* Disable invert, use white background to ensure visibility */
+}
+
+body.dark-mode .nav-avatar--placeholder,
+body.dark-mode .table-avatar--placeholder {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #555;
+}
+
+body.dark-mode .table-avatar {
+    border: 1px solid #444; 
+}
+
+body.dark-mode .text-body,
+body.dark-mode .table-cell-nowrap,
+body.dark-mode .d-flex.align-items-center span {
+    color: #e5e5e5 !important;
+}
+
+body.dark-mode .table a:not(.btn) {
+    color: #60a5fa !important; /* Force lighter blue */
+    text-decoration: none;
+}
+
+body.dark-mode .table a:not(.btn):hover {
+    color: #93c5fd !important;
+    text-decoration: underline;
+}
+
+/* Ensure form labels and static text are visible */
+body.dark-mode .form-label,
+body.dark-mode .form-text,
+body.dark-mode .form-control-plaintext,
+body.dark-mode .input-group-text {
+    color: #e5e5e5 !important;
+}
+
+body.dark-mode .input-group-text {
+    background-color: #222;
+    border-color: #444;
+}
+
+/* Fix specific badges contrast */
+body.dark-mode .badge.bg-light {
+    background-color: #2a2a2a !important;
+    color: #e5e5e5 !important;
+    border-color: #444 !important;
+}
+
+/* Fix table row hover contrast */
+body.dark-mode .table-hover > tbody > tr:hover > * {
+    color: #fff !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none; /* Remove inset shadow causing issues */
+}
+
+/* Ensure missing icons/images (if SVG or similar) are visible */
+body.dark-mode svg.bi, 
+body.dark-mode i.bi {
+    color: inherit;
+}
+
+/* Specific fix for Request ID badge colors in dark mode */
+body.dark-mode .request-id-cell--green {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border-left-color: #10b981;
+}
+
+body.dark-mode .request-id-cell--amber {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+    border-left-color: #f59e0b;
+}
+
+body.dark-mode .request-id-cell--red {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-left-color: #ef4444;
+}
+
+/* Fix table variant colors in Dark Mode to be readable */
+body.dark-mode .table-danger,
+body.dark-mode .table-danger > th,
+body.dark-mode .table-danger > td {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    color: #ffc9c9 !important;
+    --bs-table-accent-bg: transparent;
+    --bs-table-bg: transparent;
+}
+
+/* Remove red background for overdue rows in Admin Dashboard Dark Mode */
+body.admin-dashboard.dark-mode .table-danger,
+body.admin-dashboard.dark-mode .table-danger > th,
+body.admin-dashboard.dark-mode .table-danger > td {
+    background-color: transparent !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .table-warning,
+body.dark-mode .table-warning > th,
+body.dark-mode .table-warning > td {
+    background-color: rgba(255, 193, 7, 0.15) !important;
+    color: #fceda0 !important;
+}
+
+body.dark-mode .table-success,
+body.dark-mode .table-success > th,
+body.dark-mode .table-success > td {
+    background-color: rgba(25, 135, 84, 0.15) !important;
+    color: #a3e6c5 !important;
+}
+
+body.dark-mode .table-info,
+body.dark-mode .table-info > th,
+body.dark-mode .table-info > td {
+    background-color: rgba(13, 202, 240, 0.15) !important;
+    color: #a5f3fc !important;
+}
+
+/* Ensure links in colored rows are readable */
+body.dark-mode .table-danger a,
+body.dark-mode .table-warning a,
+body.dark-mode .table-success a,
+body.dark-mode .table-info a {
+    color: inherit !important;
+    text-decoration: underline;
+}
+
+/* Force light text for all tables in Admin Dashboard Dark Mode */
+body.admin-dashboard.dark-mode .dashboard-table-wrapper table,
+body.admin-dashboard.dark-mode .dashboard-table-wrapper table td,
+body.admin-dashboard.dark-mode .dashboard-table-wrapper table th {
+    color: #ffffff !important;
+    --bs-table-color: #ffffff;
+}
+
+/* Fix potential z-index or overflow issues */
+body.dark-mode .dashboard-table-wrapper {
+    scrollbar-color: #444 #000;
+}
+
+/* Fix Bootstrap utility colors for Dark Mode compatibility */
+body.dark-mode .text-danger {
+    color: #ff6b6b !important;
+}
+
+body.dark-mode .bg-danger-subtle {
+    background-color: rgba(220, 53, 69, 0.2) !important;
+    color: #ffc9c9 !important;
+    border-color: rgba(220, 53, 69, 0.3) !important;
+}
+
+body.dark-mode .text-warning {
+    color: #fcd34d !important;
+}
+
+body.dark-mode .bg-warning-subtle {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+    color: #fceda0 !important;
+    border-color: rgba(255, 193, 7, 0.3) !important;
+}
+
+body.dark-mode .text-success {
+    color: #6ee7b7 !important;
+}
+
+body.dark-mode .bg-success-subtle {
+    background-color: rgba(25, 135, 84, 0.2) !important;
+    color: #a3e6c5 !important;
+    border-color: rgba(25, 135, 84, 0.3) !important;
+}
+
+/* Requestor Dashboard Dark Mode Fixes */
+body.requestor-dashboard.dark-mode .dashboard-metric-card {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(14, 116, 144, 0.25)) !important;
+    color: #e5e5e5 !important;
+    border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+body.requestor-dashboard.dark-mode .dashboard-metric-card .dashboard-metric-card__value {
+    color: #ffffff;
+}
+
+body.requestor-dashboard.dark-mode .dashboard-metric-card .dashboard-metric-card__label {
+    color: #93c5fd;
+    opacity: 0.9;
+}
+
+body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(14, 116, 144, 0.35)) !important;
+    border-color: #60a5fa !important;
+    box-shadow: 0 10px 30px rgba(14, 116, 144, 0.25) !important;
+}
+
+
+
