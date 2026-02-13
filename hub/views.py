@@ -12,6 +12,7 @@ from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
+from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -83,6 +84,47 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             if log.is_billable:
                 billable_hours += hours
 
+        related_requests = Request.objects.filter(
+            Q(engineer=self.request.user) | Q(backup_engineer=self.request.user)
+        ).distinct()
+
+        request_status_counts = related_requests.values("status").annotate(total=Count("id")).order_by("status")
+        request_priority_counts = related_requests.values("priority").annotate(total=Count("id")).order_by("priority")
+        activity_type_counts = (
+            EngineerActivityLog.objects.filter(engineer=self.request.user)
+            .values("activity_type")
+            .annotate(total=Count("id"))
+            .order_by("activity_type")
+        )
+
+        monthly_activity_rows = (
+            EngineerActivityLog.objects.filter(engineer=self.request.user)
+            .annotate(month=TruncMonth("request_date"))
+            .values("month")
+            .annotate(total_logs=Count("id"), total_hours=Sum("actual_hours"))
+            .order_by("month")
+        )
+
+        activity_report_data = {
+            "request_status": {
+                "labels": [Request.Status(value["status"]).label for value in request_status_counts],
+                "values": [value["total"] for value in request_status_counts],
+            },
+            "request_priority": {
+                "labels": [Request.Priority(value["priority"]).label for value in request_priority_counts],
+                "values": [value["total"] for value in request_priority_counts],
+            },
+            "activity_type": {
+                "labels": [EngineerActivityLog.ActivityType(value["activity_type"]).label for value in activity_type_counts],
+                "values": [value["total"] for value in activity_type_counts],
+            },
+            "monthly": {
+                "labels": [value["month"].strftime("%b %Y") for value in monthly_activity_rows if value["month"]],
+                "hours": [float(value["total_hours"] or 0) for value in monthly_activity_rows if value["month"]],
+                "entries": [value["total_logs"] for value in monthly_activity_rows if value["month"]],
+            },
+        }
+
         context.update(
             {
                 "form": form,
@@ -92,6 +134,12 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                     "billable": billable_hours,
                     "non_billable": total_hours - billable_hours,
                 },
+                "requests_summary": {
+                    "total": related_requests.count(),
+                    "ongoing": related_requests.filter(status=Request.Status.ONGOING).count(),
+                    "completed": related_requests.filter(status=Request.Status.COMPLETED).count(),
+                },
+                "activity_report_data": activity_report_data,
                 "editing_log": editing_log,
             }
         )

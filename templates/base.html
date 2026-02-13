@@ -317,7 +317,6 @@
 
                 const toggleBtn = document.getElementById('ai-chat-toggle-btn');
                 const chatWindow = document.getElementById('ai-chat-window');
-                const closeBtn = document.getElementById('close-chat-btn');
                 const icon = toggleBtn.querySelector('i');
                 const chatFrame = document.getElementById('ai-chat-iframe');
 
@@ -338,7 +337,7 @@
                         icon.classList.remove('bi-robot');
                         icon.classList.add('bi-x-lg');
                         toggleBtn.setAttribute('aria-expanded', 'true');
-                        closeBtn.focus();
+                        chatWindow.focus();
                         
                         // Fix for JavaScript Error: "Multi-Session" support.
                         // Refreshing the iframe with a unique timestamp forces a new session context,
@@ -357,9 +356,22 @@
                 };
 
                 if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
-                if (closeBtn) closeBtn.addEventListener('click', () => {
-                    if (chatWindow.classList.contains('open')) toggleChat();
-                });
+
+                const removeInjectedAgentLabel = () => {
+                    const chatBody = document.querySelector('.ai-chat-body');
+                    if (!chatBody) return;
+                    const labels = chatBody.querySelectorAll('div');
+                    labels.forEach((node) => {
+                        const text = (node.textContent || '').trim();
+                        if (text === 'ESG Agent' && node.className && node.className.includes('___')) {
+                            node.remove();
+                        }
+                    });
+                };
+
+                removeInjectedAgentLabel();
+                const chatObserver = new MutationObserver(removeInjectedAgentLabel);
+                chatObserver.observe(document.body, { childList: true, subtree: true });
 
                 // Focus Trap Logic
                 if (chatWindow) {
@@ -402,14 +414,8 @@
     <!-- AI Chat Bot Widget -->
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
-        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-labelledby="ai-chat-title" aria-modal="true">
-             <div class="ai-chat-header">
-                <span id="ai-chat-title" class="ai-chat-title"><i class="bi bi-robot" aria-hidden="true"></i> ESG AI Assistant</span>
-                <div class="d-flex gap-2">
-                    <button type="button" id="close-chat-btn" class="btn-close btn-close-white" aria-label="Close Chat"></button>
-                </div>
-            </div>
-            <div class="ai-chat-body" style="height: calc(100% - 60px); width: 100%;">
+        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" aria-modal="true" tabindex="-1">
+            <div class="ai-chat-body" style="height: 100%; width: 100%;">
                 <iframe 
                     id="ai-chat-iframe"
                     src="https://copilotstudio.microsoft.com/environments/Default-1d11f56e-9937-45ad-80aa-03b05da28e8d/bots/auto_agent_TCzv9/webchat?__version__=2"

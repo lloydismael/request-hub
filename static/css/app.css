@@ -880,6 +880,42 @@ body.requestor-dashboard .dashboard-metric-card--active {
     content: "\00d7";
 }
 
+body.dark-mode .requestor-modal__dialog {
+    background: rgba(9, 11, 15, 0.98);
+    color: #e5e7eb;
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+body.dark-mode .requestor-modal__header {
+    border-bottom-color: rgba(148, 163, 184, 0.2);
+}
+
+body.dark-mode .requestor-modal__body .form-label,
+body.dark-mode .requestor-modal__body .form-text,
+body.dark-mode .requestor-modal__body .text-muted {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .requestor-modal__body .form-control,
+body.dark-mode .requestor-modal__body .form-select {
+    background-color: #111827;
+    border-color: #374151;
+    color: #f8fafc;
+}
+
+body.dark-mode .requestor-modal__body .form-control::placeholder {
+    color: #94a3b8;
+}
+
+body.dark-mode .requestor-modal__body .form-select option {
+    background-color: #111827;
+    color: #f8fafc;
+}
+
+body.dark-mode .requestor-modal .btn-close {
+    color: #e2e8f0;
+}
+
 @media (max-width: 640px) {
     .requestor-modal__dialog {
         margin: 4vh auto;
@@ -1977,6 +2013,35 @@ body.dark-mode .ai-chat-window {
 .ai-chat-header {
     /* Touch target size optimization */
     min-height: 60px;
+}
+
+/* Dashboard table one-line format */
+.dashboard-table-wrapper .table-nowrap th,
+.dashboard-table-wrapper .table-nowrap td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* Activity log edit focus states */
+.activity-edit-focus {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+.activity-edit-row-focus {
+    outline: 2px solid rgba(59, 130, 246, 0.45);
+    outline-offset: -2px;
+}
+
+.activity-chart-wrap {
+    position: relative;
+    height: 260px;
+    min-height: 260px;
+}
+
+.activity-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
 }
 
 

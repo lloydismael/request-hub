@@ -244,7 +244,7 @@
                 </form>
             {% endif %}
             <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}">
-                <table class="table align-middle{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
+                <table class="table align-middle table-nowrap{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
                     <thead>
                         <tr>
                             {% if role == 'admin' %}
@@ -404,14 +404,14 @@
                             <tr class="{% if not is_requestor_ui and item.is_overdue or not is_requestor_ui and item.sla_overrun or not is_requestor_ui and item.missed_sla %}table-danger{% endif %}">
                                 {% if role == 'admin' %}
                                     <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
-                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none">{{ item.reference_code }}</a>
+                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
                                     </td>
                                 {% elif role == 'engineer' %}
                                     <td>
-                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none fw-bold">{{ item.reference_code }}</a>
+                                        <a href="{% url 'hub:request-manage-collab' item.pk %}" class="text-reset text-decoration-none fw-bold" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
                                     </td>
                                 {% else %}
-                                    <td>{{ item.reference_code }}</td>
+                                    <td title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</td>
                                 {% endif %}
                                 <td>{{ item.account.name }}</td>
                                 {% if role == 'admin' %}
