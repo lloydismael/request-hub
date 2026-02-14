@@ -59,6 +59,16 @@
                     </div>
                     <button type="button" class="btn btn-primary requestor-summary__cta" id="new-request-btn">New Request</button>
                 </div>
+                <ul class="nav nav-pills mb-4" id="requestor-dashboard-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true">Requests</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="requestor-dashboard-tab-content">
+                    <div class="tab-pane fade show active" id="request-list-pane" role="tabpanel" aria-labelledby="request-list-tab" tabindex="0">
             {% endif %}
             {% if role == 'admin' %}
                 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-5 g-3 mb-4 dashboard-metrics">
@@ -244,7 +254,7 @@
                 </form>
             {% endif %}
             <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}">
-                <table class="table align-middle{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
+                <table class="table align-middle table-nowrap{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
                     <thead>
                         <tr>
                             {% if role == 'admin' %}
@@ -404,14 +414,14 @@
                             <tr class="{% if not is_requestor_ui and item.is_overdue or not is_requestor_ui and item.sla_overrun or not is_requestor_ui and item.missed_sla %}table-danger{% endif %}">
                                 {% if role == 'admin' %}
                                     <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
-                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none">{{ item.reference_code }}</a>
+                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
                                     </td>
                                 {% elif role == 'engineer' %}
                                     <td>
-                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none fw-bold">{{ item.reference_code }}</a>
+                                        <a href="{% url 'hub:request-manage-collab' item.pk %}" class="text-reset text-decoration-none fw-bold" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
                                     </td>
                                 {% else %}
-                                    <td>{{ item.reference_code }}</td>
+                                    <td title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</td>
                                 {% endif %}
                                 <td>{{ item.account.name }}</td>
                                 {% if role == 'admin' %}
@@ -677,6 +687,66 @@
                     </tbody>
                 </table>
             </div>
+            {% if is_requestor_ui %}
+                    </div>
+                    <div class="tab-pane fade" id="request-report-graph-pane" role="tabpanel" aria-labelledby="request-report-graph-tab" tabindex="0">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-4">
+                                <div class="glass-card p-3 h-100">
+                                    <div class="small text-uppercase text-muted">Total Requests</div>
+                                    <div class="h4 mb-0">{{ request_report_summary.total }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="glass-card p-3 h-100">
+                                    <div class="small text-uppercase text-muted">Ongoing</div>
+                                    <div class="h4 mb-0">{{ request_report_summary.ongoing }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="glass-card p-3 h-100">
+                                    <div class="small text-uppercase text-muted">Completed</div>
+                                    <div class="h4 mb-0">{{ request_report_summary.completed }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row g-4">
+                            <div class="col-12 col-lg-6">
+                                <div class="glass-card p-3">
+                                    <h3 class="h6 mb-3">Request Status Distribution</h3>
+                                    <div class="activity-chart-wrap">
+                                        <canvas id="requestor-status-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <div class="glass-card p-3">
+                                    <h3 class="h6 mb-3">Request Priority Distribution</h3>
+                                    <div class="activity-chart-wrap">
+                                        <canvas id="requestor-priority-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <div class="glass-card p-3">
+                                    <h3 class="h6 mb-3">Engagement Distribution</h3>
+                                    <div class="activity-chart-wrap">
+                                        <canvas id="requestor-engagement-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <div class="glass-card p-3">
+                                    <h3 class="h6 mb-3">Monthly Requests Trend</h3>
+                                    <div class="activity-chart-wrap">
+                                        <canvas id="requestor-monthly-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -872,6 +942,8 @@
     </script>
 {% endif %}
 {% if is_requestor_ui %}
+    {{ request_report_data|json_script:"requestor-report-data" }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         (function () {
             const modal = document.getElementById("create-request-modal");
@@ -1037,6 +1109,94 @@
 
             if (modal.dataset.openOnLoad === "true") {
                 openModal();
+            }
+
+            const reportDataNode = document.getElementById("requestor-report-data");
+            const graphTabButton = document.getElementById("request-report-graph-tab");
+            const graphPane = document.getElementById("request-report-graph-pane");
+            const chartRegistry = {};
+
+            if (reportDataNode && typeof Chart !== "undefined") {
+                const reportData = JSON.parse(reportDataNode.textContent || "{}");
+                const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+                const upsertChart = (canvasId, config) => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
+                    if (chartRegistry[canvasId]) {
+                        chartRegistry[canvasId].destroy();
+                    }
+                    chartRegistry[canvasId] = new Chart(canvas, config);
+                };
+
+                const makeBar = (canvasId, labels, values, label) => {
+                    if (!labels || !labels.length) return;
+                    upsertChart(canvasId, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label,
+                                data: values,
+                                backgroundColor: defaultColors,
+                                borderRadius: 8,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                        }
+                    });
+                };
+
+                const makeLine = (canvasId, labels, values, label) => {
+                    if (!labels || !labels.length) return;
+                    upsertChart(canvasId, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label,
+                                data: values,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                fill: true,
+                                tension: 0.3,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                        }
+                    });
+                };
+
+                const renderRequestorCharts = () => {
+                    makeBar('requestor-status-chart', reportData.request_status?.labels, reportData.request_status?.values, 'Requests');
+                    makeBar('requestor-priority-chart', reportData.request_priority?.labels, reportData.request_priority?.values, 'Requests');
+                    makeBar('requestor-engagement-chart', reportData.request_engagement?.labels, reportData.request_engagement?.values, 'Requests');
+                    makeLine('requestor-monthly-chart', reportData.request_monthly?.labels, reportData.request_monthly?.values, 'Requests');
+                };
+
+                if (graphPane && graphPane.classList.contains('show') && graphPane.classList.contains('active')) {
+                    renderRequestorCharts();
+                    if (graphTabButton) {
+                        graphTabButton.dataset.rendered = 'true';
+                    }
+                }
+
+                if (graphTabButton) {
+                    graphTabButton.addEventListener('shown.bs.tab', () => {
+                        if (graphTabButton.dataset.rendered !== 'true') {
+                            renderRequestorCharts();
+                            graphTabButton.dataset.rendered = 'true';
+                            return;
+                        }
+                        Object.values(chartRegistry).forEach((chart) => chart.resize());
+                    });
+                }
             }
 
             // Prevent double submissions by disabling the submit button once clicked.

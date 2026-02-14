@@ -39,7 +39,15 @@
                             </a>
                         </li>
                     </ul>
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div class="theme-toggle-wrapper">
+                            <input type="checkbox" class="checkbox" id="theme-checkbox">
+                            <label for="theme-checkbox" class="checkbox-label" title="Toggle Dark/Light Mode" aria-label="Toggle Dark Mode">
+                                <i class="bi bi-moon-fill"></i>
+                                <i class="bi bi-brightness-high-fill"></i>
+                                <span class="ball"></span>
+                            </label>
+                        </div>
                         {% if request.user.profile_photo %}
                             <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar">
                         {% else %}
@@ -56,14 +64,108 @@
                     </div>
                 </div>
             {% else %}
-                {% if not hide_sign_in_nav %}
-                    <div class="d-flex ms-auto">
-                        <a class="btn btn-sm btn-outline-light" href="{% url 'login' %}">Sign In</a>
+                <div class="d-flex ms-auto align-items-center gap-3">
+                    <div class="theme-toggle-wrapper">
+                        <input type="checkbox" class="checkbox" id="theme-checkbox">
+                        <label for="theme-checkbox" class="checkbox-label" title="Toggle Dark/Light Mode" aria-label="Toggle Dark Mode">
+                            <i class="bi bi-moon-fill"></i>
+                            <i class="bi bi-brightness-high-fill"></i>
+                            <span class="ball"></span>
+                        </label>
                     </div>
-                {% endif %}
+                    {% if not hide_sign_in_nav %}
+                        <a class="btn btn-sm btn-outline-light" href="{% url 'login' %}">Sign In</a>
+                    {% endif %}
+                </div>
             {% endif %}
         </div>
     </nav>
+    <script>
+        (function() {
+            // Theme Toggle Logic
+            const toggle = document.getElementById('theme-checkbox');
+            const body = document.body;
+            const storageKey = 'reqHubTheme';
+
+            // Helper to set theme state
+            const applyTheme = (isDark) => {
+                if (isDark) {
+                    body.classList.add('dark-mode');
+                    localStorage.setItem(storageKey, 'dark');
+                } else {
+                    body.classList.remove('dark-mode');
+                    localStorage.setItem(storageKey, 'light');
+                }
+            };
+
+            // Apply saved theme immediately on load
+            const currentTheme = localStorage.getItem(storageKey);
+            if (currentTheme === 'dark') {
+                body.classList.add('dark-mode');
+                if (toggle) toggle.checked = true;
+            }
+
+            if (toggle) {
+                // Use click on the LABEL or wrapper to get accurate coordinates
+                // We attach to the toggle change event for logic, but we might need
+                // to capture coordinates from a click listener on the wrapper if accessible
+                
+                // Better approach: Listen for click on the document/wrapper to capture coords
+                // right before the change fires.
+                let lastClickX = window.innerWidth / 2;
+                let lastClickY = window.innerHeight / 2;
+
+                document.addEventListener('click', (e) => {
+                    lastClickX = e.clientX;
+                    lastClickY = e.clientY;
+                }, { capture: true, passive: true });
+
+                toggle.addEventListener('change', async function(e) {
+                    const isDark = this.checked;
+
+                    // Fallback for browsers without View Transition API
+                    if (!document.startViewTransition) {
+                        applyTheme(isDark);
+                        return;
+                    }
+
+                    // Use captured coordinates or fallback to center
+                    const x = lastClickX;
+                    const y = lastClickY;
+                    
+                    // Calculate distance to furthest corner ensuring full coverage
+                    const endRadius = Math.hypot(
+                        Math.max(x, window.innerWidth - x),
+                        Math.max(y, window.innerHeight - y)
+                    );
+
+                    // Start the View Transition
+                    const transition = document.startViewTransition(() => {
+                        applyTheme(isDark);
+                    });
+
+                    // Wait for the pseudo-elements to be created
+                    await transition.ready;
+
+                    // Animate the circular clip-path on the NEW view (the incoming theme)
+                    document.documentElement.animate(
+                        {
+                            clipPath: [
+                                `circle(0px at ${x}px ${y}px)`,
+                                `circle(${endRadius}px at ${x}px ${y}px)`
+                            ]
+                        },
+                        {
+                            duration: 600,
+                            easing: 'ease-in-out', // Smoother invasion
+                            pseudoElement: '::view-transition-new(root)'
+                        }
+                    );
+                });
+            }
+        })();
+    </script>
+
 
     <main class="container py-4">
         {% for message in messages %}
@@ -207,7 +309,132 @@
                     }
                 });
             });
+
+            {% if request.user.is_authenticated %}
+            // AI Chat Bot Logic (Iframe Implementation)
+            const initChat = () => {
+                const chatWidget = document.getElementById('ai-chat-widget-container');
+                if (!chatWidget) return;
+
+                const toggleBtn = document.getElementById('ai-chat-toggle-btn');
+                const chatWindow = document.getElementById('ai-chat-window');
+                const icon = toggleBtn.querySelector('i');
+                const chatFrame = document.getElementById('ai-chat-iframe');
+
+                // Toggle visibility
+                const toggleChat = () => {
+                    const isOpen = chatWindow.classList.contains('open');
+                    
+                    if (isOpen) {
+                        chatWindow.classList.remove('open');
+                        toggleBtn.classList.remove('active');
+                        icon.classList.remove('bi-x-lg');
+                        icon.classList.add('bi-robot');
+                        toggleBtn.setAttribute('aria-expanded', 'false');
+                        toggleBtn.focus();
+                    } else {
+                        chatWindow.classList.add('open');
+                        toggleBtn.classList.add('active');
+                        icon.classList.remove('bi-robot');
+                        icon.classList.add('bi-x-lg');
+                        toggleBtn.setAttribute('aria-expanded', 'true');
+                        chatWindow.focus();
+                        
+                        // Fix for JavaScript Error: "Multi-Session" support.
+                        // Refreshing the iframe with a unique timestamp forces a new session context,
+                        // preventing stale tokens from causing connection errors.
+                        if (chatFrame) {
+                           try {
+                               const srcUrl = new URL(chatFrame.src);
+                               srcUrl.searchParams.set('ts', new Date().getTime());
+                               chatFrame.src = srcUrl.toString();
+                           } catch(e) {
+                               // Fallback if URL parsing fails
+                               chatFrame.src = chatFrame.src;
+                           }
+                        }
+                    }
+                };
+
+                if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
+
+                const removeInjectedAgentLabel = () => {
+                    const chatBody = document.querySelector('.ai-chat-body');
+                    if (!chatBody) return;
+                    const labels = chatBody.querySelectorAll('div');
+                    labels.forEach((node) => {
+                        const text = (node.textContent || '').trim();
+                        if (text === 'ESG Agent' && node.className && node.className.includes('___')) {
+                            node.remove();
+                        }
+                    });
+                };
+
+                removeInjectedAgentLabel();
+                const chatObserver = new MutationObserver(removeInjectedAgentLabel);
+                chatObserver.observe(document.body, { childList: true, subtree: true });
+
+                // Focus Trap Logic
+                if (chatWindow) {
+                    chatWindow.addEventListener('keydown', (e) => {
+                        if (e.key === 'Tab' || e.key === 'Escape') {
+                            if (e.key === 'Escape') {
+                                toggleChat();
+                                return;
+                            }
+                            const focusableElements = chatWindow.querySelectorAll('button, [href], iframe, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                            if (focusableElements.length) {
+                                const firstElement = focusableElements[0];
+                                const lastElement = focusableElements[focusableElements.length - 1];
+                                if (e.shiftKey) { 
+                                    if (document.activeElement === firstElement) {
+                                        lastElement.focus();
+                                        e.preventDefault();
+                                    }
+                                } else { 
+                                    if (document.activeElement === lastElement) {
+                                        firstElement.focus();
+                                        e.preventDefault();
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            };
+
+            // Ensure DOM is ready before init
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initChat);
+            } else {
+                initChat();
+            }
+            {% endif %}
         })();
     </script>
+
+    {% if request.user.is_authenticated %}
+    <!-- AI Chat Bot Widget -->
+    <div id="ai-chat-widget-container" class="ai-chat-widget">
+        <!-- Chat Window -->
+        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" aria-modal="true" tabindex="-1">
+            <div class="ai-chat-body" style="height: 100%; width: 100%;">
+                <iframe 
+                    id="ai-chat-iframe"
+                    src="https://copilotstudio.microsoft.com/environments/Default-1d11f56e-9937-45ad-80aa-03b05da28e8d/bots/auto_agent_TCzv9/webchat?__version__=2"
+                    frameborder="0" 
+                    style="width: 100%; height: 100%;"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                    title="Chat with ESG AI Assistant">
+                </iframe>
+            </div>
+        </div>
+
+        <!-- Floating Button -->
+        <button id="ai-chat-toggle-btn" class="ai-chat-toggle-btn" aria-label="Open AI Assistant" aria-expanded="false" aria-controls="ai-chat-window">
+             <i class="bi bi-robot" aria-hidden="true"></i>
+        </button>
+    </div>
+    {% endif %}
 </body>
 </html>

@@ -22,56 +22,26 @@
                 Total Hours: {{ hours_summary.total|default:0|floatformat:1 }}
             </span>
         </div>
+        <div class="ms-auto">
+            <button type="button" class="btn btn-primary" id="new-activity-btn">Create Activity Report</button>
+        </div>
     </div>
 </div>
 
-<div class="row g-4 align-items-start">
-    <div class="col-12 col-xl-4 col-xxl-3">
-        <div class="glass-card p-4 h-100">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <h1 class="h5 mb-0">{% if editing_log %}Edit Activity Log{% else %}Log Activity{% endif %}</h1>
-            </div>
-            {% if editing_log %}
-                <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
-                    <span>Updating entry from {{ editing_log.request_date|date:"M d, Y" }}.</span>
-                    <a href="{% url 'hub:activity-logs' %}" class="alert-link">Cancel</a>
-                </div>
-            {% endif %}
-            <form method="post" novalidate>
-                {% csrf_token %}
-                {% if form.non_field_errors %}
-                    <div class="alert alert-danger" role="alert">
-                        {{ form.non_field_errors|join:" " }}
-                    </div>
-                {% endif %}
-                {% if editing_log %}
-                    <input type="hidden" name="log_id" value="{{ editing_log.pk }}">
-                {% endif %}
-                {% for field in form %}
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}
-                            <div class="form-text">{{ field.help_text }}</div>
-                        {% endif %}
-                        {% if field.errors %}
-                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-                <div class="d-flex justify-content-end gap-2">
-                    {% if editing_log %}
-                        <a href="{% url 'hub:activity-logs' %}" class="btn btn-outline-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-primary">Update Log</button>
-                    {% else %}
-                        <button type="submit" class="btn btn-primary">Save Log</button>
-                    {% endif %}
-                </div>
-            </form>
-        </div>
-    </div>
-    <div class="col-12 col-xl-8 col-xxl-9">
-        <div class="glass-card p-4 h-100 d-flex flex-column">
+<ul class="nav nav-pills mb-4" id="activity-logs-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="activity-list-tab" data-bs-toggle="pill" data-bs-target="#activity-list-pane" type="button" role="tab" aria-controls="activity-list-pane" aria-selected="true">Activity Logs</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="activity-graph-tab" data-bs-toggle="pill" data-bs-target="#activity-graph-pane" type="button" role="tab" aria-controls="activity-graph-pane" aria-selected="false">Activity Report Graph</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="activity-logs-tab-content">
+    <div class="tab-pane fade show active" id="activity-list-pane" role="tabpanel" aria-labelledby="activity-list-tab" tabindex="0">
+        <div class="row g-4 align-items-start">
+            <div class="col-12">
+                <div class="glass-card p-4 h-100 d-flex flex-column">
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                 <div>
                     <h2 class="h5 mb-1">Recent Activity</h2>
@@ -79,6 +49,9 @@
                 </div>
                 <div class="d-flex flex-wrap gap-2">
                     <span class="badge bg-light text-dark border">Sorted by most recent</span>
+                    {% if editing_log %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Editing: {{ editing_log.request_date|date:"M d, Y" }}</span>
+                    {% endif %}
                 </div>
             </div>
             <div class="table-responsive flex-grow-1">
@@ -150,7 +123,265 @@
                     </tbody>
                 </table>
             </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="activity-graph-pane" role="tabpanel" aria-labelledby="activity-graph-tab" tabindex="0">
+        <div class="row g-3 mb-3">
+            <div class="col-12 col-md-4">
+                <div class="glass-card p-3 h-100">
+                    <div class="small text-uppercase text-muted">Total Related Requests</div>
+                    <div class="h4 mb-0">{{ requests_summary.total }}</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="glass-card p-3 h-100">
+                    <div class="small text-uppercase text-muted">Ongoing Requests</div>
+                    <div class="h4 mb-0">{{ requests_summary.ongoing }}</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="glass-card p-3 h-100">
+                    <div class="small text-uppercase text-muted">Completed Requests</div>
+                    <div class="h4 mb-0">{{ requests_summary.completed }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-12 col-lg-6">
+                <div class="glass-card p-3">
+                    <h3 class="h6 mb-3">Request Status Distribution</h3>
+                    <div class="activity-chart-wrap">
+                        <canvas id="request-status-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-6">
+                <div class="glass-card p-3">
+                    <h3 class="h6 mb-3">Request Priority Distribution</h3>
+                    <div class="activity-chart-wrap">
+                        <canvas id="request-priority-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-6">
+                <div class="glass-card p-3">
+                    <h3 class="h6 mb-3">Activity Type Breakdown</h3>
+                    <div class="activity-chart-wrap">
+                        <canvas id="activity-type-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-6">
+                <div class="glass-card p-3">
+                    <h3 class="h6 mb-3">Monthly Activity Hours</h3>
+                    <div class="activity-chart-wrap">
+                        <canvas id="activity-monthly-chart"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+</div>
+
+<div class="requestor-modal" id="create-activity-modal" aria-hidden="true" data-open-on-load="{% if editing_log or form.errors %}true{% else %}false{% endif %}">
+    <div class="requestor-modal__backdrop" id="create-activity-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-activity-title">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="create-activity-title">{% if editing_log %}Edit Activity Report{% else %}Create Activity Report{% endif %}</h2>
+            <button type="button" class="btn-close" id="close-activity-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <form method="post" novalidate id="activity-log-form">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors|join:" " }}
+                    </div>
+                {% endif %}
+                {% if editing_log %}
+                    <input type="hidden" name="log_id" value="{{ editing_log.pk }}">
+                {% endif %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-activity-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">{% if editing_log %}Update Activity Report{% else %}Save Activity Report{% endif %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const modal = document.getElementById('create-activity-modal');
+        if (!modal) {
+            return;
+        }
+
+        const openBtn = document.getElementById('new-activity-btn');
+        const closeBtns = [
+            document.getElementById('close-activity-btn'),
+            document.getElementById('cancel-activity-btn'),
+            document.getElementById('create-activity-backdrop'),
+        ].filter(Boolean);
+
+        const body = document.body;
+        const dialog = modal.querySelector('.requestor-modal__dialog');
+
+        const openModal = () => {
+            modal.classList.add('requestor-modal--visible');
+            body.classList.add('requestor-modal-open');
+            if (dialog) {
+                dialog.scrollTop = 0;
+            }
+        };
+
+        const closeModal = () => {
+            modal.classList.remove('requestor-modal--visible');
+            body.classList.remove('requestor-modal-open');
+            if (modal.dataset.openOnLoad === 'true') {
+                window.location.href = "{% url 'hub:activity-logs' %}";
+            }
+        };
+
+        if (openBtn) {
+            openBtn.addEventListener('click', openModal, { passive: true });
+        }
+
+        closeBtns.forEach((button) => {
+            button.addEventListener('click', closeModal, { passive: true });
+        });
+
+        const shouldOpenOnLoad = modal.dataset.openOnLoad === 'true';
+        if (shouldOpenOnLoad) {
+            openModal();
+        }
+
+        const url = new URL(window.location.href);
+        const editId = url.searchParams.get('edit');
+        if (!editId) {
+            return;
+        }
+
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach((row) => {
+            const editLink = row.querySelector('a[href*="?edit="]');
+            if (editLink && editLink.getAttribute('href').includes(`?edit=${editId}`)) {
+                row.classList.add('activity-edit-row-focus');
+            }
+        });
+    })();
+</script>
+
+{{ activity_report_data|json_script:"activity-report-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    (function () {
+        const dataNode = document.getElementById('activity-report-data');
+        if (!dataNode || typeof Chart === 'undefined') {
+            return;
+        }
+
+        const reportData = JSON.parse(dataNode.textContent || '{}');
+        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+        const chartRegistry = {};
+
+        const upsertChart = (canvasId, config) => {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            if (chartRegistry[canvasId]) {
+                chartRegistry[canvasId].destroy();
+            }
+            chartRegistry[canvasId] = new Chart(canvas, config);
+        };
+
+        const makeBar = (canvasId, labels, values, label) => {
+            if (!labels || !labels.length) return;
+            upsertChart(canvasId, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label,
+                        data: values,
+                        backgroundColor: defaultColors,
+                        borderRadius: 8,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                }
+            });
+        };
+
+        const makeLine = (canvasId, labels, values, label) => {
+            if (!labels || !labels.length) return;
+            upsertChart(canvasId, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label,
+                        data: values,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                }
+            });
+        };
+
+        const renderCharts = () => {
+            makeBar('request-status-chart', reportData.request_status?.labels, reportData.request_status?.values, 'Requests');
+            makeBar('request-priority-chart', reportData.request_priority?.labels, reportData.request_priority?.values, 'Requests');
+            makeBar('activity-type-chart', reportData.activity_type?.labels, reportData.activity_type?.values, 'Activities');
+            makeLine('activity-monthly-chart', reportData.monthly?.labels, reportData.monthly?.hours, 'Hours');
+        };
+
+        const graphTabButton = document.getElementById('activity-graph-tab');
+        const graphPane = document.getElementById('activity-graph-pane');
+
+        if (graphPane && graphPane.classList.contains('show') && graphPane.classList.contains('active')) {
+            renderCharts();
+            if (graphTabButton) {
+                graphTabButton.dataset.rendered = 'true';
+            }
+        }
+
+        if (graphTabButton) {
+            graphTabButton.addEventListener('shown.bs.tab', () => {
+                if (graphTabButton.dataset.rendered !== 'true') {
+                    renderCharts();
+                    graphTabButton.dataset.rendered = 'true';
+                    return;
+                }
+                Object.values(chartRegistry).forEach((chart) => chart.resize());
+            });
+        }
+    })();
+</script>
 {% endblock %}
