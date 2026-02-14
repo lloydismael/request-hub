@@ -310,6 +310,7 @@
                 });
             });
 
+            {% if request.user.is_authenticated %}
             // AI Chat Bot Logic (Iframe Implementation)
             const initChat = () => {
                 const chatWidget = document.getElementById('ai-chat-widget-container');
@@ -408,9 +409,11 @@
             } else {
                 initChat();
             }
+            {% endif %}
         })();
     </script>
 
+    {% if request.user.is_authenticated %}
     <!-- AI Chat Bot Widget -->
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
@@ -432,5 +435,6 @@
              <i class="bi bi-robot" aria-hidden="true"></i>
         </button>
     </div>
+    {% endif %}
 </body>
 </html>
