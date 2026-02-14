@@ -606,6 +606,52 @@ def _admin_sort_date_key(value):
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "hub/dashboard.html"
 
+    @staticmethod
+    def _build_request_report_data(requests: list[Request]) -> dict:
+        status_labels = dict(Request.Status.choices)
+        priority_labels = dict(Request.Priority.choices)
+        engagement_labels = dict(Request.Engagement.choices)
+
+        status_counts: dict[str, int] = {}
+        priority_counts: dict[str, int] = {}
+        engagement_counts: dict[str, int] = {}
+        monthly_counts: dict[str, int] = {}
+
+        for request_obj in requests:
+            status_key = request_obj.status or ""
+            priority_key = request_obj.priority or ""
+            engagement_key = request_obj.engagement_type or ""
+
+            if status_key:
+                status_counts[status_key] = status_counts.get(status_key, 0) + 1
+            if priority_key:
+                priority_counts[priority_key] = priority_counts.get(priority_key, 0) + 1
+            if engagement_key:
+                engagement_counts[engagement_key] = engagement_counts.get(engagement_key, 0) + 1
+
+            month_source = request_obj.created_at
+            month_key = month_source.strftime("%b %Y")
+            monthly_counts[month_key] = monthly_counts.get(month_key, 0) + 1
+
+        return {
+            "request_status": {
+                "labels": [status_labels.get(key, key) for key in status_counts.keys()],
+                "values": list(status_counts.values()),
+            },
+            "request_priority": {
+                "labels": [priority_labels.get(key, key) for key in priority_counts.keys()],
+                "values": list(priority_counts.values()),
+            },
+            "request_engagement": {
+                "labels": [engagement_labels.get(key, key) for key in engagement_counts.keys()],
+                "values": list(engagement_counts.values()),
+            },
+            "request_monthly": {
+                "labels": list(monthly_counts.keys()),
+                "values": list(monthly_counts.values()),
+            },
+        }
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
@@ -658,6 +704,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
             context["form_has_errors"] = form.is_bound and bool(form.errors)
+            context["request_report_summary"] = {
+                "total": len(requests),
+                "ongoing": metrics["ongoing"],
+                "completed": metrics["completed"],
+            }
+            context["request_report_data"] = self._build_request_report_data(requests)
         elif user.role in REQUEST_CREATOR_ROLES:
             form = kwargs.get("form")
             if form is None:
@@ -701,6 +753,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
             context["form_has_errors"] = form.is_bound and bool(form.errors)
+            context["request_report_summary"] = {
+                "total": len(requests),
+                "ongoing": metrics["ongoing"],
+                "completed": metrics["completed"],
+            }
+            context["request_report_data"] = self._build_request_report_data(requests)
         elif user.role == User.Roles.ENGINEER:
             metric_filter = self.request.GET.get("metric_filter") or ""
             tab = self.request.GET.get("tab") or "assigned"
