@@ -1,78 +1,221 @@
 # Request Hub
 
-Request Hub is a role-based request management portal for coordinating work between requestors, engineers, and administrators.
+Request Hub is a role-based request and activity management platform built with Django. It helps requestors, engineers, and administrators coordinate work, track SLA timelines, and monitor operational progress from a single web portal.
 
-## Features
+![Request Hub Logo](static/img/phil-data-full-logo.png)
 
-- Custom user roles (Requestor, Engineer, Admin) with first-login profile completion.
-- Ticket lifecycle with SLA tracking, engineer capacity guardrails, and completion notifications.
-- Admin dashboard for status control and SLA oversight.
-- Configurable notification center and nightly SLA checker management command.
-- Responsive UI with a modern glassmorphism-inspired design.
+## UI Preview
 
-## Quick Start (Local)
+![Login Background](static/img/login-background.svg)
+![Project Favicon](static/images/PD%20favicon.png)
 
-1. Create a virtual environment and install dependencies:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   ```
-2. Copy `.env.example` to `.env` and set values as needed.
-3. Apply migrations (default users are created via data migration):
-   ```powershell
-   python manage.py migrate
-   ```
-4. Run the development server:
-   ```powershell
-   python manage.py runserver
-   ```
+## Table of Contents
 
-Quick-start demo credentials (per role selection):
-- Admin: `Admin` / `Admin`
-- Admin (secondary): `Admin1` / `Admin1`
-- Engineer: `Admin` / `Admin`
-- Engineer (alternate): `Admin1` / `Admin1`
-- Requestor: `Admin` / `Admin`
-- Requestor (alternate): `Admin1` / `Admin1`
+- [Overview](#overview)
+- [Core Features](#core-features)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Local Development Setup](#local-development-setup)
+- [Docker Setup](#docker-setup)
+- [Environment Variables](#environment-variables)
+- [Database and Migrations](#database-and-migrations)
+- [Running Tests](#running-tests)
+- [Scheduled Jobs](#scheduled-jobs)
+- [Deployment](#deployment)
+- [Security Notes](#security-notes)
+- [Troubleshooting](#troubleshooting)
 
-Additional seeded requestors and engineers remain available with the password `RequestHub123`. Update all passwords immediately after first login.
+## Overview
 
-## Docker
+Request Hub provides:
 
-1. Build and start the stack:
-   ```powershell
-   docker compose up --build
-   ```
-2. Apply migrations inside the `web` container if needed:
-   ```powershell
-   docker compose exec web python manage.py migrate
-   ```
+- Role-aware dashboards for Requestor, Engineer, and Admin users
+- Request lifecycle management from creation to completion
+- SLA-aware monitoring and overdue visibility
+- Engineer activity logging and reporting
+- Built-in notification workflows and communication actions
+- Dark mode and responsive UI behavior for desktop/mobile users
 
-### Docker Image Versioning
+## Core Features
 
-- The current published image version is `v9.1`.
-- Increment patch versions sequentially: `v9.1`, `v9.2`, … up to `v9.9`.
-- After `v9.9`, bump the major version and reset the patch: `v10.0`.
-- Avoid tags such as `v9.10` or `v9.11`; each series only goes up to `.9`.
-- Before building, confirm the latest pushed tag (e.g., `docker images lloydismael12/request-hub --format "{{.Tag}}" | sort`) to avoid rebuilding an existing version.
-- Continue tagging `latest` alongside the specific version when pushing to the registry.
+### Request Management
 
-## Tests
+- Create and track requests with status, priority, engagement type, and due dates
+- Assign engineers and backup engineers
+- Manage request updates through role-appropriate actions
 
-Run the Django test suite:
+### Dashboard Insights
+
+- Requestor dashboards with request metrics and report graphs
+- Engineer dashboards with assigned/backup views and activity reporting
+- Admin dashboard with sorting, filtering, and SLA indicators
+
+### Activity Logs
+
+- Engineer activity logging (hours, location, billable status, work details)
+- Activity Report Graph tab for trend and distribution views
+
+### Collaboration and Notifications
+
+- In-app notification center for assignment and workflow updates
+- Teams/Outlook integrations via action buttons where configured
+
+## Technology Stack
+
+- Backend: Django 4.2
+- Database: PostgreSQL (recommended for production)
+- Frontend: Django Templates + Bootstrap 5 + custom CSS/JS
+- Containerization: Docker / Docker Compose
+- Optional integrations: Azure Communication Services, Microsoft cloud services
+
+## Project Structure
+
+```text
+accounts/            User/account management
+hub/                 Core app: requests, activity logs, dashboards, reports
+request_hub/         Django project settings and URL configuration
+templates/           Shared and app templates
+static/              CSS, images, and frontend assets
+docs/                Deployment and operational documentation
+```
+
+## Local Development Setup
+
+### 1) Create and activate virtual environment (Windows PowerShell)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 2) Configure environment
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Update `.env` with your local values (database host/user/password, secrets, and optional service keys).
+
+### 3) Run migrations
+
+```powershell
+python manage.py migrate
+```
+
+### 4) Start development server
+
+```powershell
+python manage.py runserver
+```
+
+Open: `http://127.0.0.1:8000/`
+
+## Docker Setup
+
+### Start services
+
+```powershell
+docker compose up --build
+```
+
+### Run migrations in container
+
+```powershell
+docker compose exec web python manage.py migrate
+```
+
+### Stop services
+
+```powershell
+docker compose down
+```
+
+## Environment Variables
+
+Use `.env` to store runtime configuration. Typical values include:
+
+- `SECRET_KEY`
+- `DEBUG`
+- `ALLOWED_HOSTS`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
+- Optional integration settings (email/Azure/etc.)
+
+Do not commit real secrets, tokens, passwords, or connection strings.
+
+## Database and Migrations
+
+Apply migrations:
+
+```powershell
+python manage.py migrate
+```
+
+Create new migrations after model changes:
+
+```powershell
+python manage.py makemigrations
+python manage.py migrate
+```
+
+## Running Tests
+
 ```powershell
 python manage.py test
 ```
 
-## Scheduled Tasks
+## Scheduled Jobs
 
-Use the provided management command to monitor SLA breaches:
+SLA monitoring command:
+
+```powershell
+python manage.py check_sla
+```
+
+In containerized environments:
+
 ```powershell
 docker compose exec web python manage.py check_sla
 ```
-Schedule this command (e.g., Windows Task Scheduler, cron) to run daily.
 
-## Azure App Service
+Run this on a daily schedule using Task Scheduler, cron, or your preferred scheduler.
 
-Refer to `docs/azure-app-service-deployment.md` for container deployment steps, recommended App Service settings, and CLI snippets.
+## Deployment
+
+For Azure App Service container deployment guidance, see:
+
+- [docs/azure-app-service-deployment.md](docs/azure-app-service-deployment.md)
+
+## Security Notes
+
+- Keep `.env` out of source control
+- Rotate any exposed keys immediately
+- Use strong passwords and enforce least privilege
+- Prefer secret stores for production credentials (not plaintext files)
+
+## Troubleshooting
+
+### App does not start locally
+
+- Verify Python and pip are installed and on PATH
+- Recreate `.venv` and reinstall dependencies
+- Confirm `.env` values and database connectivity
+
+### Migration errors
+
+- Ensure database service is running
+- Confirm credentials/host/port in `.env`
+- Run `python manage.py showmigrations` to inspect migration state
+
+### Static files/UI issues
+
+- Clear browser cache (Ctrl+F5)
+- Rebuild containers if running via Docker
+
+---
+
+If you want, I can also add a **Contributing Guide**, **API/URL map**, and a **changelog section** to this README.
