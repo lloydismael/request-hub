@@ -518,7 +518,6 @@ class EngineerActivityLogForm(forms.ModelForm):
         fields = [
             "request",
             "account",
-            "request_date",
             "activity_type",
             "actual_hours",
             "details",
@@ -529,7 +528,6 @@ class EngineerActivityLogForm(forms.ModelForm):
         labels = {
             "request": "Related Request",
             "account": "Account",
-            "request_date": "Date of Request",
             "actual_hours": "Actual Hours",
             "details": "Details",
             "location": "Work Location",
@@ -538,7 +536,6 @@ class EngineerActivityLogForm(forms.ModelForm):
         widgets = {
             "request": forms.Select(attrs={"class": "form-select"}),
             "account": forms.Select(attrs={"class": "form-select"}),
-            "request_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "actual_hours": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25"}),
             "details": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
             "location": forms.Select(attrs={"class": "form-select"}),
@@ -568,9 +565,7 @@ class EngineerActivityLogForm(forms.ModelForm):
             if self.instance.pk:
                 self.fields["is_billable"].initial = "true" if self.instance.is_billable else "false"
                 self.fields["activity_type"].initial = self.instance.activity_type
-                self.fields["request_date"].initial = self.instance.request_date
             else:
-                self.fields["request_date"].initial = timezone.now().date()
                 self.fields["is_billable"].initial = "true"
                 self.fields["activity_type"].initial = EngineerActivityLog.ActivityType.INTERNAL_SUPPORT
         else:
@@ -599,12 +594,6 @@ class EngineerActivityLogForm(forms.ModelForm):
         if value <= 0:
             raise forms.ValidationError("Actual hours must be greater than zero.")
         return value
-
-    def clean_request_date(self):
-        request_date = self.cleaned_data.get("request_date")
-        if request_date and request_date > timezone.now().date():
-            raise forms.ValidationError("Date of request cannot be in the future.")
-        return request_date
 
     def clean_request(self):
         request_obj = self.cleaned_data.get("request")

@@ -173,6 +173,8 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
         if form.is_valid():
             activity_log = form.save(commit=False)
             activity_log.engineer = request.user
+            if not activity_log.request_date:
+                activity_log.request_date = timezone.now().date()
             activity_log.save()
             if instance:
                 messages.success(request, "Activity log updated successfully.")
@@ -2377,7 +2379,7 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
 
 class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
     template_name = "hub/management.html"
-    formset_class = modelformset_factory(User, form=UserManagementForm, extra=1, can_delete=True)
+    formset_class = modelformset_factory(User, form=UserManagementForm, extra=0, can_delete=False)
     account_form_class = modelformset_factory(Account, form=AccountManagementForm, extra=1, can_delete=True)
 
     def get_queryset(self):
@@ -2387,9 +2389,10 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         self._sync_account_baseline()
         formset = self.formset_class(queryset=self.get_queryset())
         account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
+        create_user_form = UserManagementForm(prefix="create_user")
         self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
-        return render(request, self.template_name, self._build_context(formset, account_formset))
+        return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
     def post(self, request, *args, **kwargs):
         active_tab = request.POST.get("active_tab", "users")
@@ -2400,8 +2403,32 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                 action_response = self._handle_user_action_request(request, user_action_value)
                 if action_response:
                     return action_response
+
+            if request.POST.get("create_user_submit") == "1":
+                create_user_form = UserManagementForm(request.POST, prefix="create_user")
+                formset = self.formset_class(queryset=self.get_queryset())
+                account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
+                self._prepare_formset(formset)
+                self._prepare_account_formset(account_formset)
+                if create_user_form.is_valid():
+                    new_user = create_user_form.save()
+                    display_name = new_user.get_full_name() or new_user.username
+                    messages.success(request, f"Created new user account for {display_name}.")
+                    return redirect("hub:management")
+                return render(
+                    request,
+                    self.template_name,
+                    self._build_context(
+                        formset,
+                        account_formset,
+                        create_user_form=create_user_form,
+                        show_create_user_modal=True,
+                    ),
+                )
+
         formset = self.formset_class(request.POST, queryset=self.get_queryset())
         account_formset = self.account_form_class(request.POST, queryset=Account.objects.order_by("name"))
+        create_user_form = UserManagementForm(prefix="create_user")
         self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
 
@@ -2450,18 +2477,18 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                         admin_delta += 1
 
             if pending_error:
-                return render(request, self.template_name, self._build_context(formset, account_formset))
+                return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
             if current_admins + admin_delta <= 0:
                 if admin_removal_candidates:
                     form, field = admin_removal_candidates[0]
                     if field == "delete":
-                        form.add_error("DELETE", "At least one administrator must remain.")
+                        form.add_error(None, "At least one administrator must remain.")
                     else:
                         form.add_error("role", "At least one administrator must remain.")
                 else:
                     messages.error(request, "At least one administrator must remain.")
-                return render(request, self.template_name, self._build_context(formset, account_formset))
+                return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
             created_count = 0
             updated_count = 0
@@ -2470,12 +2497,6 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             with transaction.atomic():
                 for form in formset:
                     if not form.cleaned_data:
-                        continue
-
-                    if form.cleaned_data.get("DELETE"):
-                        if form.instance.pk:
-                            form.instance.delete()
-                            deleted_count += 1
                         continue
 
                     if not form.has_changed() and form.instance.pk:
@@ -2501,7 +2522,7 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                 messages.info(request, "No changes detected.")
             return redirect("hub:management")
 
-        return render(request, self.template_name, self._build_context(formset, account_formset))
+        return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
     def _handle_account_submission(self, request, account_formset, user_formset):
         if account_formset.is_valid():
@@ -2537,10 +2558,14 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             return redirect("hub:management")
         return render(request, self.template_name, self._build_context(user_formset, account_formset, active_tab="accounts"))
 
-    def _build_context(self, formset, account_formset, active_tab="users"):
+    def _build_context(self, formset, account_formset, active_tab="users", create_user_form=None, show_create_user_modal=False):
+        if create_user_form is None:
+            create_user_form = UserManagementForm(prefix="create_user")
         return {
             "formset": formset,
             "account_formset": account_formset,
+            "create_user_form": create_user_form,
+            "show_create_user_modal": show_create_user_modal,
             "total_users": User.objects.count(),
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
@@ -2592,6 +2617,8 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
 
         if action == "reset_password":
             return self._reset_user_password(request, target_user)
+        if action == "delete_user":
+            return self._delete_user_account(request, target_user)
 
         messages.error(request, "Unknown action requested.")
         return redirect("hub:management")
@@ -2624,6 +2651,26 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         if removed_sessions:
             message += f" Ended {removed_sessions} session{'s' if removed_sessions != 1 else ''}."
         messages.success(request, message)
+        return redirect("hub:management")
+
+    def _delete_user_account(self, request, target_user: User):
+        if target_user.is_superuser:
+            messages.error(request, "Superuser accounts cannot be deleted.")
+            return redirect("hub:management")
+
+        if target_user.pk == request.user.pk:
+            messages.error(request, "You cannot delete your own account.")
+            return redirect("hub:management")
+
+        if target_user.role == User.Roles.ADMIN:
+            admin_count = User.objects.filter(role=User.Roles.ADMIN).count()
+            if admin_count <= 1:
+                messages.error(request, "At least one administrator must remain.")
+                return redirect("hub:management")
+
+        display_name = target_user.get_full_name() or target_user.username
+        target_user.delete()
+        messages.success(request, f"Deleted user account for {display_name}.")
         return redirect("hub:management")
 
 
