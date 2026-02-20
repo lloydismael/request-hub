@@ -762,11 +762,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             }
             context["request_report_data"] = self._build_request_report_data(requests)
         elif user.role == User.Roles.ENGINEER:
-            metric_filter = self.request.GET.get("metric_filter") or ""
+            metric_filter = (self.request.GET.get("metric_filter") or "").strip()
             tab = self.request.GET.get("tab") or "assigned"
             valid_metrics = {"ongoing", "due_soon", "overdue", "completed"}
             if metric_filter not in valid_metrics:
                 metric_filter = ""
+            effective_metric_filter = metric_filter or "ongoing"
 
             if tab == "backup":
                 requests = list(
@@ -817,9 +818,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             }
 
             filtered_requests = requests
-            if metric_filter == "ongoing":
+            if effective_metric_filter == "ongoing":
                 filtered_requests = [req for req in requests if req.status == Request.Status.ONGOING]
-            elif metric_filter == "due_soon":
+            elif effective_metric_filter == "due_soon":
                 filtered_requests = [
                     req
                     for req in requests
@@ -827,19 +828,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ]
-            elif metric_filter == "overdue":
+            elif effective_metric_filter == "overdue":
                 filtered_requests = [
                     req
                     for req in requests
                     if req.status == Request.Status.ONGOING and req.due_date and req.due_date < today
                 ]
-            elif metric_filter == "completed":
+            elif effective_metric_filter == "completed":
                 filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
 
             metric_links = {}
             for key in ("ongoing", "due_soon", "overdue", "completed"):
                 params = self.request.GET.copy()
-                if params.get("metric_filter") == key:
+                is_active_key = metric_filter == key or (key == "ongoing" and metric_filter == "")
+                if is_active_key:
                     params.pop("metric_filter", None)
                 else:
                     params["metric_filter"] = key
@@ -849,7 +851,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["requests"] = filtered_requests
             context["metrics"] = metrics
             context["metric_links"] = metric_links
-            context["active_metric_filter"] = metric_filter
+            context["active_metric_filter"] = effective_metric_filter
             context["active_tab"] = tab
             context["new_ticket_count"] = user.notifications.filter(
                 is_read=False,
@@ -1575,6 +1577,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             return HttpResponseRedirect(request.path)
         status_form = RequestStatusForm(request.POST, instance=request_obj)
         if status_form.is_valid():
+            send_closing_email = (request.POST.get("send_closing_email") or "").strip() in {"1", "true", "True", "on"}
             source_label = self._source_label("Manage Request · Status")
             original = Request.objects.get(pk=request_obj.pk)
             request_obj._actor_user = request.user
@@ -1593,6 +1596,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                     changed_fields,
                     source_label,
                 )
+            if (
+                send_closing_email
+                and original.status != Request.Status.COMPLETED
+                and request_obj.status == Request.Status.COMPLETED
+            ):
+                return RequestClosingOutlookRedirectView().post(request, request_obj.pk)
             messages.success(request, "Request status updated.")
             return HttpResponseRedirect(request.path)
         if status_form.errors:
@@ -2017,6 +2026,7 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
         "Start Date",
         "Due Date",
         "End Date",
+        "Days",
         "Description",
         "Created",
         "Updated",
@@ -2048,6 +2058,7 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
                     req.start_date.strftime("%Y-%m-%d") if req.start_date else "",
                     req.due_date.strftime("%Y-%m-%d") if req.due_date else "",
                     req.end_date.strftime("%Y-%m-%d") if req.end_date else "",
+                    req.days_since_creation,
                     (req.description or "").replace("\r\n", " ").replace("\n", " "),
                     req.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     req.updated_at.strftime("%Y-%m-%d %H:%M:%S"),

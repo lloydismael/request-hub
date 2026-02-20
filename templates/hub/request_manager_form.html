@@ -162,9 +162,10 @@
                     <h2 class="h6 text-uppercase text-muted mb-0">Status</h2>
                     <span class="badge bg-light text-dark border text-capitalize">Current: {{ object.get_status_display }}</span>
                 </div>
-                <form method="post" class="row g-3 align-items-end" novalidate>
+                <form method="post" class="row g-3 align-items-end" novalidate data-status-form="true" data-current-status="{{ object.status }}">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="status">
+                    <input type="hidden" name="send_closing_email" value="0" data-send-closing-email>
                     {% for field in status_form %}
                         <div class="col-md-6">
                             <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
@@ -343,6 +344,35 @@
         syncPriorityVisibility();
         syncDeploymentVisibility();
         updateDeploymentSummary();
+    })();
+</script>
+<script>
+    (function () {
+        const statusFormInput = document.querySelector('form[method="post"][novalidate] input[name="form_type"][value="status"]');
+        const statusForm = statusFormInput ? statusFormInput.closest('form') : null;
+        if (!statusForm) {
+            return;
+        }
+
+        const statusSelect = statusForm.querySelector('#id_status');
+        const sendClosingEmailInput = statusForm.querySelector('[data-send-closing-email]');
+        const currentStatus = (statusForm.getAttribute('data-current-status') || '').trim().toLowerCase();
+
+        if (!statusSelect || !sendClosingEmailInput) {
+            return;
+        }
+
+        statusForm.addEventListener('submit', () => {
+            sendClosingEmailInput.value = '0';
+            const nextStatus = (statusSelect.value || '').trim().toLowerCase();
+            if (nextStatus !== 'completed' || currentStatus === 'completed') {
+                return;
+            }
+            const shouldSendClosingEmail = window.confirm('Status changed to Completed. Send a closing email now?');
+            if (shouldSendClosingEmail) {
+                sendClosingEmailInput.value = '1';
+            }
+        });
     })();
 </script>
 {% endblock %}

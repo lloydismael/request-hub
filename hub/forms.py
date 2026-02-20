@@ -454,6 +454,10 @@ class RequestStatusForm(forms.ModelForm):
             "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance._allow_capacity_override = True
+
     def clean(self):
         cleaned_data = super().clean()
         status = cleaned_data.get("status")
@@ -516,6 +520,7 @@ class EngineerActivityLogForm(forms.ModelForm):
     class Meta:
         model = EngineerActivityLog
         fields = [
+            "request_date",
             "request",
             "account",
             "activity_type",
@@ -526,6 +531,7 @@ class EngineerActivityLogForm(forms.ModelForm):
             "status",
         ]
         labels = {
+            "request_date": "Date of Activity",
             "request": "Related Request",
             "account": "Account",
             "actual_hours": "Actual Hours",
@@ -534,6 +540,7 @@ class EngineerActivityLogForm(forms.ModelForm):
             "status": "Status",
         }
         widgets = {
+            "request_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "request": forms.Select(attrs={"class": "form-select"}),
             "account": forms.Select(attrs={"class": "form-select"}),
             "actual_hours": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25"}),
@@ -560,6 +567,11 @@ class EngineerActivityLogForm(forms.ModelForm):
         request_field.queryset = related_requests
         request_field.empty_label = "Select request (optional)"
         self.fields["is_billable"].initial = "true"
+
+        request_date_field = self.fields["request_date"]
+        request_date_field.required = True
+        if not self.is_bound and not self.instance.pk:
+            request_date_field.initial = timezone.now().date()
 
         if not self.is_bound:
             if self.instance.pk:
