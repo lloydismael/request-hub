@@ -48,7 +48,22 @@
                     <p class="text-muted mb-0">Track your daily work for downstream productivity reporting.</p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
+                    <form method="get" class="d-flex align-items-center gap-2">
+                        <label for="activity-month-filter" class="small text-muted mb-0">Month</label>
+                        <select id="activity-month-filter" name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">All months</option>
+                            {% for month in month_options %}
+                                <option value="{{ month.value }}" {% if selected_month == month.value %}selected{% endif %}>{{ month.label }} ({{ month.count }})</option>
+                            {% endfor %}
+                        </select>
+                        {% if selected_month %}
+                            <a href="{% url 'hub:activity-logs' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </form>
                     <span class="badge bg-light text-dark border">Sorted by most recent</span>
+                    {% if selected_month_label %}
+                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Month: {{ selected_month_label }}</span>
+                    {% endif %}
                     {% if editing_log %}
                         <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Editing: {{ editing_log.request_date|date:"M d, Y" }}</span>
                     {% endif %}
@@ -107,7 +122,7 @@
                                 </td>
                                 <td>
                                     <div class="d-flex flex-wrap gap-2">
-                                        <a href="?edit={{ log.pk }}" class="btn btn-outline-primary btn-sm">Edit</a>
+                                        <a href="?edit={{ log.pk }}{% if selected_month %}&month={{ selected_month }}{% endif %}" class="btn btn-outline-primary btn-sm">Edit</a>
                                         <form method="post" action="{% url 'hub:activity-log-delete' log.pk %}" class="d-inline">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this activity log?');">Delete</button>

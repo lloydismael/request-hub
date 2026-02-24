@@ -57,12 +57,26 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
     template_name = "hub/activity_logs.html"
     form_class = EngineerActivityLogForm
 
+    def _parse_month_filter(self):
+        month_value = (self.request.GET.get("month") or "").strip()
+        if not month_value:
+            return "", None, None
+        try:
+            parsed = datetime.strptime(month_value, "%Y-%m")
+        except ValueError:
+            return "", None, None
+        return month_value, parsed.year, parsed.month
+
     def get_queryset(self):
-        return (
+        queryset = (
             EngineerActivityLog.objects.filter(engineer=self.request.user)
             .select_related("account", "request")
             .order_by("-request_date", "-created_at")
         )
+        _, year, month = self._parse_month_filter()
+        if year and month:
+            queryset = queryset.filter(request_date__year=year, request_date__month=month)
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -75,6 +89,30 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             logs = list(self.get_queryset())
         else:
             logs = list(logs)
+
+        selected_month, _, _ = self._parse_month_filter()
+        month_rows = (
+            EngineerActivityLog.objects.filter(engineer=self.request.user)
+            .annotate(month=TruncMonth("request_date"))
+            .values("month")
+            .annotate(total=Count("id"))
+            .order_by("-month")
+        )
+        month_options = [
+            {
+                "value": row["month"].strftime("%Y-%m"),
+                "label": row["month"].strftime("%B %Y"),
+                "count": row["total"],
+            }
+            for row in month_rows
+            if row.get("month")
+        ]
+        selected_month_label = ""
+        if selected_month:
+            selected_month_label = next(
+                (option["label"] for option in month_options if option["value"] == selected_month),
+                "",
+            )
 
         total_hours = Decimal("0")
         billable_hours = Decimal("0")
@@ -141,6 +179,9 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                 },
                 "activity_report_data": activity_report_data,
                 "editing_log": editing_log,
+                "month_options": month_options,
+                "selected_month": selected_month,
+                "selected_month_label": selected_month_label,
             }
         )
         return context

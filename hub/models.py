@@ -430,18 +430,54 @@ class Notification(models.Model):
             self.save(update_fields=["is_read"])
 
     @property
-    def icon_class(self) -> str:
+    def category_key(self) -> str:
         message_lower = (self.message or "").lower()
         source_lower = (self.source or "").lower()
+        if "nudge" in source_lower or "reminder" in message_lower:
+            return "reminder"
         if "new request" in source_lower or "new request" in message_lower:
-            return "bi-plus-circle"
-        if "assigned to request" in message_lower:
-            return "bi-person-check"
-        if "posted an update" in message_lower:
-            return "bi-chat-left-text"
-        if "completed" in message_lower or "closed" in message_lower:
-            return "bi-clipboard-check"
-        return "bi-bell"
+            return "new_request"
+        if "assigned to request" in message_lower or "assignment" in source_lower:
+            return "assignment"
+        if "status update" in source_lower or "posted an update" in message_lower or " updated " in message_lower:
+            return "update"
+        if "completed" in message_lower or "closed" in message_lower or "close" in source_lower:
+            return "completion"
+        return "system"
+
+    @property
+    def category_label(self) -> str:
+        labels = {
+            "new_request": "New Request",
+            "assignment": "Assignment",
+            "update": "Status Update",
+            "completion": "Completion",
+            "reminder": "Reminder",
+            "system": "System",
+        }
+        return labels.get(self.category_key, "System")
+
+    @property
+    def action_label(self) -> str:
+        if not self.related_request:
+            return "View"
+        if self.category_key in {"update", "completion"}:
+            return "Review Update"
+        if self.category_key in {"new_request", "assignment", "reminder"}:
+            return "Open Request"
+        return "Manage"
+
+    @property
+    def icon_class(self) -> str:
+        icons = {
+            "new_request": "bi-plus-circle-fill",
+            "assignment": "bi-person-workspace",
+            "update": "bi-chat-left-text-fill",
+            "completion": "bi-check2-circle",
+            "reminder": "bi-alarm",
+            "system": "bi-bell",
+        }
+        return icons.get(self.category_key, "bi-bell")
 
 
 class StatusLog(models.Model):

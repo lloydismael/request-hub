@@ -500,6 +500,92 @@ body.admin-dashboard .glass-card--expanded {
     border-bottom: none;
 }
 
+.notifications-list .notification-item {
+    background: rgba(255, 255, 255, 0.72);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 12px;
+    margin-bottom: 0.6rem;
+    padding: 1rem 0.9rem;
+}
+
+.notifications-list .notification-item--unread {
+    background: rgba(37, 99, 235, 0.1);
+    border-left: 4px solid rgba(37, 99, 235, 0.7);
+    padding-left: 0.7rem;
+}
+
+.notification-item__icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    border: 1px solid transparent;
+}
+
+.notification-item__icon--new_request {
+    background: rgba(59, 130, 246, 0.2);
+    color: #1d4ed8;
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.notification-item__icon--assignment {
+    background: rgba(99, 102, 241, 0.2);
+    color: #4338ca;
+    border-color: rgba(99, 102, 241, 0.35);
+}
+
+.notification-item__icon--update {
+    background: rgba(14, 165, 233, 0.2);
+    color: #0369a1;
+    border-color: rgba(14, 165, 233, 0.35);
+}
+
+.notification-item__icon--completion {
+    background: rgba(34, 197, 94, 0.2);
+    color: #15803d;
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+.notification-item__icon--reminder {
+    background: rgba(245, 158, 11, 0.2);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.notification-item__icon--system {
+    background: rgba(100, 116, 139, 0.2);
+    color: #334155;
+    border-color: rgba(100, 116, 139, 0.35);
+}
+
+.notification-item__message {
+    color: #0f172a;
+}
+
+.notification-meta-badge {
+    background: rgba(248, 250, 252, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #334155;
+}
+
+.notification-action-form {
+    width: 100%;
+    margin: 0;
+}
+
+.notification-action-btn {
+    width: 9rem;
+    min-height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: nowrap;
+}
+
 .nav-avatar {
     width: 36px;
     height: 36px;
@@ -1543,6 +1629,66 @@ body.dark-mode .table-hover tbody tr:hover {
 body.dark-mode .table thead th {
     color: #fff;
     border-bottom-color: #444;
+}
+
+body.dark-mode .notifications-list .notification-item {
+    background: rgba(12, 12, 12, 0.94);
+    border-color: #2d2d2d;
+}
+
+body.dark-mode .notifications-list .notification-item--unread {
+    background: rgba(30, 58, 138, 0.32);
+    border-left-color: rgba(96, 165, 250, 0.95);
+}
+
+body.dark-mode .notification-item__message {
+    color: #f8fafc;
+}
+
+body.dark-mode .notification-meta-badge {
+    background: rgba(24, 24, 27, 0.95);
+    border-color: #3f3f46;
+    color: #d4d4d8;
+}
+
+body.dark-mode .notification-action-btn {
+    border-color: #4b5563;
+}
+
+body.dark-mode .notification-item__icon--new_request {
+    background: rgba(37, 99, 235, 0.35);
+    color: #bfdbfe;
+    border-color: rgba(59, 130, 246, 0.55);
+}
+
+body.dark-mode .notification-item__icon--assignment {
+    background: rgba(79, 70, 229, 0.35);
+    color: #c7d2fe;
+    border-color: rgba(99, 102, 241, 0.55);
+}
+
+body.dark-mode .notification-item__icon--update {
+    background: rgba(3, 105, 161, 0.35);
+    color: #bae6fd;
+    border-color: rgba(14, 165, 233, 0.55);
+}
+
+body.dark-mode .notification-item__icon--completion {
+    background: rgba(22, 101, 52, 0.35);
+    color: #bbf7d0;
+    border-color: rgba(34, 197, 94, 0.55);
+}
+
+body.dark-mode .notification-item__icon--reminder {
+    background: rgba(146, 64, 14, 0.35);
+    color: #fde68a;
+    border-color: rgba(245, 158, 11, 0.55);
+}
+
+body.dark-mode .notification-item__icon--system {
+    background: rgba(63, 63, 70, 0.55);
+    color: #e4e4e7;
+    border-color: rgba(113, 113, 122, 0.65);
 }
 
 /* Text Colors */

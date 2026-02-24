@@ -8,29 +8,32 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h1 class="h5 mb-0">Notifications</h1>
             </div>
-            <ul class="list-group list-group-flush">
+            <ul class="list-group list-group-flush notifications-list">
                 {% for notification in notifications %}
-                    <li class="list-group-item {% if not notification.is_read %}bg-body-secondary{% endif %}">
+                    <li class="list-group-item notification-item {% if not notification.is_read %}notification-item--unread{% endif %}">
                         <div class="d-flex align-items-start gap-3">
-                            <span class="badge rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 2.5rem; height: 2.5rem;">
+                            <span class="notification-item__icon notification-item__icon--{{ notification.category_key }}">
                                 <i class="bi {{ notification.icon_class }}"></i>
                             </span>
                             <div class="me-auto">
-                                <div class="fw-semibold text-primary-emphasis">{{ notification.message }}</div>
+                                <div class="fw-semibold notification-item__message">{{ notification.message }}</div>
                                 <div class="d-flex flex-wrap gap-2 mt-2 small">
-                                    <span class="badge rounded-pill text-bg-light border text-body-secondary">
+                                    <span class="badge rounded-pill notification-meta-badge">
+                                        <i class="bi bi-tag-fill me-1"></i>{{ notification.category_label }}
+                                    </span>
+                                    <span class="badge rounded-pill notification-meta-badge">
                                         <i class="bi bi-person-fill me-1"></i>{{ notification.actor|default:"System" }}
                                     </span>
-                                    <span class="badge rounded-pill text-bg-light border text-body-secondary">
+                                    <span class="badge rounded-pill notification-meta-badge">
                                         <i class="bi bi-clock-history me-1"></i>{{ notification.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
                                     </span>
                                     {% if notification.source %}
-                                        <span class="badge rounded-pill text-bg-light border text-body-secondary">
+                                        <span class="badge rounded-pill notification-meta-badge">
                                             <i class="bi bi-geo-alt me-1"></i>{{ notification.source }}
                                         </span>
                                     {% endif %}
                                     {% if notification.related_request %}
-                                        <span class="badge rounded-pill text-bg-light border text-body-secondary">
+                                        <span class="badge rounded-pill notification-meta-badge">
                                             <i class="bi bi-hash me-1"></i>{{ notification.related_request.reference_code }} · {{ notification.related_request.account.name }}
                                         </span>
                                     {% endif %}
@@ -38,11 +41,17 @@
                             </div>
                             <div class="d-flex flex-column align-items-end gap-2">
                                 {% if notification.related_request %}
-                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:notification-follow' notification.pk %}">Manage</a>
+                                    <a class="btn btn-sm btn-outline-primary notification-action-btn" href="{% url 'hub:notification-follow' notification.pk %}">{{ notification.action_label }}</a>
                                 {% endif %}
-                                <form method="post" action="{% url 'hub:notification-delete' notification.pk %}">
+                                {% if not notification.is_read %}
+                                    <form method="post" action="{% url 'hub:notification-read' notification.pk %}" class="notification-action-form">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-outline-secondary notification-action-btn" type="submit">Mark Read</button>
+                                    </form>
+                                {% endif %}
+                                <form method="post" action="{% url 'hub:notification-delete' notification.pk %}" class="notification-action-form">
                                     {% csrf_token %}
-                                    <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                                    <button class="btn btn-sm btn-outline-danger notification-action-btn" type="submit">Delete</button>
                                 </form>
                             </div>
                         </div>
