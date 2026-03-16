@@ -1,7 +1,7 @@
-Django==4.2.11
+Django>=4.2.20,<5.0
 psycopg2-binary==2.9.9
-Pillow==10.2.0
+Pillow>=12.1.1,<13
 azure-communication-email
 python-dotenv==1.0.1
-gunicorn==21.2.0
+gunicorn>=23.0.0,<24
 whitenoise==6.7.0
