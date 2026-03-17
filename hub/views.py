@@ -57,12 +57,26 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
     template_name = "hub/activity_logs.html"
     form_class = EngineerActivityLogForm
 
+    def _parse_month_filter(self):
+        month_value = (self.request.GET.get("month") or "").strip()
+        if not month_value:
+            return "", None, None
+        try:
+            parsed = datetime.strptime(month_value, "%Y-%m")
+        except ValueError:
+            return "", None, None
+        return month_value, parsed.year, parsed.month
+
     def get_queryset(self):
-        return (
+        queryset = (
             EngineerActivityLog.objects.filter(engineer=self.request.user)
             .select_related("account", "request")
             .order_by("-request_date", "-created_at")
         )
+        _, year, month = self._parse_month_filter()
+        if year and month:
+            queryset = queryset.filter(request_date__year=year, request_date__month=month)
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -75,6 +89,30 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             logs = list(self.get_queryset())
         else:
             logs = list(logs)
+
+        selected_month, _, _ = self._parse_month_filter()
+        month_rows = (
+            EngineerActivityLog.objects.filter(engineer=self.request.user)
+            .annotate(month=TruncMonth("request_date"))
+            .values("month")
+            .annotate(total=Count("id"))
+            .order_by("-month")
+        )
+        month_options = [
+            {
+                "value": row["month"].strftime("%Y-%m"),
+                "label": row["month"].strftime("%B %Y"),
+                "count": row["total"],
+            }
+            for row in month_rows
+            if row.get("month")
+        ]
+        selected_month_label = ""
+        if selected_month:
+            selected_month_label = next(
+                (option["label"] for option in month_options if option["value"] == selected_month),
+                "",
+            )
 
         total_hours = Decimal("0")
         billable_hours = Decimal("0")
@@ -141,6 +179,9 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                 },
                 "activity_report_data": activity_report_data,
                 "editing_log": editing_log,
+                "month_options": month_options,
+                "selected_month": selected_month,
+                "selected_month_label": selected_month_label,
             }
         )
         return context
@@ -173,6 +214,8 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
         if form.is_valid():
             activity_log = form.save(commit=False)
             activity_log.engineer = request.user
+            if not activity_log.request_date:
+                activity_log.request_date = timezone.now().date()
             activity_log.save()
             if instance:
                 messages.success(request, "Activity log updated successfully.")
@@ -760,11 +803,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             }
             context["request_report_data"] = self._build_request_report_data(requests)
         elif user.role == User.Roles.ENGINEER:
-            metric_filter = self.request.GET.get("metric_filter") or ""
+            metric_filter = (self.request.GET.get("metric_filter") or "").strip()
             tab = self.request.GET.get("tab") or "assigned"
             valid_metrics = {"ongoing", "due_soon", "overdue", "completed"}
             if metric_filter not in valid_metrics:
                 metric_filter = ""
+            effective_metric_filter = metric_filter or "ongoing"
 
             if tab == "backup":
                 requests = list(
@@ -815,9 +859,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             }
 
             filtered_requests = requests
-            if metric_filter == "ongoing":
+            if effective_metric_filter == "ongoing":
                 filtered_requests = [req for req in requests if req.status == Request.Status.ONGOING]
-            elif metric_filter == "due_soon":
+            elif effective_metric_filter == "due_soon":
                 filtered_requests = [
                     req
                     for req in requests
@@ -825,19 +869,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ]
-            elif metric_filter == "overdue":
+            elif effective_metric_filter == "overdue":
                 filtered_requests = [
                     req
                     for req in requests
                     if req.status == Request.Status.ONGOING and req.due_date and req.due_date < today
                 ]
-            elif metric_filter == "completed":
+            elif effective_metric_filter == "completed":
                 filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
 
             metric_links = {}
             for key in ("ongoing", "due_soon", "overdue", "completed"):
                 params = self.request.GET.copy()
-                if params.get("metric_filter") == key:
+                is_active_key = metric_filter == key or (key == "ongoing" and metric_filter == "")
+                if is_active_key:
                     params.pop("metric_filter", None)
                 else:
                     params["metric_filter"] = key
@@ -847,7 +892,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["requests"] = filtered_requests
             context["metrics"] = metrics
             context["metric_links"] = metric_links
-            context["active_metric_filter"] = metric_filter
+            context["active_metric_filter"] = effective_metric_filter
             context["active_tab"] = tab
             context["new_ticket_count"] = user.notifications.filter(
                 is_read=False,
@@ -1573,6 +1618,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             return HttpResponseRedirect(request.path)
         status_form = RequestStatusForm(request.POST, instance=request_obj)
         if status_form.is_valid():
+            send_closing_email = (request.POST.get("send_closing_email") or "").strip() in {"1", "true", "True", "on"}
             source_label = self._source_label("Manage Request · Status")
             original = Request.objects.get(pk=request_obj.pk)
             request_obj._actor_user = request.user
@@ -1591,6 +1637,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                     changed_fields,
                     source_label,
                 )
+            if (
+                send_closing_email
+                and original.status != Request.Status.COMPLETED
+                and request_obj.status == Request.Status.COMPLETED
+            ):
+                return RequestClosingOutlookRedirectView().post(request, request_obj.pk)
             messages.success(request, "Request status updated.")
             return HttpResponseRedirect(request.path)
         if status_form.errors:
@@ -2015,6 +2067,7 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
         "Start Date",
         "Due Date",
         "End Date",
+        "Days",
         "Description",
         "Created",
         "Updated",
@@ -2046,6 +2099,7 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
                     req.start_date.strftime("%Y-%m-%d") if req.start_date else "",
                     req.due_date.strftime("%Y-%m-%d") if req.due_date else "",
                     req.end_date.strftime("%Y-%m-%d") if req.end_date else "",
+                    req.days_since_creation,
                     (req.description or "").replace("\r\n", " ").replace("\n", " "),
                     req.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     req.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -2377,7 +2431,7 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
 
 class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
     template_name = "hub/management.html"
-    formset_class = modelformset_factory(User, form=UserManagementForm, extra=1, can_delete=True)
+    formset_class = modelformset_factory(User, form=UserManagementForm, extra=0, can_delete=False)
     account_form_class = modelformset_factory(Account, form=AccountManagementForm, extra=1, can_delete=True)
 
     def get_queryset(self):
@@ -2387,9 +2441,10 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         self._sync_account_baseline()
         formset = self.formset_class(queryset=self.get_queryset())
         account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
+        create_user_form = UserManagementForm(prefix="create_user")
         self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
-        return render(request, self.template_name, self._build_context(formset, account_formset))
+        return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
     def post(self, request, *args, **kwargs):
         active_tab = request.POST.get("active_tab", "users")
@@ -2400,8 +2455,32 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                 action_response = self._handle_user_action_request(request, user_action_value)
                 if action_response:
                     return action_response
+
+            if request.POST.get("create_user_submit") == "1":
+                create_user_form = UserManagementForm(request.POST, prefix="create_user")
+                formset = self.formset_class(queryset=self.get_queryset())
+                account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
+                self._prepare_formset(formset)
+                self._prepare_account_formset(account_formset)
+                if create_user_form.is_valid():
+                    new_user = create_user_form.save()
+                    display_name = new_user.get_full_name() or new_user.username
+                    messages.success(request, f"Created new user account for {display_name}.")
+                    return redirect("hub:management")
+                return render(
+                    request,
+                    self.template_name,
+                    self._build_context(
+                        formset,
+                        account_formset,
+                        create_user_form=create_user_form,
+                        show_create_user_modal=True,
+                    ),
+                )
+
         formset = self.formset_class(request.POST, queryset=self.get_queryset())
         account_formset = self.account_form_class(request.POST, queryset=Account.objects.order_by("name"))
+        create_user_form = UserManagementForm(prefix="create_user")
         self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
 
@@ -2450,18 +2529,18 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                         admin_delta += 1
 
             if pending_error:
-                return render(request, self.template_name, self._build_context(formset, account_formset))
+                return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
             if current_admins + admin_delta <= 0:
                 if admin_removal_candidates:
                     form, field = admin_removal_candidates[0]
                     if field == "delete":
-                        form.add_error("DELETE", "At least one administrator must remain.")
+                        form.add_error(None, "At least one administrator must remain.")
                     else:
                         form.add_error("role", "At least one administrator must remain.")
                 else:
                     messages.error(request, "At least one administrator must remain.")
-                return render(request, self.template_name, self._build_context(formset, account_formset))
+                return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
             created_count = 0
             updated_count = 0
@@ -2470,12 +2549,6 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             with transaction.atomic():
                 for form in formset:
                     if not form.cleaned_data:
-                        continue
-
-                    if form.cleaned_data.get("DELETE"):
-                        if form.instance.pk:
-                            form.instance.delete()
-                            deleted_count += 1
                         continue
 
                     if not form.has_changed() and form.instance.pk:
@@ -2501,7 +2574,7 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                 messages.info(request, "No changes detected.")
             return redirect("hub:management")
 
-        return render(request, self.template_name, self._build_context(formset, account_formset))
+        return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
 
     def _handle_account_submission(self, request, account_formset, user_formset):
         if account_formset.is_valid():
@@ -2537,10 +2610,14 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             return redirect("hub:management")
         return render(request, self.template_name, self._build_context(user_formset, account_formset, active_tab="accounts"))
 
-    def _build_context(self, formset, account_formset, active_tab="users"):
+    def _build_context(self, formset, account_formset, active_tab="users", create_user_form=None, show_create_user_modal=False):
+        if create_user_form is None:
+            create_user_form = UserManagementForm(prefix="create_user")
         return {
             "formset": formset,
             "account_formset": account_formset,
+            "create_user_form": create_user_form,
+            "show_create_user_modal": show_create_user_modal,
             "total_users": User.objects.count(),
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
@@ -2592,6 +2669,8 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
 
         if action == "reset_password":
             return self._reset_user_password(request, target_user)
+        if action == "delete_user":
+            return self._delete_user_account(request, target_user)
 
         messages.error(request, "Unknown action requested.")
         return redirect("hub:management")
@@ -2624,6 +2703,26 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         if removed_sessions:
             message += f" Ended {removed_sessions} session{'s' if removed_sessions != 1 else ''}."
         messages.success(request, message)
+        return redirect("hub:management")
+
+    def _delete_user_account(self, request, target_user: User):
+        if target_user.is_superuser:
+            messages.error(request, "Superuser accounts cannot be deleted.")
+            return redirect("hub:management")
+
+        if target_user.pk == request.user.pk:
+            messages.error(request, "You cannot delete your own account.")
+            return redirect("hub:management")
+
+        if target_user.role == User.Roles.ADMIN:
+            admin_count = User.objects.filter(role=User.Roles.ADMIN).count()
+            if admin_count <= 1:
+                messages.error(request, "At least one administrator must remain.")
+                return redirect("hub:management")
+
+        display_name = target_user.get_full_name() or target_user.username
+        target_user.delete()
+        messages.success(request, f"Deleted user account for {display_name}.")
         return redirect("hub:management")
 
 

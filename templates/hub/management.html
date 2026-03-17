@@ -40,8 +40,11 @@
                 </div>
             {% endif %}
 
-            <div class="alert alert-info" role="alert">
-                Reset password returns the account to the default password <code>{{ default_password }}</code> and forces the user to create a new password at their next sign-in.
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div class="alert alert-info mb-0 flex-grow-1" role="alert">
+                    Change Password resets an account to the default password <code>{{ default_password }}</code> and forces a new password at next sign-in.
+                </div>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#create-user-modal">Create New User</button>
             </div>
 
             <div class="table-responsive">
@@ -52,8 +55,7 @@
                             <th scope="col" style="min-width: 140px;">Username</th>
                             <th scope="col" style="min-width: 200px;">Email</th>
                             <th scope="col" style="min-width: 160px;">Account Type</th>
-                            <th scope="col" style="min-width: 200px;">Password</th>
-                            <th scope="col" style="min-width: 220px;">Actions</th>
+                            <th scope="col" style="min-width: 280px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -102,25 +104,6 @@
                                     {% endfor %}
                                 </td>
                                 <td>
-                                    <div class="row g-2">
-                                        <div class="col-12">
-                                            {{ form.password1 }}
-                                            {% if form.password1.help_text %}
-                                                <small class="text-muted">{{ form.password1.help_text }}</small>
-                                            {% endif %}
-                                            {% for error in form.password1.errors %}
-                                                <div class="invalid-feedback d-block">{{ error }}</div>
-                                            {% endfor %}
-                                        </div>
-                                        <div class="col-12">
-                                            {{ form.password2 }}
-                                            {% for error in form.password2.errors %}
-                                                <div class="invalid-feedback d-block">{{ error }}</div>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
                                     <div class="d-flex flex-column gap-2">
                                         {% if form.instance.pk %}
                                             <span class="text-muted small">Last login:
@@ -137,26 +120,21 @@
                                             {% endif %}
                                             <div class="d-flex flex-wrap gap-2 mt-2">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" name="user_action" value="reset_password:{{ form.instance.pk }}">
-                                                    Reset Password
+                                                    Change Password
                                                 </button>
+                                                {% if not form.instance.is_superuser and request.user.pk != form.instance.pk %}
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm" name="user_action" value="delete_user:{{ form.instance.pk }}" onclick="return confirm('Delete this user account?');">
+                                                        Delete User
+                                                    </button>
+                                                {% endif %}
                                             </div>
-                                            <label class="form-check mt-2">
-                                                {{ form.DELETE }}
-                                                <span class="form-check-label">Mark for removal</span>
-                                            </label>
-                                            {% for error in form.DELETE.errors %}
-                                                <div class="invalid-feedback d-block">{{ error }}</div>
-                                            {% endfor %}
-                                        {% else %}
-                                            <span class="badge text-bg-success">New user</span>
-                                            <small class="text-muted">Leave the row blank if you do not want to add a new account.</small>
                                         {% endif %}
                                     </div>
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">No users found.</td>
+                                <td colspan="5" class="text-center text-muted py-4">No users found.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -167,6 +145,85 @@
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </div>
         </form>
+
+        <div class="modal fade" id="create-user-modal" tabindex="-1" aria-labelledby="create-user-modal-title" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <input type="hidden" name="active_tab" value="users">
+                        <input type="hidden" name="create_user_submit" value="1">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="create-user-modal-title">Create New User</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            {% if create_user_form.non_field_errors %}
+                                <div class="alert alert-danger" role="alert">
+                                    {% for error in create_user_form.non_field_errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.first_name.id_for_label }}">First Name</label>
+                                    {{ create_user_form.first_name }}
+                                    {% for error in create_user_form.first_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.last_name.id_for_label }}">Last Name</label>
+                                    {{ create_user_form.last_name }}
+                                    {% for error in create_user_form.last_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.username.id_for_label }}">Username</label>
+                                    {{ create_user_form.username }}
+                                    {% for error in create_user_form.username.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.email.id_for_label }}">Email</label>
+                                    {{ create_user_form.email }}
+                                    {% for error in create_user_form.email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.role.id_for_label }}">Account Type</label>
+                                    {{ create_user_form.role }}
+                                    {% for error in create_user_form.role.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.password1.id_for_label }}">Password</label>
+                                    {{ create_user_form.password1 }}
+                                    {% for error in create_user_form.password1.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.password2.id_for_label }}">Confirm Password</label>
+                                    {{ create_user_form.password2 }}
+                                    {% for error in create_user_form.password2.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create New User</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {% if show_create_user_modal %}
+            <script>
+                document.addEventListener("DOMContentLoaded", function () {
+                    var modalElement = document.getElementById("create-user-modal");
+                    if (!modalElement || typeof bootstrap === "undefined") {
+                        return;
+                    }
+                    var modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                });
+            </script>
+        {% endif %}
     </div>
     <div class="tab-pane fade {% if active_tab == 'accounts' %}show active{% endif %}" id="accounts-pane" role="tabpanel" aria-labelledby="accounts-tab" tabindex="0">
         <form method="post" class="glass-card p-4" novalidate>

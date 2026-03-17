@@ -319,44 +319,45 @@
                 const toggleBtn = document.getElementById('ai-chat-toggle-btn');
                 const chatWindow = document.getElementById('ai-chat-window');
                 const icon = toggleBtn.querySelector('i');
-                const chatFrame = document.getElementById('ai-chat-iframe');
+                const chatStateKey = 'reqHubChatOpen';
 
-                // Toggle visibility
-                const toggleChat = () => {
-                    const isOpen = chatWindow.classList.contains('open');
-                    
-                    if (isOpen) {
-                        chatWindow.classList.remove('open');
-                        toggleBtn.classList.remove('active');
-                        icon.classList.remove('bi-x-lg');
-                        icon.classList.add('bi-robot');
-                        toggleBtn.setAttribute('aria-expanded', 'false');
-                        toggleBtn.focus();
-                    } else {
+                const applyChatState = (open, options = {}) => {
+                    const shouldFocus = Boolean(options.focus);
+
+                    if (open) {
                         chatWindow.classList.add('open');
                         toggleBtn.classList.add('active');
                         icon.classList.remove('bi-robot');
                         icon.classList.add('bi-x-lg');
                         toggleBtn.setAttribute('aria-expanded', 'true');
-                        chatWindow.focus();
-                        
-                        // Fix for JavaScript Error: "Multi-Session" support.
-                        // Refreshing the iframe with a unique timestamp forces a new session context,
-                        // preventing stale tokens from causing connection errors.
-                        if (chatFrame) {
-                           try {
-                               const srcUrl = new URL(chatFrame.src);
-                               srcUrl.searchParams.set('ts', new Date().getTime());
-                               chatFrame.src = srcUrl.toString();
-                           } catch(e) {
-                               // Fallback if URL parsing fails
-                               chatFrame.src = chatFrame.src;
-                           }
+                        localStorage.setItem(chatStateKey, '1');
+                        if (shouldFocus) {
+                            chatWindow.focus();
+                        }
+                    } else {
+                        chatWindow.classList.remove('open');
+                        toggleBtn.classList.remove('active');
+                        icon.classList.remove('bi-x-lg');
+                        icon.classList.add('bi-robot');
+                        toggleBtn.setAttribute('aria-expanded', 'false');
+                        localStorage.setItem(chatStateKey, '0');
+                        if (shouldFocus) {
+                            toggleBtn.focus();
                         }
                     }
                 };
 
+                // Toggle visibility
+                const toggleChat = () => {
+                    const isOpen = chatWindow.classList.contains('open');
+                    applyChatState(!isOpen, { focus: true });
+                };
+
                 if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
+
+                if (localStorage.getItem(chatStateKey) === '1') {
+                    applyChatState(true);
+                }
 
                 const removeInjectedAgentLabel = () => {
                     const chatBody = document.querySelector('.ai-chat-body');

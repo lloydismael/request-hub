@@ -602,7 +602,9 @@
                                 </td>
                                 {% if not is_requestor_ui %}
                                     <td>
-                                        {% if is_pm_ess %}
+                                        {% if item.engagement_type == 'deployment' %}
+                                            <span class="text-muted">&mdash;</span>
+                                        {% elif is_pm_ess %}
                                             {% if item.due_date %}
                                                 <span class="badge bg-light text-dark border">
                                                     {{ item.due_date|date:"M d, Y" }}
