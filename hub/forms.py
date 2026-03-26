@@ -15,6 +15,7 @@ class AvatarSelect(forms.Select):
 
     def __init__(self, *args, **kwargs):
         self.avatar_mapping = {}
+        self.option_group_mapping = {}
         super().__init__(*args, **kwargs)
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
@@ -27,6 +28,9 @@ class AvatarSelect(forms.Select):
                     option["attrs"]["data-avatar"] = meta["url"]
                 if meta.get("initial"):
                     option["attrs"]["data-initial"] = meta["initial"]
+            group = self.option_group_mapping.get(str(option_value))
+            if group:
+                option["attrs"]["data-role-group"] = group
         return option
 
 
@@ -51,6 +55,12 @@ def _user_display(user):
 
 
 class RequestForm(forms.ModelForm):
+    PROJECT_MANAGER_DISPLAY_NAMES = (
+        "Jeram C. Zamora",
+        "Marfelie B. Barcenas",
+        "Princess Nicole D. Nacianceno",
+    )
+
     account_name = forms.CharField(
         label="Account Name",
         help_text="Select from the list or type a new account name.",
@@ -133,6 +143,7 @@ class RequestForm(forms.ModelForm):
     def __init__(self, *args, actor_role=None, **kwargs):
         self.actor_role = actor_role
         super().__init__(*args, **kwargs)
+        self.project_manager_ids = set()
         include_backup = actor_role == User.Roles.ENGINEER
         if not include_backup:
             self.fields.pop("backup_engineer", None)
@@ -151,11 +162,32 @@ class RequestForm(forms.ModelForm):
             desired_order.append("backup_engineer")
         self.order_fields(desired_order)
         engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        project_manager_qs = User.objects.filter(
+            (Q(first_name__icontains="Jeram") & Q(last_name__icontains="Zamora"))
+            | (Q(first_name__icontains="Marfelie") & Q(last_name__icontains="Barcenas"))
+            | (Q(first_name__icontains="Princess") & Q(last_name__icontains="Nacianceno"))
+        ).order_by("first_name", "last_name")
+        self.project_manager_ids = set(project_manager_qs.values_list("id", flat=True))
+
+        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}
+        is_requestor_form = actor_role in requestor_roles
+        all_assignee_ids = set(engineer_qs.values_list("id", flat=True)) | self.project_manager_ids
+        assignee_qs = (
+            User.objects.filter(id__in=all_assignee_ids).order_by("first_name", "last_name")
+            if is_requestor_form
+            else engineer_qs
+        )
+
         engineer_field = self.fields["engineer"]
-        engineer_field.queryset = engineer_qs
+        engineer_field.queryset = assignee_qs
         widget = engineer_field.widget
         if isinstance(widget, AvatarSelect):
-            widget.avatar_mapping = _build_avatar_mapping(engineer_qs)
+            widget.avatar_mapping = _build_avatar_mapping(assignee_qs)
+            if is_requestor_form:
+                widget.option_group_mapping = {
+                    str(user_id): ("project_manager" if user_id in self.project_manager_ids else "engineer")
+                    for user_id in all_assignee_ids
+                }
         engineer_field.label_from_instance = _user_display
         if actor_role == User.Roles.ENGINEER:
             engineer_field.label = "Turn Over Request"
@@ -163,6 +195,27 @@ class RequestForm(forms.ModelForm):
         else:
             engineer_field.label = "Preferred Engineer"
             engineer_field.empty_label = "Select preferred engineer"
+
+        engagement_value = ""
+        if self.is_bound:
+            engagement_value = (
+                self.data.get(self.add_prefix("engagement_type"))
+                or self.data.get("engagement_type")
+                or ""
+            )
+        elif self.instance.pk and self.instance.engagement_type:
+            engagement_value = self.instance.engagement_type
+
+        if is_requestor_form:
+            engineer_widget_attrs = engineer_field.widget.attrs
+            engineer_widget_attrs["data-engineer-label"] = "Preferred Engineer"
+            engineer_widget_attrs["data-project-manager-label"] = "Preferred Project Manager"
+            engineer_widget_attrs["data-engineer-empty-label"] = "Select preferred engineer"
+            engineer_widget_attrs["data-project-manager-empty-label"] = "Select preferred project manager"
+            engineer_widget_attrs["data-project-management-value"] = Request.Engagement.PROJECT_MANAGEMENT
+            if engagement_value == Request.Engagement.PROJECT_MANAGEMENT:
+                engineer_field.label = "Preferred Project Manager"
+                engineer_field.empty_label = "Select preferred project manager"
         if include_backup:
             backup_field = self.fields["backup_engineer"]
             backup_field.queryset = engineer_qs
@@ -306,6 +359,10 @@ class RequestForm(forms.ModelForm):
         if not engineer:
             return engineer
 
+        engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
+        if engagement == Request.Engagement.PROJECT_MANAGEMENT and engineer.pk not in self.project_manager_ids:
+            raise forms.ValidationError("Select a preferred project manager from the approved list.")
+
         ongoing_requests = Request.objects.filter(
             engineer=engineer,
             status=Request.Status.ONGOING,
@@ -314,7 +371,6 @@ class RequestForm(forms.ModelForm):
         if self.instance.pk:
             ongoing_requests = ongoing_requests.exclude(pk=self.instance.pk)
 
-        engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
         deployment_start = self.cleaned_data.get("deployment_start")
         deployment_end = self.cleaned_data.get("deployment_end")
         max_allowed = 5

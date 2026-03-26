@@ -2046,10 +2046,32 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     flex-direction: column;
     border: 1px solid rgba(0,0,0,0.1);
     animation: slideUpFade 0.3s ease-out forwards;
+    position: relative;
 }
 
 .ai-chat-window.open {
     display: flex;
+}
+
+.ai-chat-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    background: rgba(255, 255, 255, 0.92);
+    color: #0f172a;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.ai-chat-close-btn:hover {
+    background: #ffffff;
 }
 
 .ai-chat-header {
@@ -2107,6 +2129,10 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
         flex-direction: column;
         animation: slideUpMobile 0.3s ease-out forwards;
     }
+
+    .ai-chat-close-btn {
+        display: inline-flex;
+    }
     
     .ai-chat-header {
         padding: 16px 20px; 
@@ -2143,6 +2169,12 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
 
 body.dark-mode .ai-chat-window {
     border: 1px solid rgba(255,255,255,0.2);
+}
+
+body.dark-mode .ai-chat-close-btn {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(17, 24, 39, 0.92);
+    color: #f8fafc;
 }
 
 /* Scrollbar for chat body */

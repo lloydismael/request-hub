@@ -318,6 +318,7 @@
 
                 const toggleBtn = document.getElementById('ai-chat-toggle-btn');
                 const chatWindow = document.getElementById('ai-chat-window');
+                const closeBtn = document.getElementById('ai-chat-close-btn');
                 const icon = toggleBtn.querySelector('i');
                 const chatStateKey = 'reqHubChatOpen';
 
@@ -354,6 +355,7 @@
                 };
 
                 if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
+                if (closeBtn) closeBtn.addEventListener('click', () => applyChatState(false, { focus: true }));
 
                 if (localStorage.getItem(chatStateKey) === '1') {
                     applyChatState(true);
@@ -419,6 +421,9 @@
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
         <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" aria-modal="true" tabindex="-1">
+            <button id="ai-chat-close-btn" class="ai-chat-close-btn" type="button" aria-label="Close AI Assistant">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
             <div class="ai-chat-body" style="height: 100%; width: 100%;">
                 <iframe 
                     id="ai-chat-iframe"

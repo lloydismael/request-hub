@@ -33,6 +33,7 @@ class Request(models.Model):
         SUPPORT = "support", "Support"
         INQUIRY = "inquiry", "Inquiry"
         DEPLOYMENT = "deployment", "Deployment"
+        PROJECT_MANAGEMENT = "project_management", "Project Management"
 
     class Status(models.TextChoices):
         ONGOING = "ongoing", "Ongoing"

@@ -995,6 +995,8 @@
             });
 
             const engagementSelect = modal.querySelector("#id_engagement_type");
+            const assigneeSelect = modal.querySelector("#id_engineer");
+            const assigneeLabel = modal.querySelector('label[for="id_engineer"]');
             const priorityGroup = modal.querySelector('[data-priority-group]');
             const prioritySelect = modal.querySelector('[data-priority-select="true"]');
             const defaultPriority = prioritySelect ? prioritySelect.getAttribute('data-default-priority') || "" : "";
@@ -1085,10 +1087,41 @@
                 updateDeploymentSummary();
             };
 
+            const syncPreferredAssignee = () => {
+                if (!engagementSelect || !assigneeSelect || !assigneeLabel) {
+                    return;
+                }
+                const projectManagementValue = assigneeSelect.dataset.projectManagementValue || 'project_management';
+                const engineerLabel = assigneeSelect.dataset.engineerLabel || 'Preferred Engineer';
+                const projectManagerLabel = assigneeSelect.dataset.projectManagerLabel || 'Preferred Project Manager';
+                const engineerEmptyLabel = assigneeSelect.dataset.engineerEmptyLabel || 'Select preferred engineer';
+                const projectManagerEmptyLabel = assigneeSelect.dataset.projectManagerEmptyLabel || 'Select preferred project manager';
+                const isProjectManagement = engagementSelect.value === projectManagementValue;
+
+                assigneeLabel.textContent = isProjectManagement ? projectManagerLabel : engineerLabel;
+
+                Array.from(assigneeSelect.options).forEach((option, index) => {
+                    if (index === 0) {
+                        option.hidden = false;
+                        option.textContent = isProjectManagement ? projectManagerEmptyLabel : engineerEmptyLabel;
+                        return;
+                    }
+                    const roleGroup = option.dataset.roleGroup || 'engineer';
+                    const shouldShow = isProjectManagement ? roleGroup === 'project_manager' : roleGroup !== 'project_manager';
+                    option.hidden = !shouldShow;
+                });
+
+                const selectedOption = assigneeSelect.options[assigneeSelect.selectedIndex];
+                if (selectedOption && selectedOption.hidden) {
+                    assigneeSelect.value = '';
+                }
+            };
+
             if (engagementSelect) {
                 engagementSelect.addEventListener("change", () => {
                     syncPriorityVisibility();
                     syncDeploymentVisibility();
+                    syncPreferredAssignee();
                 }, { passive: true });
             }
 
@@ -1101,6 +1134,7 @@
 
             syncPriorityVisibility();
             syncDeploymentVisibility();
+            syncPreferredAssignee();
             updateDeploymentSummary();
 
             document.addEventListener("keydown", (event) => {
