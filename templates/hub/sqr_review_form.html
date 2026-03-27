@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Review {{ object.reference_code }} · Request Hub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+        <div class="glass-card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                <div>
+                    <h1 class="h5 mb-1">Review {{ object.reference_code }}</h1>
+                    <p class="text-muted mb-0">Submitted by {{ object.engineer.get_full_name|default:object.engineer.username }} on {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</p>
+                </div>
+                <a class="btn btn-outline-secondary" href="{{ back_url }}">Back</a>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="small text-uppercase text-muted">Customer</div>
+                    <div class="fw-semibold">{{ object.customer_name }}</div>
+                    {% if object.customer_company %}<div>{{ object.customer_company }}</div>{% endif %}
+                    {% if object.customer_contact %}<div class="text-muted small">{{ object.customer_contact }}</div>{% endif %}
+                </div>
+                <div class="col-md-6">
+                    <div class="small text-uppercase text-muted">Assigned PM-ESG</div>
+                    <div class="fw-semibold">{{ object.pm_esg_reviewer.get_full_name|default:object.pm_esg_reviewer.username }}</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="small text-uppercase text-muted">Project</div>
+                <div class="fw-semibold mb-1">{{ object.project_title }}</div>
+                <div style="white-space: pre-wrap;">{{ object.project_details }}</div>
+            </div>
+
+            <div class="mb-3">
+                <div class="small text-uppercase text-muted">Documentation Links</div>
+                {% if object.documentation_link_list %}
+                    <ul class="mb-0">
+                        {% for link in object.documentation_link_list %}
+                            <li><a href="{{ link }}" target="_blank" rel="noopener">{{ link }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted mb-0">No documentation links provided.</p>
+                {% endif %}
+            </div>
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex gap-2 justify-content-end">
+                    <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
+                    <button class="btn btn-primary" type="submit">Save Review</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

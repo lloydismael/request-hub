@@ -13,7 +13,7 @@ def notification_badges(request: HttpRequest) -> Dict[str, int]:
     if not user or not user.is_authenticated:
         return {"new_ticket_count": 0}
 
-    if getattr(user, "role", None) != User.Roles.ADMIN:
+    if getattr(user, "role", None) not in {User.Roles.ADMIN, User.Roles.PM_ESG}:
         return {"new_ticket_count": 0}
 
     new_ticket_count = (

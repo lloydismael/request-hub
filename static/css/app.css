@@ -25,6 +25,8 @@
     --brand-secondary: rgba(255, 255, 255, 0.45);
     --glass-bg: rgba(255, 255, 255, 0.7);
     --glass-border: rgba(255, 255, 255, 0.18);
+    --theme-transition-duration: 1.2s;
+    --theme-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
@@ -1488,18 +1490,22 @@ body.dark-mode .requestor-modal .btn-close {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    transition: background-color 0.55s var(--theme-transition-easing), box-shadow 0.55s var(--theme-transition-easing), border-color 0.55s var(--theme-transition-easing);
 }
 
 .checkbox-label .bi-moon-fill {
     color: #f1c40f;
     font-size: 14px;
     margin-left: 5px;
+    transition: transform 0.5s var(--theme-transition-easing), opacity 0.5s var(--theme-transition-easing);
 }
 
 .checkbox-label .bi-brightness-high-fill {
     color: #f39c12;
     font-size: 16px;
     margin-right: 5px;
+    transition: transform 0.5s var(--theme-transition-easing), opacity 0.5s var(--theme-transition-easing);
 }
 
 .checkbox-label .ball {
@@ -1510,11 +1516,32 @@ body.dark-mode .requestor-modal .btn-close {
     left: 4px;
     top: 4px;
     border-radius: 50%;
-    transition: transform 0.2s linear;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    transition: transform 0.62s cubic-bezier(0.2, 0.9, 0.2, 1), background-color 0.45s ease, box-shadow 0.45s ease;
 }
 
 #theme-checkbox:checked + .checkbox-label .ball {
     transform: translateX(30px);
+}
+
+#theme-checkbox:checked + .checkbox-label .bi-moon-fill {
+    opacity: 0.55;
+    transform: scale(0.92);
+}
+
+#theme-checkbox:checked + .checkbox-label .bi-brightness-high-fill {
+    opacity: 1;
+    transform: scale(1.04);
+}
+
+#theme-checkbox:not(:checked) + .checkbox-label .bi-moon-fill {
+    opacity: 1;
+    transform: scale(1.04);
+}
+
+#theme-checkbox:not(:checked) + .checkbox-label .bi-brightness-high-fill {
+    opacity: 0.55;
+    transform: scale(0.92);
 }
 
 /* Transitions for Smooth Switching */
@@ -1526,7 +1553,7 @@ body,
 .login-card__footer,
 .page-login .alert,
 .login-hero::before {
-    transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease;
+    transition: background-color var(--theme-transition-duration) var(--theme-transition-easing), color var(--theme-transition-duration) var(--theme-transition-easing), border-color var(--theme-transition-duration) var(--theme-transition-easing), box-shadow var(--theme-transition-duration) var(--theme-transition-easing), filter var(--theme-transition-duration) var(--theme-transition-easing), opacity var(--theme-transition-duration) var(--theme-transition-easing);
 }
 
 body.theme-switching,
@@ -1588,11 +1615,16 @@ body.dark-mode .login-hero::before {
 /* --- Global OLED Dark Mode Expansion --- */
 
 /* View Transitions for Circular Reveal */
+::view-transition-group(root) {
+    animation-duration: 1.32s;
+    animation-timing-function: var(--theme-transition-easing);
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
     animation: none;
     mix-blend-mode: normal;
-    will-change: clip-path;
+    will-change: clip-path, opacity, filter;
 }
 
 ::view-transition-old(root) {

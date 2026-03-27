@@ -1,4 +1,6 @@
 from django import forms
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 
 from django.utils import timezone
 
@@ -7,7 +9,7 @@ from typing import Iterable, List
 from django.db.models import Q
 
 from accounts.models import User
-from .models import Account, EngineerActivityLog, Request, StatusLog
+from .models import Account, EngineerActivityLog, Request, SqrSubmission, StatusLog
 
 
 class AvatarSelect(forms.Select):
@@ -499,6 +501,90 @@ class RequestAdminForm(forms.ModelForm):
     def save(self, commit=True):
         self.instance.start_date = self.cleaned_data.get("request_date") or self.instance.start_date
         return super().save(commit=commit)
+
+
+class SqrSubmissionForm(forms.ModelForm):
+    pm_esg_reviewer = forms.ModelChoiceField(
+        queryset=User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name"),
+        required=True,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="PM-ESG Reviewer",
+    )
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "pm_esg_reviewer",
+            "customer_name",
+            "customer_company",
+            "customer_contact",
+            "project_title",
+            "project_details",
+            "documentation_links",
+        ]
+        widgets = {
+            "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Customer name"}),
+            "customer_company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Customer company"}),
+            "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Customer contact details"}),
+            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Project title"}),
+            "project_details": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Project scope, status, and current blockers"}),
+            "documentation_links": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "https://example.com/doc-1\nhttps://example.com/doc-2",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        reviewer_qs = self.fields["pm_esg_reviewer"].queryset
+        self.fields["pm_esg_reviewer"].label_from_instance = _user_display
+        widget = self.fields["pm_esg_reviewer"].widget
+        if isinstance(widget, AvatarSelect):
+            widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
+        self.fields["documentation_links"].help_text = "Attach one documentation URL per line."
+
+    def clean_documentation_links(self):
+        raw = (self.cleaned_data.get("documentation_links") or "").strip()
+        if not raw:
+            raise forms.ValidationError("Provide at least one documentation link.")
+
+        validator = URLValidator(schemes=["http", "https"])
+        cleaned_links = []
+        seen = set()
+        for line in raw.splitlines():
+            link = line.strip()
+            if not link:
+                continue
+            try:
+                validator(link)
+            except ValidationError:
+                raise forms.ValidationError(f"Invalid URL: {link}")
+            if link not in seen:
+                seen.add(link)
+                cleaned_links.append(link)
+
+        if not cleaned_links:
+            raise forms.ValidationError("Provide at least one valid documentation link.")
+        return "\n".join(cleaned_links)
+
+
+class SqrReviewForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["status", "review_notes"]
+        widgets = {
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "review_notes": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 5,
+                    "placeholder": "Review findings, follow-ups, and approval notes",
+                }
+            ),
+        }
 
 
 class RequestStatusForm(forms.ModelForm):

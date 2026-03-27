@@ -34,6 +34,7 @@ class User(AbstractUser):
         REQUESTOR = "requestor", "Requestor"
         REQUESTOR_ESS = "requestor_ess", "Requestor-ESS"
         PM_ESS = "pm_ess", "PM-ESS"
+        PM_ESG = "pm_esg", "PM-ESG"
         ENGINEER = "engineer", "Engineer"
         ADMIN = "admin", "Admin"
 
@@ -50,7 +51,7 @@ class User(AbstractUser):
     )
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
     REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)
-    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS)
+    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
 

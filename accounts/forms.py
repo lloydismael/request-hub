@@ -7,6 +7,7 @@ from .models import User
 
 ROLE_LABELS = {
     User.Roles.ADMIN: "Admin",
+    User.Roles.PM_ESG: "PM-ESG",
     User.Roles.ENGINEER: "Engineer",
     User.Roles.REQUESTOR: "Requestor",
     User.Roles.REQUESTOR_ESS: "Requestor-ESS",

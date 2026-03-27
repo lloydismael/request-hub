@@ -28,6 +28,9 @@ from accounts.models import User
 REQUESTOR_ROLES = set(User.REQUESTOR_ROLES)
 REQUEST_CREATOR_ROLES = set(getattr(User, "REQUEST_CREATOR_ROLES", User.REQUESTOR_ROLES))
 PM_ESS_ROLE = User.Roles.PM_ESS
+PM_ESG_ROLE = User.Roles.PM_ESG
+ADMIN_PANEL_ROLES = {User.Roles.ADMIN, PM_ESG_ROLE}
+SQR_ACCESS_ROLES = {User.Roles.ADMIN, User.Roles.ENGINEER, PM_ESG_ROLE}
 
 from .forms import (
     AccountManagementForm,
@@ -36,6 +39,8 @@ from .forms import (
     RequestAdminForm,
     RequestForm,
     RequestStatusForm,
+    SqrReviewForm,
+    SqrSubmissionForm,
     StatusLogForm,
 )
 from .constants import ACCOUNT_NAME_RAW
@@ -45,9 +50,15 @@ from .models import (
     Notification,
     Request,
     RequestCommunication,
+    SqrSubmission,
     StatusLog,
 )
-from .mixins import AdminRequiredMixin, AdminOrEngineerRequiredMixin, EngineerRequiredMixin
+from .mixins import (
+    AdminOrEngineerRequiredMixin,
+    AdminOrPmEsgRequiredMixin,
+    AdminRequiredMixin,
+    EngineerRequiredMixin,
+)
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
@@ -238,7 +249,7 @@ class EngineerActivityLogDeleteView(EngineerRequiredMixin, LoginRequiredMixin, V
         return redirect("hub:activity-logs")
 
 
-class ReportExportView(AdminRequiredMixin, LoginRequiredMixin, View):
+class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
     """Export operational or activity report data as CSV."""
 
     def get(self, request, *args, **kwargs):
@@ -427,7 +438,7 @@ def notify_status_update(log, source_label):
     if request_obj.requestor:
         recipients[request_obj.requestor.pk] = request_obj.requestor
 
-    for admin in User.objects.filter(role=User.Roles.ADMIN):
+    for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
         recipients[admin.pk] = admin
 
     recipients.pop(author.pk, None)
@@ -478,7 +489,7 @@ def notify_account_manager_request_update(actor_user, original, updated, changed
     actor = actor_user.get_full_name() or actor_user.username
     recipients: dict[int, User] = {}
 
-    for admin in User.objects.filter(role=User.Roles.ADMIN):
+    for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
         recipients[admin.pk] = admin
     if updated.requestor:
         recipients[updated.requestor.pk] = updated.requestor
@@ -698,10 +709,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["role"] = user.role
+        context["role"] = User.Roles.ADMIN if user.role in ADMIN_PANEL_ROLES else user.role
+        context["is_admin_ui"] = user.role in ADMIN_PANEL_ROLES
         context["is_requestor_role"] = user.role in REQUESTOR_ROLES
         context["is_pm_ess"] = user.role == PM_ESS_ROLE
+        context["is_pm_esg"] = user.role == PM_ESG_ROLE
         context["is_requestor_ui"] = user.role in REQUESTOR_ROLES or user.role == PM_ESS_ROLE
+        context["can_create_request"] = user.role in REQUEST_CREATOR_ROLES
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
         if user.role == PM_ESS_ROLE:
@@ -753,7 +767,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "completed": metrics["completed"],
             }
             context["request_report_data"] = self._build_request_report_data(requests)
-        elif user.role in REQUEST_CREATOR_ROLES:
+        elif user.role in REQUEST_CREATOR_ROLES and user.role != PM_ESG_ROLE:
             form = kwargs.get("form")
             if form is None:
                 form = RequestForm(actor_role=user.role)
@@ -1024,6 +1038,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metrics"] = {key: len(metric_buckets[key]) for key in metric_keys}
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+
+        if context.get("can_create_request") and "form" not in context:
+            form = kwargs.get("form")
+            if form is None:
+                form = RequestForm(actor_role=user.role)
+            context["form"] = form
+            context["account_name_choices"] = form.account_name_suggestions
+            context["form_has_errors"] = form.is_bound and bool(form.errors)
         return context
 
     @staticmethod
@@ -1150,7 +1172,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ack_rows = (
             RequestCommunication.objects.filter(
                 request_id__in=request_ids,
-                user__role__in=[User.Roles.ENGINEER, User.Roles.ADMIN],
+                user__role__in=[User.Roles.ENGINEER, User.Roles.ADMIN, PM_ESG_ROLE],
                 channel__in=[
                     RequestCommunication.Channel.OUTLOOK,
                     RequestCommunication.Channel.TEAMS,
@@ -1244,7 +1266,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             f"New {priority_label} ticket {request_obj.reference_code} for {request_obj.account.name} "
             f"({category_label}) submitted by {actor}. Due {due_display}."
         )
-        for admin in User.objects.filter(role=User.Roles.ADMIN):
+        for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
             if admin.pk == request_obj.requestor_id:
                 continue
             Notification.objects.create(
@@ -1254,6 +1276,146 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 actor=actor,
                 source="Dashboard · New Request",
             )
+
+
+class SqrListView(LoginRequiredMixin, TemplateView):
+    template_name = "hub/sqr.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in SQR_ACCESS_ROLES:
+            messages.error(request, "You are not allowed to access SQR.")
+            return redirect("hub:dashboard")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = SqrSubmission.objects.select_related(
+            "engineer",
+            "pm_esg_reviewer",
+            "reviewed_by",
+        ).order_by("-created_at")
+        if self.request.user.role == User.Roles.ENGINEER:
+            return queryset.filter(engineer=self.request.user)
+        if self.request.user.role == PM_ESG_ROLE:
+            return queryset.filter(pm_esg_reviewer=self.request.user)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        can_create = user.role == User.Roles.ENGINEER
+        can_review = user.role in ADMIN_PANEL_ROLES
+        form = kwargs.get("form")
+        if can_create and form is None:
+            form = SqrSubmissionForm()
+
+        submissions = list(self.get_queryset())
+        context.update(
+            {
+                "can_create_sqr": can_create,
+                "can_review_sqr": can_review,
+                "sqr_form": form,
+                "sqr_submissions": submissions,
+                "sqr_counts": {
+                    "total": len(submissions),
+                    "submitted": sum(1 for item in submissions if item.status == SqrSubmission.Status.SUBMITTED),
+                    "reviewed": sum(1 for item in submissions if item.status == SqrSubmission.Status.REVIEWED),
+                },
+            }
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        if request.user.role != User.Roles.ENGINEER:
+            messages.error(request, "Only engineers can submit SQR entries.")
+            return redirect("hub:sqr")
+
+        form = SqrSubmissionForm(request.POST)
+        if form.is_valid():
+            submission = form.save(commit=False)
+            submission.engineer = request.user
+            submission.status = SqrSubmission.Status.SUBMITTED
+            submission.save()
+            self._notify_sqr_submission(submission)
+            messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
+            return redirect("hub:sqr")
+
+        context = self.get_context_data(form=form)
+        return self.render_to_response(context)
+
+    @staticmethod
+    def _notify_sqr_submission(submission: SqrSubmission) -> None:
+        actor_name = submission.engineer.get_full_name() or submission.engineer.username
+        message = (
+            f"{actor_name} submitted {submission.reference_code} for {submission.customer_name}."
+        )
+
+        recipients: dict[int, User] = {submission.pm_esg_reviewer_id: submission.pm_esg_reviewer}
+        for admin in User.objects.filter(role=User.Roles.ADMIN):
+            recipients[admin.pk] = admin
+
+        recipients.pop(submission.engineer_id, None)
+        for recipient in recipients.values():
+            Notification.objects.create(
+                recipient=recipient,
+                message=message,
+                actor=actor_name,
+                source="SQR · New Submission",
+            )
+
+
+class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
+    model = SqrSubmission
+    form_class = SqrReviewForm
+    template_name = "hub/sqr_review_form.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can review SQR submissions.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
+        if self.request.user.role == PM_ESG_ROLE:
+            return queryset.filter(pm_esg_reviewer=self.request.user)
+        return queryset
+
+    def form_valid(self, form):
+        original = SqrSubmission.objects.get(pk=form.instance.pk)
+        form.instance.reviewed_by = self.request.user
+        if form.cleaned_data.get("status") == SqrSubmission.Status.REVIEWED:
+            if not form.instance.reviewed_at:
+                form.instance.reviewed_at = timezone.now()
+        else:
+            form.instance.reviewed_at = None
+
+        response = super().form_valid(form)
+
+        review_changed = (
+            original.status != self.object.status
+            or (original.review_notes or "") != (self.object.review_notes or "")
+        )
+        if review_changed:
+            self._notify_engineer_review(self.object)
+
+        messages.success(self.request, f"SQR {self.object.reference_code} review saved.")
+        return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["back_url"] = reverse("hub:sqr")
+        return context
+
+    def _notify_engineer_review(self, submission: SqrSubmission) -> None:
+        reviewer_name = self.request.user.get_full_name() or self.request.user.username
+        status_label = submission.get_status_display()
+        Notification.objects.create(
+            recipient=submission.engineer,
+            message=f"{reviewer_name} marked {submission.reference_code} as {status_label}.",
+            actor=reviewer_name,
+            source="SQR · Review Update",
+        )
 
 
 class RequestDetailView(LoginRequiredMixin, DetailView):
@@ -1307,7 +1469,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def _user_can_comment(user, request_obj):
         if not user.is_authenticated:
             return False
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             return True
         if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
             return True
@@ -1316,7 +1478,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         return False
 
 
-class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView):
+class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, UpdateView):
     model = Request
     form_class = RequestAdminForm
     template_name = "hub/request_admin_form.html"
@@ -1687,7 +1849,7 @@ class StatusLogUpdateView(LoginRequiredMixin, UpdateView):
     def get_success_url(self):
         request_obj = self.object.request
         user = self.request.user
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             return reverse("hub:request-manage", args=[request_obj.pk])
         # For engineers, PMs, and requestors
         return reverse("hub:request-manage-collab", args=[request_obj.pk])
@@ -1697,7 +1859,7 @@ class StatusLogUpdateView(LoginRequiredMixin, UpdateView):
         # Determine back URL similarly to get_success_url
         request_obj = self.object.request
         user = self.request.user
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             context["back_url"] = reverse("hub:request-manage", args=[request_obj.pk])
         else:
             context["back_url"] = reverse("hub:request-manage-collab", args=[request_obj.pk])
@@ -1712,7 +1874,7 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             return qs
         if user.role in REQUEST_CREATOR_ROLES:
             return qs.filter(requestor=user)
@@ -1982,7 +2144,7 @@ class RequestTeamsRedirectView(LoginRequiredMixin, View):
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
         role = request.user.role
-        if role not in {User.Roles.ADMIN, User.Roles.ENGINEER, PM_ESS_ROLE}:
+        if role not in {User.Roles.ADMIN, PM_ESG_ROLE, User.Roles.ENGINEER, PM_ESS_ROLE}:
             messages.error(request, "You are not allowed to start a Teams chat for this request.")
             return redirect(redirect_target)
 
@@ -2051,7 +2213,7 @@ class RequestTeamsRedirectView(LoginRequiredMixin, View):
         )
 
 
-class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
+class RequestExportCSVView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
     """Allow administrators to export all requests to a CSV download."""
 
     columns = (
@@ -2109,7 +2271,7 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
         return response
 
 
-class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
+class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
     template_name = "hub/report.html"
 
     def get_context_data(self, **kwargs):
@@ -2737,7 +2899,7 @@ class NotificationListView(LoginRequiredMixin, ListView):
             .order_by("-created_at")
         )
         user = self.request.user
-        if getattr(user, "role", None) == User.Roles.ADMIN:
+        if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
             queryset = queryset.filter(source__icontains="new request")
         return queryset
 
@@ -2760,7 +2922,7 @@ class NotificationFollowRedirectView(LoginRequiredMixin, View):
         if notification.related_request:
             req = notification.related_request
             # Route to manage views instead of read-only detail.
-            if request.user.role == User.Roles.ADMIN:
+            if request.user.role in ADMIN_PANEL_ROLES:
                 return redirect("hub:request-manage", pk=req.pk)
             return redirect("hub:request-manage-collab", pk=req.pk)
         return redirect("hub:notifications")
@@ -2773,7 +2935,7 @@ class NotificationDeleteView(LoginRequiredMixin, View):
         return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("hub:notifications")))
 
 
-class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):
+class RequestNudgeView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(Request.objects.select_related("engineer", "backup_engineer"), pk=pk)
 

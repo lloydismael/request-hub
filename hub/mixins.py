@@ -28,6 +28,10 @@ class AdminRequiredMixin(RoleRequiredMixin):
     required_role = User.Roles.ADMIN
 
 
+class AdminOrPmEsgRequiredMixin(RoleRequiredMixin):
+    required_roles = {User.Roles.ADMIN, User.Roles.PM_ESG}
+
+
 class AdminOrEngineerRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return self.request.user.role in {User.Roles.ADMIN, User.Roles.ENGINEER}
+        return self.request.user.role in {User.Roles.ADMIN, User.Roles.PM_ESG, User.Roles.ENGINEER}

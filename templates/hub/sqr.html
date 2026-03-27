@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}SQR · Request Hub{% endblock %}
+{% block content %}
+<div class="row g-4">
+    {% if can_create_sqr %}
+    <div class="col-12 col-xl-4">
+        <div class="glass-card p-4 h-100">
+            <h1 class="h5 mb-3">Submit SQR</h1>
+            <p class="text-muted small">Engineers can submit customer/project documentation for PM-ESG review.</p>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in sqr_form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-primary" type="submit">Submit SQR</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="col-12 col-xl-8">
+    {% else %}
+    <div class="col-12">
+    {% endif %}
+        <div class="glass-card p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h2 class="h5 mb-1">SQR Submissions</h2>
+                    <p class="text-muted small mb-0">Format: SQR-YYYY-ID. Engineers submit, PM-ESG reviews.</p>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Submitted: {{ sqr_counts.submitted }}</span>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed: {{ sqr_counts.reviewed }}</span>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>SQR ID</th>
+                            <th>Engineer</th>
+                            <th>Customer</th>
+                            <th>Project</th>
+                            <th>Docs</th>
+                            <th>PM-ESG</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in sqr_submissions %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.reference_code }}</td>
+                            <td>{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ item.customer_name }}</div>
+                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
+                                {% if item.customer_contact %}<div class="small text-muted">{{ item.customer_contact }}</div>{% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-semibold">{{ item.project_title }}</div>
+                                <div class="small text-muted">{{ item.project_details|truncatechars:100 }}</div>
+                            </td>
+                            <td>
+                                {% if item.documentation_link_list %}
+                                    <ul class="list-unstyled mb-0 small">
+                                        {% for link in item.documentation_link_list %}
+                                            <li><a href="{{ link }}" target="_blank" rel="noopener">Link {{ forloop.counter }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="text-muted">No links</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</td>
+                            <td>
+                                {% if item.status == 'reviewed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Submitted</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">
+                                {% if item.reviewed_at %}
+                                    Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                {% else %}
+                                    {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if can_review_sqr %}
+                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Review</a>
+                                {% elif item.status == 'reviewed' %}
+                                    <span class="text-success small">Reviewed</span>
+                                {% else %}
+                                    <span class="text-muted small">Waiting review</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">No SQR submissions yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
