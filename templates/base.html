@@ -84,8 +84,11 @@
         (function() {
             // Theme Toggle Logic
             const toggle = document.getElementById('theme-checkbox');
+            const toggleLabel = document.querySelector('label[for="theme-checkbox"]');
             const body = document.body;
             const storageKey = 'reqHubTheme';
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const canUseViewTransition = typeof document.startViewTransition === 'function' && !prefersReducedMotion;
 
             // Helper to set theme state
             const applyTheme = (isDark) => {
@@ -106,33 +109,103 @@
             }
 
             if (toggle) {
-                // Use click on the LABEL or wrapper to get accurate coordinates
-                // We attach to the toggle change event for logic, but we might need
-                // to capture coordinates from a click listener on the wrapper if accessible
-                
-                // Better approach: Listen for click on the document/wrapper to capture coords
-                // right before the change fires.
                 let lastClickX = window.innerWidth / 2;
                 let lastClickY = window.innerHeight / 2;
+                let themeTransitionInFlight = false;
 
-                document.addEventListener('click', (e) => {
-                    lastClickX = e.clientX;
-                    lastClickY = e.clientY;
-                }, { capture: true, passive: true });
+                const resolveThemeOrigin = () => {
+                    if (toggleLabel) {
+                        const rect = toggleLabel.getBoundingClientRect();
+                        const centerX = rect.left + rect.width / 2;
+                        const centerY = rect.top + rect.height / 2;
 
-                toggle.addEventListener('change', async function(e) {
-                    const isDark = this.checked;
+                        const hasPointerPosition = Number.isFinite(lastClickX) && Number.isFinite(lastClickY) && (lastClickX !== 0 || lastClickY !== 0);
+                        return {
+                            x: hasPointerPosition ? lastClickX : centerX,
+                            y: hasPointerPosition ? lastClickY : centerY
+                        };
+                    }
 
-                    // Fallback for browsers without View Transition API
-                    if (!document.startViewTransition) {
+                    return {
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2
+                    };
+                };
+
+                const runFallbackReveal = async (isDark, x, y) => {
+                    if (prefersReducedMotion) {
                         applyTheme(isDark);
                         return;
                     }
 
-                    // Use captured coordinates or fallback to center
-                    const x = lastClickX;
-                    const y = lastClickY;
-                    
+                    const overlay = document.createElement('span');
+                    overlay.className = 'theme-reveal-overlay';
+                    overlay.style.background = isDark ? '#06070a' : '#f3f6fb';
+
+                    const endRadius = Math.hypot(
+                        Math.max(x, window.innerWidth - x),
+                        Math.max(y, window.innerHeight - y)
+                    );
+
+                    body.appendChild(overlay);
+                    applyTheme(isDark);
+
+                    const revealAnimation = overlay.animate(
+                        [
+                            { clipPath: `circle(0px at ${x}px ${y}px)`, opacity: 0.98 },
+                            { clipPath: `circle(${endRadius}px at ${x}px ${y}px)`, opacity: 1 }
+                        ],
+                        {
+                            duration: 820,
+                            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                            fill: 'forwards'
+                        }
+                    );
+
+                    await revealAnimation.finished.catch(() => {});
+
+                    const fadeAnimation = overlay.animate(
+                        [{ opacity: 1 }, { opacity: 0 }],
+                        {
+                            duration: 160,
+                            easing: 'ease-out',
+                            fill: 'forwards'
+                        }
+                    );
+
+                    await fadeAnimation.finished.catch(() => {});
+                    overlay.remove();
+                };
+
+                if (toggleLabel) {
+                    toggleLabel.addEventListener('click', (e) => {
+                        lastClickX = e.clientX;
+                        lastClickY = e.clientY;
+                    }, { passive: true });
+                }
+
+                toggle.addEventListener('change', async function(e) {
+                    if (themeTransitionInFlight) {
+                        return;
+                    }
+                    themeTransitionInFlight = true;
+                    const isDark = this.checked;
+                    body.classList.add('theme-switching');
+
+                    const finishThemeTransition = () => {
+                        body.classList.remove('theme-switching');
+                        themeTransitionInFlight = false;
+                    };
+
+                    // Fallback for browsers without View Transition API
+                    const { x, y } = resolveThemeOrigin();
+
+                    if (!canUseViewTransition) {
+                        await runFallbackReveal(isDark, x, y);
+                        finishThemeTransition();
+                        return;
+                    }
+
                     // Calculate distance to furthest corner ensuring full coverage
                     const endRadius = Math.hypot(
                         Math.max(x, window.innerWidth - x),
@@ -144,23 +217,28 @@
                         applyTheme(isDark);
                     });
 
-                    // Wait for the pseudo-elements to be created
-                    await transition.ready;
+                    try {
+                        // Wait for the pseudo-elements to be created
+                        await transition.ready;
 
-                    // Animate the circular clip-path on the NEW view (the incoming theme)
-                    document.documentElement.animate(
-                        {
-                            clipPath: [
-                                `circle(0px at ${x}px ${y}px)`,
-                                `circle(${endRadius}px at ${x}px ${y}px)`
-                            ]
-                        },
-                        {
-                            duration: 600,
-                            easing: 'ease-in-out', // Smoother invasion
-                            pseudoElement: '::view-transition-new(root)'
-                        }
-                    );
+                        // Smooth, satisfying, slowly expanding screen transition
+                        document.documentElement.animate(
+                            {
+                                clipPath: [
+                                    `circle(0px at ${x}px ${y}px)`,
+                                    `circle(${endRadius}px at ${x}px ${y}px)`
+                                ]
+                            },
+                            {
+                                duration: 860,
+                                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                                pseudoElement: '::view-transition-new(root)'
+                            }
+                        );
+                        await transition.finished;
+                    } finally {
+                        finishThemeTransition();
+                    }
                 });
             }
         })();
