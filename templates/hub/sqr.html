@@ -3,40 +3,16 @@
 {% block title %}SQR · Request Hub{% endblock %}
 {% block content %}
 <div class="row g-4">
-    {% if can_create_sqr %}
-    <div class="col-12 col-xl-4">
-        <div class="glass-card p-4 h-100">
-            <h1 class="h5 mb-3">Submit SQR</h1>
-            <p class="text-muted small">Engineers can fill out the SQR form for PM-ESG review.</p>
-            <form method="post" novalidate>
-                {% csrf_token %}
-                {% for field in sqr_form %}
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                        {% if field.errors %}
-                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-                <div class="d-flex justify-content-end">
-                    <button class="btn btn-primary" type="submit">Submit SQR</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    <div class="col-12 col-xl-8">
-    {% else %}
     <div class="col-12">
-    {% endif %}
         <div class="glass-card p-4">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                 <div>
                     <h2 class="h5 mb-1">SQR Submissions</h2>
-                    <p class="text-muted small mb-0">Format: SQR-YYYY-ID. Engineers submit, PM-ESG reviews.</p>
                 </div>
-                <div class="d-flex gap-2 flex-wrap">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    {% if can_create_sqr %}
+                        <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">New Submission</button>
+                    {% endif %}
                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Submitted: {{ sqr_counts.submitted }}</span>
                     <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed: {{ sqr_counts.reviewed }}</span>
@@ -102,7 +78,12 @@
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                {% if can_review_sqr %}
+                                {% if request.user.role == 'engineer' and item.engineer_id == request.user.id %}
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
+                                        <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
+                                    </div>
+                                {% elif can_review_sqr %}
                                     <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Review</a>
                                 {% elif item.status == 'reviewed' %}
                                     <span class="text-success small">Reviewed</span>
@@ -122,4 +103,87 @@
         </div>
     </div>
 </div>
+
+{% if can_create_sqr %}
+<div class="requestor-modal" id="create-sqr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
+    <div class="requestor-modal__backdrop" id="create-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-sqr-title">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="create-sqr-title">New Submission</h2>
+            <button type="button" class="btn-close" id="close-sqr-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% if sqr_form.errors %}
+                    <div class="alert alert-danger" role="alert">Please resolve the highlighted fields before submitting.</div>
+                {% endif %}
+                {% for field in sqr_form %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-sqr-btn">Cancel</button>
+                    <button class="btn btn-primary" type="submit">Submit Submission</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const modal = document.getElementById("create-sqr-modal");
+        if (!modal) {
+            return;
+        }
+
+        const openBtn = document.getElementById("new-sqr-btn");
+        const closeBtn = document.getElementById("close-sqr-btn");
+        const cancelBtn = document.getElementById("cancel-sqr-btn");
+        const backdrop = document.getElementById("create-sqr-backdrop");
+
+        const openModal = () => {
+            modal.classList.add("requestor-modal--visible");
+            modal.setAttribute("aria-hidden", "false");
+            document.body.classList.add("requestor-modal-open");
+        };
+
+        const closeModal = () => {
+            modal.classList.remove("requestor-modal--visible");
+            modal.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("requestor-modal-open");
+        };
+
+        if (openBtn) {
+            openBtn.addEventListener("click", openModal);
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener("click", closeModal);
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener("click", closeModal);
+        }
+        if (backdrop) {
+            backdrop.addEventListener("click", closeModal);
+        }
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && modal.classList.contains("requestor-modal--visible")) {
+                closeModal();
+            }
+        });
+
+        if (modal.dataset.openOnLoad === "true") {
+            openModal();
+        }
+    })();
+</script>
+{% endif %}
 {% endblock %}

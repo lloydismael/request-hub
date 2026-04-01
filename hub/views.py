@@ -1314,6 +1314,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "can_create_sqr": can_create,
                 "can_review_sqr": can_review,
                 "sqr_form": form,
+                "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "sqr_submissions": submissions,
                 "sqr_counts": {
                     "total": len(submissions),
@@ -1361,6 +1362,55 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 actor=actor_name,
                 source="SQR · New Submission",
             )
+
+
+class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
+    model = SqrSubmission
+    form_class = SqrSubmissionForm
+    template_name = "hub/sqr_submission_form.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role != User.Roles.ENGINEER:
+            messages.error(request, "Only engineers can edit SQR submissions.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer").filter(engineer=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["back_url"] = reverse("hub:sqr")
+        context["form_title"] = f"Edit Submission {self.object.reference_code}"
+        context["submit_label"] = "Save changes"
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"SQR {self.object.reference_code} updated.")
+        return response
+
+
+class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
+    model = SqrSubmission
+    template_name = "hub/sqr_confirm_delete.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role != User.Roles.ENGINEER:
+            messages.error(request, "Only engineers can delete SQR submissions.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return SqrSubmission.objects.filter(engineer=self.request.user)
+
+    def form_valid(self, form):
+        reference_code = self.object.reference_code
+        response = super().form_valid(form)
+        messages.success(self.request, f"SQR {reference_code} deleted.")
+        return response
 
 
 class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
