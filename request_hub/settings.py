@@ -168,6 +168,17 @@ ACS_EMAIL_SENDER = os.getenv(
     "DoNotReply@a2317fba-55e4-4b27-b26b-5b5d32235fec.azurecomm.net",
 ).strip()
 
+# Microsoft Graph (MSAL) integration scoped to the phildata tenant.
+PHILDATA_TENANT_ID = os.getenv("PHILDATA_TENANT_ID", "").strip()
+PHILDATA_CLIENT_ID = os.getenv("PHILDATA_CLIENT_ID", "").strip()
+PHILDATA_CLIENT_SECRET = os.getenv("PHILDATA_CLIENT_SECRET", "").strip()
+PHILDATA_DOMAIN = os.getenv("PHILDATA_DOMAIN", "phildata.com").strip().lower()
+PHILDATA_GRAPH_SCOPE = [
+    scope.strip()
+    for scope in os.getenv("PHILDATA_GRAPH_SCOPE", "https://graph.microsoft.com/.default").split(",")
+    if scope.strip()
+]
+
 PROFILE_COMPLETION_EXEMPT_URLS = [
     "accounts:update",
     "logout",

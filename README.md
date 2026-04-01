@@ -145,6 +145,14 @@ Use `.env` to store runtime configuration. Typical values include:
 - `DB_PORT`
 - Optional integration settings (email/Azure/etc.)
 
+Microsoft Graph (MSAL) settings for phildata tenant:
+
+- `PHILDATA_TENANT_ID`
+- `PHILDATA_CLIENT_ID`
+- `PHILDATA_CLIENT_SECRET`
+- `PHILDATA_DOMAIN` (default: `phildata.com`)
+- `PHILDATA_GRAPH_SCOPE` (default: `https://graph.microsoft.com/.default`)
+
 Do not commit real secrets, tokens, passwords, or connection strings.
 
 ## Database and Migrations
@@ -183,6 +191,18 @@ docker compose exec web python manage.py check_sla
 ```
 
 Run this on a daily schedule using Task Scheduler, cron, or your preferred scheduler.
+
+Microsoft Graph tenant authentication and user fetch command:
+
+```powershell
+python manage.py fetch_phildata_users --limit 25 --sample 10
+```
+
+To include all users returned by Graph (not only `@phildata.com`):
+
+```powershell
+python manage.py fetch_phildata_users --include-non-domain
+```
 
 ## Deployment
 
