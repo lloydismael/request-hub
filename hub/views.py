@@ -1996,7 +1996,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         to_addresses = {engineer_email, manager_email}
         cc_addresses = {"ESGRequestHub@phildata.com"}
         if request_obj.requestor and request_obj.requestor.role == User.Roles.REQUESTOR_ESS:
-            cc_addresses.add("ChristineF@phildata.com")
+            cc_addresses.add("JoanI@phildata.com")
         if backup_email:
             cc_addresses.add(backup_email)
 

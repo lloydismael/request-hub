@@ -412,7 +412,7 @@ class EngineerActivityLog(models.Model):
 
 class SqrSubmission(models.Model):
     class Status(models.TextChoices):
-        SUBMITTED = "submitted", "Submitted"
+        SUBMITTED = "submitted", "For Processing"
         REVIEWED = "reviewed", "Reviewed"
 
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)

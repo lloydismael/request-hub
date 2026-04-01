@@ -14,7 +14,7 @@
                         <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">New Submission</button>
                     {% endif %}
                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
-                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Submitted: {{ sqr_counts.submitted }}</span>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.submitted }}</span>
                     <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed: {{ sqr_counts.reviewed }}</span>
                 </div>
             </div>
@@ -67,7 +67,7 @@
                                 {% if item.status == 'reviewed' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
                                 {% else %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Submitted</span>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
                                 {% endif %}
                             </td>
                             <td class="small text-muted">
