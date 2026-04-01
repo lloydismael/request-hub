@@ -435,7 +435,9 @@ class SqrSubmission(models.Model):
     customer_contact = models.CharField(max_length=255, blank=True)
     project_title = models.CharField(max_length=255)
     project_details = models.TextField()
+    sse_manhrs = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True)
     documentation_links = models.TextField(help_text="One link per line.")
+    remarks = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUBMITTED)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(

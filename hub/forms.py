@@ -508,33 +508,47 @@ class SqrSubmissionForm(forms.ModelForm):
         queryset=User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name"),
         required=True,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
-        label="PM-ESG Reviewer",
+        label="Approver Name",
     )
 
     class Meta:
         model = SqrSubmission
         fields = [
-            "pm_esg_reviewer",
             "customer_name",
             "customer_company",
             "customer_contact",
+            "pm_esg_reviewer",
             "project_title",
             "project_details",
+            "sse_manhrs",
             "documentation_links",
+            "remarks",
         ]
+        labels = {
+            "customer_name": "Account Name",
+            "customer_company": "Group Name",
+            "customer_contact": "Account Manager",
+            "project_title": "Service Description",
+            "project_details": "Scope of Services",
+            "sse_manhrs": "SSE Manhrs",
+            "documentation_links": "SQR Doc. Ref. Link",
+            "remarks": "Remarks",
+        }
         widgets = {
-            "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Customer name"}),
-            "customer_company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Customer company"}),
-            "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Customer contact details"}),
-            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Project title"}),
-            "project_details": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Project scope, status, and current blockers"}),
+            "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
+            "customer_company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter group name"}),
+            "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account manager"}),
+            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter service description"}),
+            "project_details": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Enter scope of services"}),
+            "sse_manhrs": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}),
             "documentation_links": forms.Textarea(
                 attrs={
                     "class": "form-control",
-                    "rows": 4,
-                    "placeholder": "https://example.com/doc-1\nhttps://example.com/doc-2",
+                    "rows": 2,
+                    "placeholder": "https://example.com/sqr-reference",
                 }
             ),
+            "remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Additional notes"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -544,7 +558,7 @@ class SqrSubmissionForm(forms.ModelForm):
         widget = self.fields["pm_esg_reviewer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
-        self.fields["documentation_links"].help_text = "Attach one documentation URL per line."
+        self.fields["documentation_links"].help_text = "Provide the SQR document reference link."
 
     def clean_documentation_links(self):
         raw = (self.cleaned_data.get("documentation_links") or "").strip()

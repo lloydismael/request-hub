@@ -7,7 +7,7 @@
     <div class="col-12 col-xl-4">
         <div class="glass-card p-4 h-100">
             <h1 class="h5 mb-3">Submit SQR</h1>
-            <p class="text-muted small">Engineers can submit customer/project documentation for PM-ESG review.</p>
+            <p class="text-muted small">Engineers can fill out the SQR form for PM-ESG review.</p>
             <form method="post" novalidate>
                 {% csrf_token %}
                 {% for field in sqr_form %}
@@ -49,10 +49,11 @@
                         <tr>
                             <th>SQR ID</th>
                             <th>Engineer</th>
-                            <th>Customer</th>
-                            <th>Project</th>
+                            <th>Account Details</th>
+                            <th>Service</th>
+                            <th>SSE Manhrs</th>
                             <th>Docs</th>
-                            <th>PM-ESG</th>
+                            <th>Approver</th>
                             <th>Status</th>
                             <th>Updated</th>
                             <th class="text-end">Action</th>
@@ -65,13 +66,15 @@
                             <td>{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
                             <td>
                                 <div class="fw-semibold">{{ item.customer_name }}</div>
-                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
-                                {% if item.customer_contact %}<div class="small text-muted">{{ item.customer_contact }}</div>{% endif %}
+                                {% if item.customer_company %}<div class="small text-muted">Group: {{ item.customer_company }}</div>{% endif %}
+                                {% if item.customer_contact %}<div class="small text-muted">Manager: {{ item.customer_contact }}</div>{% endif %}
                             </td>
                             <td>
                                 <div class="fw-semibold">{{ item.project_title }}</div>
                                 <div class="small text-muted">{{ item.project_details|truncatechars:100 }}</div>
+                                {% if item.remarks %}<div class="small text-muted">Remarks: {{ item.remarks|truncatechars:60 }}</div>{% endif %}
                             </td>
+                            <td>{{ item.sse_manhrs|default:"-" }}</td>
                             <td>
                                 {% if item.documentation_link_list %}
                                     <ul class="list-unstyled mb-0 small">
@@ -110,7 +113,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">No SQR submissions yet.</td>
+                            <td colspan="10" class="text-center text-muted py-4">No SQR submissions yet.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

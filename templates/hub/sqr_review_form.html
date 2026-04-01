@@ -15,25 +15,31 @@
 
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <div class="small text-uppercase text-muted">Customer</div>
-                    <div class="fw-semibold">{{ object.customer_name }}</div>
-                    {% if object.customer_company %}<div>{{ object.customer_company }}</div>{% endif %}
-                    {% if object.customer_contact %}<div class="text-muted small">{{ object.customer_contact }}</div>{% endif %}
+                    <div class="small text-uppercase text-muted">Account Details</div>
+                    <div class="fw-semibold">Account Name: {{ object.customer_name }}</div>
+                    {% if object.customer_company %}<div>Group Name: {{ object.customer_company }}</div>{% endif %}
+                    {% if object.customer_contact %}<div class="text-muted small">Account Manager: {{ object.customer_contact }}</div>{% endif %}
                 </div>
                 <div class="col-md-6">
-                    <div class="small text-uppercase text-muted">Assigned PM-ESG</div>
+                    <div class="small text-uppercase text-muted">Approver Name</div>
                     <div class="fw-semibold">{{ object.pm_esg_reviewer.get_full_name|default:object.pm_esg_reviewer.username }}</div>
                 </div>
             </div>
 
             <div class="mb-3">
-                <div class="small text-uppercase text-muted">Project</div>
-                <div class="fw-semibold mb-1">{{ object.project_title }}</div>
+                <div class="small text-uppercase text-muted">Service Details</div>
+                <div class="fw-semibold mb-1">Service Description: {{ object.project_title }}</div>
+                <div class="small text-muted mb-1">Scope of Services</div>
                 <div style="white-space: pre-wrap;">{{ object.project_details }}</div>
             </div>
 
             <div class="mb-3">
-                <div class="small text-uppercase text-muted">Documentation Links</div>
+                <div class="small text-uppercase text-muted">SSE Manhrs</div>
+                <div class="fw-semibold">{{ object.sse_manhrs|default:"-" }}</div>
+            </div>
+
+            <div class="mb-3">
+                <div class="small text-uppercase text-muted">SQR Doc. Ref. Link</div>
                 {% if object.documentation_link_list %}
                     <ul class="mb-0">
                         {% for link in object.documentation_link_list %}
@@ -43,6 +49,11 @@
                 {% else %}
                     <p class="text-muted mb-0">No documentation links provided.</p>
                 {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <div class="small text-uppercase text-muted">Remarks</div>
+                <div style="white-space: pre-wrap;">{{ object.remarks|default:"-" }}</div>
             </div>
 
             <form method="post" novalidate>
