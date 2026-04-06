@@ -20,7 +20,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from accounts.forms import UserManagementForm
 from accounts.models import User
@@ -2324,15 +2324,170 @@ class RequestExportCSVView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
 class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
     template_name = "hub/report.html"
 
+    @staticmethod
+    def _normalize_report_view(value: str | None) -> str:
+        report_view = (value or "operational").lower()
+        if report_view not in {"operational", "activity"}:
+            return "operational"
+        return report_view
+
+    def _get_requested_edit_log(self) -> Optional[EngineerActivityLog]:
+        edit_log_id = (self.request.GET.get("edit_activity") or "").strip()
+        if not edit_log_id:
+            return None
+        try:
+            return EngineerActivityLog.objects.select_related("engineer", "account", "request").get(pk=edit_log_id)
+        except (EngineerActivityLog.DoesNotExist, ValueError):
+            messages.error(self.request, "We could not find that activity log to edit.")
+            return None
+
+    @staticmethod
+    def _normalize_month_value(value: str | None) -> str:
+        month_value = (value or "").strip()
+        if not month_value:
+            return ""
+        try:
+            datetime.strptime(month_value, "%Y-%m")
+        except ValueError:
+            return ""
+        return month_value
+
+    @staticmethod
+    def _month_start(month_value: str | None) -> Optional[date]:
+        if not month_value:
+            return None
+        parsed = datetime.strptime(month_value, "%Y-%m")
+        return date(parsed.year, parsed.month, 1)
+
+    @staticmethod
+    def _next_month_start(month_start: date) -> date:
+        if month_start.month == 12:
+            return date(month_start.year + 1, 1, 1)
+        return date(month_start.year, month_start.month + 1, 1)
+
+    def _resolve_activity_month_filters(
+        self,
+        *,
+        start_month_value: str | None = None,
+        end_month_value: str | None = None,
+    ) -> dict:
+        start_month = self._normalize_month_value(
+            self.request.GET.get("start_month") if start_month_value is None else start_month_value
+        )
+        end_month = self._normalize_month_value(
+            self.request.GET.get("end_month") if end_month_value is None else end_month_value
+        )
+
+        start_month_date = self._month_start(start_month)
+        end_month_date = self._month_start(end_month)
+
+        if start_month_date and end_month_date and start_month_date > end_month_date:
+            start_month, end_month = end_month, start_month
+            start_month_date, end_month_date = end_month_date, start_month_date
+
+        end_exclusive_date = self._next_month_start(end_month_date) if end_month_date else None
+
+        if start_month_date and end_month_date:
+            if start_month_date == end_month_date:
+                label = start_month_date.strftime("%B %Y")
+            else:
+                label = f"{start_month_date.strftime('%B %Y')} to {end_month_date.strftime('%B %Y')}"
+        elif start_month_date:
+            label = f"{start_month_date.strftime('%B %Y')} onwards"
+        elif end_month_date:
+            label = f"Up to {end_month_date.strftime('%B %Y')}"
+        else:
+            label = "All months"
+
+        return {
+            "start_month": start_month,
+            "end_month": end_month,
+            "start_month_date": start_month_date,
+            "end_exclusive_date": end_exclusive_date,
+            "label": label,
+        }
+
+    @staticmethod
+    def _build_activity_report_url(
+        *,
+        start_month: str = "",
+        end_month: str = "",
+        edit_activity: Optional[int] = None,
+    ) -> str:
+        params = {"report_view": "activity"}
+        if start_month:
+            params["start_month"] = start_month
+        if end_month:
+            params["end_month"] = end_month
+        if edit_activity is not None:
+            params["edit_activity"] = str(edit_activity)
+        return f"{reverse('hub:report')}?{urlencode(params)}"
+
+    def post(self, request, *args, **kwargs):
+        report_view = self._normalize_report_view(request.POST.get("report_view"))
+        if report_view != "activity":
+            return redirect("hub:report")
+
+        start_month = self._normalize_month_value(request.POST.get("start_month"))
+        end_month = self._normalize_month_value(request.POST.get("end_month"))
+        activity_report_url = self._build_activity_report_url(start_month=start_month, end_month=end_month)
+
+        log_id = (request.POST.get("log_id") or "").strip()
+        if not log_id:
+            messages.error(request, "No activity log was selected for editing.")
+            return redirect(activity_report_url)
+
+        try:
+            editing_activity_log = EngineerActivityLog.objects.select_related("engineer", "account", "request").get(pk=log_id)
+        except (EngineerActivityLog.DoesNotExist, ValueError):
+            messages.error(request, "Unable to update the selected activity log.")
+            return redirect(activity_report_url)
+
+        activity_form = EngineerActivityLogForm(
+            data=request.POST,
+            engineer=editing_activity_log.engineer,
+            instance=editing_activity_log,
+        )
+        if activity_form.is_valid():
+            activity_form.save()
+            engineer_name = editing_activity_log.engineer.get_full_name() or editing_activity_log.engineer.username
+            messages.success(request, f"Activity log for {engineer_name} updated successfully.")
+            return redirect(activity_report_url)
+
+        context = self.get_context_data(
+            report_view="activity",
+            editing_activity_log=editing_activity_log,
+            activity_form=activity_form,
+            activity_start_month=start_month,
+            activity_end_month=end_month,
+        )
+        return self.render_to_response(context)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        report_view = (self.request.GET.get("report_view") or "operational").lower()
-        if report_view not in {"operational", "activity"}:
-            report_view = "operational"
+        report_view = self._normalize_report_view(kwargs.get("report_view") or self.request.GET.get("report_view"))
         context["report_view"] = report_view
 
         if report_view == "activity":
-            context.update(self._build_activity_log_context())
+            editing_activity_log = kwargs.get("editing_activity_log")
+            activity_form = kwargs.get("activity_form")
+            activity_start_month = kwargs.get("activity_start_month")
+            activity_end_month = kwargs.get("activity_end_month")
+            if editing_activity_log is None:
+                editing_activity_log = self._get_requested_edit_log()
+            if editing_activity_log is not None and activity_form is None:
+                activity_form = EngineerActivityLogForm(
+                    engineer=editing_activity_log.engineer,
+                    instance=editing_activity_log,
+                )
+            context.update(
+                self._build_activity_log_context(
+                    start_month_value=activity_start_month,
+                    end_month_value=activity_end_month,
+                )
+            )
+            context["editing_activity_log"] = editing_activity_log
+            context["activity_form"] = activity_form
         else:
             context.update(self._build_operational_context())
         return context
@@ -2506,8 +2661,16 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "status_breakdown": status_breakdown,
         }
 
-    def _build_activity_log_context(self):
+    def _build_activity_log_context(self, *, start_month_value: str | None = None, end_month_value: str | None = None):
+        month_filters = self._resolve_activity_month_filters(
+            start_month_value=start_month_value,
+            end_month_value=end_month_value,
+        )
         logs_qs = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+        if month_filters["start_month_date"]:
+            logs_qs = logs_qs.filter(request_date__gte=month_filters["start_month_date"])
+        if month_filters["end_exclusive_date"]:
+            logs_qs = logs_qs.filter(request_date__lt=month_filters["end_exclusive_date"])
 
         total_hours = logs_qs.aggregate(total=Sum("actual_hours")) or {}
         billable_hours = logs_qs.filter(is_billable=True).aggregate(total=Sum("actual_hours")) or {}
@@ -2631,6 +2794,9 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
                 "non_billable_hours": non_billable_hours_value,
                 "unique_accounts": logs_qs.values("account").distinct().count(),
             },
+            "activity_start_month": month_filters["start_month"],
+            "activity_end_month": month_filters["end_month"],
+            "activity_month_filter_label": month_filters["label"],
             "activity_engineer_chart": engineer_chart,
             "activity_engineer_table": engineer_table,
             "activity_type_chart": activity_chart,

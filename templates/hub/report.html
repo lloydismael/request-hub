@@ -29,6 +29,36 @@
                 <p class="text-muted mb-0">Understand how engineers spend their time, where work happens, and which efforts are billable.</p>
             </div>
             <div class="col-12 col-lg-8">
+                <form method="get" class="row g-2 align-items-end mb-3">
+                    <input type="hidden" name="report_view" value="activity">
+                    <div class="col-12 col-md-4">
+                        <label for="activity-start-month" class="form-label mb-1">From Month</label>
+                        <input
+                            id="activity-start-month"
+                            type="month"
+                            name="start_month"
+                            class="form-control form-control-sm"
+                            value="{{ activity_start_month }}"
+                        >
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="activity-end-month" class="form-label mb-1">To Month</label>
+                        <input
+                            id="activity-end-month"
+                            type="month"
+                            name="end_month"
+                            class="form-control form-control-sm"
+                            value="{{ activity_end_month }}"
+                        >
+                    </div>
+                    <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                        {% if activity_start_month or activity_end_month %}
+                            <a href="{% url 'hub:report' %}?report_view=activity" class="btn btn-sm btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </div>
+                </form>
+                <div class="small text-muted mb-3">Showing: {{ activity_month_filter_label }}</div>
                 <div class="row g-3">
                     <div class="col-6 col-md-3">
                         <div class="report-summary-card bg-primary-subtle text-primary border border-primary-subtle">
@@ -190,11 +220,12 @@
                             <th scope="col">Hours</th>
                             <th scope="col">Location</th>
                             <th scope="col">Billable</th>
+                            <th scope="col">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for log in activity_logs %}
-                            <tr>
+                            <tr{% if editing_activity_log and editing_activity_log.pk == log.pk %} class="table-warning"{% endif %}>
                                 <td class="text-nowrap">{{ log.request_date|date:"M d, Y" }}</td>
                                 <td class="text-nowrap">{{ log.engineer.get_full_name|default:log.engineer.username }}</td>
                                 <td class="text-nowrap">{{ log.account.name }}</td>
@@ -211,11 +242,58 @@
                                         <span class="badge bg-secondary text-white">Not billable</span>
                                     {% endif %}
                                 </td>
+                                <td>
+                                    <a class="btn btn-outline-primary btn-sm" href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&edit_activity={{ log.pk }}#activity-edit-form">Edit</a>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            {% if editing_activity_log and activity_form %}
+                <div class="glass-card p-4 mt-3" id="activity-edit-form">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <div>
+                            <h4 class="h6 text-uppercase text-muted mb-1">Edit Engineer Activity Log</h4>
+                            <p class="text-muted small mb-0">
+                                {{ editing_activity_log.engineer.get_full_name|default:editing_activity_log.engineer.username }} ·
+                                {{ editing_activity_log.request_date|date:"M d, Y" }}
+                            </p>
+                        </div>
+                    </div>
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <input type="hidden" name="report_view" value="activity">
+                        <input type="hidden" name="start_month" value="{{ activity_start_month }}">
+                        <input type="hidden" name="end_month" value="{{ activity_end_month }}">
+                        <input type="hidden" name="log_id" value="{{ editing_activity_log.pk }}">
+                        {% if activity_form.non_field_errors %}
+                            <div class="alert alert-danger" role="alert">
+                                {{ activity_form.non_field_errors|join:" " }}
+                            </div>
+                        {% endif %}
+                        <div class="row g-3">
+                            {% for field in activity_form %}
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.errors %}
+                                        <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <a href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Update Activity Log</button>
+                        </div>
+                    </form>
+                </div>
+            {% endif %}
         {% else %}
             <p class="text-muted mb-0">No engineer activity logs recorded yet.</p>
         {% endif %}
