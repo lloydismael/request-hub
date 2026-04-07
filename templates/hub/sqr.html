@@ -14,9 +14,9 @@
                         <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">New Submission</button>
                     {% endif %}
                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
-                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.for_processing }}</span>
-                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved: {{ sqr_counts.approved }}</span>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.processing }}</span>
                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision: {{ sqr_counts.for_revision }}</span>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved: {{ sqr_counts.approved }}</span>
                 </div>
             </div>
 
@@ -75,7 +75,7 @@
                             </td>
                             <td class="small text-muted">
                                 {% if item.reviewed_at %}
-                                    {{ item.get_status_display }} {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                    Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
                                 {% else %}
                                     {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
                                 {% endif %}

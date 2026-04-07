@@ -1318,9 +1318,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "sqr_submissions": submissions,
                 "sqr_counts": {
                     "total": len(submissions),
-                    "for_processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.SUBMITTED),
-                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
+                    "processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_PROCESSING),
                     "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
+                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
                 },
             }
         )
@@ -1335,7 +1335,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         if form.is_valid():
             submission = form.save(commit=False)
             submission.engineer = request.user
-            submission.status = SqrSubmission.Status.SUBMITTED
+            submission.status = SqrSubmission.Status.FOR_PROCESSING
             submission.save()
             self._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
@@ -1420,6 +1420,9 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "hub/sqr_review_form.html"
     success_url = reverse_lazy("hub:sqr")
 
+    def get_success_url(self):
+        return reverse("hub:sqr-review", args=[self.object.pk])
+
     def dispatch(self, request, *args, **kwargs):
         if request.user.role not in ADMIN_PANEL_ROLES:
             messages.error(request, "Only PM-ESG or Admin can review SQR submissions.")
@@ -1435,8 +1438,7 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         original = SqrSubmission.objects.get(pk=form.instance.pk)
         form.instance.reviewed_by = self.request.user
-        new_status = form.cleaned_data.get("status")
-        if new_status in {SqrSubmission.Status.APPROVED, SqrSubmission.Status.FOR_REVISION}:
+        if form.cleaned_data.get("status") == SqrSubmission.Status.APPROVED:
             if not form.instance.reviewed_at:
                 form.instance.reviewed_at = timezone.now()
         else:
@@ -1451,29 +1453,14 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         if review_changed:
             self._notify_engineer_review(self.object)
 
-        if review_changed and new_status == SqrSubmission.Status.FOR_REVISION:
-            teams_url = self._build_sqr_revision_teams_url(self.object)
-            if teams_url:
-                messages.info(self.request, "Launching Microsoft Teams…")
-                return render(
-                    self.request,
-                    "hub/sqr_teams_redirect.html",
-                    {
-                        "teams_url": teams_url,
-                        "back_url": reverse("hub:sqr"),
-                    },
-                )
-            messages.warning(
-                self.request,
-                "SQR was marked For Revision, but Teams group chat could not be created because participant emails are missing.",
-            )
-
-        messages.success(self.request, f"SQR {self.object.reference_code} review saved.")
+        messages.success(self.request, f"SQR {self.object.reference_code} status updated.")
         return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["back_url"] = reverse("hub:sqr")
+        context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
+        context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
         return context
 
     def _notify_engineer_review(self, submission: SqrSubmission) -> None:
@@ -1486,35 +1473,115 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
             source="SQR · Review Update",
         )
 
-    @staticmethod
-    def _build_sqr_revision_teams_url(submission: SqrSubmission) -> str:
-        approver_email = (
-            submission.pm_esg_reviewer.email
-            if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email
-            else None
-        )
-        requestor_email = (
-            submission.engineer.email
-            if submission.engineer and submission.engineer.email
-            else None
-        )
-        participants = sorted({email for email in [approver_email, requestor_email] if email})
-        if len(participants) < 2:
-            return ""
 
+class SqrTeamsRedirectView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can create SQR revision Teams groups.")
+            return redirect(redirect_target)
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG approver can create the revision Teams group.")
+            return redirect(redirect_target)
+
+        if submission.status != SqrSubmission.Status.FOR_REVISION:
+            messages.error(request, "Set SQR status to For Revision before creating a Teams group.")
+            return redirect(redirect_target)
+
+        approver_email = submission.pm_esg_reviewer.email if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email else None
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not approver_email or not requestor_email:
+            messages.error(request, "Unable to create Teams group. Ensure both approver and requestor emails are configured.")
+            return redirect(redirect_target)
+
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
+        participants = ",".join(sorted({approver_email, requestor_email}))
         topic = f"{submission.reference_code}+{submission.customer_name}"
-        requestor_name = submission.engineer.get_full_name() or submission.engineer.username or "Requestor"
-        comments = (submission.review_notes or "").strip() or "No comments provided."
-        message = (
+        message_body = (
             f"Hi @{requestor_name}\n"
             "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
-            f"{comments}\n\n"
             "Thanks"
         )
-
-        return (
+        teams_url = (
             "https://teams.microsoft.com/l/chat/0/0?users="
-            f"{quote(','.join(participants))}&topicName={quote(topic)}&message={quote(message)}"
+            f"{quote(participants)}&topicName={quote(topic)}&message={quote(message_body)}"
+        )
+
+        messages.info(request, "Launching Microsoft Teams…")
+        return render(
+            request,
+            "hub/teams_redirect.html",
+            {"teams_url": teams_url},
+        )
+
+
+class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can generate SQR approval advisory emails.")
+            return redirect(redirect_target)
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG approver can generate this approval advisory email.")
+            return redirect(redirect_target)
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Set SQR status to Approved before generating the advisory email.")
+            return redirect(redirect_target)
+
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            messages.error(request, "Unable to draft an email. Ensure the requestor (engineer) has an email configured.")
+            return redirect(redirect_target)
+
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
+        recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
+        subject = quote(f"{submission.reference_code}+{submission.customer_name}")
+
+        body_template = (
+            "Hi @{requestor_name}\n"
+            "Submitted SQR is now approved, please refer to the ff. details below.\n"
+            "SQR ID: {reference_code}\n"
+            "Customer Name: {customer_name}\n"
+            "Service Description: {service_description}\n"
+            "Account Manager: {account_manager}\n"
+            "Scope of Services: {scope_of_services}\n"
+            "Quantity: 1 Lot\n"
+            "Total Price: \n"
+            "Remarks: {remarks}"
+        )
+        body = quote(
+            body_template.format(
+                requestor_name=requestor_name,
+                reference_code=submission.reference_code,
+                customer_name=submission.customer_name,
+                service_description=(submission.project_title or "").strip(),
+                account_manager=(submission.customer_contact or "").strip(),
+                scope_of_services=(submission.project_details or "").strip(),
+                remarks=(submission.remarks or "").strip(),
+            )
+        )
+
+        mailto_url = f"mailto:{recipients}?subject={subject}&body={body}"
+        messages.info(request, "Drafting approval advisory in your default mail client…")
+        return render(
+            request,
+            "hub/outlook_redirect.html",
+            {"mailto_url": mailto_url},
         )
 
 

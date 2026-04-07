@@ -70,9 +70,24 @@
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end">
                     <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
-                    <button class="btn btn-primary" type="submit">Save Update</button>
+                    <button class="btn btn-primary" type="submit">Save Status</button>
                 </div>
             </form>
+
+            <div class="d-flex gap-2 flex-wrap justify-content-end mt-3">
+                {% if can_launch_revision_teams %}
+                    <form method="post" action="{% url 'hub:sqr-teams' object.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-primary" type="submit">Create Teams Revision Group</button>
+                    </form>
+                {% endif %}
+                {% if can_launch_approval_email %}
+                    <form method="post" action="{% url 'hub:sqr-approval-email' object.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-success" type="submit">Generate Approval Email</button>
+                    </form>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>

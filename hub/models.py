@@ -412,9 +412,9 @@ class EngineerActivityLog(models.Model):
 
 class SqrSubmission(models.Model):
     class Status(models.TextChoices):
-        SUBMITTED = "submitted", "For Processing"
-        APPROVED = "reviewed", "Approved"
+        FOR_PROCESSING = "submitted", "For Processing"
         FOR_REVISION = "for_revision", "For Revision"
+        APPROVED = "reviewed", "Approved"
 
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
@@ -439,7 +439,7 @@ class SqrSubmission(models.Model):
     sse_manhrs = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True)
     documentation_links = models.TextField(help_text="One link per line.")
     remarks = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUBMITTED)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
