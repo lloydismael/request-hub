@@ -600,6 +600,13 @@ class SqrReviewForm(forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["status"].choices = [
+            (SqrSubmission.Status.APPROVED, SqrSubmission.Status.APPROVED.label),
+            (SqrSubmission.Status.FOR_REVISION, SqrSubmission.Status.FOR_REVISION.label),
+        ]
+
 
 class RequestStatusForm(forms.ModelForm):
     class Meta:

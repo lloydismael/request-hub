@@ -413,7 +413,8 @@ class EngineerActivityLog(models.Model):
 class SqrSubmission(models.Model):
     class Status(models.TextChoices):
         SUBMITTED = "submitted", "For Processing"
-        REVIEWED = "reviewed", "Reviewed"
+        APPROVED = "reviewed", "Approved"
+        FOR_REVISION = "for_revision", "For Revision"
 
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)

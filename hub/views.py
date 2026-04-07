@@ -1318,8 +1318,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "sqr_submissions": submissions,
                 "sqr_counts": {
                     "total": len(submissions),
-                    "submitted": sum(1 for item in submissions if item.status == SqrSubmission.Status.SUBMITTED),
-                    "reviewed": sum(1 for item in submissions if item.status == SqrSubmission.Status.REVIEWED),
+                    "for_processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.SUBMITTED),
+                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
+                    "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
                 },
             }
         )
@@ -1434,7 +1435,8 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         original = SqrSubmission.objects.get(pk=form.instance.pk)
         form.instance.reviewed_by = self.request.user
-        if form.cleaned_data.get("status") == SqrSubmission.Status.REVIEWED:
+        new_status = form.cleaned_data.get("status")
+        if new_status in {SqrSubmission.Status.APPROVED, SqrSubmission.Status.FOR_REVISION}:
             if not form.instance.reviewed_at:
                 form.instance.reviewed_at = timezone.now()
         else:
@@ -1448,6 +1450,23 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         )
         if review_changed:
             self._notify_engineer_review(self.object)
+
+        if review_changed and new_status == SqrSubmission.Status.FOR_REVISION:
+            teams_url = self._build_sqr_revision_teams_url(self.object)
+            if teams_url:
+                messages.info(self.request, "Launching Microsoft Teams…")
+                return render(
+                    self.request,
+                    "hub/sqr_teams_redirect.html",
+                    {
+                        "teams_url": teams_url,
+                        "back_url": reverse("hub:sqr"),
+                    },
+                )
+            messages.warning(
+                self.request,
+                "SQR was marked For Revision, but Teams group chat could not be created because participant emails are missing.",
+            )
 
         messages.success(self.request, f"SQR {self.object.reference_code} review saved.")
         return response
@@ -1465,6 +1484,37 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
             message=f"{reviewer_name} marked {submission.reference_code} as {status_label}.",
             actor=reviewer_name,
             source="SQR · Review Update",
+        )
+
+    @staticmethod
+    def _build_sqr_revision_teams_url(submission: SqrSubmission) -> str:
+        approver_email = (
+            submission.pm_esg_reviewer.email
+            if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email
+            else None
+        )
+        requestor_email = (
+            submission.engineer.email
+            if submission.engineer and submission.engineer.email
+            else None
+        )
+        participants = sorted({email for email in [approver_email, requestor_email] if email})
+        if len(participants) < 2:
+            return ""
+
+        topic = f"{submission.reference_code}+{submission.customer_name}"
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username or "Requestor"
+        comments = (submission.review_notes or "").strip() or "No comments provided."
+        message = (
+            f"Hi @{requestor_name}\n"
+            "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
+            f"{comments}\n\n"
+            "Thanks"
+        )
+
+        return (
+            "https://teams.microsoft.com/l/chat/0/0?users="
+            f"{quote(','.join(participants))}&topicName={quote(topic)}&message={quote(message)}"
         )
 
 

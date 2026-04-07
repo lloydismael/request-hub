@@ -14,8 +14,9 @@
                         <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">New Submission</button>
                     {% endif %}
                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
-                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.submitted }}</span>
-                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed: {{ sqr_counts.reviewed }}</span>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.for_processing }}</span>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved: {{ sqr_counts.approved }}</span>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision: {{ sqr_counts.for_revision }}</span>
                 </div>
             </div>
 
@@ -65,14 +66,16 @@
                             <td>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</td>
                             <td>
                                 {% if item.status == 'reviewed' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>
+                                {% elif item.status == 'for_revision' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
                                 {% else %}
                                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
                                 {% endif %}
                             </td>
                             <td class="small text-muted">
                                 {% if item.reviewed_at %}
-                                    Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                    {{ item.get_status_display }} {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
                                 {% else %}
                                     {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
                                 {% endif %}
@@ -84,11 +87,13 @@
                                         <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
                                     </div>
                                 {% elif can_review_sqr %}
-                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Review</a>
+                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Manage</a>
                                 {% elif item.status == 'reviewed' %}
-                                    <span class="text-success small">Reviewed</span>
+                                    <span class="text-success small">Approved</span>
+                                {% elif item.status == 'for_revision' %}
+                                    <span class="text-danger small">For Revision</span>
                                 {% else %}
-                                    <span class="text-muted small">Waiting review</span>
+                                    <span class="text-muted small">For Processing</span>
                                 {% endif %}
                             </td>
                         </tr>
