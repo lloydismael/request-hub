@@ -1429,6 +1429,11 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["reviewer_role"] = self.request.user.role
+        return kwargs
+
     def get_queryset(self):
         queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
         if self.request.user.role == PM_ESG_ROLE:
@@ -1504,9 +1509,11 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
         requestor_name = submission.engineer.get_full_name() or submission.engineer.username
         participants = ",".join(sorted({approver_email, requestor_email}))
         topic = f"{submission.reference_code}+{submission.customer_name}"
+        comments = (submission.review_notes or "").strip() or "No comments provided."
         message_body = (
             f"Hi @{requestor_name}\n"
             "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
+            f"{comments}\n\n"
             "Thanks"
         )
         teams_url = (

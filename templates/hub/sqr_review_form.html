@@ -91,4 +91,26 @@
         </div>
     </div>
 </div>
+<script>
+    (function () {
+        const statusField = document.getElementById("id_status");
+        const commentsField = document.getElementById("id_review_notes");
+        const commentsLabel = document.querySelector('label[for="id_review_notes"]');
+        if (!statusField || !commentsField || !commentsLabel) {
+            return;
+        }
+
+        const isPmEsgUser = "{{ request.user.role }}" === "pm_esg";
+
+        const applyCommentMode = () => {
+            const isRevision = statusField.value === "for_revision";
+            commentsLabel.textContent = isRevision ? "Revision Comments" : "Review Notes";
+            commentsField.placeholder = isRevision ? "Enter revision comments" : "Review findings, follow-ups, and approval notes";
+            commentsField.required = isPmEsgUser && isRevision;
+        };
+
+        statusField.addEventListener("change", applyCommentMode);
+        applyCommentMode();
+    })();
+</script>
 {% endblock %}

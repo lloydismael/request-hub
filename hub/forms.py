@@ -621,11 +621,30 @@ class SqrSubmissionForm(forms.ModelForm):
 
 class SqrReviewForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
+        self.reviewer_role = kwargs.pop("reviewer_role", "")
         super().__init__(*args, **kwargs)
         self.fields["status"].choices = [
             (SqrSubmission.Status.FOR_REVISION, SqrSubmission.Status.FOR_REVISION.label),
             (SqrSubmission.Status.APPROVED, SqrSubmission.Status.APPROVED.label),
         ]
+
+        selected_status = ""
+        if self.is_bound:
+            selected_status = (self.data.get("status") or "").strip()
+        else:
+            selected_status = (getattr(self.instance, "status", "") or "").strip()
+
+        if selected_status == SqrSubmission.Status.FOR_REVISION:
+            self.fields["review_notes"].label = "Revision Comments"
+            self.fields["review_notes"].widget.attrs["placeholder"] = "Enter revision comments"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        selected_status = cleaned_data.get("status")
+        comments = (cleaned_data.get("review_notes") or "").strip()
+        if selected_status == SqrSubmission.Status.FOR_REVISION and self.reviewer_role == User.Roles.PM_ESG and not comments:
+            self.add_error("review_notes", "Revision Comments is required when status is For Revision.")
+        return cleaned_data
 
     class Meta:
         model = SqrSubmission
