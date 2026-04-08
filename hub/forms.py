@@ -504,6 +504,35 @@ class RequestAdminForm(forms.ModelForm):
 
 
 class SqrSubmissionForm(forms.ModelForm):
+    GROUP_CHOICES = (
+        ("ESS", "ESS"),
+        ("HPE", "HPE"),
+        ("Dell", "Dell"),
+        ("ETC", "ETC"),
+    )
+
+    SCOPE_CHOICES = (
+        ("Training", "Training"),
+        ("Support", "Support"),
+        ("Project Implementation", "Project Implementation"),
+        ("Project Management", "Project Management"),
+        ("Project Implementation and Management", "Project Implementation and Management"),
+        ("Demonstration", "Demonstration"),
+        ("Technical Support Maintenance", "Technical Support Maintenance"),
+    )
+
+    customer_company = forms.ChoiceField(
+        choices=GROUP_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Group Name",
+    )
+
+    project_details = forms.ChoiceField(
+        choices=SCOPE_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Scope of Services",
+    )
+
     pm_esg_reviewer = forms.ModelChoiceField(
         queryset=User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name"),
         required=True,
@@ -536,10 +565,8 @@ class SqrSubmissionForm(forms.ModelForm):
         }
         widgets = {
             "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
-            "customer_company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter group name"}),
             "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account manager"}),
             "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter service description"}),
-            "project_details": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Enter scope of services"}),
             "sse_manhrs": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}),
             "documentation_links": forms.Textarea(
                 attrs={
@@ -558,7 +585,14 @@ class SqrSubmissionForm(forms.ModelForm):
         widget = self.fields["pm_esg_reviewer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
+        self.fields["project_title"].help_text = "Project Name / Engagement Name"
         self.fields["documentation_links"].help_text = "Provide the SQR document reference link."
+
+        # Preserve editability of historical values created before dropdown enforcement.
+        for field_name in ("customer_company", "project_details"):
+            current_value = getattr(self.instance, field_name, "") if self.instance else ""
+            if current_value and current_value not in dict(self.fields[field_name].choices):
+                self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
 
     def clean_documentation_links(self):
         raw = (self.cleaned_data.get("documentation_links") or "").strip()
