@@ -37,6 +37,8 @@ from .forms import (
     AdminRequestFilterForm,
     EngineerActivityLogForm,
     RequestAdminForm,
+    SqrRevenueOrderForm,
+    SqrRevenueQuotationForm,
     RequestForm,
     RequestStatusForm,
     SqrReviewForm,
@@ -1304,11 +1306,66 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         can_create = user.role == User.Roles.ENGINEER
         can_review = user.role in ADMIN_PANEL_ROLES
+        show_revenue_tracker_tab = user.role == PM_ESG_ROLE
+        active_tab = (self.request.GET.get("tab") or "submissions").strip().lower()
+        if active_tab not in {"submissions", "revenue-tracker"}:
+            active_tab = "submissions"
+        if not show_revenue_tracker_tab and active_tab == "revenue-tracker":
+            active_tab = "submissions"
+
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
 
         submissions = list(self.get_queryset())
+
+        quotation_stage_submissions = []
+        order_stage_submissions = []
+        revenue_stage_submissions = []
+        quotation_stage_items = []
+        order_stage_items = []
+        revenue_stage_totals = {
+            "count": 0,
+            "total_price": Decimal("0.00"),
+            "discounted_price": Decimal("0.00"),
+        }
+
+        if show_revenue_tracker_tab:
+            for item in submissions:
+                if item.revenue_stage_key == "quotation":
+                    quotation_stage_submissions.append(item)
+                elif item.revenue_stage_key == "order":
+                    order_stage_submissions.append(item)
+                else:
+                    revenue_stage_submissions.append(item)
+
+            quotation_stage_items = [
+                {
+                    "submission": item,
+                    "form": SqrRevenueQuotationForm(instance=item, prefix=f"quote-{item.pk}"),
+                }
+                for item in quotation_stage_submissions
+            ]
+            order_stage_items = [
+                {
+                    "submission": item,
+                    "form": SqrRevenueOrderForm(instance=item, prefix=f"order-{item.pk}"),
+                }
+                for item in order_stage_submissions
+            ]
+
+            total_price = Decimal("0.00")
+            discounted_price = Decimal("0.00")
+            for item in revenue_stage_submissions:
+                total_price += item.quotation_total_price or Decimal("0.00")
+                discounted_price += item.discounted_price or Decimal("0.00")
+
+            revenue_stage_totals = {
+                "count": len(revenue_stage_submissions),
+                "total_price": total_price,
+                "discounted_price": discounted_price,
+            }
+
         context.update(
             {
                 "can_create_sqr": can_create,
@@ -1316,12 +1373,20 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "sqr_form": form,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "sqr_submissions": submissions,
+                "active_sqr_tab": active_tab,
+                "show_revenue_tracker_tab": show_revenue_tracker_tab,
                 "sqr_counts": {
                     "total": len(submissions),
                     "processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_PROCESSING),
                     "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
                     "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
                 },
+                "quotation_stage_items": quotation_stage_items,
+                "quotation_stage_count": len(quotation_stage_submissions),
+                "order_stage_items": order_stage_items,
+                "order_stage_count": len(order_stage_submissions),
+                "revenue_stage_submissions": revenue_stage_submissions,
+                "revenue_stage_totals": revenue_stage_totals,
             }
         )
         return context
@@ -1479,6 +1544,71 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         )
 
 
+class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
+    @staticmethod
+    def _flash_form_errors(request, form):
+        for field, errors in form.errors.items():
+            if field == "__all__":
+                for error in errors:
+                    messages.error(request, error)
+                continue
+            label = form.fields.get(field).label if field in form.fields else field
+            for error in errors:
+                messages.error(request, f"{label}: {error}")
+
+    @staticmethod
+    def _tracker_redirect_url():
+        return f"{reverse('hub:sqr')}?{urlencode({'tab': 'revenue-tracker'})}"
+
+    def post(self, request, pk):
+        if request.user.role != PM_ESG_ROLE:
+            messages.error(request, "Only PM-ESG can update Revenue Tracker details.")
+            return redirect(self._tracker_redirect_url())
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+            pm_esg_reviewer=request.user,
+        )
+
+        stage_action = (request.POST.get("stage_action") or "").strip().lower()
+        if stage_action == "quotation":
+            if submission.revenue_stage_key != "quotation":
+                messages.error(request, "Quotation pricing can only be updated in Quotation stage.")
+                return redirect(self._tracker_redirect_url())
+
+            form = SqrRevenueQuotationForm(request.POST, instance=submission, prefix=f"quote-{submission.pk}")
+            if form.is_valid():
+                form.save()
+                messages.success(request, f"Quotation pricing saved for {submission.reference_code}.")
+            else:
+                self._flash_form_errors(request, form)
+            return redirect(self._tracker_redirect_url())
+
+        if stage_action == "order":
+            if submission.revenue_stage_key != "order":
+                messages.error(request, "Only approved SQR entries in Order stage can attach a P.O.")
+                return redirect(self._tracker_redirect_url())
+
+            form = SqrRevenueOrderForm(request.POST, instance=submission, prefix=f"order-{submission.pk}")
+            if form.is_valid():
+                updated_submission = form.save(commit=False)
+                if not updated_submission.quotation_total_price:
+                    messages.error(request, "Set the quotation pricing before attaching a P.O.")
+                    return redirect(self._tracker_redirect_url())
+
+                if not submission.po_attachment_link:
+                    updated_submission.po_attached_at = timezone.now()
+                updated_submission.save()
+                messages.success(request, f"P.O attached for {submission.reference_code}. Moved to Revenue stage.")
+            else:
+                self._flash_form_errors(request, form)
+            return redirect(self._tracker_redirect_url())
+
+        messages.error(request, "Invalid revenue tracker action.")
+        return redirect(self._tracker_redirect_url())
+
+
 class SqrTeamsRedirectView(LoginRequiredMixin, View):
     def post(self, request, pk):
         submission = get_object_or_404(
@@ -1558,6 +1688,9 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
         requestor_name = submission.engineer.get_full_name() or submission.engineer.username
         recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
         subject = quote(f"{submission.reference_code}+{submission.customer_name}")
+        total_price_text = f"{submission.quotation_total_price:,.2f}" if submission.quotation_total_price is not None else "TBD"
+        discounted_price_text = f"{submission.discounted_price:,.2f}" if submission.discounted_price is not None else "TBD"
+        discount_rate_text = f"{submission.discount_rate}%"
 
         body_template = (
             "Hi @{requestor_name}\n"
@@ -1568,7 +1701,9 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
             "Account Manager: {account_manager}\n"
             "Scope of Services: {scope_of_services}\n"
             "Quantity: 1 Lot\n"
-            "Total Price: \n"
+            "Total Price: {total_price}\n"
+            "Discount Rate: {discount_rate}\n"
+            "Discounted Price: {discounted_price}\n"
             "Remarks: {remarks}"
         )
         body = quote(
@@ -1579,6 +1714,9 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
                 service_description=(submission.project_title or "").strip(),
                 account_manager=(submission.customer_contact or "").strip(),
                 scope_of_services=(submission.project_details or "").strip(),
+                total_price=total_price_text,
+                discount_rate=discount_rate_text,
+                discounted_price=discounted_price_text,
                 remarks=(submission.remarks or "").strip(),
             )
         )

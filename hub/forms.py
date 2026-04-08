@@ -661,6 +661,62 @@ class SqrReviewForm(forms.ModelForm):
         }
 
 
+class SqrRevenueQuotationForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["quotation_total_price", "discount_rate"]
+        widgets = {
+            "quotation_total_price": forms.NumberInput(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+            "discount_rate": forms.Select(attrs={"class": "form-select form-select-sm"}),
+        }
+
+    def clean_quotation_total_price(self):
+        value = self.cleaned_data.get("quotation_total_price")
+        if value is None:
+            raise forms.ValidationError("Enter the quotation amount.")
+        if value <= 0:
+            raise forms.ValidationError("Quotation amount must be greater than zero.")
+        return value
+
+
+class SqrRevenueOrderForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["po_attachment_link", "revenue_overview"]
+        widgets = {
+            "po_attachment_link": forms.URLInput(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "placeholder": "https://...",
+                }
+            ),
+            "revenue_overview": forms.Textarea(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "rows": 2,
+                    "placeholder": "Overview details of the revenue",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["po_attachment_link"].required = True
+
+    def clean_po_attachment_link(self):
+        value = (self.cleaned_data.get("po_attachment_link") or "").strip()
+        if not value:
+            raise forms.ValidationError("Attach the purchase order link to move this to Revenue stage.")
+        return value
+
+
 class RequestStatusForm(forms.ModelForm):
     class Meta:
         model = Request
