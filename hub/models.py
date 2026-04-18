@@ -79,7 +79,7 @@ class Request(models.Model):
         related_name="requests_assigned",
         blank=True,
         null=True,
-        limit_choices_to={"role": "engineer"},
+        limit_choices_to={"role__in": ["engineer", "on_hold"]},
     )
     backup_engineer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -87,7 +87,7 @@ class Request(models.Model):
         related_name="backup_requests_assigned",
         blank=True,
         null=True,
-        limit_choices_to={"role": "engineer"},
+        limit_choices_to={"role__in": ["engineer", "on_hold"]},
     )
     teams_chat_topic = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)

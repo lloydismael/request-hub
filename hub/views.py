@@ -27,10 +27,12 @@ from accounts.models import User
 
 REQUESTOR_ROLES = set(User.REQUESTOR_ROLES)
 REQUEST_CREATOR_ROLES = set(getattr(User, "REQUEST_CREATOR_ROLES", User.REQUESTOR_ROLES))
+ENGINEER_ACCESS_ROLES = set(getattr(User, "ENGINEER_ACCESS_ROLES", (User.Roles.ENGINEER,)))
+ASSIGNABLE_ENGINEER_ROLES = set(getattr(User, "ASSIGNABLE_ENGINEER_ROLES", (User.Roles.ENGINEER,)))
 PM_ESS_ROLE = User.Roles.PM_ESS
 PM_ESG_ROLE = User.Roles.PM_ESG
 ADMIN_PANEL_ROLES = {User.Roles.ADMIN, PM_ESG_ROLE}
-SQR_ACCESS_ROLES = {User.Roles.ADMIN, User.Roles.ENGINEER, PM_ESG_ROLE}
+SQR_ACCESS_ROLES = ENGINEER_ACCESS_ROLES | {User.Roles.ADMIN, PM_ESG_ROLE}
 
 from .forms import (
     AccountManagementForm,
@@ -760,12 +762,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["role"] = User.Roles.ADMIN if user.role in ADMIN_PANEL_ROLES else user.role
+        if user.role in ADMIN_PANEL_ROLES:
+            context["role"] = User.Roles.ADMIN
+        elif user.role in ENGINEER_ACCESS_ROLES:
+            context["role"] = User.Roles.ENGINEER
+        else:
+            context["role"] = user.role
         context["is_admin_ui"] = user.role in ADMIN_PANEL_ROLES
         context["is_requestor_role"] = user.role in REQUESTOR_ROLES
         context["is_pm_ess"] = user.role == PM_ESS_ROLE
         context["is_pm_esg"] = user.role == PM_ESG_ROLE
         context["is_requestor_ui"] = user.role in REQUESTOR_ROLES or user.role == PM_ESS_ROLE
+        context["is_engineer_access_role"] = user.role in ENGINEER_ACCESS_ROLES
         context["can_create_request"] = user.role in REQUEST_CREATOR_ROLES
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
@@ -869,7 +877,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "completed": metrics["completed"],
             }
             context["request_report_data"] = self._build_request_report_data(requests)
-        elif user.role == User.Roles.ENGINEER:
+        elif user.role in ENGINEER_ACCESS_ROLES:
             metric_filter = (self.request.GET.get("metric_filter") or "").strip()
             tab = self.request.GET.get("tab") or "assigned"
             valid_metrics = {"ongoing", "due_soon", "overdue", "completed"}
@@ -1225,7 +1233,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ack_rows = (
             RequestCommunication.objects.filter(
                 request_id__in=request_ids,
-                user__role__in=[User.Roles.ENGINEER, User.Roles.ADMIN, PM_ESG_ROLE],
+                user__role__in=[*ENGINEER_ACCESS_ROLES, User.Roles.ADMIN, PM_ESG_ROLE],
                 channel__in=[
                     RequestCommunication.Channel.OUTLOOK,
                     RequestCommunication.Channel.TEAMS,
@@ -1352,7 +1360,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "pm_esg_reviewer",
             "reviewed_by",
         ).order_by("-created_at")
-        if self.request.user.role == User.Roles.ENGINEER:
+        if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
         if self.request.user.role == PM_ESG_ROLE:
             return queryset.filter(pm_esg_reviewer=self.request.user)
@@ -1361,7 +1369,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        can_create = user.role == User.Roles.ENGINEER
+        can_create = user.role in ENGINEER_ACCESS_ROLES
         can_review = user.role in ADMIN_PANEL_ROLES
         show_revenue_tracker_tab = user.role == PM_ESG_ROLE
         active_tab = (self.request.GET.get("tab") or "submissions").strip().lower()
@@ -1449,7 +1457,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.ENGINEER:
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
             messages.error(request, "Only engineers can submit SQR entries.")
             return redirect("hub:sqr")
 
@@ -1494,7 +1502,7 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
     success_url = reverse_lazy("hub:sqr")
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.ENGINEER:
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
             messages.error(request, "Only engineers can edit SQR submissions.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
@@ -1521,7 +1529,7 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("hub:sqr")
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role != User.Roles.ENGINEER:
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
             messages.error(request, "Only engineers can delete SQR submissions.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
@@ -1799,7 +1807,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return qs.filter(Q(requestor=user) | Q(requestor__role=User.Roles.REQUESTOR_ESS))
         if user.role in REQUESTOR_ROLES:
             return qs.filter(requestor=user)
-        if user.role == User.Roles.ENGINEER:
+        if user.role in ENGINEER_ACCESS_ROLES:
             return qs.filter(engineer=user)
         return qs
 
@@ -1812,7 +1820,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         if can_comment:
             context["log_form"] = kwargs.get("log_form") or StatusLogForm()
         if (
-            self.request.user.role == User.Roles.ENGINEER
+            self.request.user.role in ENGINEER_ACCESS_ROLES
             and request_obj.engineer_id == self.request.user.id
         ):
             context["status_form"] = kwargs.get("status_form") or RequestStatusForm(instance=request_obj)
@@ -1840,7 +1848,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return False
         if user.role in ADMIN_PANEL_ROLES:
             return True
-        if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
+        if user.role in ENGINEER_ACCESS_ROLES and request_obj.engineer_id == user.id:
             return True
         if user.role in REQUEST_CREATOR_ROLES and request_obj.requestor_id == user.id:
             return True
@@ -1958,7 +1966,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
 
     def _build_engineer_capacity_map(self):
         data = {}
-        engineers = User.objects.filter(role=User.Roles.ENGINEER)
+        engineers = User.objects.filter(role__in=ASSIGNABLE_ENGINEER_ROLES)
         for engineer in engineers:
             assigned = Request.objects.filter(engineer=engineer, status=Request.Status.ONGOING)
             if self.object.pk:
@@ -2027,7 +2035,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in REQUEST_CREATOR_ROLES | {User.Roles.ENGINEER, PM_ESS_ROLE}:
+        if request.user.role not in (REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}):
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -2041,7 +2049,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             queryset = queryset.filter(pk=pk).filter(Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user))
         elif user.role in REQUEST_CREATOR_ROLES:
             queryset = queryset.filter(pk=pk, requestor=user)
-        elif user.role == User.Roles.ENGINEER:
+        elif user.role in ENGINEER_ACCESS_ROLES:
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
         else:
             raise Http404
@@ -2079,7 +2087,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
         if form is None:
             form = RequestForm(instance=request_obj, actor_role=self.request.user.role)
-        status_allowed = self.request.user.role == User.Roles.ENGINEER
+        status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
         if status_allowed and status_form is None:
             status_form = RequestStatusForm(instance=request_obj)
         elif not status_allowed:
@@ -2146,7 +2154,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
     def _handle_status_update(self, request, request_obj):
-        if request.user.role != User.Roles.ENGINEER:
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
             messages.error(request, "Only the assigned engineer can update the status.")
             return HttpResponseRedirect(request.path)
         status_form = RequestStatusForm(request.POST, instance=request_obj)
@@ -2282,7 +2290,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
-        if request.user.role == User.Roles.ENGINEER:
+        if request.user.role in ENGINEER_ACCESS_ROLES:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to draft emails for this request.")
                 return redirect(redirect_target)
@@ -2350,7 +2358,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         if not assigned_engineer_name:
             assigned_engineer_name = "our engineering team"
 
-        if request.user.role == User.Roles.ENGINEER:
+        if request.user.role in ENGINEER_ACCESS_ROLES:
             body_template = (
                 "Hello {requestor_name},\n\n"
                 "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it.\n\n"
@@ -2417,7 +2425,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
             messages.error(request, "Mark the request as completed before sending a closing email.")
             return redirect(redirect_target)
 
-        if request.user.role == User.Roles.ENGINEER:
+        if request.user.role in ENGINEER_ACCESS_ROLES:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to close out this request.")
                 return redirect(redirect_target)
@@ -2515,11 +2523,11 @@ class RequestTeamsRedirectView(LoginRequiredMixin, View):
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
         role = request.user.role
-        if role not in {User.Roles.ADMIN, PM_ESG_ROLE, User.Roles.ENGINEER, PM_ESS_ROLE}:
+        if role not in ({User.Roles.ADMIN, PM_ESG_ROLE, PM_ESS_ROLE} | ENGINEER_ACCESS_ROLES):
             messages.error(request, "You are not allowed to start a Teams chat for this request.")
             return redirect(redirect_target)
 
-        if role == User.Roles.ENGINEER:
+        if role in ENGINEER_ACCESS_ROLES:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to start a Teams chat for this request.")
                 return redirect(redirect_target)
@@ -3511,7 +3519,7 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             pk=pk,
         )
 
-        if request.user.role != User.Roles.ENGINEER or request_obj.engineer_id != request.user.id:
+        if request.user.role not in ENGINEER_ACCESS_ROLES or request_obj.engineer_id != request.user.id:
             messages.error(request, "You are not allowed to update this request's status.")
             return redirect("hub:request-detail", pk=pk)
 

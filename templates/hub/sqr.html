@@ -97,7 +97,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-end">
-                                    {% if request.user.role == 'engineer' and item.engineer_id == request.user.id %}
+                                    {% if request.user.is_engineer_access_role and item.engineer_id == request.user.id %}
                                         <div class="d-flex gap-1 justify-content-end">
                                             <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>

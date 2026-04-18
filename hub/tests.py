@@ -7,8 +7,14 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from accounts.models import User
+from hub.forms import RequestForm
 from hub.models import Account, Request
-from hub.views import AssignmentEmailResult, DashboardView, notify_engineer_assignment_email
+from hub.views import (
+    AssignmentEmailResult,
+    DashboardView,
+    RequestCollaborativeManageView,
+    notify_engineer_assignment_email,
+)
 
 
 class AssignmentEmailTests(TestCase):
@@ -154,3 +160,102 @@ class DashboardViewTests(TestCase):
         self.assertIn(own_request.pk, request_ids)
         self.assertIn(requestor_ess_request.pk, request_ids)
         self.assertNotIn(other_request.pk, request_ids)
+
+
+class OnHoldRoleTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.requestor = User.objects.create_user(
+            username="requestor_onhold",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="requestor.onhold@example.com",
+        )
+        self.engineer = User.objects.create_user(
+            username="engineer_active",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.active@example.com",
+        )
+        self.on_hold_engineer = User.objects.create_user(
+            username="engineer_onhold",
+            password="pass12345",
+            role=User.Roles.ON_HOLD,
+            email="engineer.onhold@example.com",
+        )
+        self.account = Account.objects.create(name="On Hold Account")
+
+    def test_new_request_form_excludes_on_hold_engineers_from_assignment_choices(self):
+        form = RequestForm(actor_role=User.Roles.REQUESTOR)
+        engineer_ids = set(form.fields["engineer"].queryset.values_list("id", flat=True))
+
+        self.assertIn(self.engineer.pk, engineer_ids)
+        self.assertNotIn(self.on_hold_engineer.pk, engineer_ids)
+
+    def test_edit_request_form_keeps_current_on_hold_assignee_visible(self):
+        request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Requestor On Hold",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.on_hold_engineer,
+        )
+
+        form = RequestForm(instance=request_obj, actor_role=User.Roles.REQUESTOR)
+        engineer_ids = set(form.fields["engineer"].queryset.values_list("id", flat=True))
+
+        self.assertIn(self.on_hold_engineer.pk, engineer_ids)
+
+    def test_on_hold_user_dashboard_shows_assigned_requests(self):
+        assigned_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Requestor On Hold",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.on_hold_engineer,
+        )
+        other_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Requestor On Hold",
+            product_category="M365",
+            engagement_type=Request.Engagement.TRAINING,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+        )
+
+        request = self.factory.get(reverse("hub:dashboard"))
+        request.user = self.on_hold_engineer
+
+        view = DashboardView()
+        view.setup(request)
+        context = view.get_context_data()
+        request_ids = {item.pk for item in context["requests"]}
+
+        self.assertEqual(context["role"], User.Roles.ENGINEER)
+        self.assertIn(assigned_request.pk, request_ids)
+        self.assertNotIn(other_request.pk, request_ids)
+
+    def test_on_hold_user_can_manage_previously_assigned_request(self):
+        request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Requestor On Hold",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.on_hold_engineer,
+        )
+
+        request = self.factory.get(reverse("hub:request-manage-collab", args=[request_obj.pk]))
+        request.user = self.on_hold_engineer
+
+        view = RequestCollaborativeManageView()
+        view.setup(request, pk=request_obj.pk)
+        view.kwargs = {"pk": request_obj.pk}
+
+        self.assertEqual(view.get_object(), request_obj)

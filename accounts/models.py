@@ -36,6 +36,7 @@ class User(AbstractUser):
         PM_ESS = "pm_ess", "PM-ESS"
         PM_ESG = "pm_esg", "PM-ESG"
         ENGINEER = "engineer", "Engineer"
+        ON_HOLD = "on_hold", "On Hold"
         ADMIN = "admin", "Admin"
 
     phone_number = models.CharField(
@@ -52,6 +53,8 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
     REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)
     REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG)
+    ENGINEER_ACCESS_ROLES = (Roles.ENGINEER, Roles.ON_HOLD)
+    ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
 
@@ -72,3 +75,7 @@ class User(AbstractUser):
         except ValueError:
             return ""
         return url
+
+    @property
+    def is_engineer_access_role(self) -> bool:
+        return self.role in self.ENGINEER_ACCESS_ROLES

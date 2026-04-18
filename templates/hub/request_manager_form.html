@@ -33,7 +33,7 @@
                             {% endif %}
                         </div>
                     {% elif field.name == 'account_name' %}
-                        {% if request.user.role == 'engineer' %}
+                        {% if request.user.is_engineer_access_role %}
                             <div class="mb-3">
                                 <label class="form-label">Account Name</label>
                                 <div class="form-control-plaintext">{{ field.value }}</div>
@@ -51,7 +51,7 @@
                     {% elif field.name == 'needed_by' %}
                         <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
                             <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {% if request.user.role == 'engineer' %}
+                            {% if request.user.is_engineer_access_role %}
                                 <div class="form-control-plaintext">{{ field.value|default_if_none:'' }}</div>
                                 <input type="hidden" name="{{ field.name }}" value="{{ field.value|date:'Y-m-d'|default_if_none:'' }}">
                             {% else %}
@@ -125,7 +125,7 @@
                     {% elif field.name == 'deployment_end' %}
                         {# Rendered with deployment_start #}
                     {% elif field.name == 'description' %}
-                        {% if request.user.role == 'engineer' %}
+                        {% if request.user.is_engineer_access_role %}
                             <div class="mb-3">
                                 <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 <div class="form-control-plaintext" style="white-space: pre-wrap;">{{ field.value }}</div>
@@ -178,7 +178,7 @@
                     {% endfor %}
                     <div class="col-12 d-flex flex-wrap justify-content-end gap-2">
                         <button class="btn btn-outline-primary" type="submit">Update status</button>
-                        {% if request.user.role == 'engineer' and object.status == 'completed' %}
+                        {% if request.user.is_engineer_access_role and object.status == 'completed' %}
                             <button
                                 class="btn btn-outline-secondary"
                                 type="submit"

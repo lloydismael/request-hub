@@ -9,6 +9,7 @@ ROLE_LABELS = {
     User.Roles.ADMIN: "Admin",
     User.Roles.PM_ESG: "PM-ESG",
     User.Roles.ENGINEER: "Engineer",
+    User.Roles.ON_HOLD: "On Hold",
     User.Roles.REQUESTOR: "Requestor",
     User.Roles.REQUESTOR_ESS: "Requestor-ESS",
     User.Roles.PM_ESS: "PM-ESS",

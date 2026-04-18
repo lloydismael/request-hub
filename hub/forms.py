@@ -56,6 +56,18 @@ def _user_display(user):
     return full_name or user.username
 
 
+def _engineer_queryset(*extra_users):
+    extra_ids = [user.pk for user in extra_users if user and getattr(user, "pk", None)]
+    queryset = User.objects.filter(role__in=User.ASSIGNABLE_ENGINEER_ROLES)
+    if extra_ids:
+        queryset = User.objects.filter(Q(role__in=User.ASSIGNABLE_ENGINEER_ROLES) | Q(pk__in=extra_ids))
+    return queryset.order_by("first_name", "last_name").distinct()
+
+
+def _engineer_access_queryset():
+    return User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES).order_by("first_name", "last_name")
+
+
 class RequestForm(forms.ModelForm):
     PROJECT_MANAGER_DISPLAY_NAMES = (
         "Jeram C. Zamora",
@@ -146,7 +158,7 @@ class RequestForm(forms.ModelForm):
         self.actor_role = actor_role
         super().__init__(*args, **kwargs)
         self.project_manager_ids = set()
-        include_backup = actor_role == User.Roles.ENGINEER
+        include_backup = actor_role in User.ENGINEER_ACCESS_ROLES
         if not include_backup:
             self.fields.pop("backup_engineer", None)
         desired_order = [
@@ -163,7 +175,9 @@ class RequestForm(forms.ModelForm):
         if include_backup:
             desired_order.append("backup_engineer")
         self.order_fields(desired_order)
-        engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        current_engineer = getattr(self.instance, "engineer", None)
+        current_backup_engineer = getattr(self.instance, "backup_engineer", None)
+        engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
         project_manager_qs = User.objects.filter(
             (Q(first_name__icontains="Jeram") & Q(last_name__icontains="Zamora"))
             | (Q(first_name__icontains="Marfelie") & Q(last_name__icontains="Barcenas"))
@@ -191,7 +205,7 @@ class RequestForm(forms.ModelForm):
                     for user_id in all_assignee_ids
                 }
         engineer_field.label_from_instance = _user_display
-        if actor_role == User.Roles.ENGINEER:
+        if actor_role in User.ENGINEER_ACCESS_ROLES:
             engineer_field.label = "Turn Over Request"
             engineer_field.empty_label = "Keep current assignment"
         else:
@@ -292,7 +306,7 @@ class RequestForm(forms.ModelForm):
         # Enforce per-engineer ongoing capacity rules during turn-over by engineers.
         # If the target engineer already carries a deployment, they are capped at 3 ongoing requests.
         # Otherwise they can handle up to 5 ongoing requests (even when receiving the first deployment).
-        if self.actor_role == User.Roles.ENGINEER:
+        if self.actor_role in User.ENGINEER_ACCESS_ROLES:
             new_engineer = cleaned_data.get("engineer")
             if new_engineer and new_engineer != self.instance.engineer:
                 ongoing_qs = Request.objects.filter(engineer=new_engineer, status=Request.Status.ONGOING)
@@ -434,12 +448,12 @@ class RequestAdminForm(forms.ModelForm):
         help_text="Switch the request owner (Requestor/Requestor-ESS/PM-ESS).",
     )
     engineer = forms.ModelChoiceField(
-        queryset=User.objects.filter(role=User.Roles.ENGINEER),
+        queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
     )
     backup_engineer = forms.ModelChoiceField(
-        queryset=User.objects.filter(role=User.Roles.ENGINEER),
+        queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
         label="Backup Engineer",
@@ -481,14 +495,14 @@ class RequestAdminForm(forms.ModelForm):
         if isinstance(req_widget, AvatarSelect):
             req_widget.avatar_mapping = _build_avatar_mapping(self.fields["requestor"].queryset)
         self.fields["requestor"].label_from_instance = _user_display
-        self.fields["engineer"].queryset = self.fields["engineer"].queryset.order_by("first_name", "last_name")
+        self.fields["engineer"].queryset = _engineer_queryset(getattr(self.instance, "engineer", None))
         widget = self.fields["engineer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
         self.fields["engineer"].label_from_instance = _user_display
         
         # Setup backup engineer field
-        self.fields["backup_engineer"].queryset = self.fields["backup_engineer"].queryset.order_by("first_name", "last_name")
+        self.fields["backup_engineer"].queryset = _engineer_queryset(getattr(self.instance, "backup_engineer", None))
         backup_widget = self.fields["backup_engineer"].widget
         if isinstance(backup_widget, AvatarSelect):
             backup_widget.avatar_mapping = _build_avatar_mapping(self.fields["backup_engineer"].queryset)
@@ -991,7 +1005,7 @@ class AdminRequestFilterForm(forms.Form):
         self.fields["account_manager"].queryset = requestor_qs
         self.fields["account_manager"].empty_label = "All requestors"
         self.fields["account_manager"].label_from_instance = _user_display
-        engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        engineer_qs = _engineer_access_queryset()
         self.fields["engineer"].queryset = engineer_qs
         self.fields["engineer"].empty_label = "All engineers"
         self.fields["engineer"].label_from_instance = _user_display
