@@ -143,6 +143,8 @@ Use `.env` to store runtime configuration. Typical values include:
 - `DB_PASSWORD`
 - `DB_HOST`
 - `DB_PORT`
+- `ACS_EMAIL_CONNECTION_STRING` (use the ACS endpoint `https://esgrequesthub.asiapacific.communication.azure.com` in the connection string)
+- `ACS_EMAIL_SENDER` (set to `DoNotReply@dreadops.site`)
 - Optional integration settings (email/Azure/etc.)
 
 Microsoft Graph (MSAL) settings for phildata tenant:

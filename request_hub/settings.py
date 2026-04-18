@@ -165,7 +165,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "ESG Request Hub <no
 ACS_EMAIL_CONNECTION_STRING = os.getenv("ACS_EMAIL_CONNECTION_STRING", "").strip()
 ACS_EMAIL_SENDER = os.getenv(
     "ACS_EMAIL_SENDER",
-    "DoNotReply@a2317fba-55e4-4b27-b26b-5b5d32235fec.azurecomm.net",
+    "DoNotReply@dreadops.site",
 ).strip()
 
 # Microsoft Graph (MSAL) integration scoped to the phildata tenant.
