@@ -504,6 +504,35 @@ class RequestAdminForm(forms.ModelForm):
 
 
 class SqrSubmissionForm(forms.ModelForm):
+    GROUP_CHOICES = (
+        ("ESS", "ESS"),
+        ("HPE", "HPE"),
+        ("Dell", "Dell"),
+        ("ETC", "ETC"),
+    )
+
+    SCOPE_CHOICES = (
+        ("Training", "Training"),
+        ("Support", "Support"),
+        ("Project Implementation", "Project Implementation"),
+        ("Project Management", "Project Management"),
+        ("Project Implementation and Management", "Project Implementation and Management"),
+        ("Demonstration", "Demonstration"),
+        ("Technical Support Maintenance", "Technical Support Maintenance"),
+    )
+
+    customer_company = forms.ChoiceField(
+        choices=GROUP_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Group Name",
+    )
+
+    project_details = forms.ChoiceField(
+        choices=SCOPE_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Scope of Services",
+    )
+
     pm_esg_reviewer = forms.ModelChoiceField(
         queryset=User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name"),
         required=True,
@@ -536,10 +565,8 @@ class SqrSubmissionForm(forms.ModelForm):
         }
         widgets = {
             "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
-            "customer_company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter group name"}),
             "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account manager"}),
             "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter service description"}),
-            "project_details": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Enter scope of services"}),
             "sse_manhrs": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}),
             "documentation_links": forms.Textarea(
                 attrs={
@@ -558,7 +585,14 @@ class SqrSubmissionForm(forms.ModelForm):
         widget = self.fields["pm_esg_reviewer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
+        self.fields["project_title"].help_text = "Project Name / Engagement Name"
         self.fields["documentation_links"].help_text = "Provide the SQR document reference link."
+
+        # Preserve editability of historical values created before dropdown enforcement.
+        for field_name in ("customer_company", "project_details"):
+            current_value = getattr(self.instance, field_name, "") if self.instance else ""
+            if current_value and current_value not in dict(self.fields[field_name].choices):
+                self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
 
     def clean_documentation_links(self):
         raw = (self.cleaned_data.get("documentation_links") or "").strip()
@@ -586,6 +620,32 @@ class SqrSubmissionForm(forms.ModelForm):
 
 
 class SqrReviewForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.reviewer_role = kwargs.pop("reviewer_role", "")
+        super().__init__(*args, **kwargs)
+        self.fields["status"].choices = [
+            (SqrSubmission.Status.FOR_REVISION, SqrSubmission.Status.FOR_REVISION.label),
+            (SqrSubmission.Status.APPROVED, SqrSubmission.Status.APPROVED.label),
+        ]
+
+        selected_status = ""
+        if self.is_bound:
+            selected_status = (self.data.get("status") or "").strip()
+        else:
+            selected_status = (getattr(self.instance, "status", "") or "").strip()
+
+        if selected_status == SqrSubmission.Status.FOR_REVISION:
+            self.fields["review_notes"].label = "Revision Comments"
+            self.fields["review_notes"].widget.attrs["placeholder"] = "Enter revision comments"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        selected_status = cleaned_data.get("status")
+        comments = (cleaned_data.get("review_notes") or "").strip()
+        if selected_status == SqrSubmission.Status.FOR_REVISION and self.reviewer_role == User.Roles.PM_ESG and not comments:
+            self.add_error("review_notes", "Revision Comments is required when status is For Revision.")
+        return cleaned_data
+
     class Meta:
         model = SqrSubmission
         fields = ["status", "review_notes"]
@@ -599,6 +659,62 @@ class SqrReviewForm(forms.ModelForm):
                 }
             ),
         }
+
+
+class SqrRevenueQuotationForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["quotation_total_price", "discount_rate"]
+        widgets = {
+            "quotation_total_price": forms.NumberInput(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+            "discount_rate": forms.Select(attrs={"class": "form-select form-select-sm"}),
+        }
+
+    def clean_quotation_total_price(self):
+        value = self.cleaned_data.get("quotation_total_price")
+        if value is None:
+            raise forms.ValidationError("Enter the quotation amount.")
+        if value <= 0:
+            raise forms.ValidationError("Quotation amount must be greater than zero.")
+        return value
+
+
+class SqrRevenueOrderForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["po_attachment_link", "revenue_overview"]
+        widgets = {
+            "po_attachment_link": forms.URLInput(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "placeholder": "https://...",
+                }
+            ),
+            "revenue_overview": forms.Textarea(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "rows": 2,
+                    "placeholder": "Overview details of the revenue",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["po_attachment_link"].required = True
+
+    def clean_po_attachment_link(self):
+        value = (self.cleaned_data.get("po_attachment_link") or "").strip()
+        if not value:
+            raise forms.ValidationError("Attach the purchase order link to move this to Revenue stage.")
+        return value
 
 
 class RequestStatusForm(forms.ModelForm):

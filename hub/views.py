@@ -37,6 +37,8 @@ from .forms import (
     AdminRequestFilterForm,
     EngineerActivityLogForm,
     RequestAdminForm,
+    SqrRevenueOrderForm,
+    SqrRevenueQuotationForm,
     RequestForm,
     RequestStatusForm,
     SqrReviewForm,
@@ -1304,11 +1306,66 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         can_create = user.role == User.Roles.ENGINEER
         can_review = user.role in ADMIN_PANEL_ROLES
+        show_revenue_tracker_tab = user.role == PM_ESG_ROLE
+        active_tab = (self.request.GET.get("tab") or "submissions").strip().lower()
+        if active_tab not in {"submissions", "revenue-tracker"}:
+            active_tab = "submissions"
+        if not show_revenue_tracker_tab and active_tab == "revenue-tracker":
+            active_tab = "submissions"
+
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
 
         submissions = list(self.get_queryset())
+
+        quotation_stage_submissions = []
+        order_stage_submissions = []
+        revenue_stage_submissions = []
+        quotation_stage_items = []
+        order_stage_items = []
+        revenue_stage_totals = {
+            "count": 0,
+            "total_price": Decimal("0.00"),
+            "discounted_price": Decimal("0.00"),
+        }
+
+        if show_revenue_tracker_tab:
+            for item in submissions:
+                if item.revenue_stage_key == "quotation":
+                    quotation_stage_submissions.append(item)
+                elif item.revenue_stage_key == "order":
+                    order_stage_submissions.append(item)
+                else:
+                    revenue_stage_submissions.append(item)
+
+            quotation_stage_items = [
+                {
+                    "submission": item,
+                    "form": SqrRevenueQuotationForm(instance=item, prefix=f"quote-{item.pk}"),
+                }
+                for item in quotation_stage_submissions
+            ]
+            order_stage_items = [
+                {
+                    "submission": item,
+                    "form": SqrRevenueOrderForm(instance=item, prefix=f"order-{item.pk}"),
+                }
+                for item in order_stage_submissions
+            ]
+
+            total_price = Decimal("0.00")
+            discounted_price = Decimal("0.00")
+            for item in revenue_stage_submissions:
+                total_price += item.quotation_total_price or Decimal("0.00")
+                discounted_price += item.discounted_price or Decimal("0.00")
+
+            revenue_stage_totals = {
+                "count": len(revenue_stage_submissions),
+                "total_price": total_price,
+                "discounted_price": discounted_price,
+            }
+
         context.update(
             {
                 "can_create_sqr": can_create,
@@ -1316,11 +1373,20 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "sqr_form": form,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "sqr_submissions": submissions,
+                "active_sqr_tab": active_tab,
+                "show_revenue_tracker_tab": show_revenue_tracker_tab,
                 "sqr_counts": {
                     "total": len(submissions),
-                    "submitted": sum(1 for item in submissions if item.status == SqrSubmission.Status.SUBMITTED),
-                    "reviewed": sum(1 for item in submissions if item.status == SqrSubmission.Status.REVIEWED),
+                    "processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_PROCESSING),
+                    "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
+                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
                 },
+                "quotation_stage_items": quotation_stage_items,
+                "quotation_stage_count": len(quotation_stage_submissions),
+                "order_stage_items": order_stage_items,
+                "order_stage_count": len(order_stage_submissions),
+                "revenue_stage_submissions": revenue_stage_submissions,
+                "revenue_stage_totals": revenue_stage_totals,
             }
         )
         return context
@@ -1334,7 +1400,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         if form.is_valid():
             submission = form.save(commit=False)
             submission.engineer = request.user
-            submission.status = SqrSubmission.Status.SUBMITTED
+            submission.status = SqrSubmission.Status.FOR_PROCESSING
             submission.save()
             self._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
@@ -1419,11 +1485,19 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "hub/sqr_review_form.html"
     success_url = reverse_lazy("hub:sqr")
 
+    def get_success_url(self):
+        return reverse("hub:sqr-review", args=[self.object.pk])
+
     def dispatch(self, request, *args, **kwargs):
         if request.user.role not in ADMIN_PANEL_ROLES:
             messages.error(request, "Only PM-ESG or Admin can review SQR submissions.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["reviewer_role"] = self.request.user.role
+        return kwargs
 
     def get_queryset(self):
         queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
@@ -1434,7 +1508,7 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         original = SqrSubmission.objects.get(pk=form.instance.pk)
         form.instance.reviewed_by = self.request.user
-        if form.cleaned_data.get("status") == SqrSubmission.Status.REVIEWED:
+        if form.cleaned_data.get("status") == SqrSubmission.Status.APPROVED:
             if not form.instance.reviewed_at:
                 form.instance.reviewed_at = timezone.now()
         else:
@@ -1449,12 +1523,14 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         if review_changed:
             self._notify_engineer_review(self.object)
 
-        messages.success(self.request, f"SQR {self.object.reference_code} review saved.")
+        messages.success(self.request, f"SQR {self.object.reference_code} status updated.")
         return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["back_url"] = reverse("hub:sqr")
+        context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
+        context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
         return context
 
     def _notify_engineer_review(self, submission: SqrSubmission) -> None:
@@ -1465,6 +1541,192 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
             message=f"{reviewer_name} marked {submission.reference_code} as {status_label}.",
             actor=reviewer_name,
             source="SQR · Review Update",
+        )
+
+
+class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
+    @staticmethod
+    def _flash_form_errors(request, form):
+        for field, errors in form.errors.items():
+            if field == "__all__":
+                for error in errors:
+                    messages.error(request, error)
+                continue
+            label = form.fields.get(field).label if field in form.fields else field
+            for error in errors:
+                messages.error(request, f"{label}: {error}")
+
+    @staticmethod
+    def _tracker_redirect_url():
+        return f"{reverse('hub:sqr')}?{urlencode({'tab': 'revenue-tracker'})}"
+
+    def post(self, request, pk):
+        if request.user.role != PM_ESG_ROLE:
+            messages.error(request, "Only PM-ESG can update Revenue Tracker details.")
+            return redirect(self._tracker_redirect_url())
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+            pm_esg_reviewer=request.user,
+        )
+
+        stage_action = (request.POST.get("stage_action") or "").strip().lower()
+        if stage_action == "quotation":
+            if submission.revenue_stage_key != "quotation":
+                messages.error(request, "Quotation pricing can only be updated in Quotation stage.")
+                return redirect(self._tracker_redirect_url())
+
+            form = SqrRevenueQuotationForm(request.POST, instance=submission, prefix=f"quote-{submission.pk}")
+            if form.is_valid():
+                form.save()
+                messages.success(request, f"Quotation pricing saved for {submission.reference_code}.")
+            else:
+                self._flash_form_errors(request, form)
+            return redirect(self._tracker_redirect_url())
+
+        if stage_action == "order":
+            if submission.revenue_stage_key != "order":
+                messages.error(request, "Only approved SQR entries in Order stage can attach a P.O.")
+                return redirect(self._tracker_redirect_url())
+
+            form = SqrRevenueOrderForm(request.POST, instance=submission, prefix=f"order-{submission.pk}")
+            if form.is_valid():
+                updated_submission = form.save(commit=False)
+                if not updated_submission.quotation_total_price:
+                    messages.error(request, "Set the quotation pricing before attaching a P.O.")
+                    return redirect(self._tracker_redirect_url())
+
+                if not submission.po_attachment_link:
+                    updated_submission.po_attached_at = timezone.now()
+                updated_submission.save()
+                messages.success(request, f"P.O attached for {submission.reference_code}. Moved to Revenue stage.")
+            else:
+                self._flash_form_errors(request, form)
+            return redirect(self._tracker_redirect_url())
+
+        messages.error(request, "Invalid revenue tracker action.")
+        return redirect(self._tracker_redirect_url())
+
+
+class SqrTeamsRedirectView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can create SQR revision Teams groups.")
+            return redirect(redirect_target)
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG approver can create the revision Teams group.")
+            return redirect(redirect_target)
+
+        if submission.status != SqrSubmission.Status.FOR_REVISION:
+            messages.error(request, "Set SQR status to For Revision before creating a Teams group.")
+            return redirect(redirect_target)
+
+        approver_email = submission.pm_esg_reviewer.email if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email else None
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not approver_email or not requestor_email:
+            messages.error(request, "Unable to create Teams group. Ensure both approver and requestor emails are configured.")
+            return redirect(redirect_target)
+
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
+        participants = ",".join(sorted({approver_email, requestor_email}))
+        topic = f"{submission.reference_code}+{submission.customer_name}"
+        comments = (submission.review_notes or "").strip() or "No comments provided."
+        message_body = (
+            f"Hi @{requestor_name}\n"
+            "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
+            f"{comments}\n\n"
+            "Thanks"
+        )
+        teams_url = (
+            "https://teams.microsoft.com/l/chat/0/0?users="
+            f"{quote(participants)}&topicName={quote(topic)}&message={quote(message_body)}"
+        )
+
+        messages.info(request, "Launching Microsoft Teams…")
+        return render(
+            request,
+            "hub/teams_redirect.html",
+            {"teams_url": teams_url},
+        )
+
+
+class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can generate SQR approval advisory emails.")
+            return redirect(redirect_target)
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG approver can generate this approval advisory email.")
+            return redirect(redirect_target)
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Set SQR status to Approved before generating the advisory email.")
+            return redirect(redirect_target)
+
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            messages.error(request, "Unable to draft an email. Ensure the requestor (engineer) has an email configured.")
+            return redirect(redirect_target)
+
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
+        recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
+        subject = quote(f"{submission.reference_code}+{submission.customer_name}")
+        total_price_text = f"{submission.quotation_total_price:,.2f}" if submission.quotation_total_price is not None else "TBD"
+        discounted_price_text = f"{submission.discounted_price:,.2f}" if submission.discounted_price is not None else "TBD"
+        discount_rate_text = f"{submission.discount_rate}%"
+
+        body_template = (
+            "Hi @{requestor_name}\n"
+            "Submitted SQR is now approved, please refer to the ff. details below.\n"
+            "SQR ID: {reference_code}\n"
+            "Customer Name: {customer_name}\n"
+            "Service Description: {service_description}\n"
+            "Account Manager: {account_manager}\n"
+            "Scope of Services: {scope_of_services}\n"
+            "Quantity: 1 Lot\n"
+            "Total Price: {total_price}\n"
+            "Discount Rate: {discount_rate}\n"
+            "Discounted Price: {discounted_price}\n"
+            "Remarks: {remarks}"
+        )
+        body = quote(
+            body_template.format(
+                requestor_name=requestor_name,
+                reference_code=submission.reference_code,
+                customer_name=submission.customer_name,
+                service_description=(submission.project_title or "").strip(),
+                account_manager=(submission.customer_contact or "").strip(),
+                scope_of_services=(submission.project_details or "").strip(),
+                total_price=total_price_text,
+                discount_rate=discount_rate_text,
+                discounted_price=discounted_price_text,
+                remarks=(submission.remarks or "").strip(),
+            )
+        )
+
+        mailto_url = f"mailto:{recipients}?subject={subject}&body={body}"
+        messages.info(request, "Drafting approval advisory in your default mail client…")
+        return render(
+            request,
+            "hub/outlook_redirect.html",
+            {"mailto_url": mailto_url},
         )
 
 

@@ -54,6 +54,8 @@ class SqrSubmissionAdmin(admin.ModelAdmin):
         "pm_esg_reviewer",
         "customer_name",
         "status",
+        "quotation_total_price",
+        "discount_rate",
         "created_at",
         "reviewed_at",
     )

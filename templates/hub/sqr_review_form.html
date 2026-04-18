@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load tz %}
-{% block title %}Review {{ object.reference_code }} · Request Hub{% endblock %}
+{% block title %}Manage {{ object.reference_code }} · Request Hub{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-xl-8">
         <div class="glass-card p-4 mb-4">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                 <div>
-                    <h1 class="h5 mb-1">Review {{ object.reference_code }}</h1>
+                    <h1 class="h5 mb-1">Manage {{ object.reference_code }}</h1>
                     <p class="text-muted mb-0">Submitted by {{ object.engineer.get_full_name|default:object.engineer.username }} on {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</p>
                 </div>
                 <a class="btn btn-outline-secondary" href="{{ back_url }}">Back</a>
@@ -70,10 +70,47 @@
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end">
                     <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
-                    <button class="btn btn-primary" type="submit">Save Review</button>
+                    <button class="btn btn-primary" type="submit">Save Status</button>
                 </div>
             </form>
+
+            <div class="d-flex gap-2 flex-wrap justify-content-end mt-3">
+                {% if can_launch_revision_teams %}
+                    <form method="post" action="{% url 'hub:sqr-teams' object.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-primary" type="submit">Create Teams Revision Group</button>
+                    </form>
+                {% endif %}
+                {% if can_launch_approval_email %}
+                    <form method="post" action="{% url 'hub:sqr-approval-email' object.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-success" type="submit">Generate Approval Email</button>
+                    </form>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
+<script>
+    (function () {
+        const statusField = document.getElementById("id_status");
+        const commentsField = document.getElementById("id_review_notes");
+        const commentsLabel = document.querySelector('label[for="id_review_notes"]');
+        if (!statusField || !commentsField || !commentsLabel) {
+            return;
+        }
+
+        const isPmEsgUser = "{{ request.user.role }}" === "pm_esg";
+
+        const applyCommentMode = () => {
+            const isRevision = statusField.value === "for_revision";
+            commentsLabel.textContent = isRevision ? "Revision Comments" : "Review Notes";
+            commentsField.placeholder = isRevision ? "Enter revision comments" : "Review findings, follow-ups, and approval notes";
+            commentsField.required = isPmEsgUser && isRevision;
+        };
+
+        statusField.addEventListener("change", applyCommentMode);
+        applyCommentMode();
+    })();
+</script>
 {% endblock %}

@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -412,8 +413,9 @@ class EngineerActivityLog(models.Model):
 
 class SqrSubmission(models.Model):
     class Status(models.TextChoices):
-        SUBMITTED = "submitted", "For Processing"
-        REVIEWED = "reviewed", "Reviewed"
+        FOR_PROCESSING = "submitted", "For Processing"
+        FOR_REVISION = "for_revision", "For Revision"
+        APPROVED = "reviewed", "Approved"
 
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
@@ -438,7 +440,25 @@ class SqrSubmission(models.Model):
     sse_manhrs = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True)
     documentation_links = models.TextField(help_text="One link per line.")
     remarks = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUBMITTED)
+    quotation_total_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        blank=True,
+        null=True,
+    )
+    discount_rate = models.PositiveSmallIntegerField(
+        choices=[
+            (5, "5%"),
+            (10, "10%"),
+            (15, "15%"),
+        ],
+        default=5,
+    )
+    po_attachment_link = models.URLField(blank=True)
+    po_attached_at = models.DateTimeField(blank=True, null=True)
+    revenue_overview = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -465,6 +485,22 @@ class SqrSubmission(models.Model):
             if cleaned:
                 links.append(cleaned)
         return links
+
+    @property
+    def discounted_price(self):
+        if self.quotation_total_price is None:
+            return None
+        discount = Decimal(self.discount_rate or 0) / Decimal("100")
+        discounted = self.quotation_total_price * (Decimal("1") - discount)
+        return discounted.quantize(Decimal("0.01"))
+
+    @property
+    def revenue_stage_key(self) -> str:
+        if self.status == self.Status.APPROVED and self.po_attachment_link:
+            return "revenue"
+        if self.status == self.Status.APPROVED:
+            return "order"
+        return "quotation"
 
     def save(self, *args, **kwargs):
         creating = self.pk is None
