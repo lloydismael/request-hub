@@ -781,7 +781,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 metric_filter = ""
 
             requests = list(
-                Request.objects.filter(requestor__role=User.Roles.REQUESTOR_ESS)
+                Request.objects.filter(
+                    Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user)
+                )
                 .select_related("account", "engineer", "requestor")
                 .order_by("-created_at")
             )

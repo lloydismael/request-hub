@@ -7,7 +7,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from accounts.models import User
-from hub.models import Request
+from hub.models import Account, Request
 from hub.views import AssignmentEmailResult, DashboardView, notify_engineer_assignment_email
 
 
@@ -90,6 +90,67 @@ class AssignmentEmailTests(TestCase):
         setattr(request, "_messages", FallbackStorage(request))
 
     def _create_account_id(self, name: str) -> int:
-        from hub.models import Account
-
         return Account.objects.create(name=name).pk
+
+
+class DashboardViewTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.pm_ess = User.objects.create_user(
+            username="pmess1",
+            password="pass12345",
+            role=User.Roles.PM_ESS,
+            email="pmess@example.com",
+        )
+        self.requestor_ess = User.objects.create_user(
+            username="requestoress1",
+            password="pass12345",
+            role=User.Roles.REQUESTOR_ESS,
+            email="requestoress@example.com",
+        )
+        self.requestor = User.objects.create_user(
+            username="requestor2",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="requestor2@example.com",
+        )
+        self.account = Account.objects.create(name="Dashboard Account")
+
+    def test_pm_ess_dashboard_includes_own_and_requestor_ess_requests(self):
+        own_request = Request.objects.create(
+            requestor=self.pm_ess,
+            account=self.account,
+            account_manager="PM ESS",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+        )
+        requestor_ess_request = Request.objects.create(
+            requestor=self.requestor_ess,
+            account=self.account,
+            account_manager="Requestor ESS",
+            product_category="M365",
+            engagement_type=Request.Engagement.TRAINING,
+            priority=Request.Priority.MEDIUM,
+        )
+        other_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Regular Requestor",
+            product_category="Dell",
+            engagement_type=Request.Engagement.INQUIRY,
+            priority=Request.Priority.MEDIUM,
+        )
+
+        request = self.factory.get(reverse("hub:dashboard"))
+        request.user = self.pm_ess
+
+        view = DashboardView()
+        view.setup(request)
+        context = view.get_context_data()
+
+        request_ids = {item.pk for item in context["requests"]}
+
+        self.assertIn(own_request.pk, request_ids)
+        self.assertIn(requestor_ess_request.pk, request_ids)
+        self.assertNotIn(other_request.pk, request_ids)
