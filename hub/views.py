@@ -1,5 +1,6 @@
 import csv
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -9,7 +10,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
 from django.db.models.functions import TruncMonth
@@ -64,6 +64,45 @@ from .mixins import (
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AssignmentEmailResult:
+    status: str
+    recipients: tuple[str, ...] = ()
+
+
+def flash_assignment_email_feedback(request, result: AssignmentEmailResult, *, action_label: str, notify_on_no_assignee: bool = False) -> None:
+    if result.status == "sent":
+        return
+
+    if result.status == "no_new_assignee":
+        if notify_on_no_assignee:
+            messages.info(
+                request,
+                f"Request {action_label}, but no assignment email was sent because no engineer or backup engineer was assigned.",
+            )
+        return
+
+    if result.status == "missing_assignee_email":
+        messages.warning(
+            request,
+            f"Request {action_label}, but no assignment email was sent because the assigned engineer or backup engineer has no email address configured.",
+        )
+        return
+
+    if result.status == "missing_acs_config":
+        messages.warning(
+            request,
+            f"Request {action_label}, but Azure Communication Services email is not configured.",
+        )
+        return
+
+    if result.status == "delivery_failed":
+        messages.error(
+            request,
+            f"Request {action_label}, but the assignment email could not be delivered from {settings.ACS_EMAIL_SENDER or 'the configured sender address'}. Check Azure Communication Services email configuration and logs.",
+        )
 
 
 class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, TemplateView):
@@ -519,24 +558,36 @@ def notify_engineer_assignment_email(
     request=None,
     previous_engineer_id: int | None = None,
     previous_backup_id: int | None = None,
-) -> None:
+) -> AssignmentEmailResult:
     """Email the assigned engineer or backup when they receive a request."""
 
     recipients: list[str] = []
+    missing_email_roles: list[str] = []
 
     if request_obj.engineer_id and request_obj.engineer_id != previous_engineer_id:
         email = (request_obj.engineer.email or "").strip()
         if email:
             recipients.append(email)
+        else:
+            missing_email_roles.append("engineer")
 
     if request_obj.backup_engineer_id and request_obj.backup_engineer_id != previous_backup_id:
         email = (request_obj.backup_engineer.email or "").strip()
         if email:
             recipients.append(email)
+        else:
+            missing_email_roles.append("backup engineer")
 
     if not recipients:
+        if missing_email_roles:
+            logger.warning(
+                "Assignment email skipped: assigned recipient missing email for %s (%s)",
+                request_obj.reference_code,
+                ", ".join(missing_email_roles),
+            )
+            return AssignmentEmailResult("missing_assignee_email")
         logger.info("Assignment email skipped: no engineer/backup recipient for %s", request_obj.reference_code)
-        return
+        return AssignmentEmailResult("no_new_assignee")
 
     actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
     due_display = request_obj.due_date.strftime("%b %d, %Y") if request_obj.due_date else "Not set"
@@ -571,33 +622,31 @@ def notify_engineer_assignment_email(
 
     if not use_acs:
         logger.warning("ACS email not configured; set ACS_EMAIL_CONNECTION_STRING and ACS_EMAIL_SENDER")
+        return AssignmentEmailResult("missing_acs_config", tuple(recipients))
 
-    if use_acs:
-        try:
-            from azure.communication.email import EmailClient
+    try:
+        from azure.communication.email import EmailClient
 
-            client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
-            message = {
-                "senderAddress": settings.ACS_EMAIL_SENDER,
-                "recipients": {"to": [{"address": addr} for addr in recipients]},
-                "content": {
-                    "subject": subject,
-                    "plainText": "\n".join(body_lines),
-                },
-            }
-            poller = client.begin_send(message)
-            poller.result()
-            return
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("ACS email send failed; falling back to SMTP", exc_info=exc)
-
-    send_mail(
-        subject,
-        "\n".join(body_lines),
-        settings.DEFAULT_FROM_EMAIL,
-        recipients,
-        fail_silently=True,
-    )
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {"to": [{"address": addr} for addr in recipients]},
+            "content": {
+                "subject": subject,
+                "plainText": "\n".join(body_lines),
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        return AssignmentEmailResult("sent", tuple(recipients))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "ACS email send failed for %s to %s",
+            request_obj.reference_code,
+            ", ".join(recipients),
+            exc_info=exc,
+        )
+        return AssignmentEmailResult("delivery_failed", tuple(recipients))
 
 
 def notify_engineer_assignment_notification(
@@ -1247,13 +1296,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req._actor_source = "Dashboard · New Request"
             req.save()
             notify_engineer_assignment_notification(req, actor_user=request.user)
-            notify_engineer_assignment_email(
+            assignment_email_result = notify_engineer_assignment_email(
                 req,
                 actor_user=request.user,
                 request=request,
             )
             self._notify_admins_new_request(req)
             messages.success(request, "Request submitted", extra_tags="request-success")
+            flash_assignment_email_feedback(
+                request,
+                assignment_email_result,
+                action_label="submitted",
+                notify_on_no_assignee=True,
+            )
             return redirect("hub:dashboard")
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
@@ -1817,7 +1872,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         response = super().form_valid(form)
         if changed_fields:
             self._notify_request_update(original, self.object, changed_fields)
-        notify_engineer_assignment_email(
+        assignment_email_result = notify_engineer_assignment_email(
             self.object,
             actor_user=self.request.user,
             request=self.request,
@@ -1831,6 +1886,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
             previous_backup_id=previous_backup_id,
         )
         messages.success(self.request, "Request updated.")
+        flash_assignment_email_feedback(self.request, assignment_email_result, action_label="updated")
         return response
 
     def get_context_data(self, **kwargs):
@@ -2068,7 +2124,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                     changed_fields,
                     source_label,
                 )
-            notify_engineer_assignment_email(
+            assignment_email_result = notify_engineer_assignment_email(
                 request_obj,
                 actor_user=request.user,
                 request=request,
@@ -2082,6 +2138,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                 previous_backup_id=previous_backup_id,
             )
             messages.success(request, "Request details updated.")
+            flash_assignment_email_feedback(request, assignment_email_result, action_label="updated")
             return HttpResponseRedirect(request.path)
         context = self.get_context_data(request_obj, form=form)
         return render(request, self.template_name, context)
