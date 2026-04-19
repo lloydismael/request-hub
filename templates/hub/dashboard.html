@@ -26,7 +26,7 @@
                         </li>
                     </ul>
                 {% else %}
-                    <h2 class="h5 mb-0">{% if is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    <h2 class="h5 mb-0">{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
                 {% endif %}
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
@@ -63,12 +63,24 @@
                     <button type="button" class="btn btn-primary requestor-summary__cta" id="new-request-btn">New Request</button>
                 </div>
                 <ul class="nav nav-pills mb-4" id="requestor-dashboard-tabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true">Requests</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
-                    </li>
+                    {% if is_pm_ess %}
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link {% if pm_ess_request_tab != 'mine' %}active{% endif %}" id="request-list-tab" href="{{ pm_ess_request_tab_links.all }}">All Requests</a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link {% if pm_ess_request_tab == 'mine' %}active{% endif %}" id="request-list-mine-tab" href="{{ pm_ess_request_tab_links.mine }}">My Requests</a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
+                        </li>
+                    {% else %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true">Requests</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
+                        </li>
+                    {% endif %}
                 </ul>
                 <div class="tab-content" id="requestor-dashboard-tab-content">
                     <div class="tab-pane fade show active" id="request-list-pane" role="tabpanel" aria-labelledby="request-list-tab" tabindex="0">
@@ -695,26 +707,6 @@
             {% if is_requestor_ui %}
                     </div>
                     <div class="tab-pane fade" id="request-report-graph-pane" role="tabpanel" aria-labelledby="request-report-graph-tab" tabindex="0">
-                        <div class="row g-3 mb-3">
-                            <div class="col-12 col-md-4">
-                                <div class="glass-card p-3 h-100">
-                                    <div class="small text-uppercase text-muted">Total Requests</div>
-                                    <div class="h4 mb-0">{{ request_report_summary.total }}</div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <div class="glass-card p-3 h-100">
-                                    <div class="small text-uppercase text-muted">Ongoing</div>
-                                    <div class="h4 mb-0">{{ request_report_summary.ongoing }}</div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <div class="glass-card p-3 h-100">
-                                    <div class="small text-uppercase text-muted">Completed</div>
-                                    <div class="h4 mb-0">{{ request_report_summary.completed }}</div>
-                                </div>
-                            </div>
-                        </div>
                         <div class="row g-4">
                             <div class="col-12 col-lg-6">
                                 <div class="glass-card p-3">

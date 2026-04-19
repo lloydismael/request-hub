@@ -178,6 +178,36 @@ class DashboardViewTests(TestCase):
         self.assertIn(requestor_ess_request.pk, request_ids)
         self.assertNotIn(other_request.pk, request_ids)
 
+    def test_pm_ess_dashboard_my_requests_tab_shows_only_own_requests(self):
+        own_request = Request.objects.create(
+            requestor=self.pm_ess,
+            account=self.account,
+            account_manager="PM ESS",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+        )
+        requestor_ess_request = Request.objects.create(
+            requestor=self.requestor_ess,
+            account=self.account,
+            account_manager="Requestor ESS",
+            product_category="M365",
+            engagement_type=Request.Engagement.TRAINING,
+            priority=Request.Priority.MEDIUM,
+        )
+
+        request = self.factory.get(reverse("hub:dashboard"), data={"request_tab": "mine"})
+        request.user = self.pm_ess
+
+        view = DashboardView()
+        view.setup(request)
+        context = view.get_context_data()
+        request_ids = {item.pk for item in context["requests"]}
+
+        self.assertEqual(context["pm_ess_request_tab"], "mine")
+        self.assertIn(own_request.pk, request_ids)
+        self.assertNotIn(requestor_ess_request.pk, request_ids)
+
     def test_pm_esg_can_submit_request_from_dashboard(self):
         request = self.factory.post(
             reverse("hub:dashboard"),
@@ -251,80 +281,9 @@ class DashboardViewTests(TestCase):
         self.assertEqual(context["active_metric_filter"], "completed")
         self.assertEqual(request_ids, [newer_request.pk, older_request.pk])
 
-    def test_reassignment_clears_engineer_outlook_lock_for_new_assignee(self):
-        old_engineer = User.objects.create_user(
-            username="engineer_old",
-            password="pass12345",
-            role=User.Roles.ENGINEER,
-            email="engineer.old@example.com",
-        )
-        new_engineer = User.objects.create_user(
-            username="engineer_new",
-            password="pass12345",
-            role=User.Roles.ENGINEER,
-            email="engineer.new@example.com",
-        )
-        admin_user = User.objects.create_user(
-            username="admin_outlook",
-            password="pass12345",
-            role=User.Roles.ADMIN,
-            email="admin.outlook@example.com",
-        )
 
-        request_obj = Request.objects.create(
-            requestor=self.requestor,
-            account=self.account,
-            account_manager="Regular Requestor",
-            product_category="Azure",
-            engagement_type=Request.Engagement.SUPPORT,
-            priority=Request.Priority.MEDIUM,
-            engineer=old_engineer,
-        )
 
-        RequestCommunication.objects.create(
-            request=request_obj,
-            user=old_engineer,
-            channel=RequestCommunication.Channel.OUTLOOK,
-        )
-        RequestCommunication.objects.create(
-            request=request_obj,
-            user=admin_user,
-            channel=RequestCommunication.Channel.OUTLOOK,
-        )
 
-        request_obj.engineer = new_engineer
-        request_obj.save(update_fields=["engineer", "updated_at"])
-
-        deleted_count = clear_engineer_outlook_lock_on_reassignment(
-            request_obj,
-            previous_engineer_id=old_engineer.pk,
-        )
-
-        self.assertEqual(deleted_count, 1)
-        self.assertFalse(
-            RequestCommunication.objects.filter(
-                request=request_obj,
-                user=old_engineer,
-                channel=RequestCommunication.Channel.OUTLOOK,
-            ).exists()
-        )
-        self.assertTrue(
-            RequestCommunication.objects.filter(
-                request=request_obj,
-                user=admin_user,
-                channel=RequestCommunication.Channel.OUTLOOK,
-            ).exists()
-        )
-
-        request = self.factory.get(reverse("hub:dashboard"))
-        request.user = new_engineer
-
-        view = DashboardView()
-        view.setup(request)
-        context = view.get_context_data()
-        target = next(item for item in context["requests"] if item.pk == request_obj.pk)
-
-        self.assertFalse(target.outlook_limit_reached)
 
 
 class OnHoldRoleTests(TestCase):

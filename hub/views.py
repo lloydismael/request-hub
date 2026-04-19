@@ -689,17 +689,9 @@ def clear_engineer_outlook_lock_on_reassignment(
     *,
     previous_engineer_id: int | None,
 ) -> int:
-    """Clear engineer Outlook lock records when the primary engineer changes."""
-    if previous_engineer_id == request_obj.engineer_id:
-        return 0
-
-    deleted_count, _ = RequestCommunication.objects.filter(
-        request=request_obj,
-        channel=RequestCommunication.Channel.OUTLOOK,
-        user__role__in=ENGINEER_ACCESS_ROLES,
-    ).delete()
-    return deleted_count
-
+    """Clear engineer Outlook lock records when the primary engineer changes.
+    (Disabled per requirement: the new engineer shouldn't need to acknowledge again if already done)"""
+    return 0
 
 def _admin_sort_account_manager_key(request_obj):
     manager_name = ""
@@ -805,13 +797,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if metric_filter not in metric_keys:
                 metric_filter = ""
 
-            requests = list(
+            request_tab = (self.request.GET.get("request_tab") or "all").strip().lower()
+            if request_tab not in {"all", "mine"}:
+                request_tab = "all"
+
+            all_requests = list(
                 Request.objects.filter(
                     Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user)
                 )
                 .select_related("account", "engineer", "requestor")
                 .order_by("-created_at")
             )
+
+            my_requests = [req for req in all_requests if req.requestor_id == user.id]
+            requests = my_requests if request_tab == "mine" else all_requests
 
             metrics = {
                 "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
@@ -834,10 +833,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
+            request_tab_links = {}
+            for key in ("all", "mine"):
+                params = self.request.GET.copy()
+                if key == "all":
+                    params.pop("request_tab", None)
+                else:
+                    params["request_tab"] = "mine"
+                encoded = params.urlencode()
+                request_tab_links[key] = f"?{encoded}" if encoded else "?"
+
             context["requests"] = filtered_requests
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["pm_ess_request_tab"] = request_tab
+            context["pm_ess_request_tab_links"] = request_tab_links
             context["form_has_errors"] = form.is_bound and bool(form.errors)
             context["request_report_summary"] = {
                 "total": len(requests),
@@ -883,10 +894,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
+            request_tab_links = {}
+            for key in ("all", "mine"):
+                params = self.request.GET.copy()
+                if key == "all":
+                    params.pop("request_tab", None)
+                else:
+                    params["request_tab"] = "mine"
+                encoded = params.urlencode()
+                request_tab_links[key] = f"?{encoded}" if encoded else "?"
+
             context["requests"] = filtered_requests
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["pm_ess_request_tab"] = request_tab
+            context["pm_ess_request_tab_links"] = request_tab_links
             context["form_has_errors"] = form.is_bound and bool(form.errors)
             context["request_report_summary"] = {
                 "total": len(requests),
@@ -921,13 +944,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if request_ids:
                 communications = RequestCommunication.objects.filter(
                     request_id__in=request_ids,
-                    user=user,
-                ).only("request_id", "channel")
+                    user__role__in=ENGINEER_ACCESS_ROLES,
+                ).only("request_id", "channel", "user_id")
                 for comm in communications:
                     if comm.channel == RequestCommunication.Channel.OUTLOOK:
                         outlook_limited.add(comm.request_id)
                     elif comm.channel == RequestCommunication.Channel.TEAMS:
-                        teams_limited.add(comm.request_id)
+                        if getattr(comm, "user_id", None) == user.id:
+                            teams_limited.add(comm.request_id)
             for req in requests:
                 setattr(req, "outlook_limit_reached", req.pk in outlook_limited)
                 setattr(req, "teams_limit_reached", req.pk in teams_limited)
@@ -2327,7 +2351,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
                 return redirect(redirect_target)
             already_launched = RequestCommunication.objects.filter(
                 request=request_obj,
-                user=request.user,
+                user__role__in=ENGINEER_ACCESS_ROLES,
                 channel=RequestCommunication.Channel.OUTLOOK,
             ).exists()
             if already_launched:
