@@ -19,10 +19,13 @@
                 {% if role == 'engineer' %}
                     <ul class="nav nav-pills">
                         <li class="nav-item">
-                            <a class="nav-link {% if active_tab != 'backup' %}active{% endif %}" href="?tab=assigned">Assigned Requests</a>
+                            <a class="nav-link {% if active_tab != 'backup' and active_tab != 'report' %}active{% endif %}" href="?tab=assigned">Assigned Requests</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="?tab=backup">Backup Requests</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if active_tab == 'report' %}active{% endif %}" href="?tab=report">Report Request Graph</a>
                         </li>
                     </ul>
                 {% else %}
@@ -134,8 +137,38 @@
                     </div>
                 </div>
             {% elif role == 'engineer' %}
-                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4 dashboard-metrics">
-                    <div class="col">
+                {% if active_tab == 'report' %}
+                    <div class="row g-4 mt-2 mb-5">
+                        <div class="col-12 col-md-4">
+                            <div class="glass-card p-4 h-100 text-center border-0 shadow-sm">
+                                <h3 class="h6 text-secondary fw-semibold text-uppercase mb-3">Avg Acknowledgement Response Time</h3>
+                                <div class="fs-1 fw-bold text-primary">{{ engineer_report_data.avg_ack_time }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="glass-card p-4 h-100 text-center border-0 shadow-sm">
+                                <h3 class="h6 text-secondary fw-semibold text-uppercase mb-3">Avg Request Resolution Time</h3>
+                                <div class="fs-1 fw-bold text-success">{{ engineer_report_data.avg_resolution_time }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="glass-card p-4 h-100 text-center border-0 shadow-sm">
+                                <h3 class="h6 text-secondary fw-semibold text-uppercase mb-3">Avg Requests Per Week</h3>
+                                <div class="fs-1 fw-bold text-warning">{{ engineer_report_data.avg_requests_per_week }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-4">
+                            <div class="glass-card p-4 border-0 shadow-sm">
+                                <h3 class="h5 mb-4 text-secondary fw-semibold text-center">Count of Requests by Requestor</h3>
+                                <div class="activity-chart-wrap" style="height: 350px;">
+                                    <canvas id="engineer-requestor-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4 dashboard-metrics">
+                        <div class="col">
                         <a href="{{ metric_links.ongoing }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'ongoing' %}true{% else %}false{% endif %}">
                             <div class="dashboard-metric-card {% if active_metric_filter == 'ongoing' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Ongoing</span>
@@ -172,6 +205,7 @@
                         </a>
                     </div>
                 </div>
+                {% endif %}
             {% elif is_requestor_ui %}
                 <div class="row row-cols-1 row-cols-sm-2 g-3 mb-4 dashboard-metrics">
                     <div class="col">
@@ -268,6 +302,7 @@
                     </div>
                 </form>
             {% endif %}
+            {% if role != 'engineer' or active_tab != 'report' %}
             <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}">
                 <table class="table align-middle table-nowrap{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
                     <thead>
@@ -704,6 +739,7 @@
                     </tbody>
                 </table>
             </div>
+            {% endif %}
             {% if is_requestor_ui %}
                     </div>
                     <div class="tab-pane fade" id="request-report-graph-pane" role="tabpanel" aria-labelledby="request-report-graph-tab" tabindex="0">
@@ -1241,6 +1277,47 @@
                     submitBtn.classList.add("disabled");
                     submitBtn.textContent = "Submitting...";
                 });
+            }
+        })();
+    </script>
+{% endif %}
+
+{% if role == 'engineer' and active_tab == 'report' and engineer_report_data %}
+    {{ engineer_report_data|json_script:"engineer-report-data" }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        (function() {
+            const reportDataNode = document.getElementById('engineer-report-data');
+            if (reportDataNode && typeof Chart !== "undefined") {
+                const reportData = JSON.parse(reportDataNode.textContent || "{}");
+                const canvas = document.getElementById('engineer-requestor-chart');
+                if (canvas && reportData.requests_by_requestor) {
+                    new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels: reportData.requests_by_requestor.labels,
+                            datasets: [{
+                                label: 'Assigned Requests',
+                                data: reportData.requests_by_requestor.values,
+                                backgroundColor: '#3b82f6',
+                                borderRadius: 4,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { stepSize: 1 }
+                                }
+                            }
+                        }
+                    });
+                }
             }
         })();
     </script>

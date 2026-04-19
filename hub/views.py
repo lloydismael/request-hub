@@ -768,6 +768,84 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             },
         }
 
+    @staticmethod
+    def _build_engineer_report_data(requests: list[Request], user) -> dict:
+        from django.db.models import Min
+        assigned_requests = [req for req in requests if req.engineer_id == user.id]
+
+        # 1. Count of requests assigned by requestor
+        requestor_counts = {}
+        for req in assigned_requests:
+            name = "Unknown"
+            if req.requestor:
+                name = req.requestor.get_full_name() or req.requestor.username or "Unknown"
+            requestor_counts[name] = requestor_counts.get(name, 0) + 1
+
+        # 2. Avg Ack Response Time
+        request_ids = [req.pk for req in assigned_requests if req.pk]
+        ack_map = {}
+        if request_ids:
+            ack_rows = (
+                RequestCommunication.objects.filter(
+                    request_id__in=request_ids,
+                    user__role__in=ENGINEER_ACCESS_ROLES,
+                    channel__in=[RequestCommunication.Channel.OUTLOOK, RequestCommunication.Channel.TEAMS],
+                )
+                .values("request_id")
+                .annotate(first_ack=Min("created_at"))
+            )
+            ack_map = {row["request_id"]: row["first_ack"] for row in ack_rows}
+
+        ack_seconds_list = []
+        for req in assigned_requests:
+            ack_time = ack_map.get(req.pk)
+            if ack_time:
+                start = req.updated_at if req.updated_at and req.updated_at > req.created_at else req.created_at
+                delta = (ack_time - start).total_seconds()
+                if delta >= 0:
+                    # simplistic fallback without working hour logic to maintain performance on db scale
+                    # and decouple from the helper method inside `_annotate...`
+                    ack_seconds_list.append(delta)
+
+        if ack_seconds_list:
+            avg_ack_seconds = sum(ack_seconds_list) / len(ack_seconds_list)
+            hours = int(avg_ack_seconds // 3600)
+            minutes = int((avg_ack_seconds % 3600) // 60)
+            if hours > 0:
+                avg_ack_time = f"{hours}h {minutes}m"
+            else:
+                avg_ack_time = f"{minutes}m"
+        else:
+            avg_ack_time = "N/A"
+
+        # 3. Avg Resolution Time
+        completed_reqs = [req for req in assigned_requests if req.status == Request.Status.COMPLETED]
+        if completed_reqs:
+            avg_resolution_days = sum(req.days_since_creation for req in completed_reqs) / len(completed_reqs)
+            avg_resolution_time = f"{avg_resolution_days:.1f} days"
+        else:
+            avg_resolution_time = "N/A"
+
+        # 4. Avg Requests per week
+        if assigned_requests:
+            from django.utils import timezone
+            min_date = min(req.created_at for req in assigned_requests)
+            days_span = (timezone.now() - min_date).days
+            weeks = max(1, days_span / 7)
+            avg_requests_per_week = f"{len(assigned_requests) / weeks:.1f}"
+        else:
+            avg_requests_per_week = "0"
+
+        return {
+            "requests_by_requestor": {
+                "labels": list(requestor_counts.keys()),
+                "values": list(requestor_counts.values()),
+            },
+            "avg_ack_time": avg_ack_time,
+            "avg_resolution_time": avg_resolution_time,
+            "avg_requests_per_week": avg_requests_per_week,
+        }
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
@@ -936,6 +1014,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     Request.objects.filter(engineer=user)
                     .select_related("account", "requestor")
                     .order_by("status", "due_date")
+                )
+
+            context["active_tab"] = tab
+            if tab == "report":
+                context["engineer_report_data"] = self._build_engineer_report_data(
+                    requests=[req for req in Request.objects.filter(engineer=user).select_related("requestor")],
+                    user=user
                 )
 
             request_ids = [req.pk for req in requests]
