@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.messages import get_messages
@@ -5,6 +6,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 from hub.forms import RequestForm
@@ -198,6 +200,55 @@ class DashboardViewTests(TestCase):
         request_obj = Request.objects.get(description="PM ESG submitted request.")
         self.assertEqual(request_obj.requestor, self.pm_esg)
         self.assertEqual(request_obj.account_manager, "PM ESG")
+
+    def test_engineer_completed_filter_orders_recent_first(self):
+        engineer = User.objects.create_user(
+            username="engineer_completed_order",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.completed@example.com",
+        )
+
+        older_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Regular Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=engineer,
+            status=Request.Status.COMPLETED,
+            end_date=timezone.now().date(),
+            description="older completed request",
+        )
+        newer_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Regular Requestor",
+            product_category="M365",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=engineer,
+            status=Request.Status.COMPLETED,
+            end_date=timezone.now().date(),
+            description="newer completed request",
+        )
+
+        older_timestamp = timezone.now() - timedelta(days=2)
+        newer_timestamp = timezone.now() - timedelta(days=1)
+        Request.objects.filter(pk=older_request.pk).update(created_at=older_timestamp, updated_at=older_timestamp)
+        Request.objects.filter(pk=newer_request.pk).update(created_at=newer_timestamp, updated_at=newer_timestamp)
+
+        request = self.factory.get(reverse("hub:dashboard"), data={"metric_filter": "completed"})
+        request.user = engineer
+
+        view = DashboardView()
+        view.setup(request)
+        context = view.get_context_data()
+        request_ids = [item.pk for item in context["requests"]]
+
+        self.assertEqual(context["active_metric_filter"], "completed")
+        self.assertEqual(request_ids, [newer_request.pk, older_request.pk])
 
 
 class OnHoldRoleTests(TestCase):

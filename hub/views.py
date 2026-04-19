@@ -952,6 +952,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ]
             elif effective_metric_filter == "completed":
                 filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
+                filtered_requests = sorted(filtered_requests, key=lambda req: req.created_at, reverse=True)
 
             metric_links = {}
             for key in ("ongoing", "due_soon", "overdue", "completed"):
