@@ -684,6 +684,23 @@ def notify_engineer_assignment_notification(
         )
 
 
+def clear_engineer_outlook_lock_on_reassignment(
+    request_obj: Request,
+    *,
+    previous_engineer_id: int | None,
+) -> int:
+    """Clear engineer Outlook lock records when the primary engineer changes."""
+    if previous_engineer_id == request_obj.engineer_id:
+        return 0
+
+    deleted_count, _ = RequestCommunication.objects.filter(
+        request=request_obj,
+        channel=RequestCommunication.Channel.OUTLOOK,
+        user__role__in=ENGINEER_ACCESS_ROLES,
+    ).delete()
+    return deleted_count
+
+
 def _admin_sort_account_manager_key(request_obj):
     manager_name = ""
     manager_user = getattr(request_obj, "requestor", None)
@@ -1881,6 +1898,10 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         previous_backup_id = original.backup_engineer_id
         changed_fields = list(form.changed_data)
         response = super().form_valid(form)
+        clear_engineer_outlook_lock_on_reassignment(
+            self.object,
+            previous_engineer_id=previous_engineer_id,
+        )
         if changed_fields:
             self._notify_request_update(original, self.object, changed_fields)
         assignment_email_result = notify_engineer_assignment_email(
@@ -2016,8 +2037,13 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         form.instance._actor_user = self.request.user
         form.instance._actor_source = "Requestor · Edit Request"
         original = Request.objects.get(pk=form.instance.pk)
+        previous_engineer_id = original.engineer_id
         changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
+        clear_engineer_outlook_lock_on_reassignment(
+            self.object,
+            previous_engineer_id=previous_engineer_id,
+        )
         if original.account_id != self.object.account_id and "account" not in changed_fields:
             changed_fields.append("account")
         if changed_fields:
@@ -2125,6 +2151,10 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             previous_backup_id = original.backup_engineer_id
             changed_fields = normalize_request_form_changed_fields(form.changed_data)
             form.save()
+            clear_engineer_outlook_lock_on_reassignment(
+                request_obj,
+                previous_engineer_id=previous_engineer_id,
+            )
             if original.account_id != request_obj.account_id and "account" not in changed_fields:
                 changed_fields.append("account")
             if changed_fields:

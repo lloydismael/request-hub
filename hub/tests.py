@@ -10,11 +10,12 @@ from django.utils import timezone
 
 from accounts.models import User
 from hub.forms import RequestForm
-from hub.models import Account, Request
+from hub.models import Account, Request, RequestCommunication
 from hub.views import (
     AssignmentEmailResult,
     DashboardView,
     RequestCollaborativeManageView,
+    clear_engineer_outlook_lock_on_reassignment,
     notify_engineer_assignment_email,
 )
 
@@ -249,6 +250,81 @@ class DashboardViewTests(TestCase):
 
         self.assertEqual(context["active_metric_filter"], "completed")
         self.assertEqual(request_ids, [newer_request.pk, older_request.pk])
+
+    def test_reassignment_clears_engineer_outlook_lock_for_new_assignee(self):
+        old_engineer = User.objects.create_user(
+            username="engineer_old",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.old@example.com",
+        )
+        new_engineer = User.objects.create_user(
+            username="engineer_new",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.new@example.com",
+        )
+        admin_user = User.objects.create_user(
+            username="admin_outlook",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="admin.outlook@example.com",
+        )
+
+        request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Regular Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=old_engineer,
+        )
+
+        RequestCommunication.objects.create(
+            request=request_obj,
+            user=old_engineer,
+            channel=RequestCommunication.Channel.OUTLOOK,
+        )
+        RequestCommunication.objects.create(
+            request=request_obj,
+            user=admin_user,
+            channel=RequestCommunication.Channel.OUTLOOK,
+        )
+
+        request_obj.engineer = new_engineer
+        request_obj.save(update_fields=["engineer", "updated_at"])
+
+        deleted_count = clear_engineer_outlook_lock_on_reassignment(
+            request_obj,
+            previous_engineer_id=old_engineer.pk,
+        )
+
+        self.assertEqual(deleted_count, 1)
+        self.assertFalse(
+            RequestCommunication.objects.filter(
+                request=request_obj,
+                user=old_engineer,
+                channel=RequestCommunication.Channel.OUTLOOK,
+            ).exists()
+        )
+        self.assertTrue(
+            RequestCommunication.objects.filter(
+                request=request_obj,
+                user=admin_user,
+                channel=RequestCommunication.Channel.OUTLOOK,
+            ).exists()
+        )
+
+        request = self.factory.get(reverse("hub:dashboard"))
+        request.user = new_engineer
+
+        view = DashboardView()
+        view.setup(request)
+        context = view.get_context_data()
+        target = next(item for item in context["requests"] if item.pk == request_obj.pk)
+
+        self.assertFalse(target.outlook_limit_reached)
 
 
 class OnHoldRoleTests(TestCase):
