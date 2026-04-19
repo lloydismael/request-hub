@@ -120,6 +120,20 @@ class DashboardViewTests(TestCase):
             role=User.Roles.REQUESTOR,
             email="requestor2@example.com",
         )
+        self.pm_esg = User.objects.create_user(
+            username="pmesg1",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="pmesg@example.com",
+            first_name="PM",
+            last_name="ESG",
+        )
+        self.engineer = User.objects.create_user(
+            username="engineer_dashboard",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.dashboard@example.com",
+        )
         self.account = Account.objects.create(name="Dashboard Account")
 
     def test_pm_ess_dashboard_includes_own_and_requestor_ess_requests(self):
@@ -160,6 +174,30 @@ class DashboardViewTests(TestCase):
         self.assertIn(own_request.pk, request_ids)
         self.assertIn(requestor_ess_request.pk, request_ids)
         self.assertNotIn(other_request.pk, request_ids)
+
+    def test_pm_esg_can_submit_request_from_dashboard(self):
+        request = self.factory.post(
+            reverse("hub:dashboard"),
+            data={
+                "account_name": self.account.name,
+                "needed_by": "2026-04-19",
+                "product_category": "Azure",
+                "engagement_type": Request.Engagement.SUPPORT,
+                "priority": Request.Priority.MEDIUM,
+                "description": "PM ESG submitted request.",
+                "engineer": str(self.engineer.pk),
+            },
+        )
+        request.user = self.pm_esg
+        AssignmentEmailTests._attach_session_and_messages(request)
+
+        with patch("hub.views.notify_engineer_assignment_email", return_value=AssignmentEmailResult("sent")):
+            response = DashboardView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        request_obj = Request.objects.get(description="PM ESG submitted request.")
+        self.assertEqual(request_obj.requestor, self.pm_esg)
+        self.assertEqual(request_obj.account_manager, "PM ESG")
 
 
 class OnHoldRoleTests(TestCase):

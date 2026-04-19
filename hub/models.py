@@ -50,7 +50,7 @@ class Request(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="requests_made",
-        limit_choices_to={"role__in": ["requestor", "requestor_ess", "pm_ess"]},
+        limit_choices_to={"role__in": ["requestor", "requestor_ess", "pm_ess", "pm_esg"]},
     )
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="requests")
     account_manager = models.CharField(max_length=255)
