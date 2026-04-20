@@ -972,6 +972,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
+            request_tab = (self.request.GET.get("request_tab") or "mine").strip().lower()
+            if request_tab not in {"all", "mine"}:
+                request_tab = "mine"
+
             request_tab_links = {}
             for key in ("all", "mine"):
                 params = self.request.GET.copy()
