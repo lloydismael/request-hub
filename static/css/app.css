@@ -151,7 +151,8 @@ body.requestor-modal-open {
     border-radius: 999px;
 }
 
-body.admin-dashboard main.container {
+body.admin-dashboard main.container,
+body.engineer-dashboard main.container {
     max-width: 100%;
     padding-left: clamp(1rem, 4vw, 3rem);
     padding-right: clamp(1rem, 4vw, 3rem);
@@ -161,10 +162,22 @@ body.engineer-activity-logs main.container {
     max-width: 1620px;
 }
 
-body.admin-dashboard .glass-card--expanded {
+body.admin-dashboard .glass-card--expanded,
+body.engineer-dashboard .glass-card--expanded {
     width: 100%;
     max-width: 1920px;
     margin-inline: auto;
+}
+
+/* Improve btn-outline-info (Teams button) contrast in light mode */
+body:not(.dark-mode) .btn-outline-info {
+    color: #087990;
+    border-color: #087990;
+}
+body:not(.dark-mode) .btn-outline-info:hover {
+    background-color: #087990;
+    color: #fff;
+    border-color: #087990;
 }
 
 .table > :not(caption) > * > * {
@@ -198,6 +211,91 @@ body.admin-dashboard .glass-card--expanded {
     background-color: #f8d7da;
     color: #842029;
     border-left-color: #dc3545;
+}
+
+.engineer-id-cell {
+    min-width: 170px;
+}
+
+.engineer-id-cell__meta .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    letter-spacing: 0.01em;
+}
+
+.engineer-ack-timer {
+    font-variant-numeric: tabular-nums;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.engineer-ack-timer--neutral {
+    background-color: #e0f2fe;
+    color: #075985;
+    border: 1px solid #bae6fd;
+}
+
+.engineer-ack-timer--amber {
+    background-color: #fff3cd;
+    color: #664d03;
+    border: 1px solid #ffe69c;
+    animation: engineer-ack-pulse 2s ease-in-out infinite;
+}
+
+.engineer-ack-timer--red {
+    background-color: #f8d7da;
+    color: #842029;
+    border: 1px solid #f1aeb5;
+    animation: engineer-ack-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes engineer-ack-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    50% { box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.18); }
+}
+
+body.dark-mode .engineer-ack-timer--neutral {
+    background-color: rgba(14, 165, 233, 0.18);
+    color: #bae6fd;
+    border-color: rgba(14, 165, 233, 0.35);
+}
+
+body.dark-mode .engineer-ack-timer--amber {
+    background-color: rgba(234, 179, 8, 0.22);
+    color: #fde68a;
+    border-color: rgba(234, 179, 8, 0.45);
+}
+
+body.dark-mode .engineer-ack-timer--red {
+    background-color: rgba(220, 38, 38, 0.22);
+    color: #fecaca;
+    border-color: rgba(220, 38, 38, 0.45);
+}
+
+/* Ensure sub-badging is readable in dark mode */
+body.dark-mode .bg-info-subtle.text-info-emphasis {
+    background-color: rgba(13, 202, 240, 0.2) !important;
+    color: #9eeaf9 !important;
+    border-color: rgba(13, 202, 240, 0.4) !important;
+}
+
+body.dark-mode .bg-warning-subtle.text-warning-emphasis {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+    color: #ffda6a !important;
+    border-color: rgba(255, 193, 7, 0.4) !important;
+}
+
+body.dark-mode .bg-success-subtle.text-success-emphasis {
+    background-color: rgba(25, 135, 84, 0.2) !important;
+    color: #a3cfbb !important;
+    border-color: rgba(25, 135, 84, 0.4) !important;
+}
+
+body.dark-mode .bg-primary-subtle.text-primary-emphasis,
+body.dark-mode .bg-primary-subtle.text-primary {
+    background-color: rgba(13, 110, 253, 0.2) !important;
+    color: #9ec5fe !important;
+    border-color: rgba(13, 110, 253, 0.4) !important;
 }
 
 .btn-primary {

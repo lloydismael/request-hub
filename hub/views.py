@@ -1045,6 +1045,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 setattr(req, "outlook_limit_reached", req.pk in outlook_limited)
                 setattr(req, "teams_limit_reached", req.pk in teams_limited)
 
+            self._annotate_acknowledgement_status(requests)
+            self._annotate_engineer_activity(requests)
+
             today = timezone.now().astimezone(MANILA_TZ).date()
             metrics = {
                 "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
@@ -1383,6 +1386,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if not req.engineer:
                 req.ack_sla_status = ""
                 req.ack_sla_tooltip = "Awaiting engineer assignment; acknowledgement SLA starts after assignment."
+                req.ack_start_iso = ""
+                req.ack_first_iso = ""
+                req.is_acknowledged = False
                 continue
 
             start_anchor = req.created_at
@@ -1423,6 +1429,75 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
             req.ack_sla_status = status
             req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
+            req.ack_start_iso = start_anchor.isoformat() if start_anchor else ""
+            req.ack_first_iso = ack_time.isoformat() if ack_time else ""
+            req.is_acknowledged = bool(ack_time)
+
+    def _annotate_engineer_activity(self, requests: list[Request]) -> None:
+        """Attach status-log and recent-change hints used by the engineer dashboard."""
+        if not requests:
+            return
+        request_ids = [req.pk for req in requests if req.pk]
+        log_counts: dict[int, int] = {}
+        latest_logs: dict[int, StatusLog] = {}
+        if request_ids:
+            from django.db.models import Count
+
+            count_rows = (
+                StatusLog.objects.filter(request_id__in=request_ids)
+                .values("request_id")
+                .annotate(total=Count("id"))
+            )
+            log_counts = {row["request_id"]: row["total"] for row in count_rows}
+
+            latest_qs = (
+                StatusLog.objects.filter(request_id__in=request_ids)
+                .select_related("author")
+                .order_by("request_id", "-created_at")
+            )
+            seen: set[int] = set()
+            for log in latest_qs:
+                if log.request_id in seen:
+                    continue
+                seen.add(log.request_id)
+                latest_logs[log.request_id] = log
+
+        for req in requests:
+            count = log_counts.get(req.pk, 0)
+            latest = latest_logs.get(req.pk)
+            req.status_log_count = count
+            if latest:
+                author_name = (
+                    latest.author.get_full_name()
+                    or latest.author.username
+                    or "Unknown"
+                )
+                message = (latest.message or "").strip()
+                excerpt = message[:140] + ("…" if len(message) > 140 else "")
+                created_local = timezone.localtime(latest.created_at, MANILA_TZ)
+                req.latest_status_log_tooltip = (
+                    f"Latest update by {author_name} on "
+                    f"{created_local.strftime('%b %d, %Y %I:%M %p')}"
+                    + (f" — {excerpt}" if excerpt else "")
+                )
+            else:
+                req.latest_status_log_tooltip = ""
+
+            # Consider the request "changed" when updated_at is clearly after created_at.
+            has_changes = bool(
+                req.updated_at
+                and req.created_at
+                and (req.updated_at - req.created_at).total_seconds() > 60
+            )
+            req.has_recent_changes = has_changes
+            if has_changes:
+                updated_local = timezone.localtime(req.updated_at, MANILA_TZ)
+                req.recent_change_tooltip = (
+                    f"Request last updated on "
+                    f"{updated_local.strftime('%b %d, %Y %I:%M %p')}"
+                )
+            else:
+                req.recent_change_tooltip = ""
 
     def post(self, request, *args, **kwargs):
         if request.user.role not in REQUEST_CREATOR_ROLES:
