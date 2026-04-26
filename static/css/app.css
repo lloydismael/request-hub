@@ -2942,8 +2942,8 @@ body.dark-mode .mgmt-toolbar {
     flex: 1;
     min-width: 180px;
     max-width: 440px;
-    background: rgba(15, 23, 42, 0.06);
-    border: 1.5px solid rgba(15, 23, 42, 0.12);
+    background: rgba(15, 23, 42, 0.05);
+    border: 1.5px solid rgba(15, 23, 42, 0.22);
     border-radius: 12px;
     padding: 0.4rem 0.85rem;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -2975,7 +2975,8 @@ body.dark-mode .mgmt-search-box:focus-within {
     color: #111827;
     min-width: 0;
 }
-.mgmt-search-input::placeholder { color: #9ca3af; }
+.mgmt-search-input::placeholder { color: #6b7280; }
+body.dark-mode .mgmt-search-input::placeholder { color: #9ca3af; }
 body.dark-mode .mgmt-search-input { color: #e2e8f0; }
 
 .mgmt-result-badge {
@@ -3053,6 +3054,55 @@ body.dark-mode .mgmt-card-footer {
     color: #6b7280;
 }
 body.dark-mode .mgmt-limit-note { color: #64748b; }
+
+/* ── Pagination controls ── */
+.mgmt-pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.mgmt-pagination .mgmt-page-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.75rem;
+}
+.mgmt-pagination .mgmt-page-label {
+    font-size: 0.78rem;
+    color: #6b7280;
+    white-space: nowrap;
+}
+body.dark-mode .mgmt-pagination .mgmt-page-label { color: #64748b; }
+
+/* ── Management table action buttons: darker amber in light mode ── */
+.mgmt-table .btn-outline-warning {
+    --bs-btn-color: #92400e;
+    --bs-btn-border-color: #b45309;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: #b45309;
+    --bs-btn-hover-border-color: #b45309;
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: #92400e;
+    --bs-btn-active-border-color: #92400e;
+    --bs-btn-disabled-color: #b45309;
+    --bs-btn-disabled-border-color: #b45309;
+}
+body.dark-mode .mgmt-table .btn-outline-warning {
+    --bs-btn-color: #ffc107;
+    --bs-btn-border-color: #ffc107;
+    --bs-btn-hover-color: #000;
+    --bs-btn-hover-bg: #ffc107;
+    --bs-btn-hover-border-color: #ffc107;
+    --bs-btn-active-color: #000;
+    --bs-btn-active-bg: #ffc107;
+    --bs-btn-active-border-color: #ffc107;
+    --bs-btn-disabled-color: #ffc107;
+    --bs-btn-disabled-border-color: #ffc107;
+}
 
 /* ── Code in alert ── */
 .mgmt-code {
@@ -3599,8 +3649,8 @@ body.dark-mode .ai-chat-close-btn {
 .rpt-tab-group {
     display: flex;
     align-items: center;
-    background: rgba(0, 0, 0, 0.07);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 12px;
     padding: 3px;
     gap: 3px;
@@ -3614,20 +3664,20 @@ body.dark-mode .ai-chat-close-btn {
     border-radius: 9px;
     font-size: 0.82rem;
     font-weight: 600;
-    color: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.6);
     text-decoration: none;
     transition: all 0.18s var(--spring);
     white-space: nowrap;
 }
 .rpt-tab:hover {
-    color: rgba(0, 0, 0, 0.72);
-    background: rgba(0, 0, 0, 0.05);
+    color: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.07);
     text-decoration: none;
 }
 .rpt-tab--active {
     background: #fff;
     color: #4338ca;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
     border: 1px solid rgba(99, 102, 241, 0.18);
 }
 
@@ -3859,15 +3909,15 @@ body.dark-mode .rpt-hero-icon {
 
 body.dark-mode .rpt-tab-group {
     background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.08);
 }
 body.dark-mode .rpt-tab { color: rgba(255, 255, 255, 0.5); }
-body.dark-mode .rpt-tab:hover { color: rgba(255, 255, 255, 0.8); background: rgba(255, 255, 255, 0.06); }
+body.dark-mode .rpt-tab:hover { color: rgba(255, 255, 255, 0.8); background: rgba(255, 255, 255, 0.05); }
 body.dark-mode .rpt-tab--active {
-    background: rgba(99, 102, 241, 0.25);
+    background: rgba(99, 102, 241, 0.22);
     color: #a5b4fc;
-    border-color: rgba(99, 102, 241, 0.35);
-    box-shadow: 0 1px 8px rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.32);
+    box-shadow: 0 1px 8px rgba(99, 102, 241, 0.18);
 }
 
 body.dark-mode .rpt-kpi-card {

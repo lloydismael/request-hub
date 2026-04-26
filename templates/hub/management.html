@@ -6,14 +6,32 @@
 {% block content %}
 
 {# ── Page Header ── #}
-<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
     <div>
         <h1 class="h3 mb-1 fw-semibold">
             <i class="bi bi-shield-lock-fill me-2 text-primary"></i>Management
         </h1>
         <p class="text-muted mb-0 small">Create, update, or remove user accounts and managed accounts for the workspace.</p>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        <ul class="nav nav-pills mgmt-tabs gap-1 mb-0" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if active_tab != 'accounts' %}active{% endif %}"
+                        id="users-tab" data-bs-toggle="tab" data-bs-target="#users-pane"
+                        type="button" role="tab" aria-controls="users-pane"
+                        aria-selected="{% if active_tab != 'accounts' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-people-fill me-1"></i>Users
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if active_tab == 'accounts' %}active{% endif %}"
+                        id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts-pane"
+                        type="button" role="tab" aria-controls="accounts-pane"
+                        aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-building me-1"></i>Accounts
+                </button>
+            </li>
+        </ul>
         <span class="mgmt-stat-chip mgmt-stat-chip--users">
             <i class="bi bi-people-fill me-1"></i>{{ total_users }} Users
         </span>
@@ -22,26 +40,6 @@
         </span>
     </div>
 </div>
-
-{# ── Tab Navigation ── #}
-<ul class="nav nav-pills mgmt-tabs mb-3 gap-1" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab != 'accounts' %}active{% endif %}"
-                id="users-tab" data-bs-toggle="tab" data-bs-target="#users-pane"
-                type="button" role="tab" aria-controls="users-pane"
-                aria-selected="{% if active_tab != 'accounts' %}true{% else %}false{% endif %}">
-            <i class="bi bi-people-fill me-1"></i>Users
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'accounts' %}active{% endif %}"
-                id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts-pane"
-                type="button" role="tab" aria-controls="accounts-pane"
-                aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}">
-            <i class="bi bi-building me-1"></i>Accounts
-        </button>
-    </li>
-</ul>
 
 {# ── Tab Content ── #}
 <div class="tab-content">
@@ -61,7 +59,7 @@
                 </div>
             {% endif %}
 
-            {# Toolbar: search + create button #}
+            {# Toolbar: search + save + create button #}
             <div class="mgmt-toolbar">
                 <div class="mgmt-search-box">
                     <i class="bi bi-search mgmt-search-icon"></i>
@@ -69,10 +67,15 @@
                            placeholder="Search by name, username or email…" autocomplete="off">
                     <span class="mgmt-result-badge" id="user-count-badge"></span>
                 </div>
-                <button type="button" class="btn btn-primary btn-sm"
-                        data-bs-toggle="modal" data-bs-target="#create-user-modal">
-                    <i class="bi bi-person-plus-fill me-1"></i>New User
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="submit" class="btn btn-success btn-sm" id="users-save-btn" style="display:none">
+                        <i class="bi bi-floppy-fill me-1"></i>Save Changes
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#create-user-modal">
+                        <i class="bi bi-person-plus-fill me-1"></i>New User
+                    </button>
+                </div>
             </div>
 
             {# Info alert #}
@@ -194,9 +197,7 @@
             {# Card footer #}
             <div class="mgmt-card-footer">
                 <span class="mgmt-limit-note" id="user-limit-note"></span>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-floppy-fill me-1"></i>Save Changes
-                </button>
+                <div class="mgmt-pagination" id="user-pagination"></div>
             </div>
         </form>
 
@@ -296,7 +297,7 @@
                 </div>
             {% endif %}
 
-            {# Toolbar: search only #}
+            {# Toolbar: search + save #}
             <div class="mgmt-toolbar">
                 <div class="mgmt-search-box">
                     <i class="bi bi-search mgmt-search-icon"></i>
@@ -304,6 +305,9 @@
                            placeholder="Search accounts by name…" autocomplete="off">
                     <span class="mgmt-result-badge" id="account-count-badge"></span>
                 </div>
+                <button type="submit" class="btn btn-success btn-sm" id="accounts-save-btn" style="display:none">
+                    <i class="bi bi-floppy-fill me-1"></i>Save Changes
+                </button>
             </div>
 
             {# Accounts table #}
@@ -388,71 +392,117 @@
             {# Card footer #}
             <div class="mgmt-card-footer">
                 <span class="mgmt-limit-note" id="account-limit-note"></span>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-floppy-fill me-1"></i>Save Account Changes
-                </button>
+                <div class="mgmt-pagination" id="account-pagination"></div>
             </div>
         </form>
     </div>
 
 </div>
 
-{# ── Search + 100-item limit JS ── #}
+{# ── Search, pagination (50/page) + dirty-save JS ── #}
 <script>
 (function () {
-    var LIMIT = 100;
+    var PAGE_SIZE = 50;
 
-    function initTab(tbodyId, searchId, badgeId, limitNoteId) {
-        var tbody = document.getElementById(tbodyId);
-        var searchInput = document.getElementById(searchId);
-        var badge = document.getElementById(badgeId);
-        var limitNote = document.getElementById(limitNoteId);
+    function initTab(tbodyId, searchId, badgeId, limitNoteId, paginationId, saveBtnId, formSelector) {
+        var tbody        = document.getElementById(tbodyId);
+        var searchInput  = document.getElementById(searchId);
+        var badge        = document.getElementById(badgeId);
+        var limitNote    = document.getElementById(limitNoteId);
+        var paginationEl = document.getElementById(paginationId);
+        var saveBtn      = document.getElementById(saveBtnId);
         if (!tbody || !searchInput) return;
 
         var rows = Array.from(tbody.querySelectorAll('tr.mgmt-row'));
-        var total = rows.length;
+        var currentPage  = 1;
 
+        /* ── render ── */
         function render() {
-            var q = searchInput.value.trim().toLowerCase();
-            var shown = 0;
+            var q        = searchInput.value.trim().toLowerCase();
+            var filtered = q ? rows.filter(function (r) {
+                return (r.dataset.searchText || '').toLowerCase().includes(q);
+            }) : rows;
+            var total        = rows.length;
+            var totalFiltered = filtered.length;
+            var totalPages   = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+            if (currentPage > totalPages) currentPage = totalPages;
+            var start = (currentPage - 1) * PAGE_SIZE;
+            var end   = start + PAGE_SIZE;
 
-            rows.forEach(function (row, idx) {
-                var text = (row.dataset.searchText || '').toLowerCase();
-                var matches = !q || text.includes(q);
-                var inLimit = !q ? idx < LIMIT : true;
-                var visible = matches && inLimit;
-                row.style.display = visible ? '' : 'none';
-                if (visible) shown++;
+            /* visibility */
+            rows.forEach(function (row) { row.style.display = 'none'; });
+            filtered.forEach(function (row, idx) {
+                row.style.display = (idx >= start && idx < end) ? '' : 'none';
             });
 
+            /* badge */
             if (badge) {
                 badge.textContent = q
-                    ? shown + ' match' + (shown !== 1 ? 'es' : '')
-                    : Math.min(shown, total) + ' / ' + total;
+                    ? totalFiltered + ' match' + (totalFiltered !== 1 ? 'es' : '')
+                    : total + ' total';
             }
 
+            /* limit note */
             if (limitNote) {
-                if (!q && total > LIMIT) {
-                    limitNote.textContent = 'Showing first ' + LIMIT + ' of ' + total + ' records — use search to find others.';
+                if (totalFiltered > 0 && totalPages > 1) {
+                    limitNote.textContent = 'Showing ' + (start + 1) + '–' + Math.min(end, totalFiltered) + ' of ' + totalFiltered;
                     limitNote.style.display = 'inline';
                 } else {
                     limitNote.style.display = 'none';
                 }
             }
+
+            /* pagination buttons */
+            if (paginationEl) {
+                if (totalPages > 1) {
+                    var prevId = paginationId + '-prev';
+                    var nextId = paginationId + '-next';
+                    paginationEl.innerHTML =
+                        '<button type="button" class="btn btn-sm btn-outline-secondary mgmt-page-btn" id="' + prevId + '"' + (currentPage <= 1 ? ' disabled' : '') + '>' +
+                            '<i class="bi bi-chevron-left"></i>' +
+                        '</button>' +
+                        '<span class="mgmt-page-label">Page ' + currentPage + ' / ' + totalPages + '</span>' +
+                        '<button type="button" class="btn btn-sm btn-outline-secondary mgmt-page-btn" id="' + nextId + '"' + (currentPage >= totalPages ? ' disabled' : '') + '>' +
+                            '<i class="bi bi-chevron-right"></i>' +
+                        '</button>';
+                    paginationEl.style.display = 'flex';
+                    document.getElementById(prevId).addEventListener('click', function () {
+                        if (currentPage > 1) { currentPage--; render(); }
+                    });
+                    document.getElementById(nextId).addEventListener('click', function () {
+                        if (currentPage < totalPages) { currentPage++; render(); }
+                    });
+                } else {
+                    paginationEl.innerHTML = '';
+                    paginationEl.style.display = 'none';
+                }
+            }
         }
 
+        /* ── search ── */
         var debounce;
         searchInput.addEventListener('input', function () {
+            currentPage = 1;
             clearTimeout(debounce);
             debounce = setTimeout(render, 120);
         });
+
+        /* ── dirty detection → show save button ── */
+        if (saveBtn && formSelector) {
+            var form = document.querySelector(formSelector);
+            if (form) {
+                function markDirty() { saveBtn.style.display = ''; }
+                form.addEventListener('input',  markDirty);
+                form.addEventListener('change', markDirty);
+            }
+        }
 
         render();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        initTab('users-tbody',    'user-search',    'user-count-badge',    'user-limit-note');
-        initTab('accounts-tbody', 'account-search', 'account-count-badge', 'account-limit-note');
+        initTab('users-tbody',    'user-search',    'user-count-badge',    'user-limit-note',    'user-pagination',    'users-save-btn',    '#users-pane form');
+        initTab('accounts-tbody', 'account-search', 'account-count-badge', 'account-limit-note', 'account-pagination', 'accounts-save-btn', '#accounts-pane form');
     });
 }());
 </script>
