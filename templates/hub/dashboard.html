@@ -19,17 +19,17 @@
                 {% if role == 'engineer' %}
                     <ul class="nav nav-pills">
                         <li class="nav-item">
-                            <a class="nav-link {% if active_tab != 'backup' and active_tab != 'report' %}active{% endif %}" href="?tab=assigned">Assigned Requests</a>
+                            <a class="nav-link {% if active_tab != 'backup' and active_tab != 'report' %}active{% endif %}" href="?tab=assigned"><i class="bi bi-clipboard2-check-fill me-1"></i>Assigned Requests</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="?tab=backup">Backup Requests</a>
+                            <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="?tab=backup"><i class="bi bi-shield-check me-1"></i>Backup Requests</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if active_tab == 'report' %}active{% endif %}" href="?tab=report">Report Request Graph</a>
+                            <a class="nav-link {% if active_tab == 'report' %}active{% endif %}" href="?tab=report"><i class="bi bi-bar-chart-line-fill me-1"></i>Report Request Graph</a>
                         </li>
                     </ul>
                 {% else %}
-                    <h2 class="h5 mb-0">{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    <h2 class="h5 mb-0"><i class="bi {% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %}{% elif is_requestor_ui %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %} me-2"></i>{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
                 {% endif %}
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
@@ -68,20 +68,20 @@
                 <ul class="nav nav-pills mb-4" id="requestor-dashboard-tabs" role="tablist">
                     {% if is_pm_ess %}
                         <li class="nav-item" role="presentation">
-                            <a class="nav-link {% if pm_ess_request_tab != 'mine' %}active{% endif %}" id="request-list-tab" href="{{ pm_ess_request_tab_links.all }}">All Requests</a>
+                            <a class="nav-link {% if pm_ess_request_tab != 'mine' %}active{% endif %}" id="request-list-tab" href="{{ pm_ess_request_tab_links.all }}"><i class="bi bi-inbox-fill me-1"></i>All Requests</a>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <a class="nav-link {% if pm_ess_request_tab == 'mine' %}active{% endif %}" id="request-list-mine-tab" href="{{ pm_ess_request_tab_links.mine }}">My Requests</a>
+                            <a class="nav-link {% if pm_ess_request_tab == 'mine' %}active{% endif %}" id="request-list-mine-tab" href="{{ pm_ess_request_tab_links.mine }}"><i class="bi bi-person-lines-fill me-1"></i>My Requests</a>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
+                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false"><i class="bi bi-bar-chart-line-fill me-1"></i>Request Report Graph</button>
                         </li>
                     {% else %}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true">Requests</button>
+                            <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true"><i class="bi bi-inbox-fill me-1"></i>Requests</button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
+                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false"><i class="bi bi-bar-chart-line-fill me-1"></i>Request Report Graph</button>
                         </li>
                     {% endif %}
                 </ul>
