@@ -1663,7 +1663,9 @@ body.dark-mode .notif-page-info { color: #64748b; }
 
 .nav-avatar-menu__role {
     font-size: 0.75rem;
-    color: #64748b;
+    /* Reset inherited navbar-dark --bs-secondary-color so text-muted is dark on the white dropdown */
+    --bs-secondary-color: rgba(100, 116, 139, 1);
+    color: #64748b !important;
     text-transform: capitalize;
 }
 
@@ -3900,14 +3902,139 @@ body:not(.dark-mode) .profile-hero {
     background: rgba(255, 255, 255, 0.85);
     border-color: rgba(148, 163, 184, 0.25);
 }
+/* Broad reset: all text in the hero body inherits dark when light mode is on */
+body:not(.dark-mode) .profile-hero__body,
+body:not(.dark-mode) .profile-hero__info { color: #0f172a; }
 body:not(.dark-mode) .profile-hero__name { color: #0f172a; }
 body:not(.dark-mode) .profile-hero__meta { color: #475569; }
+body:not(.dark-mode) .profile-hero__role-badge {
+    background: rgba(47, 108, 243, 0.12);
+    color: #1d4ed8;
+    border-color: rgba(29, 78, 216, 0.25);
+}
 body:not(.dark-mode) .profile-tabs { border-bottom-color: rgba(15, 23, 42, 0.12); }
 body:not(.dark-mode) .profile-tab { color: #64748b; }
 body:not(.dark-mode) .profile-tab:hover { color: #0f172a; }
 body:not(.dark-mode) .profile-tab--active { color: #2f6cf3; border-bottom-color: #2f6cf3; }
-body:not(.dark-mode) .profile-card__title { color: #0f172a; }
-body:not(.dark-mode) .profile-label { color: #1e293b; }
+/* Profile card internals: override the dark-mode explicit colors */
+body:not(.dark-mode) .profile-card__title { color: #0f172a !important; }
+body:not(.dark-mode) .profile-label { color: #1e293b !important; }
+body:not(.dark-mode) .profile-card p,
+body:not(.dark-mode) .profile-card .text-muted,
+body:not(.dark-mode) .profile-avatar-section .text-muted { color: #64748b !important; }
+/* Avatar panel form help text */
+body:not(.dark-mode) .profile-avatar-controls .form-text { color: #64748b; }
+body:not(.dark-mode) .banner-swatch__label { color: #fff; }
+/* Coming-soon swatch text is always readable on its own bg */
+body:not(.dark-mode) .banner-swatch--custom .banner-swatch__label { color: #e2e8f0; }
+
+/* Banner gradient variants */
+.profile-hero__banner--blue    { background-image: linear-gradient(120deg, #1d4ed8 0%, #3b82f6 50%, #6366f1 100%); }
+.profile-hero__banner--sunset  { background-image: linear-gradient(120deg, #f97316 0%, #ec4899 60%, #8b5cf6 100%); }
+.profile-hero__banner--forest  { background-image: linear-gradient(120deg, #065f46 0%, #10b981 60%, #3b82f6 100%); }
+.profile-hero__banner--crimson { background-image: linear-gradient(120deg, #7f1d1d 0%, #dc2626 50%, #f97316 100%); }
+.profile-hero__banner--slate   { background-image: linear-gradient(120deg, #0f172a 0%, #334155 60%, #475569 100%); }
+.profile-hero__banner--aurora  { background-image: linear-gradient(120deg, #1e1b4b 0%, #7c3aed 50%, #06b6d4 100%); }
+.profile-hero__banner--rose    { background-image: linear-gradient(120deg, #881337 0%, #f43f5e 50%, #fb923c 100%); }
+.profile-hero__banner--teal    { background-image: linear-gradient(120deg, #134e4a 0%, #0d9488 50%, #3b82f6 100%); }
+
+/* Banner edit button (overlay on hero banner) */
+.profile-hero__banner {
+    position: relative;
+}
+.profile-hero__banner-edit {
+    position: absolute;
+    bottom: 0.6rem;
+    right: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.18s var(--spring);
+}
+.profile-hero__banner-edit:hover {
+    background: rgba(0, 0, 0, 0.55);
+    transform: translateY(-1px);
+}
+
+/* Banner swatch picker */
+.banner-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+}
+.banner-swatch {
+    position: relative;
+    height: 68px;
+    border-radius: 10px;
+    cursor: pointer;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: border-color 0.15s ease, transform 0.18s var(--spring), box-shadow 0.15s ease;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.35rem 0.5rem;
+}
+.banner-swatch:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+.banner-swatch.is-active { border-color: #fff; box-shadow: 0 0 0 3px rgba(47,108,243,0.5); }
+.banner-swatch__label { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.9); text-shadow: 0 1px 3px rgba(0,0,0,0.5); pointer-events: none; }
+.banner-swatch__check { position: absolute; top: 0.35rem; right: 0.45rem; font-size: 0.9rem; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.banner-swatch--blue    { background-image: linear-gradient(120deg, #1d4ed8 0%, #3b82f6 50%, #6366f1 100%); }
+.banner-swatch--sunset  { background-image: linear-gradient(120deg, #f97316 0%, #ec4899 60%, #8b5cf6 100%); }
+.banner-swatch--forest  { background-image: linear-gradient(120deg, #065f46 0%, #10b981 60%, #3b82f6 100%); }
+.banner-swatch--crimson { background-image: linear-gradient(120deg, #7f1d1d 0%, #dc2626 50%, #f97316 100%); }
+.banner-swatch--slate   { background-image: linear-gradient(120deg, #0f172a 0%, #334155 60%, #475569 100%); }
+.banner-swatch--aurora  { background-image: linear-gradient(120deg, #1e1b4b 0%, #7c3aed 50%, #06b6d4 100%); }
+.banner-swatch--rose    { background-image: linear-gradient(120deg, #881337 0%, #f43f5e 50%, #fb923c 100%); }
+.banner-swatch--teal    { background-image: linear-gradient(120deg, #134e4a 0%, #0d9488 50%, #3b82f6 100%); }
+
+/* Custom banner — coming soon */
+.banner-swatch--custom {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(148, 163, 184, 0.1) 0px,
+        rgba(148, 163, 184, 0.1) 4px,
+        rgba(148, 163, 184, 0.04) 4px,
+        rgba(148, 163, 184, 0.04) 8px
+    ), linear-gradient(120deg, #1e293b 0%, #334155 100%);
+    border: 2px dashed rgba(148, 163, 184, 0.35);
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+.banner-swatch--custom:hover { transform: none; box-shadow: none; }
+.banner-swatch--custom .banner-swatch__label { color: #94a3b8; }
+.banner-swatch--custom .banner-swatch__icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    font-size: 1.25rem;
+    color: rgba(148, 163, 184, 0.55);
+    pointer-events: none;
+}
+.banner-swatch__coming-soon {
+    position: absolute;
+    top: 0.3rem;
+    right: 0.3rem;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    pointer-events: none;
+}
 
 @media (max-width: 600px) {
     .profile-hero__body { padding: 0 1rem 1rem; }

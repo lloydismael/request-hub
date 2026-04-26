@@ -44,11 +44,28 @@ class User(AbstractUser):
         blank=True,
         validators=[RegexValidator(r"^[0-9+\-() ]*$", "Phone number contains invalid characters.")],
     )
+    BANNER_GRADIENT_CHOICES = [
+        ("blue", "Blue"),
+        ("sunset", "Sunset"),
+        ("forest", "Forest"),
+        ("crimson", "Crimson"),
+        ("slate", "Slate"),
+        ("aurora", "Aurora"),
+        ("rose", "Rose"),
+        ("teal", "Teal"),
+    ]
+
     profile_photo = models.ImageField(
         upload_to=user_profile_photo_upload_to,
         storage=DatabaseMediaStorage(),
         blank=True,
         null=True,
+    )
+    banner_gradient = models.CharField(
+        max_length=20,
+        choices=BANNER_GRADIENT_CHOICES,
+        default="blue",
+        blank=True,
     )
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
     REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)

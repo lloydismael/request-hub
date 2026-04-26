@@ -33,6 +33,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         password_changed = bool(form.cleaned_data.get("new_password1"))
         delete_photo_requested = form.data.get("delete_photo")
+        save_banner_requested = form.data.get("save_banner")
         photo_deleted = False
 
         if delete_photo_requested:
@@ -43,6 +44,13 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
             form.instance.profile_photo = None
             if "profile_photo" in form.cleaned_data:
                 form.cleaned_data["profile_photo"] = None
+
+        # When saving banner, also propagate the hidden field value from POST
+        if save_banner_requested:
+            banner_val = form.data.get("banner_gradient", "").strip()
+            valid_keys = {"blue", "sunset", "forest", "crimson", "slate", "aurora", "rose", "teal"}
+            if banner_val in valid_keys:
+                form.instance.banner_gradient = banner_val
 
         response = super().form_valid(form)
         user = self.request.user
