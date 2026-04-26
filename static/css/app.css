@@ -2090,7 +2090,7 @@ body.dark-mode .requestor-modal .btn-close {
 .page-login main.container {
     max-width: none;
     width: 100%;
-    padding: 0;
+    padding: 0 !important;   /* override Bootstrap .py-4's !important */
     min-height: 100vh;
     overflow: hidden;
 }
