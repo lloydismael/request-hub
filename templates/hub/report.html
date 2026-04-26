@@ -3,31 +3,28 @@
 {% block content %}
 
 {# ── Page Header ─────────────────────────────────────────────────────────── #}
-<div class="glass-card rpt-page-header mb-4">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-        <div class="d-flex align-items-center gap-3">
-            <span class="rpt-hero-icon"><i class="bi bi-bar-chart-line-fill"></i></span>
-            <div>
-                <h1 class="h4 mb-0 fw-bold">Reports</h1>
-                <p class="text-muted mb-0 small mt-1">Operational metrics and engineer activity insights.</p>
-            </div>
-        </div>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <div class="rpt-tab-group" role="group" aria-label="Report view toggle">
-                <a href="?report_view=operational"
-                   class="rpt-tab {% if report_view == 'operational' %}rpt-tab--active{% endif %}">
-                    <i class="bi bi-graph-up-arrow"></i> Operational
-                </a>
-                <a href="?report_view=activity"
-                   class="rpt-tab {% if report_view == 'activity' %}rpt-tab--active{% endif %}">
-                    <i class="bi bi-clipboard-data-fill"></i> Activity Logs
-                </a>
-            </div>
-            <a class="btn btn-sm btn-outline-secondary"
-               href="{% url 'hub:report-export' %}?report_view={{ report_view }}">
-                <i class="bi bi-download me-1"></i>Export CSV
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1 fw-semibold">
+            <i class="bi bi-bar-chart-line-fill me-2 text-primary"></i>Reports
+        </h1>
+        <p class="text-muted mb-0 small">Operational metrics and engineer activity insights.</p>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="rpt-tab-group" role="group" aria-label="Report view toggle">
+            <a href="?report_view=operational"
+               class="rpt-tab {% if report_view == 'operational' %}rpt-tab--active{% endif %}">
+                <i class="bi bi-graph-up-arrow"></i> Operational
+            </a>
+            <a href="?report_view=activity"
+               class="rpt-tab {% if report_view == 'activity' %}rpt-tab--active{% endif %}">
+                <i class="bi bi-clipboard-data-fill"></i> Activity Logs
             </a>
         </div>
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{% url 'hub:report-export' %}?report_view={{ report_view }}">
+            <i class="bi bi-download me-1"></i>Export CSV
+        </a>
     </div>
 </div>
 
