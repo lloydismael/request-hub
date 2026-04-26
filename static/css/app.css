@@ -1940,6 +1940,10 @@ body.requestor-dashboard .dashboard-metric-card--active {
     box-shadow: 0 25px 60px rgba(15, 23, 42, 0.35);
     border: 1px solid rgba(148, 163, 184, 0.25);
     overflow: hidden;
+    /* Force dark text — body color is light (#e2e8f0) for dark bg, breaks white modal */
+    color: #0f172a;
+    --bs-heading-color: #0f172a;
+    --bs-body-color: #0f172a;
 }
 
 .requestor-modal__header {
@@ -1951,6 +1955,11 @@ body.requestor-dashboard .dashboard-metric-card--active {
     flex-shrink: 0;
 }
 
+.requestor-modal__header h2,
+.requestor-modal__header .h5 {
+    color: #0f172a;
+}
+
 .requestor-modal__body {
     padding: 1.5rem;
     flex: 1 1 auto;
@@ -1958,9 +1967,25 @@ body.requestor-dashboard .dashboard-metric-card--active {
     -webkit-overflow-scrolling: touch;
 }
 
+.requestor-modal__body .form-label {
+    color: #1e293b;
+    font-weight: 500;
+}
+
+.requestor-modal__body .form-text,
+.requestor-modal__body .text-muted {
+    color: #64748b !important;
+}
+
 .requestor-modal__body .form-control,
 .requestor-modal__body .form-select {
     background-color: #ffffff;
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.requestor-modal__body .form-control::placeholder {
+    color: #94a3b8;
 }
 
 .requestor-modal .btn-close {
@@ -2010,6 +2035,52 @@ body.dark-mode .requestor-modal__body .form-select option {
 
 body.dark-mode .requestor-modal .btn-close {
     color: #e2e8f0;
+}
+
+/* Custom account-name autocomplete dropdown */
+.acct-dropdown {
+    position: fixed;
+    z-index: 99999;
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.acct-dropdown__item {
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.12s ease;
+}
+
+.acct-dropdown__item:hover,
+.acct-dropdown__item.is-active {
+    background: rgba(47, 108, 243, 0.1);
+    color: #2f6cf3;
+}
+
+body.dark-mode .acct-dropdown {
+    background: #1e293b;
+    border-color: rgba(148, 163, 184, 0.2);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-mode .acct-dropdown__item {
+    color: #e2e8f0;
+}
+
+body.dark-mode .acct-dropdown__item:hover,
+body.dark-mode .acct-dropdown__item.is-active {
+    background: rgba(47, 108, 243, 0.2);
+    color: #93c5fd;
 }
 
 @media (max-width: 640px) {
