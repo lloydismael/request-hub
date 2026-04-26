@@ -597,6 +597,89 @@ body.dark-mode .bg-primary-subtle.text-primary {
     padding-block: 1.1rem;
 }
 
+/* ══════════════════════════════════════════════
+   NAVBAR – icons + bouncy hover animations
+══════════════════════════════════════════════ */
+
+/* Brand bounce */
+.navbar-brand {
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.navbar-brand:hover {
+    transform: scale(1.08);
+    opacity: 0.9;
+}
+
+/* Nav links – base */
+.navbar .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.85rem;
+    border-radius: 10px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    position: relative;
+    transition:
+        color 0.18s ease,
+        background 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center bottom;
+    overflow: visible;
+}
+
+/* Hover – pill background + float up */
+.navbar .nav-link:hover,
+.navbar .nav-link:focus-visible {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.16);
+    transform: translateY(-3px) scale(1.06);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
+/* Icon inside nav link */
+.navbar .nav-link .nav-icon {
+    font-size: 0.92rem;
+    display: inline-block;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.navbar .nav-link:hover .nav-icon {
+    transform: scale(1.25) rotate(-8deg);
+}
+
+/* Active nav link */
+.navbar .nav-link.active,
+.navbar .nav-link[aria-current="page"] {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.2);
+    font-weight: 600;
+}
+
+/* Avatar bounce */
+.nav-avatar {
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+    cursor: pointer;
+}
+.nav-avatar:hover {
+    transform: scale(1.14);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.4);
+}
+
+/* Username link bounce */
+a.text-white-50.small {
+    display: inline-block;
+    transition: color 0.18s ease, transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+a.text-white-50.small:hover {
+    color: #fff !important;
+    transform: translateY(-2px) scale(1.04);
+}
+
 .form-control, .form-select {
     border-radius: 12px;
     border-color: rgba(15, 23, 42, 0.1);
