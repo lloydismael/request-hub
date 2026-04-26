@@ -2076,7 +2076,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
 class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, UpdateView):
     model = Request
     form_class = RequestAdminForm
-    template_name = "hub/request_admin_form.html"
+    template_name = "hub/request_manager_form.html"
     success_url = reverse_lazy("hub:dashboard")
 
     def get_form_kwargs(self):
@@ -2138,6 +2138,10 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         )
         context.setdefault("log_form", StatusLogForm())
         context["engineer_capacity_map"] = self._build_engineer_capacity_map()
+        context["status_form"] = None
+        context["status_allowed"] = False
+        context["account_name_choices"] = []
+        context["is_admin_form"] = True
         return context
 
     def _handle_status_log_post(self, request):

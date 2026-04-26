@@ -3297,6 +3297,10 @@ body.theme-switching *::after {
     border-radius: 20px;
     box-shadow: 0 2px 16px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.04);
     overflow: hidden;
+    /* Force dark text inside white card regardless of body theme */
+    color: #0f172a;
+    --bs-secondary-color: rgba(15, 23, 42, 0.55);
+    --bs-body-color: #0f172a;
 }
 .rmf-card__header {
     display: flex;
@@ -3486,7 +3490,7 @@ body.dark-mode .rmf-meta-chip--date     { background: rgba(16,185,129,0.1);  bor
 body.dark-mode .rmf-status-dot--ongoing   { background: rgba(234,179,8,0.12);   color: #fde047; }
 body.dark-mode .rmf-status-dot--completed { background: rgba(34,197,94,0.12);   color: #86efac; }
 body.dark-mode .rmf-status-dot--on_hold   { background: rgba(168,85,247,0.12);  color: #d8b4fe; }
-body.dark-mode .rmf-card                { background: rgba(15,23,42,0.9); border-color: rgba(148,163,184,0.12); box-shadow: 0 2px 20px rgba(0,0,0,0.4); }
+body.dark-mode .rmf-card                { background: rgba(15,23,42,0.9); border-color: rgba(148,163,184,0.12); box-shadow: 0 2px 20px rgba(0,0,0,0.4); color: #e2e8f0; --bs-secondary-color: rgba(226,232,240,0.55); --bs-body-color: #e2e8f0; }
 body.dark-mode .rmf-card__header        { background: rgba(255,255,255,0.03); border-bottom-color: rgba(255,255,255,0.08); }
 body.dark-mode .rmf-card__header-title  { color: #f1f5f9; }
 body.dark-mode .rmf-card__header-sub    { color: #64748b; }

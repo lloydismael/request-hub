@@ -43,6 +43,9 @@
             <form method="post" novalidate class="rmf-form">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="details">
+                {% if is_admin_form %}
+                <input type="hidden" name="override_capacity" value="0" data-override-flag>
+                {% endif %}
                 {% if account_name_choices %}
                     <datalist id="account-name-options">
                         {% for option in account_name_choices %}
@@ -53,15 +56,19 @@
 
                 {# ── Read-only info strip ── #}
                 <div class="rmf-info-strip">
+                    {# Account: from form field if available, else from the request object #}
+                    <div class="rmf-info-item">
+                        <span class="rmf-info-item__label"><i class="bi bi-building me-1"></i>Account</span>
+                        <span class="rmf-info-item__value">
+                            {% if form.account_name %}{{ form.account_name.value|default_if_none:"—" }}{% else %}{{ object.account.name|default:"—" }}{% endif %}
+                        </span>
+                        {% if form.account_name and request.user.is_engineer_access_role %}
+                            <input type="hidden" name="account_name" value="{{ form.account_name.value|default_if_none:'' }}">
+                        {% endif %}
+                    </div>
                     {% for field in form %}
                         {% if field.name == 'account_name' %}
-                            <div class="rmf-info-item">
-                                <span class="rmf-info-item__label"><i class="bi bi-building me-1"></i>Account</span>
-                                <span class="rmf-info-item__value">{{ field.value|default_if_none:"—" }}</span>
-                                {% if request.user.is_engineer_access_role %}
-                                    <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}">
-                                {% endif %}
-                            </div>
+                            {# Already rendered above #}
                         {% elif field.name == 'request_date' or field.name == 'needed_by' %}
                             {% if request.user.is_engineer_access_role %}
                                 <div class="rmf-info-item" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
@@ -75,6 +82,7 @@
                 </div>
 
                 {# ── Editable fields ── #}
+                <div class="rmf-fields-wrap">
                 <div class="rmf-fields">
                     {% for field in form %}
                         {% if field.name == 'account_name' or field.name == 'request_date' or field.name == 'needed_by' %}
@@ -91,10 +99,17 @@
                                     {{ field }}
                                     {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                                 </div>
+                            {% elif not request.user.is_engineer_access_role and field.name == 'request_date' %}
+                                <div class="rmf-field-group">
+                                    <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                                </div>
                             {% endif %}
 
                         {% elif field.name == 'priority' %}
-                            <div class="rmf-field-group" data-priority-group{% if form.engagement_type.value != 'support' %} style="display:none;"{% endif %}>
+                            <div class="rmf-field-group" data-priority-group{% if form.engagement_type and form.engagement_type.value != 'support' %} style="display:none;"{% endif %}>
                                 <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
@@ -132,7 +147,7 @@
                             {# Rendered inside deployment_start block #}
 
                         {% elif field.name == 'description' %}
-                            {# Rendered below the grid as full-width #}
+                            {# Rendered in the description side column below #}
 
                         {% elif field.name == 'engineer' %}
                             <div class="rmf-field-group">
@@ -170,11 +185,11 @@
                             </div>
                         {% endif %}
                     {% endfor %}
-                </div>
+                </div>{# /rmf-fields #}
 
-                {# ── Description — full-width below the grid ── #}
-                {% with field=form.description %}
-                <div class="rmf-field-group rmf-field-group--full rmf-field-group--desc px-0 mx-0" style="padding: 0 1.5rem 1rem;">
+                {# Description — right side column, full height #}
+                <div class="rmf-description-side">
+                    {% with field=form.description %}
                     <label class="rmf-label" {% if not request.user.is_engineer_access_role %}for="id_description"{% endif %}>{{ field.label }}</label>
                     {% if request.user.is_engineer_access_role %}
                         <div class="rmf-description-box">{{ field.value }}</div>
@@ -183,8 +198,9 @@
                         {{ field }}
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                     {% endif %}
+                    {% endwith %}
                 </div>
-                {% endwith %}
+                </div>{# /rmf-fields-wrap #}
 
                 <div class="rmf-form-actions">
                     <button class="btn btn-primary rmf-btn-save" type="submit">
@@ -480,4 +496,32 @@
         });
     })();
 </script>
+{% if is_admin_form %}
+{{ engineer_capacity_map|json_script:"engineer-capacity-data" }}
+<script>
+    (function () {
+        const form = document.querySelector('form.rmf-form');
+        if (!form) return;
+        const overrideInput = form.querySelector('[data-override-flag]');
+        const engineerSelect = form.querySelector('#id_engineer');
+        const dataEl = document.getElementById('engineer-capacity-data');
+        let capacityMap = {};
+        if (dataEl) { try { capacityMap = JSON.parse(dataEl.textContent); } catch (e) {} }
+        if (engineerSelect) {
+            engineerSelect.addEventListener('change', () => { if (overrideInput) overrideInput.value = '0'; });
+        }
+        form.addEventListener('submit', (e) => {
+            if (!engineerSelect || !overrideInput) return;
+            const id = engineerSelect.value;
+            if (!id || !capacityMap[id]) return;
+            const { load, capacity, name } = capacityMap[id];
+            if (typeof load === 'number' && typeof capacity === 'number' && load >= capacity && overrideInput.value !== '1') {
+                const confirmed = window.confirm(`${name} is at capacity (${load}/${capacity} ongoing). Proceed with override and assign anyway?`);
+                if (!confirmed) { e.preventDefault(); return; }
+                overrideInput.value = '1';
+            }
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}
