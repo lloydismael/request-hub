@@ -2,65 +2,156 @@
 {% load tz %}
 {% block title %}Notifications · Request Hub{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="glass-card p-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h1 class="h5 mb-0">Notifications</h1>
+<div class="notif-page">
+
+    {# ── Header ── #}
+    <div class="notif-header">
+        <div class="notif-header__left">
+            <span class="notif-header__icon-wrap">
+                <i class="bi bi-bell-fill"></i>
+            </span>
+            <div>
+                <h1 class="notif-header__title">Notifications</h1>
+                <p class="notif-header__sub">
+                    {% if unread_count > 0 %}
+                        You have <strong>{{ unread_count }}</strong> unread notification{{ unread_count|pluralize }}.
+                    {% else %}
+                        You're all caught up!
+                    {% endif %}
+                </p>
             </div>
-            <ul class="list-group list-group-flush notifications-list">
-                {% for notification in notifications %}
-                    <li class="list-group-item notification-item {% if not notification.is_read %}notification-item--unread{% endif %}">
-                        <div class="d-flex align-items-start gap-3">
-                            <span class="notification-item__icon notification-item__icon--{{ notification.category_key }}">
-                                <i class="bi {{ notification.icon_class }}"></i>
-                            </span>
-                            <div class="me-auto">
-                                <div class="fw-semibold notification-item__message">{{ notification.message }}</div>
-                                <div class="d-flex flex-wrap gap-2 mt-2 small">
-                                    <span class="badge rounded-pill notification-meta-badge">
-                                        <i class="bi bi-tag-fill me-1"></i>{{ notification.category_label }}
-                                    </span>
-                                    <span class="badge rounded-pill notification-meta-badge">
-                                        <i class="bi bi-person-fill me-1"></i>{{ notification.actor|default:"System" }}
-                                    </span>
-                                    <span class="badge rounded-pill notification-meta-badge">
-                                        <i class="bi bi-clock-history me-1"></i>{{ notification.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
-                                    </span>
-                                    {% if notification.source %}
-                                        <span class="badge rounded-pill notification-meta-badge">
-                                            <i class="bi bi-geo-alt me-1"></i>{{ notification.source }}
-                                        </span>
-                                    {% endif %}
-                                    {% if notification.related_request %}
-                                        <span class="badge rounded-pill notification-meta-badge">
-                                            <i class="bi bi-hash me-1"></i>{{ notification.related_request.reference_code }} · {{ notification.related_request.account.name }}
-                                        </span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="d-flex flex-column align-items-end gap-2">
-                                {% if notification.related_request %}
-                                    <a class="btn btn-sm btn-outline-primary notification-action-btn" href="{% url 'hub:notification-follow' notification.pk %}">{{ notification.action_label }}</a>
-                                {% endif %}
-                                {% if not notification.is_read %}
-                                    <form method="post" action="{% url 'hub:notification-read' notification.pk %}" class="notification-action-form">
-                                        {% csrf_token %}
-                                        <button class="btn btn-sm btn-outline-secondary notification-action-btn" type="submit">Mark Read</button>
-                                    </form>
-                                {% endif %}
-                                <form method="post" action="{% url 'hub:notification-delete' notification.pk %}" class="notification-action-form">
-                                    {% csrf_token %}
-                                    <button class="btn btn-sm btn-outline-danger notification-action-btn" type="submit">Delete</button>
-                                </form>
-                            </div>
-                        </div>
-                    </li>
-                {% empty %}
-                    <li class="list-group-item text-center text-muted">No notifications yet.</li>
-                {% endfor %}
-            </ul>
+        </div>
+        <div class="notif-header__actions">
+            {% if unread_count > 0 %}
+                <form method="post" action="{% url 'hub:notification-mark-all-read' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm notif-btn-markall">
+                        <i class="bi bi-check2-all me-1"></i>Mark all read
+                    </button>
+                </form>
+            {% endif %}
+            <span class="notif-count-chip">
+                {{ total_count }} total
+            </span>
         </div>
     </div>
+
+    {# ── Cards ── #}
+    {% if notifications %}
+        <div class="notif-feed">
+            {% for notification in notifications %}
+                <article class="notif-card notif-card--{{ notification.category_key }}{% if not notification.is_read %} notif-card--unread{% endif %}">
+
+                    {# Left accent strip – driven by category #}
+                    <div class="notif-card__strip"></div>
+
+                    {# Icon bubble #}
+                    <div class="notif-card__icon">
+                        <i class="bi {{ notification.icon_class }}"></i>
+                    </div>
+
+                    {# Main body #}
+                    <div class="notif-card__body">
+                        <div class="notif-card__top-row">
+                            <span class="notif-card__category">{{ notification.category_label }}</span>
+                            {% if not notification.is_read %}
+                                <span class="notif-card__unread-dot" title="Unread"></span>
+                            {% endif %}
+                            <span class="notif-card__time ms-auto" title="{{ notification.created_at|timezone:"Asia/Manila"|date:"N j, Y g:i A" }}">
+                                <i class="bi bi-clock me-1 opacity-50"></i>{{ notification.created_at|timezone:"Asia/Manila"|date:"N j, Y · g:i A" }}
+                            </span>
+                        </div>
+
+                        <p class="notif-card__message">{{ notification.message }}</p>
+
+                        <div class="notif-card__meta">
+                            {% if notification.actor %}
+                                <span class="notif-chip notif-chip--person">
+                                    <i class="bi bi-person-fill"></i>{{ notification.actor }}
+                                </span>
+                            {% endif %}
+                            {% if notification.related_request %}
+                                <span class="notif-chip notif-chip--ref">
+                                    <i class="bi bi-hash"></i>{{ notification.related_request.reference_code }}
+                                    <span class="notif-chip__sep">·</span>
+                                    {{ notification.related_request.account.name }}
+                                </span>
+                            {% endif %}
+                            {% if notification.source %}
+                                <span class="notif-chip notif-chip--source">
+                                    <i class="bi bi-geo-alt"></i>{{ notification.source }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Actions #}
+                    <div class="notif-card__actions">
+                        {% if notification.related_request %}
+                            <a class="notif-action-btn notif-action-btn--primary"
+                               href="{% url 'hub:notification-follow' notification.pk %}">
+                                <i class="bi bi-arrow-right-circle me-1"></i>{{ notification.action_label }}
+                            </a>
+                        {% endif %}
+                        {% if not notification.is_read %}
+                            <form method="post" action="{% url 'hub:notification-read' notification.pk %}" class="m-0">
+                                {% csrf_token %}
+                                <button class="notif-action-btn notif-action-btn--secondary" type="submit">
+                                    <i class="bi bi-check2 me-1"></i>Mark read
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="notif-read-badge">
+                                <i class="bi bi-check2-all me-1"></i>Read
+                            </span>
+                        {% endif %}
+                        <form method="post" action="{% url 'hub:notification-delete' notification.pk %}" class="m-0">
+                            {% csrf_token %}
+                            <button class="notif-action-btn notif-action-btn--danger" type="submit" title="Delete notification">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </form>
+                    </div>
+
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="notif-empty">
+            <i class="bi bi-bell-slash notif-empty__icon"></i>
+            <p class="notif-empty__title">No notifications yet</p>
+            <p class="notif-empty__sub">When something happens on your requests, you'll see updates here.</p>
+        </div>
+    {% endif %}
+
+    {# ── Pagination ── #}
+    {% if is_paginated %}
+        <nav class="notif-pagination" aria-label="Notifications pages">
+            {% if page_obj.has_previous %}
+                <a class="notif-page-btn" href="?page={{ page_obj.previous_page_number }}">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </a>
+            {% else %}
+                <span class="notif-page-btn notif-page-btn--disabled">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </span>
+            {% endif %}
+
+            <span class="notif-page-info">
+                Page <strong>{{ page_obj.number }}</strong> of <strong>{{ page_obj.paginator.num_pages }}</strong>
+            </span>
+
+            {% if page_obj.has_next %}
+                <a class="notif-page-btn" href="?page={{ page_obj.next_page_number }}">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </a>
+            {% else %}
+                <span class="notif-page-btn notif-page-btn--disabled">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </span>
+            {% endif %}
+        </nav>
+    {% endif %}
+
 </div>
 {% endblock %}

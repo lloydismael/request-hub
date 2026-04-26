@@ -3656,6 +3656,7 @@ class NotificationListView(LoginRequiredMixin, ListView):
     model = Notification
     template_name = "hub/notifications.html"
     context_object_name = "notifications"
+    paginate_by = 25
 
     def get_queryset(self):
         queryset = (
@@ -3666,6 +3667,16 @@ class NotificationListView(LoginRequiredMixin, ListView):
         if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
             queryset = queryset.filter(source__icontains="new request")
         return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        base_qs = user.notifications.all()
+        if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
+            base_qs = base_qs.filter(source__icontains="new request")
+        context["unread_count"] = base_qs.filter(is_read=False).count()
+        context["total_count"] = base_qs.count()
+        return context
 
 
 class NotificationReadView(LoginRequiredMixin, View):
@@ -3696,6 +3707,12 @@ class NotificationDeleteView(LoginRequiredMixin, View):
     def post(self, request, pk):
         notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
         notification.delete()
+        return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("hub:notifications")))
+
+
+class NotificationMarkAllReadView(LoginRequiredMixin, View):
+    def post(self, request):
+        request.user.notifications.filter(is_read=False).update(is_read=True)
         return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("hub:notifications")))
 
 

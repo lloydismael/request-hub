@@ -60,12 +60,9 @@
                                 <span class="nav-avatar nav-avatar--placeholder">{{ display_name|slice:":1"|upper }}</span>
                             {% endwith %}
                         {% endif %}
-                        <span class="text-white-50 small">{{ request.user.get_full_name|default:request.user.username }}</span>
-                        <a class="btn btn-sm btn-outline-light" href="{% url 'accounts:update' %}">Profile</a>
-                        <form action="{% url 'logout' %}" method="post" class="d-inline">
-                            {% csrf_token %}
-                            <button class="btn btn-sm btn-outline-light" type="submit">Logout</button>
-                        </form>
+                        <a class="text-white-50 small text-decoration-none" href="{% url 'accounts:update' %}" title="Go to Profile">
+                            {{ request.user.get_full_name|default:request.user.username }}
+                        </a>
                     </div>
                 </div>
             {% else %}
