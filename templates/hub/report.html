@@ -1,87 +1,101 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Reports · Request Hub{% endblock %}
 {% block content %}
-<div class="glass-card p-4 mb-4">
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="glass-card rpt-page-header mb-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-        <div>
-            <h1 class="h4 mb-1">Reports</h1>
-            <p class="text-muted mb-0">Switch between operational metrics and engineer activity insights.</p>
+        <div class="d-flex align-items-center gap-3">
+            <span class="rpt-hero-icon"><i class="bi bi-bar-chart-line-fill"></i></span>
+            <div>
+                <h1 class="h4 mb-0 fw-bold">Reports</h1>
+                <p class="text-muted mb-0 small mt-1">Operational metrics and engineer activity insights.</p>
+            </div>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
-            <div class="btn-group" role="group" aria-label="Report view toggle">
-                <a href="?report_view=operational" class="btn btn-sm {% if report_view == 'operational' %}btn-primary active{% else %}btn-outline-primary{% endif %}">Operational Report</a>
-                <a href="?report_view=activity" class="btn btn-sm {% if report_view == 'activity' %}btn-primary active{% else %}btn-outline-primary{% endif %}">Activity Logs</a>
+            <div class="rpt-tab-group" role="group" aria-label="Report view toggle">
+                <a href="?report_view=operational"
+                   class="rpt-tab {% if report_view == 'operational' %}rpt-tab--active{% endif %}">
+                    <i class="bi bi-graph-up-arrow"></i> Operational
+                </a>
+                <a href="?report_view=activity"
+                   class="rpt-tab {% if report_view == 'activity' %}rpt-tab--active{% endif %}">
+                    <i class="bi bi-clipboard-data-fill"></i> Activity Logs
+                </a>
             </div>
-            {% if report_view == 'activity' %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:report-export' %}?report_view=activity">Export CSV</a>
-            {% else %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:report-export' %}?report_view=operational">Export CSV</a>
-            {% endif %}
+            <a class="btn btn-sm btn-outline-secondary"
+               href="{% url 'hub:report-export' %}?report_view={{ report_view }}">
+                <i class="bi bi-download me-1"></i>Export CSV
+            </a>
         </div>
     </div>
 </div>
 
 {% if report_view == 'activity' %}
+
+    {# ── Activity: filter + KPI row ──────────────────────────────────────── #}
     <div class="glass-card p-4 mb-4">
-        <div class="row g-3 align-items-center">
+        <div class="row g-4 align-items-start">
             <div class="col-12 col-lg-4">
-                <h2 class="h5 mb-2">Engineer Activity Summary</h2>
-                <p class="text-muted mb-0">Understand how engineers spend their time, where work happens, and which efforts are billable.</p>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-clock-history"></i></span>
+                    <h2 class="h5 mb-0 fw-bold">Engineer Activity</h2>
+                </div>
+                <p class="text-muted small mb-0">Track how engineers spend time, where work happens, and which efforts are billable.</p>
             </div>
             <div class="col-12 col-lg-8">
                 <form method="get" class="row g-2 align-items-end mb-3">
                     <input type="hidden" name="report_view" value="activity">
                     <div class="col-12 col-md-4">
-                        <label for="activity-start-month" class="form-label mb-1">From Month</label>
-                        <input
-                            id="activity-start-month"
-                            type="month"
-                            name="start_month"
-                            class="form-control form-control-sm"
-                            value="{{ activity_start_month }}"
-                        >
+                        <label for="activity-start-month" class="form-label mb-1 small fw-semibold">From Month</label>
+                        <input id="activity-start-month" type="month" name="start_month"
+                               class="form-control form-control-sm" value="{{ activity_start_month }}">
                     </div>
                     <div class="col-12 col-md-4">
-                        <label for="activity-end-month" class="form-label mb-1">To Month</label>
-                        <input
-                            id="activity-end-month"
-                            type="month"
-                            name="end_month"
-                            class="form-control form-control-sm"
-                            value="{{ activity_end_month }}"
-                        >
+                        <label for="activity-end-month" class="form-label mb-1 small fw-semibold">To Month</label>
+                        <input id="activity-end-month" type="month" name="end_month"
+                               class="form-control form-control-sm" value="{{ activity_end_month }}">
                     </div>
                     <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
-                        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-funnel-fill me-1"></i>Apply
+                        </button>
                         {% if activity_start_month or activity_end_month %}
-                            <a href="{% url 'hub:report' %}?report_view=activity" class="btn btn-sm btn-outline-secondary">Clear</a>
+                            <a href="{% url 'hub:report' %}?report_view=activity"
+                               class="btn btn-sm btn-outline-secondary">Clear</a>
                         {% endif %}
                     </div>
                 </form>
-                <div class="small text-muted mb-3">Showing: {{ activity_month_filter_label }}</div>
+                <div class="rpt-period-badge mb-3">
+                    <i class="bi bi-calendar3"></i> {{ activity_month_filter_label }}
+                </div>
                 <div class="row g-3">
                     <div class="col-6 col-md-3">
-                        <div class="report-summary-card bg-primary-subtle text-primary border border-primary-subtle">
-                            <span class="report-summary-card__label">Log Entries</span>
-                            <span class="report-summary-card__value">{{ activity_totals.entries }}</span>
+                        <div class="rpt-kpi-card rpt-kpi--blue">
+                            <span class="rpt-kpi-icon"><i class="bi bi-journal-text"></i></span>
+                            <span class="rpt-kpi-label">Log Entries</span>
+                            <span class="rpt-kpi-value">{{ activity_totals.entries }}</span>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="report-summary-card bg-success-subtle text-success border border-success-subtle">
-                            <span class="report-summary-card__label">Total Hours</span>
-                            <span class="report-summary-card__value">{{ activity_totals.total_hours|default:0|floatformat:1 }}</span>
+                        <div class="rpt-kpi-card rpt-kpi--green">
+                            <span class="rpt-kpi-icon"><i class="bi bi-clock-fill"></i></span>
+                            <span class="rpt-kpi-label">Total Hours</span>
+                            <span class="rpt-kpi-value">{{ activity_totals.total_hours|default:0|floatformat:1 }}</span>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="report-summary-card bg-info-subtle text-info border border-info-subtle">
-                            <span class="report-summary-card__label">Billable Hours</span>
-                            <span class="report-summary-card__value">{{ activity_totals.billable_hours|default:0|floatformat:1 }}</span>
+                        <div class="rpt-kpi-card rpt-kpi--violet">
+                            <span class="rpt-kpi-icon"><i class="bi bi-cash-coin"></i></span>
+                            <span class="rpt-kpi-label">Billable Hrs</span>
+                            <span class="rpt-kpi-value">{{ activity_totals.billable_hours|default:0|floatformat:1 }}</span>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="report-summary-card bg-warning-subtle text-warning border border-warning-subtle">
-                            <span class="report-summary-card__label">Accounts</span>
-                            <span class="report-summary-card__value">{{ activity_totals.unique_accounts }}</span>
+                        <div class="rpt-kpi-card rpt-kpi--amber">
+                            <span class="rpt-kpi-icon"><i class="bi bi-building"></i></span>
+                            <span class="rpt-kpi-label">Accounts</span>
+                            <span class="rpt-kpi-value">{{ activity_totals.unique_accounts }}</span>
                         </div>
                     </div>
                 </div>
@@ -89,28 +103,35 @@
         </div>
     </div>
 
-    <div class="row g-4">
+    {# ── Activity: Charts row 1 ──────────────────────────────────────────── #}
+    <div class="row g-4 mb-4">
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="h6 text-uppercase text-muted mb-0">Hours by Engineer</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--green"><i class="bi bi-person-lines-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Hours by Engineer</h3>
+                        <p class="rpt-chart-sub">Billable vs non-billable hours logged per engineer.</p>
+                    </div>
                 </div>
                 {% if activity_engineer_chart.labels %}
-                    <canvas id="activityEngineerChart" height="240"></canvas>
-                    <p class="text-muted small mt-3 mb-0">Billable vs non-billable hours logged per engineer.</p>
+                    <div class="rpt-canvas-wrap"><canvas id="activityEngineerChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No engineer activity entries available yet.</p>
                 {% endif %}
             </div>
         </div>
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="h6 text-uppercase text-muted mb-0">Hours by Activity Type</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--blue"><i class="bi bi-tags-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Hours by Activity Type</h3>
+                        <p class="rpt-chart-sub">Compare time across learning, customer-facing, and internal work.</p>
+                    </div>
                 </div>
                 {% if activity_type_chart.labels %}
-                    <canvas id="activityTypeChart" height="240"></canvas>
-                    <p class="text-muted small mt-3 mb-0">Compare time spent across learning, customer-facing, and internal initiatives.</p>
+                    <div class="rpt-canvas-wrap"><canvas id="activityTypeChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No activity type data captured yet.</p>
                 {% endif %}
@@ -118,22 +139,35 @@
         </div>
     </div>
 
-    <div class="row g-4 mt-1">
+    {# ── Activity: Charts row 2 ──────────────────────────────────────────── #}
+    <div class="row g-4 mb-4">
         <div class="col-12 col-lg-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Work Location Mix</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--cyan"><i class="bi bi-geo-alt-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Work Location Mix</h3>
+                        <p class="rpt-chart-sub">On-site, remote, and mixed work distribution.</p>
+                    </div>
+                </div>
                 {% if activity_location_chart.labels %}
-                    <canvas id="activityLocationChart" height="220"></canvas>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityLocationChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No location data logged yet.</p>
                 {% endif %}
             </div>
         </div>
         <div class="col-12 col-lg-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Billable Distribution</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--amber"><i class="bi bi-pie-chart-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Billable Distribution</h3>
+                        <p class="rpt-chart-sub">Ratio of billable to non-billable hours across all entries.</p>
+                    </div>
+                </div>
                 {% if activity_totals.entries %}
-                    <canvas id="activityBillableChart" height="220"></canvas>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityBillableChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">Log activity to see billable trends.</p>
                 {% endif %}
@@ -141,28 +175,35 @@
         </div>
     </div>
 
-    <div class="row g-4 mt-1">
+    {# ── Activity: Breakdown tables ───────────────────────────────────────── #}
+    <div class="row g-4 mb-4">
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Engineer Hour Breakdown</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--violet"><i class="bi bi-person-fill-check"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Engineer Hour Breakdown</h3>
+                        <p class="rpt-chart-sub">Total, billable, and non-billable hours per engineer.</p>
+                    </div>
+                </div>
                 {% if activity_engineer_table %}
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
-                            <thead>
+                            <thead class="rpt-table-head">
                                 <tr>
-                                    <th scope="col">Engineer</th>
-                                    <th scope="col" class="text-end">Total</th>
-                                    <th scope="col" class="text-end">Billable</th>
-                                    <th scope="col" class="text-end">Not Billable</th>
+                                    <th>Engineer</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Billable</th>
+                                    <th class="text-end">Not Billable</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in activity_engineer_table %}
                                     <tr>
                                         <td>{{ row.name }}</td>
-                                        <td class="text-end fw-semibold">{{ row.total_hours|floatformat:1 }}</td>
-                                        <td class="text-end">{{ row.billable_hours|floatformat:1 }}</td>
-                                        <td class="text-end">{{ row.non_billable_hours|floatformat:1 }}</td>
+                                        <td class="text-end fw-bold">{{ row.total_hours|floatformat:1 }}</td>
+                                        <td class="text-end"><span class="badge rpt-badge--green">{{ row.billable_hours|floatformat:1 }}</span></td>
+                                        <td class="text-end"><span class="badge rpt-badge--gray">{{ row.non_billable_hours|floatformat:1 }}</span></td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -174,26 +215,32 @@
             </div>
         </div>
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Activity Type Breakdown</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--blue"><i class="bi bi-list-task"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Activity Type Breakdown</h3>
+                        <p class="rpt-chart-sub">Hours aggregated by activity category.</p>
+                    </div>
+                </div>
                 {% if activity_type_table %}
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
-                            <thead>
+                            <thead class="rpt-table-head">
                                 <tr>
-                                    <th scope="col">Activity</th>
-                                    <th scope="col" class="text-end">Total</th>
-                                    <th scope="col" class="text-end">Billable</th>
-                                    <th scope="col" class="text-end">Not Billable</th>
+                                    <th>Activity</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Billable</th>
+                                    <th class="text-end">Not Billable</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in activity_type_table %}
                                     <tr>
                                         <td>{{ row.label }}</td>
-                                        <td class="text-end fw-semibold">{{ row.total_hours|floatformat:1 }}</td>
-                                        <td class="text-end">{{ row.billable_hours|floatformat:1 }}</td>
-                                        <td class="text-end">{{ row.non_billable_hours|floatformat:1 }}</td>
+                                        <td class="text-end fw-bold">{{ row.total_hours|floatformat:1 }}</td>
+                                        <td class="text-end"><span class="badge rpt-badge--green">{{ row.billable_hours|floatformat:1 }}</span></td>
+                                        <td class="text-end"><span class="badge rpt-badge--gray">{{ row.non_billable_hours|floatformat:1 }}</span></td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -206,21 +253,28 @@
         </div>
     </div>
 
-    <div class="glass-card p-4 mt-4">
-        <h3 class="h6 text-uppercase text-muted">Recent Engineer Activity</h3>
+    {# ── Activity: log table ─────────────────────────────────────────────── #}
+    <div class="glass-card rpt-chart-card mb-4">
+        <div class="rpt-chart-head">
+            <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-table"></i></span>
+            <div>
+                <h3 class="rpt-chart-title">Recent Engineer Activity</h3>
+                <p class="rpt-chart-sub">Latest logged entries across all engineers and accounts.</p>
+            </div>
+        </div>
         {% if activity_logs %}
             <div class="table-responsive activity-log-scroll">
                 <table class="table align-middle">
-                    <thead>
+                    <thead class="rpt-table-head">
                         <tr>
-                            <th scope="col">Date</th>
-                            <th scope="col">Engineer</th>
-                            <th scope="col">Account</th>
-                            <th scope="col">Activity</th>
-                            <th scope="col">Hours</th>
-                            <th scope="col">Location</th>
-                            <th scope="col">Billable</th>
-                            <th scope="col">Actions</th>
+                            <th>Date</th>
+                            <th>Engineer</th>
+                            <th>Account</th>
+                            <th>Activity</th>
+                            <th>Hours</th>
+                            <th>Location</th>
+                            <th>Billable</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -234,30 +288,32 @@
                                     <div class="text-muted small">{{ log.details }}</div>
                                 </td>
                                 <td>{{ log.actual_hours|floatformat:1 }}</td>
-                                <td><span class="badge bg-light text-dark border">{{ log.get_location_display }}</span></td>
+                                <td><span class="badge rpt-badge--gray">{{ log.get_location_display }}</span></td>
                                 <td>
                                     {% if log.is_billable %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Billable</span>
+                                        <span class="badge rpt-badge--green">Billable</span>
                                     {% else %}
-                                        <span class="badge bg-secondary text-white">Not billable</span>
+                                        <span class="badge rpt-badge--muted">Not billable</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a class="btn btn-outline-primary btn-sm" href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&edit_activity={{ log.pk }}#activity-edit-form">Edit</a>
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&edit_activity={{ log.pk }}#activity-edit-form">
+                                        <i class="bi bi-pencil-fill me-1"></i>Edit
+                                    </a>
                                 </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-
             {% if editing_activity_log and activity_form %}
                 <div class="glass-card p-4 mt-3" id="activity-edit-form">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                         <div>
                             <h4 class="h6 text-uppercase text-muted mb-1">Edit Engineer Activity Log</h4>
                             <p class="text-muted small mb-0">
-                                {{ editing_activity_log.engineer.get_full_name|default:editing_activity_log.engineer.username }} ·
+                                {{ editing_activity_log.engineer.get_full_name|default:editing_activity_log.engineer.username }} &middot;
                                 {{ editing_activity_log.request_date|date:"M d, Y" }}
                             </p>
                         </div>
@@ -269,26 +325,21 @@
                         <input type="hidden" name="end_month" value="{{ activity_end_month }}">
                         <input type="hidden" name="log_id" value="{{ editing_activity_log.pk }}">
                         {% if activity_form.non_field_errors %}
-                            <div class="alert alert-danger" role="alert">
-                                {{ activity_form.non_field_errors|join:" " }}
-                            </div>
+                            <div class="alert alert-danger" role="alert">{{ activity_form.non_field_errors|join:" " }}</div>
                         {% endif %}
                         <div class="row g-3">
                             {% for field in activity_form %}
                                 <div class="col-12 col-md-6">
                                     <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                                     {{ field }}
-                                    {% if field.help_text %}
-                                        <div class="form-text">{{ field.help_text }}</div>
-                                    {% endif %}
-                                    {% if field.errors %}
-                                        <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                                    {% endif %}
+                                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                                 </div>
                             {% endfor %}
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-3">
-                            <a href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+                            <a href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}"
+                               class="btn btn-outline-secondary">Cancel</a>
                             <button type="submit" class="btn btn-primary">Update Activity Log</button>
                         </div>
                     </form>
@@ -305,63 +356,72 @@
     {{ activity_billable_chart|json_script:"activity-billable-data" }}
 
 {% else %}
-    <div class="glass-card p-4 mb-4">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div>
-                <h2 class="h5 mb-1">Operational Report</h2>
-                <p class="text-muted mb-0">A consolidated view of request activity across requestors and engineers.</p>
-            </div>
-            <div class="text-end small text-muted">
-                <div>Total Requests: <span class="fw-semibold">{{ totals.requests }}</span></div>
-                <div>Ongoing vs Completed: <span class="fw-semibold">{{ totals.ongoing }}</span> / <span class="fw-semibold">{{ totals.completed }}</span></div>
+
+    {# ── Operational: KPI row ────────────────────────────────────────────── #}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="rpt-kpi-card rpt-kpi--blue">
+                <span class="rpt-kpi-icon"><i class="bi bi-activity"></i></span>
+                <span class="rpt-kpi-label">Active Requests</span>
+                <span class="rpt-kpi-value">{{ totals.ongoing }}</span>
+                <span class="rpt-kpi-sub">Currently in progress</span>
             </div>
         </div>
-        <div class="row g-3 mt-3">
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="report-summary-card bg-primary-subtle text-primary border border-primary-subtle">
-                    <span class="report-summary-card__label">Active Requests</span>
-                    <span class="report-summary-card__value">{{ totals.ongoing }}</span>
-                </div>
+        <div class="col-6 col-lg-3">
+            <div class="rpt-kpi-card rpt-kpi--green">
+                <span class="rpt-kpi-icon"><i class="bi bi-check-circle-fill"></i></span>
+                <span class="rpt-kpi-label">Completed</span>
+                <span class="rpt-kpi-value">{{ totals.completed }}</span>
+                <span class="rpt-kpi-sub">Total resolved</span>
             </div>
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="report-summary-card bg-success-subtle text-success border border-success-subtle">
-                    <span class="report-summary-card__label">Completed Requests</span>
-                    <span class="report-summary-card__value">{{ totals.completed }}</span>
-                </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="rpt-kpi-card rpt-kpi--amber">
+                <span class="rpt-kpi-icon"><i class="bi bi-people-fill"></i></span>
+                <span class="rpt-kpi-label">Requestors</span>
+                <span class="rpt-kpi-value">{{ totals.account_managers }}</span>
+                <span class="rpt-kpi-sub">Active requestors</span>
             </div>
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="report-summary-card bg-warning-subtle text-warning border border-warning-subtle">
-                    <span class="report-summary-card__label">Requestors</span>
-                    <span class="report-summary-card__value">{{ totals.account_managers }}</span>
-                </div>
-            </div>
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="report-summary-card bg-info-subtle text-info border border-info-subtle">
-                    <span class="report-summary-card__label">Active Engineers</span>
-                    <span class="report-summary-card__value">{{ totals.engineers }}</span>
-                </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="rpt-kpi-card rpt-kpi--cyan">
+                <span class="rpt-kpi-icon"><i class="bi bi-person-workspace"></i></span>
+                <span class="rpt-kpi-label">Engineers</span>
+                <span class="rpt-kpi-value">{{ totals.engineers }}</span>
+                <span class="rpt-kpi-sub">Handling requests</span>
             </div>
         </div>
     </div>
 
-    <div class="row g-4">
+    {# ── Operational: Charts row 1 ───────────────────────────────────────── #}
+    <div class="row g-4 mb-4">
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Requests by Requestor</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--blue"><i class="bi bi-person-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Requests by Requestor</h3>
+                        <p class="rpt-chart-sub">Which requestors create the most tickets.</p>
+                    </div>
+                </div>
                 {% if account_manager_stats %}
-                    <canvas id="accountManagerChart" height="240"></canvas>
-                    <p class="text-muted small mt-3 mb-0">Figures include every recorded request and highlight which requestors create the most tickets.</p>
+                    <div class="rpt-canvas-wrap"><canvas id="accountManagerChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No requests recorded yet for requestors.</p>
                 {% endif %}
             </div>
         </div>
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Requests handled by Engineers</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--violet"><i class="bi bi-tools"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Requests by Engineer</h3>
+                        <p class="rpt-chart-sub">Includes unassigned requests to indicate backlog.</p>
+                    </div>
+                </div>
                 {% if engineer_stats %}
-                    <canvas id="engineerChart" height="240"></canvas>
-                    <p class="text-muted small mt-3 mb-0">Includes unassigned requests to indicate potential backlog.</p>
+                    <div class="rpt-canvas-wrap"><canvas id="engineerChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No engineer assignments captured yet.</p>
                 {% endif %}
@@ -369,24 +429,35 @@
         </div>
     </div>
 
-    <div class="row g-4 mt-1">
+    {# ── Operational: Charts row 2 ───────────────────────────────────────── #}
+    <div class="row g-4 mb-4">
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Count of Engagement Type</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--green"><i class="bi bi-diagram-3-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Engagement Types</h3>
+                        <p class="rpt-chart-sub">Opportunity, Support, Training, and Inquiry volumes.</p>
+                    </div>
+                </div>
                 {% if engagement_chart_has_data %}
-                    <canvas id="engagementChart" height="240"></canvas>
-                    <p class="text-muted small mt-3 mb-0">Displays Opportunity, Support, Training, and Inquiry request volumes.</p>
+                    <div class="rpt-canvas-wrap"><canvas id="engagementChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No engagement type data available yet.</p>
                 {% endif %}
             </div>
         </div>
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Count of Product Category</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--amber"><i class="bi bi-box-seam-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Product Categories</h3>
+                        <p class="rpt-chart-sub">Azure, M365, VMware, and other product volumes.</p>
+                    </div>
+                </div>
                 {% if product_chart_has_data %}
-                    <canvas id="productChart" height="240"></canvas>
-                    <p class="text-muted small mt-3 mb-0">Tracks Azure, M365, and other product categories for quick comparison.</p>
+                    <div class="rpt-canvas-wrap"><canvas id="productChart"></canvas></div>
                 {% else %}
                     <p class="text-muted mb-0">No product category data recorded yet.</p>
                 {% endif %}
@@ -394,28 +465,35 @@
         </div>
     </div>
 
-    <div class="row g-4 mt-1">
+    {# ── Operational: Breakdown tables ───────────────────────────────────── #}
+    <div class="row g-4 mb-4">
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Requestor Breakdown</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--blue"><i class="bi bi-person-vcard-fill"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Requestor Breakdown</h3>
+                        <p class="rpt-chart-sub">Total, completed, and ongoing requests per requestor.</p>
+                    </div>
+                </div>
                 {% if account_manager_stats %}
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
-                            <thead>
+                            <thead class="rpt-table-head">
                                 <tr>
-                                    <th scope="col">Requestor</th>
-                                    <th scope="col" class="text-end">Total Requests</th>
-                                    <th scope="col" class="text-end">Completed</th>
-                                    <th scope="col" class="text-end">Ongoing</th>
+                                    <th>Requestor</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Completed</th>
+                                    <th class="text-end">Ongoing</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in account_manager_stats %}
                                     <tr>
                                         <td>{{ row.name }}</td>
-                                        <td class="text-end fw-semibold">{{ row.total }}</td>
-                                        <td class="text-end">{{ row.completed }}</td>
-                                        <td class="text-end">{{ row.ongoing }}</td>
+                                        <td class="text-end fw-bold">{{ row.total }}</td>
+                                        <td class="text-end"><span class="badge rpt-badge--green">{{ row.completed }}</span></td>
+                                        <td class="text-end"><span class="badge rpt-badge--amber">{{ row.ongoing }}</span></td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -427,26 +505,32 @@
             </div>
         </div>
         <div class="col-12 col-xl-6">
-            <div class="glass-card p-4 h-100">
-                <h3 class="h6 text-uppercase text-muted">Engineer Allocation</h3>
+            <div class="glass-card rpt-chart-card h-100">
+                <div class="rpt-chart-head">
+                    <span class="rpt-chart-icon rpt-icon--violet"><i class="bi bi-person-fill-gear"></i></span>
+                    <div>
+                        <h3 class="rpt-chart-title">Engineer Allocation</h3>
+                        <p class="rpt-chart-sub">Workload distribution per engineer.</p>
+                    </div>
+                </div>
                 {% if engineer_stats %}
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
-                            <thead>
+                            <thead class="rpt-table-head">
                                 <tr>
-                                    <th scope="col">Engineer</th>
-                                    <th scope="col" class="text-end">Total Requests</th>
-                                    <th scope="col" class="text-end">Completed</th>
-                                    <th scope="col" class="text-end">Ongoing</th>
+                                    <th>Engineer</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Completed</th>
+                                    <th class="text-end">Ongoing</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in engineer_stats %}
                                     <tr>
                                         <td>{{ row.name }}</td>
-                                        <td class="text-end fw-semibold">{{ row.total }}</td>
-                                        <td class="text-end">{{ row.completed }}</td>
-                                        <td class="text-end">{{ row.ongoing }}</td>
+                                        <td class="text-end fw-bold">{{ row.total }}</td>
+                                        <td class="text-end"><span class="badge rpt-badge--green">{{ row.completed }}</span></td>
+                                        <td class="text-end"><span class="badge rpt-badge--amber">{{ row.ongoing }}</span></td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -459,12 +543,23 @@
         </div>
     </div>
 
+    {# ── Operational: Status overview ────────────────────────────────────── #}
     {% if status_breakdown %}
-        <div class="glass-card p-4 mt-4">
-            <h3 class="h6 text-uppercase text-muted">Request Status Overview</h3>
-            <div class="d-flex flex-wrap gap-3 mt-2">
+        <div class="glass-card rpt-chart-card mb-4">
+            <div class="rpt-chart-head">
+                <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-flag-fill"></i></span>
+                <div>
+                    <h3 class="rpt-chart-title">Request Status Overview</h3>
+                    <p class="rpt-chart-sub">Current distribution across all status categories.</p>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-1">
                 {% for status in status_breakdown %}
-                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ status.label }}: {{ status.total }}</span>
+                    <div class="rpt-status-chip">
+                        <span class="rpt-status-dot"></span>
+                        <span>{{ status.label }}</span>
+                        <span class="rpt-status-count">{{ status.total }}</span>
+                    </div>
                 {% endfor %}
             </div>
         </div>
@@ -474,380 +569,198 @@
     {{ engineer_chart|json_script:"engineer-data" }}
     {{ engagement_chart|json_script:"engagement-data" }}
     {{ product_chart|json_script:"product-data" }}
+
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    (function () {
-        const reportView = "{{ report_view }}";
+(function () {
+    // ── Theme ────────────────────────────────────────────────────────────────
+    const isDark = document.body.classList.contains('dark-mode');
+    const C = {
+        text:       isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.58)',
+        textStrong: isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.76)',
+        grid:       isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.055)',
+        border:     isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
+        tooltip: {
+            bg:     isDark ? 'rgba(15,23,42,0.97)'   : 'rgba(255,255,255,0.98)',
+            title:  isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.82)',
+            body:   isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.55)',
+            border: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+        },
+    };
 
-        if (reportView === "operational") {
-            const accountManagerNode = document.getElementById("account-manager-data");
-            const engineerNode = document.getElementById("engineer-data");
-            const engagementNode = document.getElementById("engagement-data");
-            const productNode = document.getElementById("product-data");
+    Chart.defaults.color       = C.text;
+    Chart.defaults.borderColor = C.grid;
+    Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+    Chart.defaults.font.size   = 11;
 
-            const totalLabelsPlugin = {
-                id: "totalLabels",
-                afterDatasetsDraw(chart) {
-                    const pluginOptions = chart.options?.plugins?.totalLabels;
-                    if (!pluginOptions?.display) {
-                        return;
-                    }
-                    const totals = pluginOptions.totals || [];
-                    const metaIndex = chart.data.datasets.length - 1;
-                    const meta = chart.getDatasetMeta(metaIndex);
-                    if (!meta) {
-                        return;
-                    }
-                    const ctx = chart.ctx;
-                    meta.data.forEach((element, index) => {
-                        const totalValue = totals[index];
-                        if (totalValue == null) {
-                            return;
-                        }
-                        const { x, y } = element.tooltipPosition();
-                        if (!Number.isFinite(y)) {
-                            return;
-                        }
-                        ctx.save();
-                        ctx.fillStyle = pluginOptions.color || "#212529";
-                        ctx.font = pluginOptions.font || "600 12px 'Inter', sans-serif";
-                        ctx.textAlign = "center";
-                        ctx.textBaseline = "bottom";
-                        ctx.fillText(totalValue, x, y - 4);
-                        ctx.restore();
-                    });
-                },
-            };
+    // ── Shared pieces ────────────────────────────────────────────────────────
+    const tooltipCfg = {
+        backgroundColor: C.tooltip.bg,
+        titleColor:      C.tooltip.title,
+        bodyColor:       C.tooltip.body,
+        borderColor:     C.tooltip.border,
+        borderWidth: 1,
+        padding: 10,
+        cornerRadius: 10,
+        boxWidth: 10,
+        boxHeight: 10,
+    };
 
-            const buildDatasets = (payload, palette) => [
-                {
-                    key: "completed",
-                    label: "Completed",
-                    backgroundColor: palette.completed.background,
-                    borderColor: palette.completed.border,
-                    data: Array.isArray(payload.completed) ? payload.completed : [],
-                    borderWidth: 1.5,
-                    stack: "requests",
-                    order: 1,
-                },
-                {
-                    key: "ongoing",
-                    label: "Ongoing",
-                    backgroundColor: palette.ongoing.background,
-                    borderColor: palette.ongoing.border,
-                    data: Array.isArray(payload.ongoing) ? payload.ongoing : [],
-                    borderWidth: 1.5,
-                    stack: "requests",
-                    order: 2,
-                },
-            ];
+    const axisCfg = {
+        grid:   { color: C.grid,   drawBorder: false },
+        border: { color: C.border, display: false    },
+        ticks:  { color: C.text,   padding: 6        },
+    };
 
-            const buildOptions = totals => ({
+    const legendCfg = {
+        position: 'bottom',
+        labels: { color: C.text, boxWidth: 12, boxHeight: 12, borderRadius: 4, useBorderRadius: true, padding: 16 },
+    };
+
+    // ── Palette ──────────────────────────────────────────────────────────────
+    const P = {
+        green:  { bg: 'rgba(16,185,129,0.42)',  b: 'rgba(16,185,129,0.85)'  },
+        violet: { bg: 'rgba(99,102,241,0.42)',  b: 'rgba(99,102,241,0.85)'  },
+        blue:   { bg: 'rgba(59,130,246,0.42)',  b: 'rgba(59,130,246,0.85)'  },
+        amber:  { bg: 'rgba(245,158,11,0.42)',  b: 'rgba(245,158,11,0.85)'  },
+        cyan:   { bg: 'rgba(6,182,212,0.42)',   b: 'rgba(6,182,212,0.85)'   },
+        gray:   { bg: 'rgba(100,116,139,0.38)', b: 'rgba(100,116,139,0.72)' },
+        rose:   { bg: 'rgba(244,63,94,0.42)',   b: 'rgba(244,63,94,0.85)'   },
+    };
+
+    const DONUT_BG = [P.blue.bg,  P.green.bg,  P.amber.bg,  P.violet.bg,  P.cyan.bg,  P.rose.bg,  P.gray.bg];
+    const DONUT_BR = [P.blue.b,   P.green.b,   P.amber.b,   P.violet.b,   P.cyan.b,   P.rose.b,   P.gray.b];
+
+    // ── totalLabels plugin ───────────────────────────────────────────────────
+    const totalLabelsPlugin = {
+        id: 'totalLabels',
+        afterDatasetsDraw(chart) {
+            const opts = chart.options?.plugins?.totalLabels;
+            if (!opts?.display) return;
+            const totals = opts.totals || [];
+            const meta = chart.getDatasetMeta(chart.data.datasets.length - 1);
+            if (!meta) return;
+            const ctx = chart.ctx;
+            meta.data.forEach((el, i) => {
+                const val = totals[i];
+                if (val == null) return;
+                const { x, y } = el.tooltipPosition();
+                if (!Number.isFinite(y)) return;
+                ctx.save();
+                ctx.fillStyle    = C.textStrong;
+                ctx.font         = "700 11px 'Inter', sans-serif";
+                ctx.textAlign    = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(val, x, y - 5);
+                ctx.restore();
+            });
+        },
+    };
+
+    // ── Stacked bar factory ──────────────────────────────────────────────────
+    function makeStackedBar(canvas, payload, cA, cB) {
+        if (!canvas || !payload?.labels?.length) return;
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: payload.labels,
+                datasets: [
+                    { label: 'Completed', data: payload.completed || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'r', order: 1 },
+                    { label: 'Ongoing',   data: payload.ongoing   || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'r', order: 2 },
+                ],
+            },
+            options: {
+                responsive: true,
+                animation: { duration: 650, easing: 'easeOutQuart' },
                 scales: {
-                    x: {
-                        stacked: true,
-                    },
-                    y: {
-                        stacked: true,
-                        beginAtZero: true,
-                        grace: "10%",
-                        ticks: {
-                            precision: 0,
-                        },
-                    },
+                    x: { stacked: true, ...axisCfg, ticks: { ...axisCfg.ticks, maxRotation: 35, minRotation: 0 } },
+                    y: { stacked: true, beginAtZero: true, grace: '12%', ...axisCfg, ticks: { ...axisCfg.ticks, precision: 0 } },
                 },
                 plugins: {
-                    legend: {
-                        position: "bottom",
-                        labels: {
-                            boxWidth: 16,
-                            boxHeight: 16,
-                        },
-                    },
-                    tooltip: {
-                        callbacks: {
-                            afterBody(items) {
-                                if (!items.length) {
-                                    return "";
-                                }
-                                const index = items[0].dataIndex;
-                                const totalValue = Array.isArray(totals) ? totals[index] : null;
-                                if (totalValue == null) {
-                                    return "";
-                                }
-                                return `Total Requests: ${totalValue}`;
-                            },
-                        },
-                    },
-                    totalLabels: {
-                        display: true,
-                        totals: totals,
-                    },
+                    legend: legendCfg,
+                    tooltip: { ...tooltipCfg, callbacks: { afterBody(items) { if (!items.length) return ''; const t = (payload.totals || [])[items[0].dataIndex]; return t != null ? `Total: ${t}` : ''; } } },
+                    totalLabels: { display: true, totals: payload.totals },
                 },
-            });
+            },
+            plugins: [totalLabelsPlugin],
+        });
+    }
 
-            if (accountManagerNode && accountManagerNode.textContent) {
-                const accountManagerPayload = JSON.parse(accountManagerNode.textContent);
-                const managerCanvas = document.getElementById("accountManagerChart");
-                if (managerCanvas && accountManagerPayload.labels.length) {
-                    const datasets = buildDatasets(accountManagerPayload, {
-                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
-                        ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
-                    });
+    // ── Activity hour bar factory ────────────────────────────────────────────
+    function makeHourBar(canvas, payload, cA, cB) {
+        if (!canvas || !payload?.labels?.length) return;
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: payload.labels,
+                datasets: [
+                    { label: 'Billable',     data: payload.billable     || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'h' },
+                    { label: 'Not Billable', data: payload.non_billable || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'h' },
+                ],
+            },
+            options: {
+                responsive: true,
+                animation: { duration: 650, easing: 'easeOutQuart' },
+                scales: {
+                    x: { stacked: true, ...axisCfg },
+                    y: { stacked: true, beginAtZero: true, ...axisCfg, ticks: { ...axisCfg.ticks, precision: 0 } },
+                },
+                plugins: {
+                    legend: legendCfg,
+                    tooltip: { ...tooltipCfg, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} hrs` } },
+                },
+            },
+        });
+    }
 
-                    new Chart(managerCanvas, {
-                        type: "bar",
-                        data: {
-                            labels: accountManagerPayload.labels,
-                            datasets,
-                        },
-                        options: buildOptions(accountManagerPayload.totals),
-                        plugins: [totalLabelsPlugin],
-                    });
-                }
-            }
+    // ── Doughnut factory ─────────────────────────────────────────────────────
+    function makeDonut(canvas, payload, bgColors, brColors, labelFn) {
+        if (!canvas || !payload?.labels?.length) return;
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: { labels: payload.labels, datasets: [{ data: payload.totals, backgroundColor: bgColors, borderColor: brColors, borderWidth: 2, hoverOffset: 10, borderRadius: 5 }] },
+            options: {
+                responsive: true,
+                cutout: '62%',
+                animation: { duration: 700, easing: 'easeOutQuart', animateRotate: true },
+                plugins: { legend: legendCfg, tooltip: { ...tooltipCfg, callbacks: { label: labelFn } } },
+            },
+        });
+    }
 
-            if (engineerNode && engineerNode.textContent) {
-                const engineerPayload = JSON.parse(engineerNode.textContent);
-                const engineerCanvas = document.getElementById("engineerChart");
-                if (engineerCanvas && engineerPayload.labels.length) {
-                    const datasets = buildDatasets(engineerPayload, {
-                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
-                        ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
-                    });
+    const rptView = '{{ report_view }}';
 
-                    new Chart(engineerCanvas, {
-                        type: "bar",
-                        data: {
-                            labels: engineerPayload.labels,
-                            datasets,
-                        },
-                        options: buildOptions(engineerPayload.totals),
-                        plugins: [totalLabelsPlugin],
-                    });
-                }
-            }
+    if (rptView === 'operational') {
+        const amN   = document.getElementById('account-manager-data');
+        const engN  = document.getElementById('engineer-data');
+        const engtN = document.getElementById('engagement-data');
+        const prodN = document.getElementById('product-data');
 
-            if (engagementNode && engagementNode.textContent) {
-                const engagementPayload = JSON.parse(engagementNode.textContent);
-                const engagementCanvas = document.getElementById("engagementChart");
-                const hasData = Array.isArray(engagementPayload.totals) && engagementPayload.totals.some(value => value > 0);
-                if (engagementCanvas && hasData) {
-                    const datasets = buildDatasets(engagementPayload, {
-                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
-                        ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
-                    });
+        if (amN?.textContent)   makeStackedBar(document.getElementById('accountManagerChart'), JSON.parse(amN.textContent),   P.green, P.violet);
+        if (engN?.textContent)  makeStackedBar(document.getElementById('engineerChart'),       JSON.parse(engN.textContent),  P.green, P.violet);
+        if (engtN?.textContent) { const p = JSON.parse(engtN.textContent); if (p.totals?.some(v => v > 0)) makeStackedBar(document.getElementById('engagementChart'), p, P.green, P.blue); }
+        if (prodN?.textContent) { const p = JSON.parse(prodN.textContent); if (p.totals?.some(v => v > 0)) makeStackedBar(document.getElementById('productChart'),    p, P.green, P.amber); }
+    }
 
-                    new Chart(engagementCanvas, {
-                        type: "bar",
-                        data: {
-                            labels: engagementPayload.labels,
-                            datasets,
-                        },
-                        options: buildOptions(engagementPayload.totals),
-                        plugins: [totalLabelsPlugin],
-                    });
-                }
-            }
+    if (rptView === 'activity') {
+        const engN  = document.getElementById('activity-engineer-data');
+        const typeN = document.getElementById('activity-type-data');
+        const locN  = document.getElementById('activity-location-data');
+        const billN = document.getElementById('activity-billable-data');
 
-            if (productNode && productNode.textContent) {
-                const productPayload = JSON.parse(productNode.textContent);
-                const productCanvas = document.getElementById("productChart");
-                const hasData = Array.isArray(productPayload.totals) && productPayload.totals.some(value => value > 0);
-                if (productCanvas && hasData) {
-                    const datasets = buildDatasets(productPayload, {
-                        completed: { background: "rgba(25,135,84,0.35)", border: "rgba(25,135,84,0.8)" },
-                        ongoing: { background: "rgba(255,193,7,0.35)", border: "rgba(255,193,7,0.8)" },
-                    });
-
-                    new Chart(productCanvas, {
-                        type: "bar",
-                        data: {
-                            labels: productPayload.labels,
-                            datasets,
-                        },
-                        options: buildOptions(productPayload.totals),
-                        plugins: [totalLabelsPlugin],
-                    });
-                }
-            }
-        } else if (reportView === "activity") {
-            const engineerNode = document.getElementById("activity-engineer-data");
-            const activityNode = document.getElementById("activity-type-data");
-            const locationNode = document.getElementById("activity-location-data");
-            const billableNode = document.getElementById("activity-billable-data");
-
-            if (engineerNode && engineerNode.textContent) {
-                const payload = JSON.parse(engineerNode.textContent);
-                const canvas = document.getElementById("activityEngineerChart");
-                if (canvas && payload.labels.length) {
-                    new Chart(canvas, {
-                        type: "bar",
-                        data: {
-                            labels: payload.labels,
-                            datasets: [
-                                {
-                                    label: "Billable",
-                                    data: payload.billable,
-                                    backgroundColor: "rgba(25,135,84,0.55)",
-                                    borderColor: "rgba(25,135,84,0.85)",
-                                    borderWidth: 1.5,
-                                    stack: "hours",
-                                },
-                                {
-                                    label: "Not Billable",
-                                    data: payload.non_billable,
-                                    backgroundColor: "rgba(108,117,125,0.4)",
-                                    borderColor: "rgba(108,117,125,0.75)",
-                                    borderWidth: 1.5,
-                                    stack: "hours",
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            scales: {
-                                x: { stacked: true },
-                                y: { stacked: true, beginAtZero: true },
-                            },
-                            plugins: {
-                                legend: { position: "bottom" },
-                                tooltip: {
-                                    callbacks: {
-                                        label(context) {
-                                            const value = context.parsed.y ?? context.parsed;
-                                            return `${context.dataset.label}: ${value} hrs`;
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    });
-                }
-            }
-
-            if (activityNode && activityNode.textContent) {
-                const payload = JSON.parse(activityNode.textContent);
-                const canvas = document.getElementById("activityTypeChart");
-                if (canvas && payload.labels.length) {
-                    new Chart(canvas, {
-                        type: "bar",
-                        data: {
-                            labels: payload.labels,
-                            datasets: [
-                                {
-                                    label: "Billable",
-                                    data: payload.billable,
-                                    backgroundColor: "rgba(13,110,253,0.5)",
-                                    borderColor: "rgba(13,110,253,0.85)",
-                                    borderWidth: 1.5,
-                                    stack: "hours",
-                                },
-                                {
-                                    label: "Not Billable",
-                                    data: payload.non_billable,
-                                    backgroundColor: "rgba(255,193,7,0.45)",
-                                    borderColor: "rgba(255,193,7,0.85)",
-                                    borderWidth: 1.5,
-                                    stack: "hours",
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            scales: {
-                                x: { stacked: true },
-                                y: { stacked: true, beginAtZero: true },
-                            },
-                            plugins: {
-                                legend: { position: "bottom" },
-                                tooltip: {
-                                    callbacks: {
-                                        label(context) {
-                                            const value = context.parsed.y ?? context.parsed;
-                                            return `${context.dataset.label}: ${value} hrs`;
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    });
-                }
-            }
-
-            if (locationNode && locationNode.textContent) {
-                const payload = JSON.parse(locationNode.textContent);
-                const canvas = document.getElementById("activityLocationChart");
-                if (canvas && payload.labels.length) {
-                    new Chart(canvas, {
-                        type: "doughnut",
-                        data: {
-                            labels: payload.labels,
-                            datasets: [
-                                {
-                                    data: payload.totals,
-                                    backgroundColor: [
-                                        "rgba(13,110,253,0.6)",
-                                        "rgba(25,135,84,0.6)",
-                                        "rgba(255,193,7,0.6)",
-                                        "rgba(108,117,125,0.6)",
-                                    ],
-                                },
-                            ],
-                        },
-                        options: {
-                            plugins: {
-                                legend: { position: "bottom" },
-                                tooltip: {
-                                    callbacks: {
-                                        label(context) {
-                                            const raw = context.raw ?? context.parsed;
-                                            const formatted = typeof raw === "number" ? `${raw.toFixed(1)} hrs` : raw;
-                                            return `${context.label}: ${formatted}`;
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    });
-                }
-            }
-
-            if (billableNode && billableNode.textContent) {
-                const payload = JSON.parse(billableNode.textContent);
-                const canvas = document.getElementById("activityBillableChart");
-                if (canvas && payload.labels.length) {
-                    new Chart(canvas, {
-                        type: "doughnut",
-                        data: {
-                            labels: payload.labels,
-                            datasets: [
-                                {
-                                    data: payload.totals,
-                                    backgroundColor: ["rgba(25,135,84,0.6)", "rgba(108,117,125,0.6)"],
-                                },
-                            ],
-                        },
-                        options: {
-                            plugins: {
-                                legend: { position: "bottom" },
-                                tooltip: {
-                                    callbacks: {
-                                        label(context) {
-                                            const raw = context.raw ?? context.parsed;
-                                            const formatted = typeof raw === "number" ? `${raw.toFixed(1)} hrs` : raw;
-                                            return `${context.label}: ${formatted}`;
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    });
-                }
-            }
+        if (engN?.textContent)  makeHourBar(document.getElementById('activityEngineerChart'), JSON.parse(engN.textContent),  P.green, P.gray);
+        if (typeN?.textContent) makeHourBar(document.getElementById('activityTypeChart'),      JSON.parse(typeN.textContent), P.blue,  P.amber);
+        if (locN?.textContent) {
+            const p = JSON.parse(locN.textContent);
+            makeDonut(document.getElementById('activityLocationChart'), p, DONUT_BG.slice(0, p.labels.length), DONUT_BR.slice(0, p.labels.length), ctx => { const v = ctx.raw ?? ctx.parsed; return `${ctx.label}: ${typeof v === 'number' ? v.toFixed(1) + ' hrs' : v}`; });
         }
-    })();
+        if (billN?.textContent) {
+            const p = JSON.parse(billN.textContent);
+            makeDonut(document.getElementById('activityBillableChart'), p, [P.green.bg, P.gray.bg], [P.green.b, P.gray.b], ctx => { const v = ctx.raw ?? ctx.parsed; return `${ctx.label}: ${typeof v === 'number' ? v.toFixed(1) + ' hrs' : v}`; });
+        }
+    }
+})();
 </script>
 {% endblock %}

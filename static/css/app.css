@@ -3541,5 +3541,369 @@ body.dark-mode .ai-chat-close-btn {
     display: block;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   REPORTS PAGE  (rpt-*)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Page header ── */
+.rpt-page-header {
+    padding: 1.4rem 1.75rem;
+}
+
+.rpt-hero-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(59, 130, 246, 0.18));
+    border: 1px solid rgba(99, 102, 241, 0.28);
+    color: #818cf8;
+}
+
+/* ── View tab toggle ── */
+.rpt-tab-group {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.07);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 3px;
+    gap: 3px;
+}
+
+.rpt-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border-radius: 9px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.5);
+    text-decoration: none;
+    transition: all 0.18s var(--spring);
+    white-space: nowrap;
+}
+.rpt-tab:hover {
+    color: rgba(0, 0, 0, 0.72);
+    background: rgba(0, 0, 0, 0.05);
+    text-decoration: none;
+}
+.rpt-tab--active {
+    background: #fff;
+    color: #4338ca;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.18);
+}
+
+/* ── KPI / Metric cards ── */
+.rpt-kpi-card {
+    position: relative;
+    border-radius: 16px;
+    padding: 1.25rem 1.4rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--glass-bg);
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+    transition: transform var(--spring-dur) var(--spring), box-shadow var(--spring-dur) var(--spring);
+}
+.rpt-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+}
+.rpt-kpi-card:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+.rpt-kpi--blue::before  { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+.rpt-kpi--green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.rpt-kpi--amber::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.rpt-kpi--cyan::before  { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+.rpt-kpi--violet::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+
+.rpt-kpi-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    margin-bottom: 0.7rem;
+}
+
+.rpt-kpi--blue  .rpt-kpi-icon { background: rgba(59, 130, 246, 0.1);  color: #2563eb; border: 1px solid rgba(59, 130, 246, 0.2); }
+.rpt-kpi--green .rpt-kpi-icon { background: rgba(16, 185, 129, 0.1);  color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
+.rpt-kpi--amber .rpt-kpi-icon { background: rgba(245, 158, 11, 0.1);  color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); }
+.rpt-kpi--cyan  .rpt-kpi-icon { background: rgba(6, 182, 212, 0.1);   color: #0891b2; border: 1px solid rgba(6, 182, 212, 0.2);  }
+.rpt-kpi--violet .rpt-kpi-icon { background: rgba(139, 92, 246, 0.1); color: #7c3aed; border: 1px solid rgba(139, 92, 246, 0.2); }
+
+.rpt-kpi-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: rgba(0, 0, 0, 0.45);
+    margin-bottom: 0.05rem;
+}
+.rpt-kpi-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.05;
+    margin-bottom: 0.2rem;
+}
+.rpt-kpi--blue   .rpt-kpi-value { color: #1d4ed8; }
+.rpt-kpi--green  .rpt-kpi-value { color: #065f46; }
+.rpt-kpi--amber  .rpt-kpi-value { color: #92400e; }
+.rpt-kpi--cyan   .rpt-kpi-value { color: #0e7490; }
+.rpt-kpi--violet .rpt-kpi-value { color: #5b21b6; }
+
+.rpt-kpi-sub {
+    font-size: 0.75rem;
+    color: rgba(0, 0, 0, 0.38);
+}
+
+/* ── Chart cards ── */
+.rpt-chart-card {
+    padding: 1.5rem;
+}
+
+.rpt-chart-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1.2rem;
+}
+
+.rpt-chart-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.rpt-icon--blue   { background: rgba(59, 130, 246, 0.1);  color: #2563eb; border: 1px solid rgba(59, 130, 246, 0.18); }
+.rpt-icon--violet { background: rgba(139, 92, 246, 0.1);  color: #7c3aed; border: 1px solid rgba(139, 92, 246, 0.18); }
+.rpt-icon--green  { background: rgba(16, 185, 129, 0.1);  color: #059669; border: 1px solid rgba(16, 185, 129, 0.18); }
+.rpt-icon--amber  { background: rgba(245, 158, 11, 0.1);  color: #d97706; border: 1px solid rgba(245, 158, 11, 0.18); }
+.rpt-icon--cyan   { background: rgba(6, 182, 212, 0.1);   color: #0891b2; border: 1px solid rgba(6, 182, 212, 0.18);  }
+.rpt-icon--indigo { background: rgba(99, 102, 241, 0.1);  color: #4f46e5; border: 1px solid rgba(99, 102, 241, 0.18); }
+
+.rpt-chart-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin: 0 0 0.15rem;
+    color: rgba(0, 0, 0, 0.75);
+}
+.rpt-chart-sub {
+    font-size: 0.77rem;
+    color: rgba(0, 0, 0, 0.42);
+    margin: 0;
+}
+
+/* ── Canvas wrappers ── */
+.rpt-canvas-wrap {
+    position: relative;
+    min-height: 260px;
+}
+.rpt-canvas-wrap--donut {
+    min-height: 240px;
+    max-height: 300px;
+}
+
+/* ── Table styling ── */
+.rpt-table-head th {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(0, 0, 0, 0.45);
+    border-top: none;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+/* ── Table badges ── */
+.rpt-badge--green {
+    background: rgba(16, 185, 129, 0.12);
+    color: #065f46;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+}
+.rpt-badge--amber {
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+}
+.rpt-badge--gray {
+    background: rgba(100, 116, 139, 0.1);
+    color: #475569;
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+}
+.rpt-badge--muted {
+    background: rgba(100, 116, 139, 0.08);
+    color: #64748b;
+    border: 1px solid rgba(100, 116, 139, 0.15);
+    font-weight: 500;
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+}
+
+/* ── Period badge ── */
+.rpt-period-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    color: #4338ca;
+}
+
+/* ── Status chips ── */
+.rpt-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.65);
+    transition: transform var(--spring-dur) var(--spring), box-shadow var(--spring-dur) var(--spring);
+}
+.rpt-status-chip:hover {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.rpt-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.55;
+    flex-shrink: 0;
+}
+.rpt-status-count {
+    font-weight: 800;
+    font-size: 0.88rem;
+    color: rgba(0, 0, 0, 0.75);
+}
+
+/* ───────────────────────── DARK MODE OVERRIDES ─────────────────────────── */
+body.dark-mode .rpt-hero-icon {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(59, 130, 246, 0.22));
+    border-color: rgba(99, 102, 241, 0.35);
+    color: #a5b4fc;
+}
+
+body.dark-mode .rpt-tab-group {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+body.dark-mode .rpt-tab { color: rgba(255, 255, 255, 0.5); }
+body.dark-mode .rpt-tab:hover { color: rgba(255, 255, 255, 0.8); background: rgba(255, 255, 255, 0.06); }
+body.dark-mode .rpt-tab--active {
+    background: rgba(99, 102, 241, 0.25);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 1px 8px rgba(99, 102, 241, 0.2);
+}
+
+body.dark-mode .rpt-kpi-card {
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+}
+body.dark-mode .rpt-kpi-label { color: rgba(255, 255, 255, 0.42); }
+body.dark-mode .rpt-kpi-sub   { color: rgba(255, 255, 255, 0.35); }
+
+body.dark-mode .rpt-kpi--blue  .rpt-kpi-icon { background: rgba(59, 130, 246, 0.18);  color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+body.dark-mode .rpt-kpi--green .rpt-kpi-icon { background: rgba(16, 185, 129, 0.18);  color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+body.dark-mode .rpt-kpi--amber .rpt-kpi-icon { background: rgba(245, 158, 11, 0.18);  color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+body.dark-mode .rpt-kpi--cyan  .rpt-kpi-icon { background: rgba(6, 182, 212, 0.18);   color: #22d3ee; border-color: rgba(6, 182, 212, 0.3);  }
+body.dark-mode .rpt-kpi--violet .rpt-kpi-icon { background: rgba(139, 92, 246, 0.18); color: #a78bfa; border-color: rgba(139, 92, 246, 0.3); }
+
+body.dark-mode .rpt-kpi--blue   .rpt-kpi-value { color: #93c5fd; }
+body.dark-mode .rpt-kpi--green  .rpt-kpi-value { color: #6ee7b7; }
+body.dark-mode .rpt-kpi--amber  .rpt-kpi-value { color: #fcd34d; }
+body.dark-mode .rpt-kpi--cyan   .rpt-kpi-value { color: #67e8f9; }
+body.dark-mode .rpt-kpi--violet .rpt-kpi-value { color: #c4b5fd; }
+
+body.dark-mode .rpt-chart-title { color: rgba(255, 255, 255, 0.82); }
+body.dark-mode .rpt-chart-sub   { color: rgba(255, 255, 255, 0.4);  }
+
+body.dark-mode .rpt-icon--blue   { background: rgba(59, 130, 246, 0.18);  color: #60a5fa; border-color: rgba(59, 130, 246, 0.28); }
+body.dark-mode .rpt-icon--violet { background: rgba(139, 92, 246, 0.18);  color: #a78bfa; border-color: rgba(139, 92, 246, 0.28); }
+body.dark-mode .rpt-icon--green  { background: rgba(16, 185, 129, 0.18);  color: #34d399; border-color: rgba(16, 185, 129, 0.28); }
+body.dark-mode .rpt-icon--amber  { background: rgba(245, 158, 11, 0.18);  color: #fbbf24; border-color: rgba(245, 158, 11, 0.28); }
+body.dark-mode .rpt-icon--cyan   { background: rgba(6, 182, 212, 0.18);   color: #22d3ee; border-color: rgba(6, 182, 212, 0.28);  }
+body.dark-mode .rpt-icon--indigo { background: rgba(99, 102, 241, 0.18);  color: #818cf8; border-color: rgba(99, 102, 241, 0.28); }
+
+body.dark-mode .rpt-table-head th { color: rgba(255, 255, 255, 0.42); }
+
+body.dark-mode .rpt-badge--green {
+    background: rgba(16, 185, 129, 0.18);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+body.dark-mode .rpt-badge--amber {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fcd34d;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+body.dark-mode .rpt-badge--gray {
+    background: rgba(100, 116, 139, 0.18);
+    color: #94a3b8;
+    border-color: rgba(100, 116, 139, 0.28);
+}
+body.dark-mode .rpt-badge--muted {
+    background: rgba(100, 116, 139, 0.12);
+    color: #94a3b8;
+    border-color: rgba(100, 116, 139, 0.2);
+}
+
+body.dark-mode .rpt-period-badge {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+}
+
+body.dark-mode .rpt-status-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.65);
+}
+body.dark-mode .rpt-status-count { color: rgba(255, 255, 255, 0.85); }
+
 
 
