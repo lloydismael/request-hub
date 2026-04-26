@@ -1,18 +1,46 @@
 {% extends "base.html" %}
 {% load tz %}
 {% block title %}Manage Request {{ object.reference_code }} · Request Hub{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-7 col-xl-6">
-        <div class="glass-card p-4 mb-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-                <div>
-                    <h1 class="h5 mb-1">Manage Request {{ object.reference_code }}</h1>
-                    <p class="text-muted mb-0">Created {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }} (GMT+8)</p>
-                </div>
-                <a class="btn btn-outline-secondary" href="{{ back_url }}">Back</a>
+
+{# ── Page header ── #}
+<div class="rmf-page-header mb-4">
+    <div class="rmf-page-header__left">
+        <div class="rmf-page-header__title-group">
+            <h1 class="rmf-page-header__ref">{{ object.reference_code }}</h1>
+            <div class="rmf-page-header__meta">
+                <span class="rmf-meta-chip rmf-meta-chip--account">
+                    <i class="bi bi-building"></i>
+                    {{ object.account.name|default:"—" }}
+                </span>
+                <span class="rmf-meta-chip rmf-meta-chip--date">
+                    <i class="bi bi-calendar3"></i>
+                    {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y" }}
+                </span>
+                <span class="rmf-status-dot rmf-status-dot--{{ object.status }}">{{ object.get_status_display }}</span>
             </div>
-            <form method="post" novalidate>
+        </div>
+    </div>
+</div>
+
+{# ── Two-column layout ── #}
+<div class="row g-4 align-items-stretch">
+
+    {# ── LEFT: Details form ── #}
+    <div class="col-lg-7 d-flex flex-column">
+        <div class="rmf-card flex-grow-1">
+            <div class="rmf-card__header">
+                <div class="rmf-card__header-icon">
+                    <i class="bi bi-pencil-square"></i>
+                </div>
+                <div>
+                    <div class="rmf-card__header-title">Request Details</div>
+                    <div class="rmf-card__header-sub">Update the fields below and save your changes</div>
+                </div>
+            </div>
+
+            <form method="post" novalidate class="rmf-form">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="details">
                 {% if account_name_choices %}
@@ -22,213 +50,253 @@
                         {% endfor %}
                     </datalist>
                 {% endif %}
-                {% for field in form %}
-                    {% if field.name == 'priority' %}
-                        <div class="mb-3" data-priority-group{% if form.engagement_type.value != 'support' %} style="display:none;"{% endif %}>
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}
-                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                            {% endif %}
-                        </div>
-                    {% elif field.name == 'account_name' %}
-                        {% if request.user.is_engineer_access_role %}
-                            <div class="mb-3">
-                                <label class="form-label">Account Name</label>
-                                <div class="form-control-plaintext">{{ field.value }}</div>
-                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}">
+
+                {# ── Read-only info strip ── #}
+                <div class="rmf-info-strip">
+                    {% for field in form %}
+                        {% if field.name == 'account_name' %}
+                            <div class="rmf-info-item">
+                                <span class="rmf-info-item__label"><i class="bi bi-building me-1"></i>Account</span>
+                                <span class="rmf-info-item__value">{{ field.value|default_if_none:"—" }}</span>
+                                {% if request.user.is_engineer_access_role %}
+                                    <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}">
+                                {% endif %}
                             </div>
-                        {% else %}
-                            <div class="mb-3">
-                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                        {% elif field.name == 'request_date' or field.name == 'needed_by' %}
+                            {% if request.user.is_engineer_access_role %}
+                                <div class="rmf-info-item" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
+                                    <span class="rmf-info-item__label"><i class="bi bi-calendar3 me-1"></i>{{ field.label }}</span>
+                                    <span class="rmf-info-item__value">{{ field.value|default_if_none:"—" }}</span>
+                                    <input type="hidden" name="{{ field.name }}" value="{{ field.value|date:'Y-m-d'|default_if_none:'' }}">
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                {# ── Editable fields ── #}
+                <div class="rmf-fields">
+                    {% for field in form %}
+                        {% if field.name == 'account_name' or field.name == 'request_date' or field.name == 'needed_by' %}
+                            {# Already rendered in info strip or handled separately #}
+                            {% if not request.user.is_engineer_access_role and field.name == 'account_name' %}
+                                <div class="rmf-field-group">
+                                    <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                                </div>
+                            {% elif not request.user.is_engineer_access_role and field.name == 'needed_by' %}
+                                <div class="rmf-field-group" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
+                                    <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                                </div>
+                            {% endif %}
+
+                        {% elif field.name == 'priority' %}
+                            <div class="rmf-field-group" data-priority-group{% if form.engagement_type.value != 'support' %} style="display:none;"{% endif %}>
+                                <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                                {% if field.errors %}
-                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                             </div>
-                        {% endif %}
-                    {% elif field.name == 'needed_by' %}
-                        <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {% if request.user.is_engineer_access_role %}
-                                <div class="form-control-plaintext">{{ field.value|default_if_none:'' }}</div>
-                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|date:'Y-m-d'|default_if_none:'' }}">
-                            {% else %}
-                                {{ field }}
-                            {% endif %}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}
-                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
-                        </div>
-                    {% elif field.name == 'deployment_start' %}
-                        <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' %} style="display:none;"{% endif %}>
-                            <label class="form-label" for="id_{{ field.name }}">Deployment Calendar</label>
-                            <div class="deployment-calendar" data-deployment-calendar>
-                                <div class="row g-3 align-items-end">
-                                    <div class="col-sm-6">
-                                        <label class="form-label" for="{{ field.id_for_label }}">Start</label>
-                                        {{ field }}
-                                        {% if field.errors %}
-                                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                                        {% endif %}
-                                    </div>
-                                    {% with end_field=form.deployment_end %}
+
+                        {% elif field.name == 'deployment_start' %}
+                            <div class="rmf-field-group" data-deployment-group{% if form.engagement_type.value != 'deployment' %} style="display:none;"{% endif %}>
+                                <label class="rmf-label">Deployment Calendar</label>
+                                <div class="deployment-calendar" data-deployment-calendar>
+                                    <div class="row g-3 align-items-end">
                                         <div class="col-sm-6">
-                                            <label class="form-label" for="{{ end_field.id_for_label }}">End</label>
-                                            {{ end_field }}
-                                            {% if end_field.errors %}
-                                                <div class="invalid-feedback d-block">{{ end_field.errors|join:" " }}</div>
-                                            {% endif %}
+                                            <label class="rmf-label-sm" for="{{ field.id_for_label }}">Start</label>
+                                            {{ field }}
+                                            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                                         </div>
-                                    {% endwith %}
-                                </div>
-                                <div class="deployment-calendar__summary text-muted small mt-2" data-deployment-summary>
-                                    <span class="me-2">Selected window:</span>
-                                    <span class="badge bg-secondary-subtle text-secondary border" data-deployment-start-chip hidden>Start</span>
-                                    <span class="badge bg-secondary-subtle text-secondary border" data-deployment-end-chip hidden>End</span>
-                                    <span data-deployment-summary-text>No dates selected yet.</span>
+                                        {% with end_field=form.deployment_end %}
+                                            <div class="col-sm-6">
+                                                <label class="rmf-label-sm" for="{{ end_field.id_for_label }}">End</label>
+                                                {{ end_field }}
+                                                {% if end_field.errors %}<div class="invalid-feedback d-block">{{ end_field.errors|join:" " }}</div>{% endif %}
+                                            </div>
+                                        {% endwith %}
+                                    </div>
+                                    <div class="deployment-calendar__summary text-muted small mt-2" data-deployment-summary>
+                                        <span class="me-2">Selected window:</span>
+                                        <span class="badge bg-secondary-subtle text-secondary border" data-deployment-start-chip hidden>Start</span>
+                                        <span class="badge bg-secondary-subtle text-secondary border" data-deployment-end-chip hidden>End</span>
+                                        <span data-deployment-summary-text>No dates selected yet.</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    {% elif field.name == 'engineer' %}
-                        <div class="mb-3">
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}
-                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                            {% endif %}
+
+                        {% elif field.name == 'deployment_end' %}
+                            {# Rendered inside deployment_start block #}
+
+                        {% elif field.name == 'description' %}
+                            {# Rendered below the grid as full-width #}
+
+                        {% elif field.name == 'engineer' %}
+                            <div class="rmf-field-group">
+                                <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                            </div>
                             {% if request.user.role in request.user.REQUESTOR_ROLES %}
-                                <div class="mt-2">
-                                    <div class="text-muted small mb-1">Backup Engineer</div>
-                                    <div class="avatar-select">
-                                        <span class="avatar-select__image">
+                                <div class="rmf-field-group">
+                                    <label class="rmf-label">Backup Engineer</label>
+                                    <div class="rmf-engineer-chip">
+                                        <span class="rmf-engineer-chip__avatar">
                                             {% if object.backup_engineer %}
                                                 {{ object.backup_engineer.get_full_name|default:object.backup_engineer.username|slice:':1'|upper }}
+                                            {% else %}?{% endif %}
+                                        </span>
+                                        <span class="rmf-engineer-chip__name">
+                                            {% if object.backup_engineer %}
+                                                {{ object.backup_engineer.get_full_name|default:object.backup_engineer.username }}
                                             {% else %}
-                                                ?
+                                                <span class="text-muted">Not assigned</span>
                                             {% endif %}
                                         </span>
-                                        <div>
-                                            {% if object.backup_engineer %}
-                                                <div class="fw-semibold">{{ object.backup_engineer.get_full_name|default:object.backup_engineer.username }}</div>
-                                                
-                                            {% else %}
-                                                <div class="text-muted">Not assigned</div>
-                                            {% endif %}
-                                        </div>
                                     </div>
                                 </div>
                             {% endif %}
-                        </div>
-                    {% elif field.name == 'deployment_end' %}
-                        {# Rendered with deployment_start #}
-                    {% elif field.name == 'description' %}
-                        {% if request.user.is_engineer_access_role %}
-                            <div class="mb-3">
-                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                                <div class="form-control-plaintext" style="white-space: pre-wrap;">{{ field.value }}</div>
-                                <textarea name="{{ field.name }}" hidden>{{ field.value }}</textarea>
-                            </div>
+
                         {% else %}
-                            <div class="mb-3">
-                                <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                            <div class="rmf-field-group">
+                                <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                                {% if field.errors %}
-                                    <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                             </div>
                         {% endif %}
+                    {% endfor %}
+                </div>
+
+                {# ── Description — full-width below the grid ── #}
+                {% with field=form.description %}
+                <div class="rmf-field-group rmf-field-group--full rmf-field-group--desc px-0 mx-0" style="padding: 0 1.5rem 1rem;">
+                    <label class="rmf-label" {% if not request.user.is_engineer_access_role %}for="id_description"{% endif %}>{{ field.label }}</label>
+                    {% if request.user.is_engineer_access_role %}
+                        <div class="rmf-description-box">{{ field.value }}</div>
+                        <textarea name="description" hidden>{{ field.value }}</textarea>
                     {% else %}
-                        <div class="mb-3">
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}
-                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
-                        </div>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                     {% endif %}
-                {% endfor %}
-                <div class="d-flex flex-wrap gap-2 justify-content-end">
-                    <button class="btn btn-primary" type="submit">Save changes</button>
-                    <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
+                </div>
+                {% endwith %}
+
+                <div class="rmf-form-actions">
+                    <button class="btn btn-primary rmf-btn-save" type="submit">
+                        <i class="bi bi-floppy-fill me-1"></i>Save changes
+                    </button>
+                    <a class="btn btn-outline-secondary" href="{{ back_url }}">
+                        <i class="bi bi-arrow-left me-1"></i>Back
+                    </a>
                 </div>
             </form>
         </div>
+    </div>
+
+    {# ── RIGHT: Status + Log ── #}
+    <div class="col-lg-5 d-flex flex-column">
+
+        {# Status card #}
         {% if status_form %}
-            <div class="glass-card p-4 mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h6 text-uppercase text-muted mb-0">Status</h2>
-                    <span class="badge bg-light text-dark border text-capitalize">Current: {{ object.get_status_display }}</span>
+        <div class="rmf-card rmf-card--status mb-4">
+            <div class="rmf-card__header">
+                <div class="rmf-card__header-icon rmf-card__header-icon--status">
+                    <i class="bi bi-activity"></i>
                 </div>
-                <form method="post" class="row g-3 align-items-end" novalidate data-status-form="true" data-current-status="{{ object.status }}">
-                    {% csrf_token %}
-                    <input type="hidden" name="form_type" value="status">
-                    <input type="hidden" name="send_closing_email" value="0" data-send-closing-email>
+                <div>
+                    <div class="rmf-card__header-title">Status</div>
+                    <div class="rmf-card__header-sub">Current: <strong>{{ object.get_status_display }}</strong></div>
+                </div>
+                <span class="rmf-status-badge rmf-status-badge--{{ object.status }} ms-auto">{{ object.get_status_display }}</span>
+            </div>
+            <form method="post" novalidate data-status-form="true" data-current-status="{{ object.status }}" class="rmf-status-form">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="status">
+                <input type="hidden" name="send_closing_email" value="0" data-send-closing-email>
+                <div class="row g-3 align-items-end">
                     {% for field in status_form %}
-                        <div class="col-md-6">
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                        <div class="col-sm-6">
+                            <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
                             {{ field }}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}
-                                <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                            {% endif %}
+                            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                         </div>
                     {% endfor %}
-                    <div class="col-12 d-flex flex-wrap justify-content-end gap-2">
-                        <button class="btn btn-outline-primary" type="submit">Update status</button>
-                        {% if request.user.is_engineer_access_role and object.status == 'completed' %}
-                            <button
-                                class="btn btn-outline-secondary"
-                                type="submit"
-                                formaction="{% url 'hub:request-outlook-closing' object.pk %}"
-                                formmethod="post"
-                                formnovalidate
-                            >
-                                For Closing
-                            </button>
-                        {% endif %}
-                    </div>
-                </form>
-            </div>
+                </div>
+                <div class="rmf-form-actions rmf-form-actions--end mt-3">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-arrow-repeat me-1"></i>Update status
+                    </button>
+                    {% if request.user.is_engineer_access_role and object.status == 'completed' %}
+                        <button class="btn btn-outline-secondary" type="submit"
+                            formaction="{% url 'hub:request-outlook-closing' object.pk %}"
+                            formmethod="post" formnovalidate>
+                            <i class="bi bi-envelope me-1"></i>For Closing
+                        </button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
         {% endif %}
-        <div class="glass-card p-4">
-            <h2 class="h6 text-uppercase text-muted mb-3">Status Log</h2>
+
+        {# Status log card #}
+        <div class="rmf-card rmf-card--log flex-grow-1">
+            <div class="rmf-card__header">
+                <div class="rmf-card__header-icon rmf-card__header-icon--log">
+                    <i class="bi bi-chat-left-text"></i>
+                </div>
+                <div>
+                    <div class="rmf-card__header-title">Updates</div>
+                    <div class="rmf-card__header-sub">Activity &amp; status notes</div>
+                </div>
+            </div>
+
             {% if status_logs %}
-                <ul class="list-unstyled mb-0">
+                <ul class="rmf-timeline">
                     {% for log in status_logs %}
-                        <li class="mb-3">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <div class="fw-semibold">{{ log.author.get_full_name|default:log.author.username }}</div>
-                                    <div class="text-body" style="white-space: pre-wrap;">{{ log.message }}</div>
+                        <li class="rmf-timeline__item">
+                            <div class="rmf-timeline__avatar">
+                                {{ log.author.get_full_name|default:log.author.username|slice:':1'|upper }}
+                            </div>
+                            <div class="rmf-timeline__body">
+                                <div class="rmf-timeline__header">
+                                    <span class="rmf-timeline__author">{{ log.author.get_full_name|default:log.author.username }}</span>
+                                    <span class="rmf-timeline__time">{{ log.created_at|timezone:"Asia/Manila"|date:"M d, Y · h:i A" }}</span>
                                 </div>
-                                <div class="d-flex flex-column align-items-end ms-3">
-                                    <small class="text-muted text-nowrap">{{ log.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</small>
-                                    {% if log.author.id == request.user.id %}
-                                        <a href="{% url 'hub:status-log-edit' log.pk %}" class="small text-decoration-none mt-1">Edit</a>
-                                    {% endif %}
-                                </div>
+                                <div class="rmf-timeline__message">{{ log.message }}</div>
+                                {% if log.author.id == request.user.id %}
+                                    <a href="{% url 'hub:status-log-edit' log.pk %}" class="rmf-timeline__edit">
+                                        <i class="bi bi-pencil me-1"></i>Edit
+                                    </a>
+                                {% endif %}
                             </div>
                         </li>
                     {% endfor %}
                 </ul>
             {% else %}
-                <p class="text-muted mb-0">No status updates recorded yet.</p>
+                <div class="rmf-empty-log">
+                    <i class="bi bi-chat-left-dots rmf-empty-log__icon"></i>
+                    <p>No updates yet. Be the first to post one.</p>
+                </div>
             {% endif %}
-            <form method="post" class="mt-3" novalidate>
+
+            <form method="post" class="rmf-log-form" novalidate>
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="status_log">
-                <div class="mb-3">
-                    <label class="form-label" for="{{ log_form.message.id_for_label }}">{{ log_form.message.label }}</label>
+                <div class="rmf-log-form__field">
                     {{ log_form.message }}
                     {% if log_form.message.errors %}
                         <div class="invalid-feedback d-block">{{ log_form.message.errors|join:" " }}</div>
                     {% endif %}
                 </div>
-                <div class="d-flex justify-content-end">
-                    <button class="btn btn-outline-primary" type="submit">Post update</button>
+                <div class="rmf-form-actions rmf-form-actions--end">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-send me-1"></i>Post update
+                    </button>
                 </div>
             </form>
         </div>
