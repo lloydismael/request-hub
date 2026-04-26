@@ -25,7 +25,7 @@ from .forms import (
 class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     form_class = ProfileForm
     template_name = "accounts/profile_form.html"
-    success_url = reverse_lazy("hub:dashboard")
+    success_url = reverse_lazy("accounts:update")
 
     def get_object(self):
         return self.request.user

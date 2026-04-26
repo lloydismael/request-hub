@@ -55,16 +55,36 @@
                                 <span class="ball"></span>
                             </label>
                         </div>
-                        {% if request.user.profile_photo %}
-                            <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar">
-                        {% else %}
-                            {% with display_name=request.user.get_full_name|default:request.user.username %}
-                                <span class="nav-avatar nav-avatar--placeholder">{{ display_name|slice:":1"|upper }}</span>
-                            {% endwith %}
-                        {% endif %}
-                        <a class="text-white-50 small text-decoration-none" href="{% url 'accounts:update' %}" title="Go to Profile">
-                            {{ request.user.get_full_name|default:request.user.username }}
-                        </a>
+                        <!-- Avatar dropdown -->
+                        <div class="nav-avatar-wrap" id="nav-avatar-wrap">
+                            {% if request.user.profile_photo %}
+                                <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">
+                            {% else %}
+                                {% with display_name=request.user.get_full_name|default:request.user.username %}
+                                    <span class="nav-avatar nav-avatar--placeholder" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">{{ display_name|slice:":1"|upper }}</span>
+                                {% endwith %}
+                            {% endif %}
+                            <div class="nav-avatar-menu" id="nav-avatar-menu" role="menu" aria-hidden="true">
+                                <div class="nav-avatar-menu__header">
+                                    <span class="nav-avatar-menu__name">{{ request.user.get_full_name|default:request.user.username }}</span>
+                                    <span class="nav-avatar-menu__role text-muted small">{{ request.user.get_role_display|default:request.user.role }}</span>
+                                </div>
+                                <div class="nav-avatar-menu__divider"></div>
+                                <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}#avatar" role="menuitem">
+                                    <i class="bi bi-camera-fill nav-avatar-menu__icon"></i>Update Avatar
+                                </a>
+                                <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}" role="menuitem">
+                                    <i class="bi bi-person-fill nav-avatar-menu__icon"></i>My Profile
+                                </a>
+                                <div class="nav-avatar-menu__divider"></div>
+                                <form action="{% url 'logout' %}" method="post" class="nav-avatar-menu__logout-form">
+                                    {% csrf_token %}
+                                    <button type="submit" class="nav-avatar-menu__item nav-avatar-menu__item--danger" role="menuitem">
+                                        <i class="bi bi-box-arrow-right nav-avatar-menu__icon"></i>Log Out
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
             {% else %}
@@ -307,6 +327,32 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'js/login-success.js' %}" defer></script>
+    <script>
+        // Nav avatar dropdown
+        (function () {
+            const wrap = document.getElementById('nav-avatar-wrap');
+            const trigger = document.getElementById('nav-avatar-trigger');
+            const menu = document.getElementById('nav-avatar-menu');
+            if (!wrap || !trigger || !menu) return;
+
+            const open = () => {
+                menu.classList.add('nav-avatar-menu--open');
+                trigger.setAttribute('aria-expanded', 'true');
+                menu.setAttribute('aria-hidden', 'false');
+            };
+            const close = () => {
+                menu.classList.remove('nav-avatar-menu--open');
+                trigger.setAttribute('aria-expanded', 'false');
+                menu.setAttribute('aria-hidden', 'true');
+            };
+            const toggle = () => menu.classList.contains('nav-avatar-menu--open') ? close() : open();
+
+            trigger.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+            trigger.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+            document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) close(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        }());
+    </script>
     <script>
         (function () {
             function enhanceSelect(select) {
