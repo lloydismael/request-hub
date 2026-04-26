@@ -88,24 +88,16 @@ body.requestor-modal-open {
 /* ── Activity Summary Card (banner header) ── */
 .activity-summary-card {
     border-radius: 22px;
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 40%, #818cf8 70%, #a5b4fc 100%);
+    background: #ffffff;
     padding: clamp(1.5rem, 2vw + 1rem, 2rem) clamp(1.5rem, 2vw + 1rem, 2.25rem);
-    box-shadow: 0 18px 40px rgba(79, 70, 229, 0.28), 0 4px 16px rgba(15, 23, 42, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08), 0 1px 4px rgba(15, 23, 42, 0.05);
+    border: 1px solid rgba(15, 23, 42, 0.09);
     position: relative;
     overflow: hidden;
 }
-/* Subtle mesh highlight */
+/* No decorative strip */
 .activity-summary-card::before {
-    content: '';
-    position: absolute;
-    top: -40%;
-    right: -10%;
-    width: 360px;
-    height: 360px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
-    pointer-events: none;
+    content: none;
 }
 
 .activity-summary-card__body {
@@ -126,14 +118,14 @@ body.requestor-modal-open {
 
 /* title+sub section */
 .activity-summary-card__info h1 {
-    color: #ffffff;
+    color: #0f172a;
     font-size: 1.35rem;
     font-weight: 800;
     margin: 0 0 0.3rem;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    text-shadow: none;
 }
 .activity-summary-card__info p {
-    color: rgba(255, 255, 255, 0.78);
+    color: #64748b;
     font-size: 0.875rem;
     margin: 0;
 }
@@ -156,7 +148,7 @@ body.requestor-modal-open {
 @media (min-width: 992px) {
     .activity-summary-card__cta {
         padding-left: 1.5rem;
-        border-left: 1px solid rgba(255, 255, 255, 0.22);
+        border-left: 1px solid rgba(15, 23, 42, 0.1);
     }
 }
 
@@ -169,11 +161,9 @@ body.requestor-modal-open {
     border-radius: 999px;
     font-size: 0.82rem;
     font-weight: 700;
-    background: rgba(255, 255, 255, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #ffffff;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: #f1f5f9;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    color: #1e293b;
     transition:
         transform   var(--spring-dur) var(--spring),
         background  0.2s ease,
@@ -181,8 +171,8 @@ body.requestor-modal-open {
 }
 .activity-summary-pill:hover {
     transform: translateY(-2px) scale(1.05);
-    background: rgba(255, 255, 255, 0.28);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+    background: #e2e8f0;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
 }
 .activity-summary-pill .pill-icon {
     width: 20px;
@@ -192,13 +182,14 @@ body.requestor-modal-open {
     align-items: center;
     justify-content: center;
     font-size: 0.75rem;
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(37, 99, 235, 0.1);
+    color: #2563eb;
     flex-shrink: 0;
 }
 .activity-summary-pill .pill-label {
     font-size: 0.73rem;
     font-weight: 600;
-    opacity: 0.82;
+    color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -206,29 +197,28 @@ body.requestor-modal-open {
 .activity-summary-pill .pill-value {
     font-size: 0.92rem;
     font-weight: 800;
+    color: #0f172a;
     letter-spacing: -0.01em;
 }
 
-/* CTA button on banner — solid white pop */
-/* pulse ring behind the button */
+/* CTA button — blue pop on white card */
 @keyframes cta-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.45); }
-    70%  { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
-    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    0%   { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+    70%  { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
 }
 .activity-summary-card .btn-create-activity {
-    background: #ffffff;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     border: none;
-    color: #3730a3;
+    color: #ffffff;
     font-weight: 800;
     font-size: 0.875rem;
     letter-spacing: 0.01em;
     padding: 0.65rem 1.45rem;
     border-radius: 999px;
     box-shadow:
-        0 4px 16px rgba(15, 23, 42, 0.22),
-        0 1px 3px rgba(15, 23, 42, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        0 4px 16px rgba(37, 99, 235, 0.35),
+        0 1px 3px rgba(37, 99, 235, 0.2);
     animation: cta-pulse 2.4s ease-out infinite;
     transition:
         background  0.18s ease,
@@ -242,26 +232,21 @@ body.requestor-modal-open {
     cursor: pointer;
 }
 .activity-summary-card .btn-create-activity:hover {
-    background: #f0f0ff;
-    color: #2e1065;
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    color: #ffffff;
     transform: translateY(-3px) scale(1.04);
     animation: none;
     box-shadow:
-        0 10px 28px rgba(15, 23, 42, 0.28),
-        0 2px 6px rgba(15, 23, 42, 0.14),
-        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        0 10px 28px rgba(37, 99, 235, 0.45),
+        0 2px 6px rgba(37, 99, 235, 0.25);
 }
 .activity-summary-card .btn-create-activity:active {
     transform: translateY(0) scale(0.98);
     animation: none;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
 }
 
-/* Light mode override — keep dark gradient readable */
-body:not(.dark-mode) .activity-summary-card {
-    background: linear-gradient(135deg, #4338ca 0%, #4f46e5 35%, #6366f1 65%, #818cf8 100%);
-    box-shadow: 0 14px 36px rgba(67, 56, 202, 0.3), 0 4px 12px rgba(15, 23, 42, 0.12);
-}
+/* Light mode — clean white, already set as default */
 
 .activity-log-scroll {
     max-height: 420px;
@@ -2342,28 +2327,22 @@ body.dark-mode .acct-dropdown__item.is-active {
     align-items: center;
     gap: 0.9rem;
     padding: 1rem 1.25rem;
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 55%, #818cf8 100%);
+    background: #ffffff;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.09);
     flex-shrink: 0;
     position: relative;
-}
-.act-modal-header::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.15);
 }
 .act-modal-header__icon {
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.18);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1rem;
-    color: #ffffff;
+    color: #2563eb;
     flex-shrink: 0;
 }
 .act-modal-header__text {
@@ -2373,13 +2352,13 @@ body.dark-mode .acct-dropdown__item.is-active {
 .act-modal-header__title {
     font-size: 1rem;
     font-weight: 700;
-    color: #ffffff;
+    color: #0f172a;
     margin: 0;
     line-height: 1.3;
 }
 .act-modal-header__sub {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.7);
+    color: #64748b;
     margin: 0.1rem 0 0;
     line-height: 1.2;
 }
@@ -2387,9 +2366,9 @@ body.dark-mode .acct-dropdown__item.is-active {
     width: 28px;
     height: 28px;
     border-radius: 7px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    background: #f8fafc;
+    color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2400,9 +2379,9 @@ body.dark-mode .acct-dropdown__item.is-active {
     padding: 0;
 }
 .act-modal-close:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.48);
-    color: #ffffff;
+    background: #f1f5f9;
+    border-color: rgba(15, 23, 42, 0.28);
+    color: #0f172a;
     transform: scale(1.1);
 }
 
@@ -2439,7 +2418,7 @@ body.dark-mode .acct-dropdown__item.is-active {
 }
 .act-form-label i {
     font-size: 0.78rem;
-    color: #6366f1;
+    color: #2563eb;
     flex-shrink: 0;
 }
 .act-form-optional {
@@ -2501,7 +2480,7 @@ body.dark-mode .acct-dropdown__item.is-active {
     padding: 0.48rem 1.4rem;
     border-radius: 8px;
     border: none;
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: #ffffff;
     font-size: 0.85rem;
     font-weight: 700;
@@ -2510,13 +2489,13 @@ body.dark-mode .acct-dropdown__item.is-active {
     align-items: center;
     gap: 0.4rem;
     transition: opacity 0.15s, transform var(--spring-dur) var(--spring), box-shadow 0.15s;
-    box-shadow: 0 3px 10px rgba(99, 102, 241, 0.32);
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.32);
     line-height: 1.5;
 }
 .act-form-submit:hover {
     opacity: 0.9;
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.42);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.42);
 }
 .act-form-submit:active {
     transform: translateY(0);
@@ -2528,13 +2507,35 @@ body.dark-mode .requestor-modal__dialog--act {
     color: #e5e7eb;
 }
 body.dark-mode .act-modal-header {
-    background: linear-gradient(135deg, #312e81 0%, #3730a3 50%, #4338ca 100%);
+    background: #1e293b;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+body.dark-mode .act-modal-header__icon {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.25);
+    color: #60a5fa;
+}
+body.dark-mode .act-modal-header__title {
+    color: #f1f5f9;
+}
+body.dark-mode .act-modal-header__sub {
+    color: #94a3b8;
+}
+body.dark-mode .act-modal-close {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #94a3b8;
+}
+body.dark-mode .act-modal-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.28);
+    color: #f1f5f9;
 }
 body.dark-mode .act-form-label {
     color: #94a3b8;
 }
 body.dark-mode .act-form-label i {
-    color: #818cf8;
+    color: #60a5fa;
 }
 body.dark-mode .act-form-actions {
     border-top-color: rgba(255, 255, 255, 0.1);
@@ -3034,104 +3035,159 @@ body.dark-mode .act-form-error {
 .checkbox {
     opacity: 0;
     position: absolute;
+    pointer-events: none;
 }
 
+/* ── Toggle track ── */
 .checkbox-label {
-    background-color: #111;
-    width: 60px;
-    height: 30px;
-    border-radius: 50px;
+    /* Default (not-checked) = LIGHT mode: warm sky-blue track */
+    background: linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%);
+    width: 62px;
+    height: 32px;
+    border-radius: 999px;
     position: relative;
-    padding: 5px;
+    padding: 0;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    box-shadow: 0 0 5px rgba(0,0,0,0.2);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    border: 1.5px solid rgba(14, 165, 233, 0.3);
+    box-shadow:
+        0 2px 12px rgba(14, 165, 233, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
     overflow: hidden;
-    transition: background-color 0.55s var(--theme-transition-easing), box-shadow 0.55s var(--theme-transition-easing), border-color 0.55s var(--theme-transition-easing), transform 0.35s var(--theme-transition-easing);
+    transition:
+        background 0.65s var(--theme-transition-easing),
+        border-color 0.65s var(--theme-transition-easing),
+        box-shadow 0.45s ease,
+        transform 0.3s var(--spring);
 }
 
+/* Checked = DARK mode: deep navy track */
+#theme-checkbox:checked + .checkbox-label {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-color: rgba(148, 163, 184, 0.22);
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Sun icon — sits on LEFT, visible in LIGHT mode (not-checked) — NO yellow ── */
 .checkbox-label .bi-moon-fill {
-    color: #f1c40f;
-    font-size: 14px;
+    color: #c7d2fe;
+    font-size: 13px;
     position: absolute;
-    left: 8px;
+    left: 9px;
     top: 50%;
-    transform: translateY(-50%) scale(1);
+    transform: translateY(-50%) scale(0.8) rotate(28deg);
     transform-origin: center;
-    transition: transform 0.52s var(--theme-transition-easing), opacity 0.52s var(--theme-transition-easing), filter 0.52s var(--theme-transition-easing);
+    opacity: 0.28;
+    transition:
+        transform  0.55s var(--theme-transition-easing),
+        opacity    0.45s ease,
+        filter     0.45s ease;
+    filter: blur(0.3px);
 }
 
+/* ── Sun icon — sits on RIGHT, visible in LIGHT mode (not-checked) — NO yellow ── */
 .checkbox-label .bi-brightness-high-fill {
-    color: #f39c12;
-    font-size: 16px;
+    color: #0ea5e9;
+    font-size: 15px;
     position: absolute;
-    right: 7px;
+    right: 8px;
     top: 50%;
-    transform: translateY(-50%) scale(1);
+    transform: translateY(-50%) scale(1.1) rotate(0deg);
     transform-origin: center;
-    transition: transform 0.52s var(--theme-transition-easing), opacity 0.52s var(--theme-transition-easing), filter 0.52s var(--theme-transition-easing);
+    opacity: 1;
+    transition:
+        transform  0.55s var(--theme-transition-easing),
+        opacity    0.45s ease,
+        filter     0.45s ease;
+    filter: drop-shadow(0 0 4px rgba(14, 165, 233, 0.5));
 }
 
+/* ── Ball ── */
 .checkbox-label .ball {
-    background-color: #fff;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     position: absolute;
     left: 4px;
-    top: 4px;
+    top: 3px;
     border-radius: 50%;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    background: #ffffff;
+    box-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
     will-change: transform;
-    transition: transform 0.58s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.45s ease;
+    transition:
+        transform    0.65s cubic-bezier(0.34, 1.3, 0.64, 1),
+        background   0.5s ease,
+        box-shadow   0.4s ease;
 }
 
 .checkbox-label .ball::before {
     content: "";
     position: absolute;
-    inset: 5px;
+    inset: 6px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.45);
-    opacity: 0.75;
-    transition: opacity 0.4s ease;
+    background: rgba(99, 102, 241, 0.18);
+    opacity: 0;
+    transition: opacity 0.45s ease, background 0.5s ease;
 }
 
+/* ── Hover ── */
 .checkbox-label:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    transform: translateY(-1px) scale(1.04);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* ── Checked state (DARK mode) — ball slides right, moon glows ── */
 #theme-checkbox:checked + .checkbox-label .ball {
-    transform: translateX(30px) scale(1.01);
+    transform: translateX(30px);
+    background: #f0f4ff;
+    box-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+#theme-checkbox:checked + .checkbox-label .ball::before {
+    background: rgba(165, 180, 252, 0.2);
+    opacity: 1;
 }
 
+/* Dark mode: sun fades out, moon rises */
 #theme-checkbox:checked + .checkbox-label .bi-moon-fill {
-    opacity: 0.45;
-    transform: translateY(-50%) rotate(-28deg) scale(0.9);
-    filter: blur(0.1px);
+    opacity: 1;
+    transform: translateY(-50%) rotate(0deg) scale(1.05);
+    filter: drop-shadow(0 0 4px rgba(165, 180, 252, 0.55));
+    color: #c7d2fe;
 }
 
 #theme-checkbox:checked + .checkbox-label .bi-brightness-high-fill {
-    opacity: 1;
-    transform: translateY(-50%) rotate(0deg) scale(1.08);
-    filter: drop-shadow(0 0 2px rgba(243, 156, 18, 0.45));
+    opacity: 0.28;
+    transform: translateY(-50%) scale(0.8) rotate(28deg);
+    filter: blur(0.3px);
+    color: #ffffff;
 }
 
+/* ── Not checked (LIGHT mode) — sun glows ── */
 #theme-checkbox:not(:checked) + .checkbox-label .bi-moon-fill {
-    opacity: 1;
-    transform: translateY(-50%) rotate(0deg) scale(1.08);
-    filter: drop-shadow(0 0 2px rgba(241, 196, 15, 0.35));
+    opacity: 0.28;
+    transform: translateY(-50%) rotate(-30deg) scale(0.78);
+    filter: blur(0.3px);
 }
 
 #theme-checkbox:not(:checked) + .checkbox-label .bi-brightness-high-fill {
-    opacity: 0.45;
-    transform: translateY(-50%) rotate(26deg) scale(0.9);
-    filter: blur(0.1px);
+    opacity: 1;
+    transform: translateY(-50%) scale(1.1) rotate(0deg);
+    filter: drop-shadow(0 0 4px rgba(14, 165, 233, 0.5));
+    color: #0ea5e9;
 }
 
 #theme-checkbox:focus-visible + .checkbox-label {
-    outline: 2px solid rgba(255, 255, 255, 0.45);
+    outline: 2px solid rgba(99, 102, 241, 0.55);
     outline-offset: 2px;
 }
 
@@ -3205,10 +3261,10 @@ body.dark-mode .login-hero::before {
 
 /* --- Global OLED Dark Mode Expansion --- */
 
-/* View Transitions for Circular Reveal */
+/* ── View Transitions — Circular Reveal ── */
 ::view-transition-group(root) {
-    animation-duration: 1.32s;
-    animation-timing-function: var(--theme-transition-easing);
+    animation-duration: 1.55s;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 ::view-transition-old(root),
@@ -3219,7 +3275,8 @@ body.dark-mode .login-hero::before {
 }
 
 ::view-transition-old(root) {
-    z-index: 1000;
+    z-index: 1;
+    opacity: 1;
 }
 
 ::view-transition-new(root) {
@@ -3232,7 +3289,7 @@ body.dark-mode .login-hero::before {
     pointer-events: none;
     z-index: 10000;
     clip-path: circle(0px at 50% 50%);
-    will-change: clip-path, opacity;
+    will-change: clip-path, opacity, filter;
 }
 
 /* Navbar */
@@ -3257,12 +3314,43 @@ body.dark-mode .dropdown-menu {
     --bs-secondary-color: rgba(226, 232, 240, 0.65);
 }
 
-/* Activity summary card stays vivid in dark mode */
+/* Dark mode — deep glass card */
 body.dark-mode .activity-summary-card {
-    background: linear-gradient(135deg, #312e81 0%, #3730a3 35%, #4338ca 65%, #4f46e5 100%) !important;
-    border: 1px solid rgba(99, 102, 241, 0.35) !important;
-    box-shadow: 0 12px 32px rgba(49, 46, 129, 0.45) !important;
-    color: #e5e5e5;
+    background: rgba(30, 41, 59, 0.85) !important;
+    border: 1px solid rgba(148, 163, 184, 0.15) !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+body.dark-mode .activity-summary-card::before {
+    background: linear-gradient(180deg, #3b82f6 0%, #0891b2 100%);
+}
+body.dark-mode .activity-summary-card__info h1 {
+    color: #f1f5f9;
+}
+body.dark-mode .activity-summary-card__info p {
+    color: #94a3b8;
+}
+body.dark-mode .activity-summary-card__cta {
+    border-left-color: rgba(148, 163, 184, 0.2);
+}
+body.dark-mode .activity-summary-pill {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+}
+body.dark-mode .activity-summary-pill:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+body.dark-mode .activity-summary-pill .pill-icon {
+    background: rgba(59, 130, 246, 0.18);
+    color: #60a5fa;
+}
+body.dark-mode .activity-summary-pill .pill-label {
+    color: #94a3b8;
+}
+body.dark-mode .activity-summary-pill .pill-value {
+    color: #f1f5f9;
 }
 
 /* Dark mode heading color inside glass-cards */
