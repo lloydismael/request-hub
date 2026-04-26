@@ -320,8 +320,353 @@ body.dark-mode .bg-primary-subtle.text-primary {
     border-radius: 999px;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   GLOBAL SPRING ANIMATIONS
+   Smooth, fluid, bouncy hover transitions applied site-wide.
+   Uses cubic-bezier(0.34, 1.56, 0.64, 1) — the "spring" curve.
+   @prefers-reduced-motion: all animations disabled at the bottom.
+══════════════════════════════════════════════════════════════ */
+
+/* ── CSS custom property shortcuts ── */
+:root {
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --spring-fast: cubic-bezier(0.22, 1, 0.36, 1);
+    --spring-dur: 0.28s;
+    --spring-dur-fast: 0.18s;
+}
+
+/* ── Buttons – ALL variants ── */
+.btn {
+    transition:
+        background-color    var(--spring-dur-fast) ease,
+        border-color        var(--spring-dur-fast) ease,
+        color               var(--spring-dur-fast) ease,
+        box-shadow          var(--spring-dur) var(--spring),
+        transform           var(--spring-dur) var(--spring),
+        opacity             var(--spring-dur-fast) ease;
+    transform-origin: center bottom;
+    will-change: transform;
+}
+.btn:hover:not(:disabled):not(.disabled) {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.btn:active:not(:disabled):not(.disabled) {
+    transform: translateY(0) scale(0.97);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    transition-duration: 0.1s;
+}
+/* Smaller bounce for sm/xs buttons */
+.btn-sm:hover:not(:disabled):not(.disabled),
+.btn-xs:hover:not(:disabled):not(.disabled) {
+    transform: translateY(-2px) scale(1.06);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.15);
+}
+/* Icon-only buttons – scale only */
+.btn.btn-icon:hover:not(:disabled):not(.disabled) {
+    transform: scale(1.15);
+}
+
+/* ── Badges – subtle bob ── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    transition:
+        transform var(--spring-dur) var(--spring),
+        box-shadow var(--spring-dur) var(--spring);
+    will-change: transform;
+}
+.badge:hover {
+    transform: translateY(-2px) scale(1.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Glass cards ── */
+.glass-card,
+.activity-summary-card {
+    transition:
+        transform         var(--spring-dur) var(--spring),
+        box-shadow        var(--spring-dur) var(--spring),
+        background-color  0.25s ease,
+        border-color      0.25s ease;
+    will-change: transform;
+}
+.glass-card:hover,
+.activity-summary-card:hover {
+    transform: translateY(-4px) scale(1.008);
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.28);
+}
+/* Cards inside tables / tight spaces – lighter lift */
+.table .glass-card:hover,
+.list-group .glass-card:hover {
+    transform: translateY(-2px) scale(1.003);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+}
+
+/* ── Bootstrap .card ── */
+.card {
+    transition:
+        transform         var(--spring-dur) var(--spring),
+        box-shadow        var(--spring-dur) var(--spring);
+    will-change: transform;
+}
+.card:hover {
+    transform: translateY(-3px) scale(1.006);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.2);
+}
+
+/* ── Form inputs – gentle focus spring ── */
+.form-control,
+.form-select {
+    transition:
+        border-color  0.2s ease,
+        box-shadow    0.25s var(--spring),
+        background-color 0.2s ease,
+        transform     0.22s var(--spring);
+    will-change: transform;
+}
+.form-control:focus,
+.form-select:focus {
+    transform: scale(1.012);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(59, 130, 246, 0.08);
+}
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Table sort links ── */
+.table-sort-link {
+    transition:
+        color       0.15s ease,
+        transform   var(--spring-dur) var(--spring);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.table-sort-link:hover {
+    transform: translateY(-1px);
+}
+
+/* ── Table rows – row-level hover lifts disabled; cell hover color only ──
+   (rows shift layout if they scale — keep subtle background only) */
+.table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+/* ── Links inside tables – icon hover bounce ── */
+.table td a:not(.btn) {
+    transition: color 0.15s ease, transform var(--spring-dur) var(--spring);
+    display: inline-block;
+}
+.table td a:not(.btn):hover {
+    transform: translateX(2px);
+}
+
+/* ── List group items ── */
+.list-group-item {
+    transition:
+        background-color 0.18s ease,
+        transform        var(--spring-dur) var(--spring),
+        box-shadow       var(--spring-dur) var(--spring);
+    cursor: pointer;
+}
+a.list-group-item:hover,
+button.list-group-item:hover,
+.list-group-item-action:hover {
+    transform: translateX(4px);
+    box-shadow: inset 4px 0 0 var(--brand-primary);
+}
+
+/* ── Notification cards ── */
+.notif-card {
+    transition:
+        transform         var(--spring-dur) var(--spring),
+        box-shadow        var(--spring-dur) var(--spring),
+        background        0.2s ease,
+        border-color      0.2s ease;
+    will-change: transform;
+}
+.notif-card:hover {
+    transform: translateY(-3px) scale(1.008);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+}
+body.dark-mode .notif-card:hover {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Notification action buttons ── */
+.notif-action-btn {
+    transition:
+        background  0.18s ease,
+        box-shadow  0.25s var(--spring),
+        transform   var(--spring-dur) var(--spring),
+        color       0.15s ease;
+}
+.notif-action-btn:hover {
+    transform: translateY(-2px) scale(1.06);
+}
+
+/* ── Notification pagination buttons ── */
+.notif-page-btn {
+    transition:
+        background  0.2s ease,
+        box-shadow  0.25s var(--spring),
+        transform   var(--spring-dur) var(--spring),
+        color       0.15s ease;
+}
+.notif-page-btn:hover:not(.notif-page-btn--disabled) {
+    transform: translateY(-2px) scale(1.06);
+}
+
+/* ── Mark-all-read button ── */
+.notif-btn-markall {
+    transition:
+        background  0.18s ease,
+        box-shadow  0.25s var(--spring),
+        transform   var(--spring-dur) var(--spring),
+        color       0.15s ease;
+}
+.notif-btn-markall:hover {
+    transform: translateY(-2px) scale(1.06);
+    box-shadow: 0 6px 18px rgba(96, 165, 250, 0.25);
+}
+
+/* ── Notification dot ── */
+.notification-dot {
+    transition: transform var(--spring-dur) var(--spring);
+}
+.notification-dot:hover {
+    transform: scale(1.2);
+}
+
+/* ── Activity summary pills ── */
+.activity-summary-pill {
+    transition:
+        transform   var(--spring-dur) var(--spring),
+        box-shadow  var(--spring-dur) var(--spring);
+}
+.activity-summary-pill:hover {
+    transform: translateY(-3px) scale(1.06);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+/* ── Stat chips (management page) ── */
+.mgmt-stat-chip {
+    transition:
+        transform   var(--spring-dur) var(--spring),
+        box-shadow  var(--spring-dur) var(--spring);
+}
+.mgmt-stat-chip:hover {
+    transform: translateY(-2px) scale(1.06);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.14);
+}
+
+/* ── Table avatars ── */
+.table-avatar,
+.table-avatar--placeholder {
+    transition:
+        transform   var(--spring-dur) var(--spring),
+        box-shadow  0.22s ease;
+}
+.table-avatar:hover,
+.table-avatar--placeholder:hover {
+    transform: scale(1.16);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+/* ── Modal – slide-up spring entrance ── */
+.modal.fade .modal-dialog {
+    transform: translateY(24px) scale(0.97);
+    transition: transform 0.35s var(--spring), opacity 0.25s ease;
+}
+.modal.show .modal-dialog {
+    transform: translateY(0) scale(1);
+}
+
+/* ── Theme toggle wrapper ── */
+.theme-toggle-wrapper .checkbox-label {
+    transition: transform var(--spring-dur) var(--spring);
+}
+.theme-toggle-wrapper .checkbox-label:hover {
+    transform: scale(1.12) rotate(-5deg);
+}
+
+/* ── Dropdown items ── */
+.dropdown-item {
+    transition:
+        background-color 0.15s ease,
+        transform        var(--spring-dur) var(--spring),
+        padding-left     0.18s ease;
+    border-radius: 8px;
+}
+.dropdown-item:hover {
+    transform: translateX(3px);
+    padding-left: 1.1rem;
+}
+
+/* ── Breadcrumb links ── */
+.breadcrumb-item a {
+    transition: color 0.15s ease, transform var(--spring-dur) var(--spring);
+    display: inline-block;
+}
+.breadcrumb-item a:hover {
+    transform: translateX(2px);
+}
+
+/* ── Heading icon wrappers (e.g. notif icon wrap) ── */
+.notif-header__icon-wrap {
+    transition: transform var(--spring-dur) var(--spring), box-shadow var(--spring-dur) var(--spring);
+}
+.notif-header__icon-wrap:hover {
+    transform: scale(1.12) rotate(-6deg);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+}
+
+/* ── Form check / checkbox ── */
+.form-check-input {
+    transition: transform var(--spring-dur) var(--spring), box-shadow 0.2s ease;
+}
+.form-check-input:hover {
+    transform: scale(1.14);
+}
+.form-check-input:checked {
+    transform: scale(1.1);
+}
+
+/* ── Code elements ── */
+.mgmt-code,
+code {
+    transition: transform var(--spring-dur) var(--spring), box-shadow 0.2s ease;
+    display: inline-block;
+}
+.mgmt-code:hover,
+code:hover {
+    transform: scale(1.07);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.18);
+}
+
+/* ── Accessibility: respect prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+    }
+}
+
 .alert {
     border-radius: 14px;
+    transition:
+        transform   var(--spring-dur) var(--spring),
+        box-shadow  var(--spring-dur) var(--spring);
+}
+.alert:hover {
+    transform: translateY(-2px) scale(1.005);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 .alert-info.glass-card {
