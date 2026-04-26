@@ -3302,6 +3302,10 @@ body.theme-switching *::after {
     --bs-secondary-color: rgba(15, 23, 42, 0.55);
     --bs-body-color: #0f172a;
 }
+/* Hide help text and avatars inside the manage request form card */
+.rmf-card .form-text { display: none; }
+.rmf-card .avatar-select { display: block; }
+.rmf-card .avatar-select__image { display: none; }
 .rmf-card__header {
     display: flex;
     align-items: center;
