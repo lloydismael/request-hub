@@ -136,14 +136,32 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         form = kwargs.get("form")
-        logs = kwargs.get("logs")
         editing_log = kwargs.get("editing_log")
         if form is None:
             form = self.form_class(engineer=self.request.user)
-        if logs is None:
-            logs = list(self.get_queryset())
-        else:
-            logs = list(logs)
+
+        # Full queryset — used for aggregates, month options, charts
+        full_qs = self.get_queryset()
+        logs_total_count = full_qs.count()
+
+        agg = full_qs.aggregate(
+            total_hours=Sum("actual_hours"),
+            billable_hours=Sum("actual_hours", filter=Q(is_billable=True)),
+        )
+        total_hours_val = agg.get("total_hours") or Decimal("0")
+        billable_hours_val = agg.get("billable_hours") or Decimal("0")
+
+        # Paginate to 50 rows per page
+        try:
+            page_num = max(1, int(self.request.GET.get("page") or 1))
+        except (TypeError, ValueError):
+            page_num = 1
+        paginator = Paginator(full_qs, 50)
+        try:
+            logs_page_obj = paginator.page(page_num)
+        except InvalidPage:
+            logs_page_obj = paginator.page(1)
+        logs = list(logs_page_obj.object_list)
 
         selected_month, _, _ = self._parse_month_filter()
         month_rows = (
@@ -168,14 +186,6 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                 (option["label"] for option in month_options if option["value"] == selected_month),
                 "",
             )
-
-        total_hours = Decimal("0")
-        billable_hours = Decimal("0")
-        for log in logs:
-            hours = log.actual_hours or Decimal("0")
-            total_hours += hours
-            if log.is_billable:
-                billable_hours += hours
 
         related_requests = Request.objects.filter(
             Q(engineer=self.request.user) | Q(backup_engineer=self.request.user)
@@ -222,10 +232,12 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             {
                 "form": form,
                 "logs": logs,
+                "logs_page_obj": logs_page_obj,
+                "logs_total_count": logs_total_count,
                 "hours_summary": {
-                    "total": total_hours,
-                    "billable": billable_hours,
-                    "non_billable": total_hours - billable_hours,
+                    "total": total_hours_val,
+                    "billable": billable_hours_val,
+                    "non_billable": total_hours_val - billable_hours_val,
                 },
                 "requests_summary": {
                     "total": related_requests.count(),
@@ -277,8 +289,7 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             else:
                 messages.success(request, "Activity logged successfully.")
             return redirect("hub:activity-logs")
-        logs = self.get_queryset()
-        context = self.get_context_data(form=form, logs=logs, editing_log=instance)
+        context = self.get_context_data(form=form, editing_log=instance)
         return self.render_to_response(context)
 
 

@@ -793,12 +793,12 @@ class EngineerActivityLogForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "form-select"}),
     )
     is_billable = forms.TypedChoiceField(
-        label="Billable",
+        label="Billing Type",
         choices=(
+            ("false", "Not Billable"),
             ("true", "Billable"),
-            ("false", "Not billable"),
         ),
-        initial="true",
+        initial="false",
         coerce=lambda value: str(value).lower() in {"true", "1", "yes"},
         widget=forms.Select(attrs={"class": "form-select"}),
     )
@@ -852,7 +852,7 @@ class EngineerActivityLogForm(forms.ModelForm):
         ).order_by("-created_at").select_related("account")
         request_field.queryset = related_requests
         request_field.empty_label = "Select request (optional)"
-        self.fields["is_billable"].initial = "true"
+        self.fields["is_billable"].initial = "false"
 
         request_date_field = self.fields["request_date"]
         request_date_field.required = True
@@ -864,12 +864,12 @@ class EngineerActivityLogForm(forms.ModelForm):
                 self.fields["is_billable"].initial = "true" if self.instance.is_billable else "false"
                 self.fields["activity_type"].initial = self.instance.activity_type
             else:
-                self.fields["is_billable"].initial = "true"
+                self.fields["is_billable"].initial = "false"
                 self.fields["activity_type"].initial = EngineerActivityLog.ActivityType.INTERNAL_SUPPORT
         else:
             raw_billable = self.data.get(self.add_prefix("is_billable"))
             if raw_billable is None:
-                self.fields["is_billable"].initial = "true"
+                self.fields["is_billable"].initial = "false"
 
         if self.is_bound and self.errors:
             for name, field in self.fields.items():
