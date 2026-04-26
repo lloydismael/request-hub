@@ -410,6 +410,24 @@ body.dark-mode .bg-primary-subtle.text-primary {
     position: relative;
     z-index: 10;
 }
+/* Chart cards: pre-promote GPU layer to prevent backdrop-filter re-composite flash */
+.rpt-chart-card {
+    will-change: transform;      /* tells browser to pre-create compositing layer NOW, before any hover */
+    isolation: isolate;          /* own stacking context from birth */
+    z-index: 1;                  /* constant — never changes, so no layer re-creation on hover */
+    display: flex;
+    flex-direction: column;
+    transition:
+        transform         var(--spring-dur) var(--spring),
+        box-shadow        var(--spring-dur) var(--spring),
+        background-color  0.25s ease,
+        border-color      0.25s ease;
+}
+.rpt-chart-card:hover {
+    transform: translateY(-5px) !important;   /* spring lift — no scale so no canvas re-paint */
+    z-index: 1 !important;                    /* same value = zero GPU layer change = no white flash */
+    box-shadow: 0 22px 50px rgba(15, 23, 42, 0.32) !important;
+}
 /* Cards inside tables / tight spaces – lighter lift */
 .table .glass-card:hover,
 .list-group .glass-card:hover {
@@ -3802,11 +3820,15 @@ body.dark-mode .ai-chat-close-btn {
 /* ── Canvas wrappers ── */
 .rpt-canvas-wrap {
     position: relative;
-    min-height: 260px;
+    flex: 1 1 0;   /* grow to fill remaining card height */
+    min-height: 320px;
 }
 .rpt-canvas-wrap--donut {
-    min-height: 240px;
-    max-height: 300px;
+    min-height: 280px;
+}
+.rpt-canvas-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* ── Table styling ── */

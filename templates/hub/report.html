@@ -670,6 +670,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 animation: { duration: 650, easing: 'easeOutQuart' },
                 scales: {
                     x: { stacked: true, ...axisCfg, ticks: { ...axisCfg.ticks, maxRotation: 35, minRotation: 0 } },
@@ -699,6 +700,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 animation: { duration: 650, easing: 'easeOutQuart' },
                 scales: {
                     x: { stacked: true, ...axisCfg },
@@ -720,6 +722,7 @@
             data: { labels: payload.labels, datasets: [{ data: payload.totals, backgroundColor: bgColors, borderColor: brColors, borderWidth: 2, hoverOffset: 10, borderRadius: 5 }] },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 cutout: '62%',
                 animation: { duration: 700, easing: 'easeOutQuart', animateRotate: true },
                 plugins: { legend: legendCfg, tooltip: { ...tooltipCfg, callbacks: { label: labelFn } } },
