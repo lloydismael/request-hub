@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
+from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
 from django.db.models.functions import TruncMonth
@@ -3028,10 +3029,15 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
                     engineer=editing_activity_log.engineer,
                     instance=editing_activity_log,
                 )
+            try:
+                activity_log_page = max(1, int(self.request.GET.get("activity_log_page") or 1))
+            except (TypeError, ValueError):
+                activity_log_page = 1
             context.update(
                 self._build_activity_log_context(
                     start_month_value=activity_start_month,
                     end_month_value=activity_end_month,
+                    page_num=activity_log_page,
                 )
             )
             context["editing_activity_log"] = editing_activity_log
@@ -3209,7 +3215,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "status_breakdown": status_breakdown,
         }
 
-    def _build_activity_log_context(self, *, start_month_value: str | None = None, end_month_value: str | None = None):
+    def _build_activity_log_context(self, *, start_month_value: str | None = None, end_month_value: str | None = None, page_num: int = 1):
         month_filters = self._resolve_activity_month_filters(
             start_month_value=start_month_value,
             end_month_value=end_month_value,
@@ -3330,9 +3336,12 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             ],
         }
 
-        recent_logs = list(
-            logs_qs.order_by("-request_date", "-created_at")[:50]
-        )
+        paginator = Paginator(logs_qs.order_by("-request_date", "-created_at"), 50)
+        try:
+            page_obj = paginator.page(page_num)
+        except InvalidPage:
+            page_obj = paginator.page(1)
+        recent_logs = list(page_obj.object_list)
 
         return {
             "activity_totals": {
@@ -3352,6 +3361,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "activity_location_chart": location_chart,
             "activity_billable_chart": billable_chart,
             "activity_logs": recent_logs,
+            "activity_logs_page_obj": page_obj,
         }
 
 
