@@ -866,6 +866,7 @@ class EngineerActivityLogForm(forms.ModelForm):
             else:
                 self.fields["is_billable"].initial = "false"
                 self.fields["activity_type"].initial = EngineerActivityLog.ActivityType.INTERNAL_SUPPORT
+                self.fields["status"].initial = EngineerActivityLog.Status.COMPLETED
         else:
             raw_billable = self.data.get(self.add_prefix("is_billable"))
             if raw_billable is None:
