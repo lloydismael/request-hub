@@ -2479,6 +2479,318 @@ body.dark-mode .input-group-text {
     border-color: #444;
 }
 
+/* ══════════════════════════════════════════════
+   MANAGEMENT PAGE  –  redesign + visibility fixes
+══════════════════════════════════════════════ */
+
+/* ── Stat chips in page header ── */
+.mgmt-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+.mgmt-stat-chip--users {
+    background: rgba(59, 130, 246, 0.12);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.25);
+}
+.mgmt-stat-chip--accounts {
+    background: rgba(34, 197, 94, 0.12);
+    color: #86efac;
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+/* ── Pill tabs ── */
+.mgmt-tabs .nav-link {
+    color: rgba(226, 232, 240, 0.75);
+    background: transparent;
+    border: 1px solid transparent;
+    font-weight: 500;
+    font-size: 0.875rem;
+    padding: 0.45rem 1.1rem;
+    border-radius: 10px;
+    transition:
+        background 0.22s ease,
+        color 0.18s ease,
+        transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.22s ease;
+}
+.mgmt-tabs .nav-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transform: translateY(-2px);
+}
+.mgmt-tabs .nav-link.active {
+    background: #fff;
+    color: #1d4ed8;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+    border-color: transparent;
+}
+body.dark-mode .mgmt-tabs .nav-link {
+    color: rgba(203, 213, 225, 0.75);
+}
+body.dark-mode .mgmt-tabs .nav-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+}
+body.dark-mode .mgmt-tabs .nav-link.active {
+    background: #1e3a5f;
+    color: #93c5fd;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Card toolbar (search + button row) ── */
+.mgmt-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    flex-wrap: wrap;
+}
+body.dark-mode .mgmt-toolbar {
+    border-bottom-color: #2a2a2a;
+}
+
+/* ── Search box ── */
+.mgmt-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 1;
+    min-width: 180px;
+    max-width: 440px;
+    background: rgba(15, 23, 42, 0.06);
+    border: 1.5px solid rgba(15, 23, 42, 0.12);
+    border-radius: 12px;
+    padding: 0.4rem 0.85rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.mgmt-search-box:focus-within {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+body.dark-mode .mgmt-search-box {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #2e2e2e;
+}
+body.dark-mode .mgmt-search-box:focus-within {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.mgmt-search-icon {
+    color: #9ca3af;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+}
+.mgmt-search-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    flex: 1;
+    font-size: 0.875rem;
+    color: #111827;
+    min-width: 0;
+}
+.mgmt-search-input::placeholder { color: #9ca3af; }
+body.dark-mode .mgmt-search-input { color: #e2e8f0; }
+
+.mgmt-result-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #6b7280;
+    white-space: nowrap;
+    background: rgba(107, 114, 128, 0.1);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    letter-spacing: 0.03em;
+}
+body.dark-mode .mgmt-result-badge {
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Table header ── */
+.mgmt-thead th {
+    background: #f1f5f9;
+    color: #374151;
+    font-size: 0.73rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-bottom: 2px solid #e2e8f0;
+    padding: 0.7rem 1rem;
+}
+body.dark-mode .mgmt-thead th {
+    background: #0d0d0d;
+    color: #94a3b8;
+    border-bottom-color: #2a2a2a;
+}
+
+/* ── Table rows ── */
+.mgmt-table td {
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    color: #111827;
+}
+body.dark-mode .mgmt-table td {
+    border-bottom-color: #1e1e1e;
+    color: #e2e8f0;
+}
+.mgmt-table tbody tr {
+    transition: background 0.14s ease;
+}
+.mgmt-table tbody tr:hover {
+    background: rgba(59, 130, 246, 0.04);
+}
+body.dark-mode .mgmt-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* ── Card footer ── */
+.mgmt-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 0.9rem 1.25rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(248, 250, 252, 0.6);
+}
+body.dark-mode .mgmt-card-footer {
+    border-top-color: #2a2a2a;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Limit note (shown by JS) ── */
+.mgmt-limit-note {
+    display: none;
+    font-size: 0.78rem;
+    color: #6b7280;
+}
+body.dark-mode .mgmt-limit-note { color: #64748b; }
+
+/* ── Code in alert ── */
+.mgmt-code {
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+    padding: 0.1em 0.45em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: monospace;
+}
+body.dark-mode .mgmt-code {
+    background: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+}
+
+/* ════════════════════════════════════════════════
+   GLOBAL DARK MODE VISIBILITY FIXES
+════════════════════════════════════════════════ */
+
+/* table-light thead in dark mode (used on other pages) */
+body.dark-mode .table-light,
+body.dark-mode thead.table-light {
+    --bs-table-bg: #0d0d0d;
+    --bs-table-color: #cbd5e1;
+}
+body.dark-mode .table-light th,
+body.dark-mode .table-light td {
+    background-color: #0d0d0d !important;
+    color: #cbd5e1 !important;
+    border-bottom-color: #2a2a2a !important;
+}
+
+/* nav-tabs in dark mode (pages that use nav-tabs) */
+body.dark-mode .nav-tabs {
+    --bs-nav-tabs-border-color: #3a3a3a;
+    border-bottom-color: #3a3a3a;
+}
+body.dark-mode .nav-tabs .nav-link {
+    color: #94a3b8;
+}
+body.dark-mode .nav-tabs .nav-link:hover {
+    border-color: #444 #444 #3a3a3a;
+    color: #e2e8f0;
+}
+body.dark-mode .nav-tabs .nav-link.active {
+    background-color: #000;
+    border-color: #3a3a3a #3a3a3a #000;
+    color: #fff;
+}
+
+/* Alert variants in dark mode */
+body.dark-mode .alert-info {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+}
+body.dark-mode .alert-info strong { color: #bfdbfe; }
+body.dark-mode .alert-info code { color: #93c5fd; background: rgba(59,130,246,0.15); }
+
+body.dark-mode .alert-warning {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: rgba(234, 179, 8, 0.25);
+    color: #fde68a;
+}
+body.dark-mode .alert-success {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+}
+body.dark-mode .alert-danger {
+    background: rgba(220, 53, 69, 0.12);
+    border-color: rgba(220, 53, 69, 0.28);
+    color: #fca5a5;
+}
+
+/* Badge variants in dark mode */
+body.dark-mode .badge.text-bg-light {
+    background-color: #1e1e1e !important;
+    color: #cbd5e1 !important;
+    border: 1px solid #333;
+}
+body.dark-mode .badge.text-bg-secondary {
+    background-color: #1e293b !important;
+    color: #94a3b8 !important;
+}
+body.dark-mode .badge.text-bg-warning {
+    background-color: rgba(234, 179, 8, 0.15) !important;
+    color: #fde68a !important;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+body.dark-mode .badge.text-bg-primary {
+    background-color: rgba(59, 130, 246, 0.18) !important;
+    color: #93c5fd !important;
+}
+body.dark-mode .badge.text-bg-success {
+    background-color: rgba(34, 197, 94, 0.15) !important;
+    color: #86efac !important;
+}
+body.dark-mode .badge.text-bg-danger {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    color: #fca5a5 !important;
+}
+
+/* btn-outline-warning visibility in dark mode */
+body.dark-mode .btn-outline-warning {
+    color: #fde68a;
+    border-color: rgba(234, 179, 8, 0.5);
+}
+body.dark-mode .btn-outline-warning:hover {
+    background-color: rgba(234, 179, 8, 0.15);
+    color: #fef08a;
+    border-color: #fde68a;
+}
+
 /* Fix specific badges contrast */
 body.dark-mode .badge.bg-light {
     background-color: #2a2a2a !important;
