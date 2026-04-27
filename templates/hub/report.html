@@ -110,6 +110,7 @@
                         <h3 class="rpt-chart-title">Hours by Engineer</h3>
                         <p class="rpt-chart-sub">Billable vs non-billable hours logged per engineer.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityEngineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_engineer_chart.labels %}
                     <div class="rpt-canvas-wrap"><canvas id="activityEngineerChart"></canvas></div>
@@ -126,6 +127,7 @@
                         <h3 class="rpt-chart-title">Hours by Activity Type</h3>
                         <p class="rpt-chart-sub">Compare time across learning, customer-facing, and internal work.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityTypeChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_type_chart.labels %}
                     <div class="rpt-canvas-wrap"><canvas id="activityTypeChart"></canvas></div>
@@ -146,6 +148,7 @@
                         <h3 class="rpt-chart-title">Work Location Mix</h3>
                         <p class="rpt-chart-sub">On-site, remote, and mixed work distribution.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityLocationChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_location_chart.labels %}
                     <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityLocationChart"></canvas></div>
@@ -162,6 +165,7 @@
                         <h3 class="rpt-chart-title">Billable Distribution</h3>
                         <p class="rpt-chart-sub">Ratio of billable to non-billable hours across all entries.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityBillableChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_totals.entries %}
                     <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityBillableChart"></canvas></div>
@@ -488,6 +492,7 @@
                         <h3 class="rpt-chart-title">Requests by Requestor</h3>
                         <p class="rpt-chart-sub">Which requestors create the most tickets.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="accountManagerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if account_manager_stats %}
                     <div class="rpt-canvas-wrap"><canvas id="accountManagerChart"></canvas></div>
@@ -504,6 +509,7 @@
                         <h3 class="rpt-chart-title">Requests by Engineer</h3>
                         <p class="rpt-chart-sub">Includes unassigned requests to indicate backlog.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="engineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if engineer_stats %}
                     <div class="rpt-canvas-wrap"><canvas id="engineerChart"></canvas></div>
@@ -524,6 +530,7 @@
                         <h3 class="rpt-chart-title">Engagement Types</h3>
                         <p class="rpt-chart-sub">Opportunity, Support, Training, and Inquiry volumes.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="engagementChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if engagement_chart_has_data %}
                     <div class="rpt-canvas-wrap"><canvas id="engagementChart"></canvas></div>
@@ -540,6 +547,7 @@
                         <h3 class="rpt-chart-title">Product Categories</h3>
                         <p class="rpt-chart-sub">Azure, M365, VMware, and other product volumes.</p>
                     </div>
+                    <button class="rpt-expand-btn ms-auto" data-expand-chart="productChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if product_chart_has_data %}
                     <div class="rpt-canvas-wrap"><canvas id="productChart"></canvas></div>
@@ -657,6 +665,19 @@
 
 {% endif %}
 
+{# ── Chart expand modal ──────────────────────────────────────────────────── #}
+<div class="rpt-chart-modal" id="rptChartModal" role="dialog" aria-modal="true" aria-labelledby="rptChartModalTitle">
+    <div class="rpt-chart-modal__inner">
+        <div class="rpt-chart-modal__header">
+            <span class="rpt-chart-modal__title" id="rptChartModalTitle"></span>
+            <button class="rpt-chart-modal__close" id="rptChartModalClose" title="Close"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="rpt-chart-modal__canvas-wrap">
+            <canvas id="rptModalCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {
@@ -744,10 +765,12 @@
         },
     };
 
+    const chartBuilders = {};
+
     // ── Stacked bar factory ──────────────────────────────────────────────────
     function makeStackedBar(canvas, payload, cA, cB) {
         if (!canvas || !payload?.labels?.length) return;
-        new Chart(canvas, {
+        const buildFn = (tgt) => new Chart(tgt, {
             type: 'bar',
             data: {
                 labels: payload.labels,
@@ -772,12 +795,14 @@
             },
             plugins: [totalLabelsPlugin],
         });
+        buildFn(canvas);
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: canvas.closest('.rpt-chart-card')?.querySelector('.rpt-chart-title')?.textContent?.trim() || '' };
     }
 
     // ── Activity hour bar factory ────────────────────────────────────────────
     function makeHourBar(canvas, payload, cA, cB) {
         if (!canvas || !payload?.labels?.length) return;
-        new Chart(canvas, {
+        const buildFn = (tgt) => new Chart(tgt, {
             type: 'bar',
             data: {
                 labels: payload.labels,
@@ -800,12 +825,14 @@
                 },
             },
         });
+        buildFn(canvas);
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: canvas.closest('.rpt-chart-card')?.querySelector('.rpt-chart-title')?.textContent?.trim() || '' };
     }
 
     // ── Doughnut factory ─────────────────────────────────────────────────────
     function makeDonut(canvas, payload, bgColors, brColors, labelFn) {
         if (!canvas || !payload?.labels?.length) return;
-        new Chart(canvas, {
+        const buildFn = (tgt) => new Chart(tgt, {
             type: 'doughnut',
             data: { labels: payload.labels, datasets: [{ data: payload.totals, backgroundColor: bgColors, borderColor: brColors, borderWidth: 2, hoverOffset: 10, borderRadius: 5 }] },
             options: {
@@ -816,6 +843,8 @@
                 plugins: { legend: legendCfg, tooltip: { ...tooltipCfg, callbacks: { label: labelFn } } },
             },
         });
+        buildFn(canvas);
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: canvas.closest('.rpt-chart-card')?.querySelector('.rpt-chart-title')?.textContent?.trim() || '' };
     }
 
     const rptView = '{{ report_view }}';
@@ -849,6 +878,39 @@
             makeDonut(document.getElementById('activityBillableChart'), p, [P.green.bg, P.gray.bg], [P.green.b, P.gray.b], ctx => { const v = ctx.raw ?? ctx.parsed; return `${ctx.label}: ${typeof v === 'number' ? v.toFixed(1) + ' hrs' : v}`; });
         }
     }
+    // ── Chart expand modal ───────────────────────────────────────────────────
+    (function () {
+        const modal    = document.getElementById('rptChartModal');
+        const titleEl  = document.getElementById('rptChartModalTitle');
+        const closeBtn = document.getElementById('rptChartModalClose');
+        if (!modal) return;
+        let activeChart = null;
+
+        function openModal(id) {
+            const entry = chartBuilders[id];
+            if (!entry) return;
+            titleEl.textContent = entry.title;
+            if (activeChart) { activeChart.destroy(); activeChart = null; }
+            modal.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                const mc = document.getElementById('rptModalCanvas');
+                if (mc) activeChart = entry.build(mc);
+            });
+        }
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            document.body.style.overflow = '';
+        }
+
+        document.querySelectorAll('[data-expand-chart]').forEach(btn => {
+            btn.addEventListener('click', () => openModal(btn.dataset.expandChart));
+        });
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal(); });
+    })();
 })();
 </script>
 {% endblock %}
