@@ -5536,6 +5536,184 @@ body.view-mobile .rpt-kpi-row {
 }
 body.view-mobile .rpt-kpi { min-width: 0; }
 
+/* ══════════════════════════════════════════════════════════
+   16. REPORTS PAGE — fully isolated mobile overrides
+       (All rules prefixed body.view-mobile — zero desktop bleed)
+   ══════════════════════════════════════════════════════════ */
+
+/* ─── Report page header ─── */
+/* Force the controls row (tab group + export) to sit directly under the title
+   and scroll horizontally when the 390px frame is too narrow */
+body.view-mobile .d-flex:has(.rpt-tab-group) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
+    padding-bottom: 2px;
+}
+body.view-mobile .d-flex:has(.rpt-tab-group)::-webkit-scrollbar { display: none; }
+
+/* ─── Tab group (Operational / Activity Logs) ─── */
+body.view-mobile .rpt-tab-group {
+    flex-shrink: 0;
+    padding: 2px;
+    gap: 2px;
+    border-radius: 10px;
+}
+body.view-mobile .rpt-tab {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* ─── KPI row: override the generic single-column row rule → 2-column grid ─── */
+/* Use > [class*="col-"] > .rpt-kpi-card to avoid matching outer wrapper rows
+   that only contain KPI cards as deeper descendants */
+body.view-mobile .row:has(> [class*="col-"] > .rpt-kpi-card) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: unset !important;
+    gap: 0.45rem;
+}
+body.view-mobile .row:has(> [class*="col-"] > .rpt-kpi-card) > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    flex: unset !important;
+}
+
+/* ─── KPI cards — compact ─── */
+body.view-mobile .rpt-kpi-card {
+    padding: 0.85rem 0.75rem 0.7rem !important;
+    border-radius: 14px;
+}
+body.view-mobile .rpt-kpi-icon {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 0.78rem !important;
+    border-radius: 7px !important;
+    margin-bottom: 0.4rem !important;
+}
+body.view-mobile .rpt-kpi-value {
+    font-size: 1.5rem !important;
+    margin-bottom: 0.1rem !important;
+}
+body.view-mobile .rpt-kpi-sub {
+    /* Hide the sub-label to save vertical space in mobile cards */
+    display: none !important;
+}
+body.view-mobile .rpt-kpi-label {
+    font-size: 0.6rem !important;
+    letter-spacing: 0.04em !important;
+}
+
+/* ─── Chart cards — compact header, reduced canvas height ─── */
+body.view-mobile .rpt-chart-card {
+    padding: 1rem 0.85rem !important;
+}
+body.view-mobile .rpt-chart-head {
+    gap: 0.45rem;
+    margin-bottom: 0.65rem;
+    flex-wrap: wrap;
+    align-items: flex-start !important;
+}
+body.view-mobile .rpt-chart-icon {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 0.78rem !important;
+    border-radius: 7px !important;
+    margin-top: 0 !important;
+    flex-shrink: 0 !important;
+}
+body.view-mobile .rpt-chart-title {
+    font-size: 0.76rem !important;
+    margin-bottom: 0 !important;
+}
+body.view-mobile .rpt-chart-sub {
+    /* Hide long subtitle text on narrow mobile frame */
+    display: none !important;
+}
+body.view-mobile .rpt-expand-btn {
+    /* Keep expand button but reduce size */
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 0.7rem !important;
+}
+
+/* ─── Chart canvases — reduce height so 2+ charts fit without too much scroll ─── */
+body.view-mobile .rpt-canvas-wrap {
+    min-height: 195px !important;
+    flex: none !important;
+    height: 195px;
+}
+body.view-mobile .rpt-canvas-wrap--donut {
+    min-height: 175px !important;
+    height: 175px;
+}
+
+/* ─── Period badge ─── */
+body.view-mobile .rpt-period-badge {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.6rem;
+}
+
+/* ─── Activity filter form ─── */
+body.view-mobile .rpt-activity-filter .row {
+    flex-direction: column !important; /* already handled by generic rule; reinforce */
+}
+
+/* ─── Activity log table — hide non-essential columns to fit 390px ─── */
+/* Hidden: # (col 1) and Location (col 7) — reduces ~120px of horizontal space */
+body.view-mobile .rpt-activity-table th:nth-child(1),
+body.view-mobile .rpt-activity-table td:nth-child(1) { display: none; }   /* # */
+body.view-mobile .rpt-activity-table th:nth-child(7),
+body.view-mobile .rpt-activity-table td:nth-child(7) { display: none; }   /* Location */
+
+body.view-mobile .rpt-activity-table {
+    font-size: 0.72rem !important;
+    min-width: 420px;               /* allow horizontal scroll, but thinner than before */
+}
+body.view-mobile .rpt-activity-table th,
+body.view-mobile .rpt-activity-table td {
+    padding: 0.32rem 0.38rem !important;
+    white-space: nowrap;
+}
+
+/* ─── Eng avatar in activity table — smaller ─── */
+body.view-mobile .rpt-eng-avatar {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 0.62rem !important;
+}
+body.view-mobile .rpt-date-chip { font-size: 0.72rem; }
+body.view-mobile .rpt-account-name { font-size: 0.72rem; }
+body.view-mobile .rpt-hours-badge { font-size: 0.72rem; padding: 0.15rem 0.45rem; }
+body.view-mobile .rpt-edit-btn { width: 22px; height: 22px; font-size: 0.7rem; }
+
+/* ─── Breakdown tables (Requestor / Engineer allocation) — compact ─── */
+body.view-mobile .rpt-table-head th {
+    font-size: 0.65rem !important;
+    padding: 0.3rem 0.45rem !important;
+}
+
+/* ─── Log count badge ─── */
+body.view-mobile .rpt-log-count-badge { font-size: 0.72rem; padding: 0.25rem 0.6rem; }
+
+/* ─── Pagination row — horizontal-scroll ─── */
+body.view-mobile .rpt-log-pagination {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+}
+body.view-mobile .rpt-page-btn {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.72rem !important;
+    border-radius: 7px !important;
+}
+
 
 .rpt-expand-btn {
     flex-shrink: 0;
