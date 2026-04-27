@@ -39,11 +39,11 @@
                         <a class="btn btn-sm {% if show_filters or filters_active %}btn-light text-primary{% else %}btn-outline-light{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
                             <i class="bi {% if show_filters or filters_active %}bi-funnel-fill{% else %}bi-funnel{% endif %}"></i>
                         </a>
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">All: {{ status_counts.all }}</span>
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Ongoing: {{ status_counts.ongoing }}</span>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Completed: {{ status_counts.completed }}</span>
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Overdue: {{ overdue_count }}</span>
-                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-export' %}">Export CSV</a>
+                        <span class="dbd-stat-pill dbd-stat-pill--blue"><i class="bi bi-layers-fill"></i><span class="dbd-stat-pill__label">All</span><span class="dbd-stat-pill__value">{{ status_counts.all }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--amber"><i class="bi bi-hourglass-split"></i><span class="dbd-stat-pill__label">Ongoing</span><span class="dbd-stat-pill__value">{{ status_counts.ongoing }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--green"><i class="bi bi-check-circle-fill"></i><span class="dbd-stat-pill__label">Completed</span><span class="dbd-stat-pill__value">{{ status_counts.completed }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--red"><i class="bi bi-exclamation-triangle-fill"></i><span class="dbd-stat-pill__label">Overdue</span><span class="dbd-stat-pill__value">{{ overdue_count }}</span></span>
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-export' %}"><i class="bi bi-download me-1"></i>Export CSV</a>
                     </div>
                 {% endif %}
             </div>
