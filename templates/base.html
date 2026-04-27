@@ -105,6 +105,16 @@
         </div>
     </nav>
     <script>
+        // Apply view-mobile class immediately to avoid flash of wrong layout
+        (function() {
+            try {
+                if (localStorage.getItem('reqHubViewMode') === 'mobile') {
+                    document.body.classList.add('view-mobile');
+                }
+            } catch (_) {}
+        })();
+    </script>
+    <script>
         (function() {
             // Theme Toggle Logic
             const toggle = document.getElementById('theme-checkbox');

@@ -4711,6 +4711,7 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     gap: 0.35rem;
     margin-bottom: 1.25rem;
     border-bottom: 1px solid rgba(255,255,255,0.1);
+    align-items: center;
 }
 
 .profile-tab {
@@ -4725,6 +4726,79 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     transition: color 0.15s ease, border-color 0.15s ease;
     margin-bottom: -1px;
     border-radius: 0;
+}
+
+/* ── Inline view-mode toggle inside .profile-tabs ── */
+.profile-tabs__vmt {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 3px 4px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.profile-vmt__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.42);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    letter-spacing: 0.02em;
+    border: none;
+    background: transparent;
+    transition:
+        background 0.18s ease,
+        color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s var(--spring);
+}
+.profile-vmt__btn i { font-size: 12.5px; line-height: 1; }
+.profile-vmt__btn--active {
+    background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(47, 108, 243, 0.4);
+    transform: scale(1.04);
+}
+.profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.08);
+}
+.profile-vmt__divider {
+    display: block;
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.13);
+    flex-shrink: 0;
+}
+
+/* Light-mode overrides for the inline toggle */
+body:not(.dark-mode) .profile-tabs__vmt {
+    background: rgba(15, 23, 42, 0.08);
+    border-color: rgba(15, 23, 42, 0.22);
+}
+body:not(.dark-mode) .profile-vmt__btn { color: rgba(15, 23, 42, 0.55); }
+body:not(.dark-mode) .profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
+    color: rgba(15, 23, 42, 0.82);
+    background: rgba(15, 23, 42, 0.1);
+}
+body:not(.dark-mode) .profile-vmt__divider { background: rgba(15, 23, 42, 0.2); }
+body:not(.dark-mode) .profile-vmt__btn--active {
+    box-shadow: 0 2px 8px rgba(47, 108, 243, 0.35);
+}
+
+/* Mobile: stack view-mode below tabs */
+body.view-mobile .profile-tabs__vmt {
+    margin-top: 4px;
 }
 
 .profile-tab:hover { color: #e2e8f0; }
@@ -5236,6 +5310,161 @@ body.dark-mode .ai-chat-close-btn {
     margin-bottom: 1.2rem;
 }
 /* ── Chart expand button ── */
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE VIEW MODE  (body.view-mobile)
+   ══════════════════════════════════════════════════════════ */
+
+/* ─── Phone-width column, centered with a device-like frame ─── */
+body.view-mobile > main.container {
+    max-width: 390px !important;       /* ~iPhone 14 viewport width */
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    min-height: calc(100vh - 70px);
+    border-left: 1.5px solid rgba(99, 102, 241, 0.18);
+    border-right: 1.5px solid rgba(99, 102, 241, 0.18);
+    box-shadow:
+        -12px 0 36px rgba(99, 102, 241, 0.06),
+         12px 0 36px rgba(99, 102, 241, 0.06);
+    position: relative;
+}
+body:not(.dark-mode).view-mobile > main.container {
+    border-left-color: rgba(99, 102, 241, 0.22);
+    border-right-color: rgba(99, 102, 241, 0.22);
+    box-shadow:
+        -12px 0 36px rgba(99, 102, 241, 0.08),
+         12px 0 36px rgba(99, 102, 241, 0.08);
+}
+
+/* ─── Mobile preview indicator strip ─── */
+body.view-mobile > main.container::before {
+    content: "\2022\0020Mobile Preview";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(99, 102, 241, 0.55);
+    padding: 5px 0 7px;
+    margin-bottom: 0.85rem;
+    border-bottom: 1px dashed rgba(99, 102, 241, 0.18);
+}
+
+/* ─── Force hamburger navbar inside the narrow frame ─── */
+body.view-mobile .navbar-expand-lg {
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-toggler {
+    display: inline-flex !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-collapse:not(.show):not(.collapsing) {
+    display: none !important;
+    flex-basis: 100% !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-collapse.show,
+body.view-mobile .navbar-expand-lg .navbar-collapse.collapsing {
+    display: block !important;
+    flex-basis: 100% !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-nav {
+    flex-direction: column !important;
+}
+
+/* ─── Single-column grid ─── */
+body.view-mobile .row {
+    flex-direction: column;
+}
+body.view-mobile .row > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* ─── Cards ─── */
+body.view-mobile .glass-card {
+    border-radius: 16px;
+    padding: 0.9rem 0.85rem !important;
+}
+body.view-mobile .glass-card .glass-card {
+    border-radius: 12px;
+    padding: 0.65rem 0.75rem !important;
+}
+
+/* ─── Typography scale ─── */
+body.view-mobile h4, body.view-mobile .h4 { font-size: 1rem !important; }
+body.view-mobile h5, body.view-mobile .h5 { font-size: 0.9rem !important; }
+body.view-mobile h6, body.view-mobile .h6 { font-size: 0.82rem !important; }
+body.view-mobile p, body.view-mobile li { font-size: 0.82rem; }
+
+/* ─── Tables — horizontal scroll, compact ─── */
+body.view-mobile .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+body.view-mobile table { min-width: 320px; font-size: 0.78rem; }
+body.view-mobile .table th,
+body.view-mobile .table td { padding: 0.4rem 0.55rem; white-space: nowrap; }
+
+/* ─── Buttons & forms ─── */
+body.view-mobile .btn { font-size: 0.78rem; padding: 0.38rem 0.85rem; }
+body.view-mobile .btn-sm { font-size: 0.72rem; padding: 0.3rem 0.65rem; }
+body.view-mobile .form-control,
+body.view-mobile .form-select { font-size: 0.82rem; padding: 0.38rem 0.65rem; }
+body.view-mobile label { font-size: 0.78rem; }
+
+/* ─── Profile page — compact ─── */
+body.view-mobile .profile-page { max-width: 100% !important; }
+body.view-mobile .profile-hero__banner { height: 72px !important; }
+body.view-mobile .profile-hero__body { padding: 0 0.6rem 0.75rem; }
+body.view-mobile .profile-hero__avatar-wrap { margin-top: -32px !important; }
+body.view-mobile .profile-hero__avatar,
+body.view-mobile .profile-hero__avatar--placeholder {
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 1.35rem !important;
+}
+body.view-mobile .profile-hero__name { font-size: 0.95rem !important; }
+body.view-mobile .profile-hero__meta,
+body.view-mobile .profile-hero__role-badge { font-size: 0.68rem !important; }
+body.view-mobile .profile-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.1rem;
+    padding-bottom: 2px;
+}
+body.view-mobile .profile-tabs::-webkit-scrollbar { display: none; }
+body.view-mobile .profile-tab {
+    padding: 0.45rem 0.7rem !important;
+    font-size: 0.75rem !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+body.view-mobile .profile-tabs__vmt {
+    flex-shrink: 0;
+    transform: scale(0.88);
+    transform-origin: right center;
+}
+body.view-mobile .profile-card { padding: 0.9rem !important; }
+body.view-mobile .profile-avatar-section { flex-direction: column; align-items: center; gap: 0.85rem; }
+body.view-mobile .profile-avatar-preview,
+body.view-mobile .profile-avatar-preview--placeholder { width: 76px !important; height: 76px !important; }
+body.view-mobile .banner-swatch-grid { grid-template-columns: repeat(3, 1fr) !important; }
+
+/* ─── Dashboard stats ─── */
+body.view-mobile .dbd-stat-pill { min-width: 0; }
+body.view-mobile .dbd-stats-row { flex-direction: column; gap: 0.45rem; }
+
+/* ─── Reports KPI row ─── */
+body.view-mobile .rpt-kpi-row { flex-direction: column; gap: 0.45rem; }
+body.view-mobile .rpt-kpi { min-width: 0; }
+
+
 .rpt-expand-btn {
     flex-shrink: 0;
     width: 28px;

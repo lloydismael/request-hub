@@ -54,6 +54,16 @@
         <button class="profile-tab" data-profile-tab="banner" id="banner-tab-btn">
             <i class="bi bi-image-fill me-1"></i>Edit Banner
         </button>
+        {# ── View mode toggle — inline in tab bar ── #}
+        <div class="profile-tabs__vmt ms-auto" id="profile-vmt-clone" role="group" aria-label="View mode">
+            <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
+                <i class="bi bi-pc-display"></i><span>Desktop</span>
+            </button>
+            <span class="profile-vmt__divider" aria-hidden="true"></span>
+            <button class="profile-vmt__btn" data-vmt="mobile" type="button" title="Mobile view" aria-pressed="false">
+                <i class="bi bi-phone-fill"></i><span>Mobile</span>
+            </button>
+        </div>
     </div>
 
     {# ── Main form ─────────────────────────────────────────── #}
@@ -329,6 +339,29 @@
         });
     }
 }());
+
+// ── Profile page: inline view-mode toggle ──
+(function () {
+    const VMT_KEY = 'reqHubViewMode';
+    const btns = document.querySelectorAll('#profile-vmt-clone [data-vmt]');
+    if (!btns.length) return;
+
+    const applyMode = (mode) => {
+        document.body.classList.toggle('view-mobile', mode === 'mobile');
+        try { localStorage.setItem(VMT_KEY, mode); } catch (_) {}
+        btns.forEach((btn) => {
+            const isActive = btn.dataset.vmt === mode;
+            btn.classList.toggle('profile-vmt__btn--active', isActive);
+            btn.setAttribute('aria-pressed', String(isActive));
+        });
+    };
+
+    const saved = (() => { try { return localStorage.getItem(VMT_KEY); } catch (_) { return null; } })();
+    applyMode(saved === 'mobile' ? 'mobile' : 'desktop');
+
+    btns.forEach((btn) => {
+        btn.addEventListener('click', () => applyMode(btn.dataset.vmt));
+    });
+}());
 </script>
 {% endblock %}
-
