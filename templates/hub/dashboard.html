@@ -14,30 +14,36 @@
 {% block content %}
 <div class="row g-4">
     <div class="{% if role == 'admin' %}col-12 col-xl-12{% elif role == 'engineer' %}col-12 col-xl-12{% else %}col-12{% endif %}">
-    <div class="glass-card p-4 mb-5 {% if role == 'admin' %}glass-card--expanded{% elif is_requestor_ui %}glass-card--expanded{% endif %}">
+        <div class="glass-card p-4 mb-5 glass-card--expanded">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
                 {% if role == 'engineer' %}
                     <ul class="nav nav-pills">
                         <li class="nav-item">
-                            <a class="nav-link {% if active_tab != 'backup' %}active{% endif %}" href="?tab=assigned">Assigned Requests</a>
+                            <a class="nav-link {% if active_tab != 'backup' and active_tab != 'report' %}active{% endif %}" href="?tab=assigned"><i class="bi bi-clipboard2-check-fill me-1"></i>Assigned Requests</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="?tab=backup">Backup Requests</a>
+                            <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="?tab=backup"><i class="bi bi-shield-check me-1"></i>Backup Requests</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if active_tab == 'report' %}active{% endif %}" href="?tab=report"><i class="bi bi-bar-chart-line-fill me-1"></i>Report Request Graph</a>
                         </li>
                     </ul>
                 {% else %}
-                    <h2 class="h5 mb-0">{% if is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    <h2 class="h5 mb-0"><i class="bi {% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %}{% elif is_requestor_ui %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %} me-2"></i>{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
                 {% endif %}
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
+                        {% if can_create_request %}
+                            <button type="button" class="btn btn-sm btn-primary" id="new-request-btn">New Request</button>
+                        {% endif %}
                         <a class="btn btn-sm {% if show_filters or filters_active %}btn-light text-primary{% else %}btn-outline-light{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
                             <i class="bi {% if show_filters or filters_active %}bi-funnel-fill{% else %}bi-funnel{% endif %}"></i>
                         </a>
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">All: {{ status_counts.all }}</span>
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Ongoing: {{ status_counts.ongoing }}</span>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Completed: {{ status_counts.completed }}</span>
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Overdue: {{ overdue_count }}</span>
-                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-export' %}">Export CSV</a>
+                        <span class="dbd-stat-pill dbd-stat-pill--blue"><i class="bi bi-layers-fill"></i><span class="dbd-stat-pill__label">All</span><span class="dbd-stat-pill__value">{{ status_counts.all }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--amber"><i class="bi bi-hourglass-split"></i><span class="dbd-stat-pill__label">Ongoing</span><span class="dbd-stat-pill__value">{{ status_counts.ongoing }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--green"><i class="bi bi-check-circle-fill"></i><span class="dbd-stat-pill__label">Completed</span><span class="dbd-stat-pill__value">{{ status_counts.completed }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--red"><i class="bi bi-exclamation-triangle-fill"></i><span class="dbd-stat-pill__label">Overdue</span><span class="dbd-stat-pill__value">{{ overdue_count }}</span></span>
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-export' %}"><i class="bi bi-download me-1"></i>Export CSV</a>
                     </div>
                 {% endif %}
             </div>
@@ -60,12 +66,24 @@
                     <button type="button" class="btn btn-primary requestor-summary__cta" id="new-request-btn">New Request</button>
                 </div>
                 <ul class="nav nav-pills mb-4" id="requestor-dashboard-tabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true">Requests</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false">Request Report Graph</button>
-                    </li>
+                    {% if is_pm_ess %}
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link {% if pm_ess_request_tab != 'mine' %}active{% endif %}" id="request-list-tab" href="{{ pm_ess_request_tab_links.all }}"><i class="bi bi-inbox-fill me-1"></i>All Requests</a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link {% if pm_ess_request_tab == 'mine' %}active{% endif %}" id="request-list-mine-tab" href="{{ pm_ess_request_tab_links.mine }}"><i class="bi bi-person-lines-fill me-1"></i>My Requests</a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false"><i class="bi bi-bar-chart-line-fill me-1"></i>Request Report Graph</button>
+                        </li>
+                    {% else %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="request-list-tab" data-bs-toggle="pill" data-bs-target="#request-list-pane" type="button" role="tab" aria-controls="request-list-pane" aria-selected="true"><i class="bi bi-inbox-fill me-1"></i>Requests</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="request-report-graph-tab" data-bs-toggle="pill" data-bs-target="#request-report-graph-pane" type="button" role="tab" aria-controls="request-report-graph-pane" aria-selected="false"><i class="bi bi-bar-chart-line-fill me-1"></i>Request Report Graph</button>
+                        </li>
+                    {% endif %}
                 </ul>
                 <div class="tab-content" id="requestor-dashboard-tab-content">
                     <div class="tab-pane fade show active" id="request-list-pane" role="tabpanel" aria-labelledby="request-list-tab" tabindex="0">
@@ -119,8 +137,52 @@
                     </div>
                 </div>
             {% elif role == 'engineer' %}
-                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4 dashboard-metrics">
-                    <div class="col">
+                {% if active_tab == 'report' %}
+                    <div class="row g-4 mt-2 mb-5">
+                        <div class="col-12 col-md-4">
+                            <div class="glass-card p-4 h-100 text-center border-0 shadow-sm">
+                                <h3 class="h6 text-secondary fw-semibold text-uppercase mb-3">Avg Acknowledgement Response Time</h3>
+                                <div class="fs-1 fw-bold text-primary">{{ engineer_report_data.avg_ack_time }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="glass-card p-4 h-100 text-center border-0 shadow-sm">
+                                <h3 class="h6 text-secondary fw-semibold text-uppercase mb-3">Avg Request Resolution Time</h3>
+                                <div class="fs-1 fw-bold text-success">{{ engineer_report_data.avg_resolution_time }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="glass-card p-4 h-100 text-center border-0 shadow-sm">
+                                <h3 class="h6 text-secondary fw-semibold text-uppercase mb-3">Avg Requests Per Week</h3>
+                                <div class="fs-1 fw-bold text-warning">{{ engineer_report_data.avg_requests_per_week }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-4">
+                            <div class="glass-card p-4 border-0 shadow-sm">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+                                    <div>
+                                        <h3 class="h5 mb-1 text-secondary fw-semibold">Count of Requests by Requestor</h3>
+                                        <p class="small text-muted mb-0">Assigned requests grouped by who raised them. Hover a bar for the exact count and share of total.</p>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2" id="engineer-requestor-chart-summary" aria-hidden="true">
+                                        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2" data-summary="total">Total: 0</span>
+                                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2" data-summary="top">Top: &mdash;</span>
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2" data-summary="requestors">Requestors: 0</span>
+                                    </div>
+                                </div>
+                                <div class="activity-chart-wrap" id="engineer-requestor-chart-wrap" style="height: 360px;">
+                                    <canvas id="engineer-requestor-chart"></canvas>
+                                </div>
+                                <div class="small text-muted mt-3 d-flex flex-wrap align-items-center gap-3">
+                                    <span><span class="d-inline-block rounded-circle align-middle me-1" style="width:10px;height:10px;background:#2563eb;"></span>Requests assigned</span>
+                                    <span class="text-muted">Sorted highest to lowest &bull; Numbers on each bar show the exact count.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4 dashboard-metrics">
+                        <div class="col">
                         <a href="{{ metric_links.ongoing }}" class="dashboard-metric-card-link d-block text-decoration-none text-reset" role="button" aria-pressed="{% if active_metric_filter == 'ongoing' %}true{% else %}false{% endif %}">
                             <div class="dashboard-metric-card {% if active_metric_filter == 'ongoing' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Ongoing</span>
@@ -157,6 +219,7 @@
                         </a>
                     </div>
                 </div>
+                {% endif %}
             {% elif is_requestor_ui %}
                 <div class="row row-cols-1 row-cols-sm-2 g-3 mb-4 dashboard-metrics">
                     <div class="col">
@@ -253,6 +316,7 @@
                     </div>
                 </form>
             {% endif %}
+            {% if role != 'engineer' or active_tab != 'report' %}
             <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}">
                 <table class="table align-middle table-nowrap{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
                     <thead>
@@ -417,8 +481,46 @@
                                         <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
                                     </td>
                                 {% elif role == 'engineer' %}
-                                    <td>
+                                    <td class="engineer-id-cell{% if item.ack_sla_status %} request-id-cell request-id-cell--{{ item.ack_sla_status }}{% endif %}">
                                         <a href="{% url 'hub:request-manage-collab' item.pk %}" class="text-reset text-decoration-none fw-bold" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
+                                        <div class="engineer-id-cell__meta d-flex flex-wrap align-items-center gap-1 mt-1">
+                                            {% if item.status_log_count and item.status_log_count > 0 %}
+                                                <span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle d-inline-flex align-items-center gap-1"
+                                                      data-bs-toggle="tooltip"
+                                                      title="{{ item.latest_status_log_tooltip|default:'Status log updated' }}">
+                                                    <i class="bi bi-chat-left-text"></i>
+                                                    <span>{{ item.status_log_count }}</span>
+                                                </span>
+                                            {% endif %}
+                                            {% if item.has_recent_changes %}
+                                                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle d-inline-flex align-items-center gap-1"
+                                                      data-bs-toggle="tooltip"
+                                                      title="{{ item.recent_change_tooltip|default:'Request details were updated' }}">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                    <span>Edited</span>
+                                                </span>
+                                            {% endif %}
+                                            {% if item.ack_start_iso and item.status != 'completed' %}
+                                                {% if item.is_acknowledged %}
+                                                    <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle d-inline-flex align-items-center gap-1"
+                                                          data-bs-toggle="tooltip"
+                                                          title="{{ item.ack_sla_tooltip }}">
+                                                        <i class="bi bi-check2-circle"></i>
+                                                        <span>Ack</span>
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge rounded-pill engineer-ack-timer engineer-ack-timer--{{ item.ack_sla_status|default:'neutral' }} d-inline-flex align-items-center gap-1"
+                                                          data-ack-timer
+                                                          data-ack-start="{{ item.ack_start_iso }}"
+                                                          data-bs-toggle="tooltip"
+                                                          title="{{ item.ack_sla_tooltip }}">
+                                                        <i class="bi bi-stopwatch"></i>
+                                                        <span class="engineer-ack-timer__label">Ack pending</span>
+                                                        <span class="engineer-ack-timer__value">…</span>
+                                                    </span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
                                     </td>
                                 {% else %}
                                     <td title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</td>
@@ -641,10 +743,14 @@
                                     <div class="d-inline-flex gap-2">
                                         {% if role == 'admin' %}
                                             <a class="btn btn-sm btn-primary" href="{% url 'hub:request-manage' item.pk %}">Manage</a>
-                                            <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
-                                                {% csrf_token %}
-                                                <button class="btn btn-sm btn-outline-success" type="submit">Outlook</button>
-                                            </form>
+                                            {% if item.is_acknowledged %}
+                                                <button class="btn btn-sm btn-outline-success" type="button" disabled title="Request has already been acknowledged">Outlook</button>
+                                            {% else %}
+                                                <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button class="btn btn-sm btn-outline-success" type="submit">Outlook</button>
+                                                </form>
+                                            {% endif %}
                                             {% if item.teams_chat_url %}
                                                 <a class="btn btn-sm btn-outline-info" href="{{ item.teams_chat_url }}" target="_blank" rel="noopener">Teams</a>
                                             {% else %}
@@ -665,10 +771,14 @@
                                             <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
                                         {% else %}
                                             <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
-                                            <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
-                                                {% csrf_token %}
-                                                <button class="btn btn-sm btn-outline-success" type="submit"{% if item.outlook_limit_reached %} disabled title="Outlook draft already launched for this request."{% endif %}>Outlook</button>
-                                            </form>
+                                            {% if item.is_acknowledged %}
+                                                <button class="btn btn-sm btn-outline-success" type="button" disabled title="Request has already been acknowledged">Outlook</button>
+                                            {% else %}
+                                                <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button class="btn btn-sm btn-outline-success" type="submit"{% if item.outlook_limit_reached %} disabled title="Outlook draft already launched for this request."{% endif %}>Outlook</button>
+                                                </form>
+                                            {% endif %}
                                             {% if item.teams_chat_url %}
                                                 <form method="post" action="{% url 'hub:request-teams' item.pk %}" class="d-inline">
                                                     {% csrf_token %}
@@ -689,29 +799,10 @@
                     </tbody>
                 </table>
             </div>
+            {% endif %}
             {% if is_requestor_ui %}
                     </div>
                     <div class="tab-pane fade" id="request-report-graph-pane" role="tabpanel" aria-labelledby="request-report-graph-tab" tabindex="0">
-                        <div class="row g-3 mb-3">
-                            <div class="col-12 col-md-4">
-                                <div class="glass-card p-3 h-100">
-                                    <div class="small text-uppercase text-muted">Total Requests</div>
-                                    <div class="h4 mb-0">{{ request_report_summary.total }}</div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <div class="glass-card p-3 h-100">
-                                    <div class="small text-uppercase text-muted">Ongoing</div>
-                                    <div class="h4 mb-0">{{ request_report_summary.ongoing }}</div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <div class="glass-card p-3 h-100">
-                                    <div class="small text-uppercase text-muted">Completed</div>
-                                    <div class="h4 mb-0">{{ request_report_summary.completed }}</div>
-                                </div>
-                            </div>
-                        </div>
                         <div class="row g-4">
                             <div class="col-12 col-lg-6">
                                 <div class="glass-card p-3">
@@ -752,7 +843,7 @@
         </div>
     </div>
 </div>
-{% if is_requestor_ui %}
+{% if is_requestor_ui or can_create_request %}
     <div class="requestor-modal" id="create-request-modal" aria-hidden="true" data-open-on-load="{% if form_has_errors %}true{% else %}false{% endif %}">
         <div class="requestor-modal__backdrop" id="create-request-backdrop"></div>
         <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-request-title">
@@ -943,9 +1034,11 @@
         })();
     </script>
 {% endif %}
-{% if is_requestor_ui %}
-    {{ request_report_data|json_script:"requestor-report-data" }}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% if is_requestor_ui or can_create_request %}
+    {% if is_requestor_ui %}
+        {{ request_report_data|json_script:"requestor-report-data" }}
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    {% endif %}
     <script>
         (function () {
             const modal = document.getElementById("create-request-modal");
@@ -995,6 +1088,8 @@
             });
 
             const engagementSelect = modal.querySelector("#id_engagement_type");
+            const assigneeSelect = modal.querySelector("#id_engineer");
+            const assigneeLabel = modal.querySelector('label[for="id_engineer"]');
             const priorityGroup = modal.querySelector('[data-priority-group]');
             const prioritySelect = modal.querySelector('[data-priority-select="true"]');
             const defaultPriority = prioritySelect ? prioritySelect.getAttribute('data-default-priority') || "" : "";
@@ -1085,10 +1180,41 @@
                 updateDeploymentSummary();
             };
 
+            const syncPreferredAssignee = () => {
+                if (!engagementSelect || !assigneeSelect || !assigneeLabel) {
+                    return;
+                }
+                const projectManagementValue = assigneeSelect.dataset.projectManagementValue || 'project_management';
+                const engineerLabel = assigneeSelect.dataset.engineerLabel || 'Preferred Engineer';
+                const projectManagerLabel = assigneeSelect.dataset.projectManagerLabel || 'Preferred Project Manager';
+                const engineerEmptyLabel = assigneeSelect.dataset.engineerEmptyLabel || 'Select preferred engineer';
+                const projectManagerEmptyLabel = assigneeSelect.dataset.projectManagerEmptyLabel || 'Select preferred project manager';
+                const isProjectManagement = engagementSelect.value === projectManagementValue;
+
+                assigneeLabel.textContent = isProjectManagement ? projectManagerLabel : engineerLabel;
+
+                Array.from(assigneeSelect.options).forEach((option, index) => {
+                    if (index === 0) {
+                        option.hidden = false;
+                        option.textContent = isProjectManagement ? projectManagerEmptyLabel : engineerEmptyLabel;
+                        return;
+                    }
+                    const roleGroup = option.dataset.roleGroup || 'engineer';
+                    const shouldShow = isProjectManagement ? roleGroup === 'project_manager' : roleGroup !== 'project_manager';
+                    option.hidden = !shouldShow;
+                });
+
+                const selectedOption = assigneeSelect.options[assigneeSelect.selectedIndex];
+                if (selectedOption && selectedOption.hidden) {
+                    assigneeSelect.value = '';
+                }
+            };
+
             if (engagementSelect) {
                 engagementSelect.addEventListener("change", () => {
                     syncPriorityVisibility();
                     syncDeploymentVisibility();
+                    syncPreferredAssignee();
                 }, { passive: true });
             }
 
@@ -1101,6 +1227,7 @@
 
             syncPriorityVisibility();
             syncDeploymentVisibility();
+            syncPreferredAssignee();
             updateDeploymentSummary();
 
             document.addEventListener("keydown", (event) => {
@@ -1211,6 +1338,360 @@
                     submitBtn.textContent = "Submitting...";
                 });
             }
+
+            // Custom autocomplete for Account Name field (replaces native <datalist>
+            // which can't be bounded by the modal's overflow:hidden container).
+            (function () {
+                const acctInput = document.getElementById("id_account_name");
+                if (!acctInput) return;
+
+                // Disable the native datalist dropdown.
+                const listId = acctInput.getAttribute("list");
+                acctInput.removeAttribute("list");
+                const datalistEl = listId ? document.getElementById(listId) : null;
+                const allOptions = datalistEl
+                    ? Array.from(datalistEl.options).map((o) => o.value).filter(Boolean)
+                    : [];
+                if (!allOptions.length) return;
+
+                // Build a fixed-position dropdown appended to <body> so it is never
+                // clipped by the modal's overflow:hidden.
+                const dropdown = document.createElement("div");
+                dropdown.className = "acct-dropdown";
+                dropdown.setAttribute("role", "listbox");
+                dropdown.style.display = "none";
+                document.body.appendChild(dropdown);
+
+                let activeIndex = -1;
+
+                const positionDropdown = () => {
+                    const rect = acctInput.getBoundingClientRect();
+                    dropdown.style.top = (rect.bottom + 3) + "px";
+                    dropdown.style.left = rect.left + "px";
+                    dropdown.style.width = rect.width + "px";
+                };
+
+                const closeDropdown = () => {
+                    dropdown.style.display = "none";
+                    activeIndex = -1;
+                };
+
+                const setActive = (index) => {
+                    const items = dropdown.querySelectorAll(".acct-dropdown__item");
+                    items.forEach((el, i) => el.classList.toggle("is-active", i === index));
+                    if (items[index]) {
+                        items[index].scrollIntoView({ block: "nearest" });
+                    }
+                    activeIndex = index;
+                };
+
+                const renderOptions = (query) => {
+                    const q = query.trim().toLowerCase();
+                    const filtered = q
+                        ? allOptions.filter((o) => o.toLowerCase().includes(q))
+                        : allOptions;
+
+                    if (!filtered.length) {
+                        closeDropdown();
+                        return;
+                    }
+
+                    const slice = filtered.slice(0, 60);
+                    dropdown.innerHTML = slice
+                        .map((o) => `<div class="acct-dropdown__item" role="option" data-value="${o.replace(/"/g, "&quot;").replace(/</g, "&lt;")}">${o}</div>`)
+                        .join("");
+                    activeIndex = -1;
+                    positionDropdown();
+                    dropdown.style.display = "block";
+                };
+
+                acctInput.addEventListener("input", () => renderOptions(acctInput.value));
+
+                acctInput.addEventListener("focus", () => {
+                    renderOptions(acctInput.value);
+                });
+
+                acctInput.addEventListener("keydown", (e) => {
+                    const items = dropdown.querySelectorAll(".acct-dropdown__item");
+                    if (dropdown.style.display === "none" || !items.length) return;
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setActive(Math.min(activeIndex + 1, items.length - 1));
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setActive(Math.max(activeIndex - 1, 0));
+                    } else if (e.key === "Enter" && activeIndex >= 0) {
+                        e.preventDefault();
+                        acctInput.value = items[activeIndex].dataset.value;
+                        closeDropdown();
+                    } else if (e.key === "Escape") {
+                        closeDropdown();
+                    }
+                });
+
+                dropdown.addEventListener("mousedown", (e) => {
+                    const item = e.target.closest(".acct-dropdown__item");
+                    if (!item) return;
+                    e.preventDefault();
+                    acctInput.value = item.dataset.value;
+                    closeDropdown();
+                });
+
+                document.addEventListener("click", (e) => {
+                    if (!acctInput.contains(e.target) && !dropdown.contains(e.target)) {
+                        closeDropdown();
+                    }
+                });
+
+                // Reposition on scroll / resize so the dropdown tracks the input.
+                window.addEventListener("scroll", positionDropdown, { passive: true, capture: true });
+                window.addEventListener("resize", positionDropdown, { passive: true });
+            }());
+        })();
+    </script>
+{% endif %}
+
+{% if role == 'engineer' and active_tab == 'report' and engineer_report_data %}
+    {{ engineer_report_data|json_script:"engineer-report-data" }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        (function() {
+            const reportDataNode = document.getElementById('engineer-report-data');
+            if (!reportDataNode || typeof Chart === "undefined") { return; }
+            const reportData = JSON.parse(reportDataNode.textContent || "{}");
+            const canvas = document.getElementById('engineer-requestor-chart');
+            const wrap = document.getElementById('engineer-requestor-chart-wrap');
+            const summaryEl = document.getElementById('engineer-requestor-chart-summary');
+            const byReq = reportData.requests_by_requestor || { labels: [], values: [] };
+            if (!canvas) { return; }
+
+            // Pair + sort descending so the biggest requestor is first.
+            const rawLabels = byReq.labels || [];
+            const rawValues = (byReq.values || []).map(function (v) { return Number(v) || 0; });
+            const paired = rawLabels.map(function (l, i) { return { label: l || 'Unknown', value: rawValues[i] || 0 }; })
+                .sort(function (a, b) { return b.value - a.value; });
+
+            const labels = paired.map(function (p) { return p.label; });
+            const values = paired.map(function (p) { return p.value; });
+            const total = values.reduce(function (a, b) { return a + b; }, 0);
+            const maxValue = values.length ? Math.max.apply(null, values) : 0;
+
+            // Update summary badges.
+            if (summaryEl) {
+                const totalBadge = summaryEl.querySelector('[data-summary="total"]');
+                const topBadge = summaryEl.querySelector('[data-summary="top"]');
+                const countBadge = summaryEl.querySelector('[data-summary="requestors"]');
+                if (totalBadge) { totalBadge.textContent = 'Total: ' + total; }
+                if (countBadge) { countBadge.textContent = 'Requestors: ' + labels.length; }
+                if (topBadge) {
+                    topBadge.textContent = labels.length
+                        ? 'Top: ' + labels[0] + ' (' + values[0] + ')'
+                        : 'Top: —';
+                }
+                summaryEl.setAttribute('aria-hidden', 'false');
+            }
+
+            if (!labels.length) {
+                if (wrap) {
+                    wrap.innerHTML = '<div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">'
+                        + '<i class="bi bi-bar-chart fs-1 mb-2"></i>'
+                        + '<div class="fw-semibold">No assigned requests yet</div>'
+                        + '<div class="small">Once requests are assigned to you, they will appear here grouped by requestor.</div>'
+                        + '</div>';
+                }
+                return;
+            }
+
+            // Build a gradient fill for each bar based on its value (darker = more).
+            const palette = {
+                top: { start: '#1d4ed8', end: '#60a5fa' },
+                mid: { start: '#2563eb', end: '#93c5fd' },
+                low: { start: '#3b82f6', end: '#bfdbfe' }
+            };
+            const ctx = canvas.getContext('2d');
+            const horizontal = labels.length > 8;
+            const buildGradient = function (colorPair) {
+                const g = horizontal
+                    ? ctx.createLinearGradient(0, 0, canvas.width || 600, 0)
+                    : ctx.createLinearGradient(0, 0, 0, canvas.height || 360);
+                g.addColorStop(0, colorPair.start);
+                g.addColorStop(1, colorPair.end);
+                return g;
+            };
+            const backgroundColors = values.map(function (v) {
+                if (maxValue === 0) { return buildGradient(palette.low); }
+                const ratio = v / maxValue;
+                if (ratio >= 0.75) { return buildGradient(palette.top); }
+                if (ratio >= 0.4) { return buildGradient(palette.mid); }
+                return buildGradient(palette.low);
+            });
+            const borderColors = values.map(function (v) {
+                if (maxValue === 0) { return palette.low.start; }
+                const ratio = v / maxValue;
+                if (ratio >= 0.75) { return palette.top.start; }
+                if (ratio >= 0.4) { return palette.mid.start; }
+                return palette.low.start;
+            });
+
+            // Grow height for horizontal layout so each bar has breathing room.
+            if (horizontal && wrap) {
+                wrap.style.height = Math.max(360, labels.length * 36 + 80) + 'px';
+            }
+
+            // Plugin: draw the value at the end of each bar so counts are visible without hovering.
+            const valueLabelPlugin = {
+                id: 'engineerRequestorValueLabels',
+                afterDatasetsDraw: function (chart) {
+                    const { ctx: c } = chart;
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta) { return; }
+                    c.save();
+                    c.fillStyle = '#1f2937';
+                    c.font = '600 12px "Inter", system-ui, -apple-system, Segoe UI, sans-serif';
+                    meta.data.forEach(function (bar, i) {
+                        const value = values[i];
+                        if (value === undefined || value === null) { return; }
+                        const pos = bar.tooltipPosition();
+                        if (chart.options.indexAxis === 'y') {
+                            c.textAlign = 'left';
+                            c.textBaseline = 'middle';
+                            c.fillText(String(value), bar.x + 6, pos.y);
+                        } else {
+                            c.textAlign = 'center';
+                            c.textBaseline = 'bottom';
+                            c.fillText(String(value), pos.x, bar.y - 4);
+                        }
+                    });
+                    c.restore();
+                }
+            };
+
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Assigned Requests',
+                        data: values,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                        maxBarThickness: 42,
+                        hoverBackgroundColor: borderColors
+                    }]
+                },
+                options: {
+                    indexAxis: horizontal ? 'y' : 'x',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 18, right: horizontal ? 36 : 12, bottom: 4, left: 4 } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#f9fafb',
+                            padding: 12,
+                            borderColor: '#2563eb',
+                            borderWidth: 1,
+                            displayColors: false,
+                            callbacks: {
+                                title: function (items) {
+                                    return items && items.length ? items[0].label : '';
+                                },
+                                label: function (item) {
+                                    const v = item.parsed[horizontal ? 'x' : 'y'] || 0;
+                                    const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+                                    const plural = v === 1 ? 'request' : 'requests';
+                                    return v + ' ' + plural + ' (' + pct + '% of total)';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(148, 163, 184, 0.15)', drawBorder: false },
+                            ticks: {
+                                stepSize: horizontal ? undefined : 1,
+                                precision: 0,
+                                color: '#475569',
+                                font: { size: 12 }
+                            },
+                            title: horizontal ? { display: true, text: 'Number of requests', color: '#475569', font: { size: 12, weight: '600' } } : { display: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(148, 163, 184, 0.15)', drawBorder: false, display: !horizontal },
+                            ticks: {
+                                stepSize: horizontal ? undefined : 1,
+                                precision: 0,
+                                color: '#475569',
+                                font: { size: 12 },
+                                autoSkip: false
+                            },
+                            title: !horizontal ? { display: true, text: 'Number of requests', color: '#475569', font: { size: 12, weight: '600' } } : { display: false }
+                        }
+                    },
+                    animation: { duration: 700, easing: 'easeOutQuart' }
+                },
+                plugins: [valueLabelPlugin]
+            });
+        })();
+    </script>
+{% endif %}
+
+{% if role == 'engineer' %}
+    <script>
+        (function () {
+            const timers = document.querySelectorAll('[data-ack-timer]');
+            if (!timers.length) { return; }
+
+            const amberMs = 45 * 60 * 1000;
+            const redMs = 60 * 60 * 1000;
+
+            const formatElapsed = function (ms) {
+                if (ms < 0) { ms = 0; }
+                const totalSeconds = Math.floor(ms / 1000);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                if (hours > 0) {
+                    return hours + 'h ' + String(minutes).padStart(2, '0') + 'm ' + String(seconds).padStart(2, '0') + 's';
+                }
+                if (minutes > 0) {
+                    return minutes + 'm ' + String(seconds).padStart(2, '0') + 's';
+                }
+                return seconds + 's';
+            };
+
+            const tick = function () {
+                const now = Date.now();
+                timers.forEach(function (el) {
+                    const startIso = el.getAttribute('data-ack-start');
+                    if (!startIso) { return; }
+                    const startMs = Date.parse(startIso);
+                    if (isNaN(startMs)) { return; }
+                    const elapsed = now - startMs;
+                    const valueEl = el.querySelector('.engineer-ack-timer__value');
+                    if (valueEl) { valueEl.textContent = formatElapsed(elapsed); }
+
+                    // Upgrade color as thresholds are crossed (client-side only; backend tooltip is authoritative).
+                    el.classList.remove('engineer-ack-timer--neutral', 'engineer-ack-timer--amber', 'engineer-ack-timer--red');
+                    if (elapsed >= redMs) {
+                        el.classList.add('engineer-ack-timer--red');
+                    } else if (elapsed >= amberMs) {
+                        el.classList.add('engineer-ack-timer--amber');
+                    } else {
+                        el.classList.add('engineer-ack-timer--neutral');
+                    }
+                });
+            };
+
+            tick();
+            setInterval(tick, 1000);
         })();
     </script>
 {% endif %}

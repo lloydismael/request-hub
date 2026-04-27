@@ -34,7 +34,9 @@ class User(AbstractUser):
         REQUESTOR = "requestor", "Requestor"
         REQUESTOR_ESS = "requestor_ess", "Requestor-ESS"
         PM_ESS = "pm_ess", "PM-ESS"
+        PM_ESG = "pm_esg", "PM-ESG"
         ENGINEER = "engineer", "Engineer"
+        ON_HOLD = "on_hold", "On Hold"
         ADMIN = "admin", "Admin"
 
     phone_number = models.CharField(
@@ -42,15 +44,34 @@ class User(AbstractUser):
         blank=True,
         validators=[RegexValidator(r"^[0-9+\-() ]*$", "Phone number contains invalid characters.")],
     )
+    BANNER_GRADIENT_CHOICES = [
+        ("blue", "Blue"),
+        ("sunset", "Sunset"),
+        ("forest", "Forest"),
+        ("crimson", "Crimson"),
+        ("slate", "Slate"),
+        ("aurora", "Aurora"),
+        ("rose", "Rose"),
+        ("teal", "Teal"),
+    ]
+
     profile_photo = models.ImageField(
         upload_to=user_profile_photo_upload_to,
         storage=DatabaseMediaStorage(),
         blank=True,
         null=True,
     )
+    banner_gradient = models.CharField(
+        max_length=20,
+        choices=BANNER_GRADIENT_CHOICES,
+        default="blue",
+        blank=True,
+    )
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
     REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)
-    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS)
+    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG)
+    ENGINEER_ACCESS_ROLES = (Roles.ENGINEER, Roles.ON_HOLD)
+    ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
 
@@ -71,3 +92,7 @@ class User(AbstractUser):
         except ValueError:
             return ""
         return url
+
+    @property
+    def is_engineer_access_role(self) -> bool:
+        return self.role in self.ENGINEER_ACCESS_ROLES

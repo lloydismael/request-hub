@@ -1,5 +1,6 @@
 import csv
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -9,7 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
-from django.core.mail import send_mail
+from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
 from django.db.models.functions import TruncMonth
@@ -20,22 +21,31 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from accounts.forms import UserManagementForm
 from accounts.models import User
 
 REQUESTOR_ROLES = set(User.REQUESTOR_ROLES)
 REQUEST_CREATOR_ROLES = set(getattr(User, "REQUEST_CREATOR_ROLES", User.REQUESTOR_ROLES))
+ENGINEER_ACCESS_ROLES = set(getattr(User, "ENGINEER_ACCESS_ROLES", (User.Roles.ENGINEER,)))
+ASSIGNABLE_ENGINEER_ROLES = set(getattr(User, "ASSIGNABLE_ENGINEER_ROLES", (User.Roles.ENGINEER,)))
 PM_ESS_ROLE = User.Roles.PM_ESS
+PM_ESG_ROLE = User.Roles.PM_ESG
+ADMIN_PANEL_ROLES = {User.Roles.ADMIN, PM_ESG_ROLE}
+SQR_ACCESS_ROLES = ENGINEER_ACCESS_ROLES | {User.Roles.ADMIN, PM_ESG_ROLE}
 
 from .forms import (
     AccountManagementForm,
     AdminRequestFilterForm,
     EngineerActivityLogForm,
     RequestAdminForm,
+    SqrRevenueOrderForm,
+    SqrRevenueQuotationForm,
     RequestForm,
     RequestStatusForm,
+    SqrReviewForm,
+    SqrSubmissionForm,
     StatusLogForm,
 )
 from .constants import ACCOUNT_NAME_RAW
@@ -45,12 +55,57 @@ from .models import (
     Notification,
     Request,
     RequestCommunication,
+    SqrSubmission,
     StatusLog,
 )
-from .mixins import AdminRequiredMixin, AdminOrEngineerRequiredMixin, EngineerRequiredMixin
+from .mixins import (
+    AdminOrEngineerRequiredMixin,
+    AdminOrPmEsgRequiredMixin,
+    AdminRequiredMixin,
+    EngineerRequiredMixin,
+)
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AssignmentEmailResult:
+    status: str
+    recipients: tuple[str, ...] = ()
+
+
+def flash_assignment_email_feedback(request, result: AssignmentEmailResult, *, action_label: str, notify_on_no_assignee: bool = False) -> None:
+    if result.status == "sent":
+        return
+
+    if result.status == "no_new_assignee":
+        if notify_on_no_assignee:
+            messages.info(
+                request,
+                f"Request {action_label}, but no assignment email was sent because no engineer or backup engineer was assigned.",
+            )
+        return
+
+    if result.status == "missing_assignee_email":
+        messages.warning(
+            request,
+            f"Request {action_label}, but no assignment email was sent because the assigned engineer or backup engineer has no email address configured.",
+        )
+        return
+
+    if result.status == "missing_acs_config":
+        messages.warning(
+            request,
+            f"Request {action_label}, but Azure Communication Services email is not configured.",
+        )
+        return
+
+    if result.status == "delivery_failed":
+        messages.error(
+            request,
+            f"Request {action_label}, but the assignment email could not be delivered from {settings.ACS_EMAIL_SENDER or 'the configured sender address'}. Check Azure Communication Services email configuration and logs.",
+        )
 
 
 class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, TemplateView):
@@ -81,14 +136,32 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         form = kwargs.get("form")
-        logs = kwargs.get("logs")
         editing_log = kwargs.get("editing_log")
         if form is None:
             form = self.form_class(engineer=self.request.user)
-        if logs is None:
-            logs = list(self.get_queryset())
-        else:
-            logs = list(logs)
+
+        # Full queryset — used for aggregates, month options, charts
+        full_qs = self.get_queryset()
+        logs_total_count = full_qs.count()
+
+        agg = full_qs.aggregate(
+            total_hours=Sum("actual_hours"),
+            billable_hours=Sum("actual_hours", filter=Q(is_billable=True)),
+        )
+        total_hours_val = agg.get("total_hours") or Decimal("0")
+        billable_hours_val = agg.get("billable_hours") or Decimal("0")
+
+        # Paginate to 50 rows per page
+        try:
+            page_num = max(1, int(self.request.GET.get("page") or 1))
+        except (TypeError, ValueError):
+            page_num = 1
+        paginator = Paginator(full_qs, 50)
+        try:
+            logs_page_obj = paginator.page(page_num)
+        except InvalidPage:
+            logs_page_obj = paginator.page(1)
+        logs = list(logs_page_obj.object_list)
 
         selected_month, _, _ = self._parse_month_filter()
         month_rows = (
@@ -113,14 +186,6 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                 (option["label"] for option in month_options if option["value"] == selected_month),
                 "",
             )
-
-        total_hours = Decimal("0")
-        billable_hours = Decimal("0")
-        for log in logs:
-            hours = log.actual_hours or Decimal("0")
-            total_hours += hours
-            if log.is_billable:
-                billable_hours += hours
 
         related_requests = Request.objects.filter(
             Q(engineer=self.request.user) | Q(backup_engineer=self.request.user)
@@ -167,10 +232,12 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             {
                 "form": form,
                 "logs": logs,
+                "logs_page_obj": logs_page_obj,
+                "logs_total_count": logs_total_count,
                 "hours_summary": {
-                    "total": total_hours,
-                    "billable": billable_hours,
-                    "non_billable": total_hours - billable_hours,
+                    "total": total_hours_val,
+                    "billable": billable_hours_val,
+                    "non_billable": total_hours_val - billable_hours_val,
                 },
                 "requests_summary": {
                     "total": related_requests.count(),
@@ -222,8 +289,7 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
             else:
                 messages.success(request, "Activity logged successfully.")
             return redirect("hub:activity-logs")
-        logs = self.get_queryset()
-        context = self.get_context_data(form=form, logs=logs, editing_log=instance)
+        context = self.get_context_data(form=form, editing_log=instance)
         return self.render_to_response(context)
 
 
@@ -238,7 +304,7 @@ class EngineerActivityLogDeleteView(EngineerRequiredMixin, LoginRequiredMixin, V
         return redirect("hub:activity-logs")
 
 
-class ReportExportView(AdminRequiredMixin, LoginRequiredMixin, View):
+class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
     """Export operational or activity report data as CSV."""
 
     def get(self, request, *args, **kwargs):
@@ -427,7 +493,7 @@ def notify_status_update(log, source_label):
     if request_obj.requestor:
         recipients[request_obj.requestor.pk] = request_obj.requestor
 
-    for admin in User.objects.filter(role=User.Roles.ADMIN):
+    for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
         recipients[admin.pk] = admin
 
     recipients.pop(author.pk, None)
@@ -478,7 +544,7 @@ def notify_account_manager_request_update(actor_user, original, updated, changed
     actor = actor_user.get_full_name() or actor_user.username
     recipients: dict[int, User] = {}
 
-    for admin in User.objects.filter(role=User.Roles.ADMIN):
+    for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
         recipients[admin.pk] = admin
     if updated.requestor:
         recipients[updated.requestor.pk] = updated.requestor
@@ -506,24 +572,36 @@ def notify_engineer_assignment_email(
     request=None,
     previous_engineer_id: int | None = None,
     previous_backup_id: int | None = None,
-) -> None:
+) -> AssignmentEmailResult:
     """Email the assigned engineer or backup when they receive a request."""
 
     recipients: list[str] = []
+    missing_email_roles: list[str] = []
 
     if request_obj.engineer_id and request_obj.engineer_id != previous_engineer_id:
         email = (request_obj.engineer.email or "").strip()
         if email:
             recipients.append(email)
+        else:
+            missing_email_roles.append("engineer")
 
     if request_obj.backup_engineer_id and request_obj.backup_engineer_id != previous_backup_id:
         email = (request_obj.backup_engineer.email or "").strip()
         if email:
             recipients.append(email)
+        else:
+            missing_email_roles.append("backup engineer")
 
     if not recipients:
+        if missing_email_roles:
+            logger.warning(
+                "Assignment email skipped: assigned recipient missing email for %s (%s)",
+                request_obj.reference_code,
+                ", ".join(missing_email_roles),
+            )
+            return AssignmentEmailResult("missing_assignee_email")
         logger.info("Assignment email skipped: no engineer/backup recipient for %s", request_obj.reference_code)
-        return
+        return AssignmentEmailResult("no_new_assignee")
 
     actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
     due_display = request_obj.due_date.strftime("%b %d, %Y") if request_obj.due_date else "Not set"
@@ -558,33 +636,31 @@ def notify_engineer_assignment_email(
 
     if not use_acs:
         logger.warning("ACS email not configured; set ACS_EMAIL_CONNECTION_STRING and ACS_EMAIL_SENDER")
+        return AssignmentEmailResult("missing_acs_config", tuple(recipients))
 
-    if use_acs:
-        try:
-            from azure.communication.email import EmailClient
+    try:
+        from azure.communication.email import EmailClient
 
-            client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
-            message = {
-                "senderAddress": settings.ACS_EMAIL_SENDER,
-                "recipients": {"to": [{"address": addr} for addr in recipients]},
-                "content": {
-                    "subject": subject,
-                    "plainText": "\n".join(body_lines),
-                },
-            }
-            poller = client.begin_send(message)
-            poller.result()
-            return
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("ACS email send failed; falling back to SMTP", exc_info=exc)
-
-    send_mail(
-        subject,
-        "\n".join(body_lines),
-        settings.DEFAULT_FROM_EMAIL,
-        recipients,
-        fail_silently=True,
-    )
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {"to": [{"address": addr} for addr in recipients]},
+            "content": {
+                "subject": subject,
+                "plainText": "\n".join(body_lines),
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        return AssignmentEmailResult("sent", tuple(recipients))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "ACS email send failed for %s to %s",
+            request_obj.reference_code,
+            ", ".join(recipients),
+            exc_info=exc,
+        )
+        return AssignmentEmailResult("delivery_failed", tuple(recipients))
 
 
 def notify_engineer_assignment_notification(
@@ -619,6 +695,15 @@ def notify_engineer_assignment_notification(
             source="Assignment",
         )
 
+
+def clear_engineer_outlook_lock_on_reassignment(
+    request_obj: Request,
+    *,
+    previous_engineer_id: int | None,
+) -> int:
+    """Clear engineer Outlook lock records when the primary engineer changes.
+    (Disabled per requirement: the new engineer shouldn't need to acknowledge again if already done)"""
+    return 0
 
 def _admin_sort_account_manager_key(request_obj):
     manager_name = ""
@@ -695,13 +780,100 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             },
         }
 
+    @staticmethod
+    def _build_engineer_report_data(requests: list[Request], user) -> dict:
+        from django.db.models import Min
+        assigned_requests = [req for req in requests if req.engineer_id == user.id]
+
+        # 1. Count of requests assigned by requestor
+        requestor_counts = {}
+        for req in assigned_requests:
+            name = "Unknown"
+            if req.requestor:
+                name = req.requestor.get_full_name() or req.requestor.username or "Unknown"
+            requestor_counts[name] = requestor_counts.get(name, 0) + 1
+
+        # 2. Avg Ack Response Time
+        request_ids = [req.pk for req in assigned_requests if req.pk]
+        ack_map = {}
+        if request_ids:
+            ack_rows = (
+                RequestCommunication.objects.filter(
+                    request_id__in=request_ids,
+                    user__role__in=ENGINEER_ACCESS_ROLES,
+                    channel__in=[RequestCommunication.Channel.OUTLOOK, RequestCommunication.Channel.TEAMS],
+                )
+                .values("request_id")
+                .annotate(first_ack=Min("created_at"))
+            )
+            ack_map = {row["request_id"]: row["first_ack"] for row in ack_rows}
+
+        ack_seconds_list = []
+        for req in assigned_requests:
+            ack_time = ack_map.get(req.pk)
+            if ack_time:
+                start = req.updated_at if req.updated_at and req.updated_at > req.created_at else req.created_at
+                delta = (ack_time - start).total_seconds()
+                if delta >= 0:
+                    # simplistic fallback without working hour logic to maintain performance on db scale
+                    # and decouple from the helper method inside `_annotate...`
+                    ack_seconds_list.append(delta)
+
+        if ack_seconds_list:
+            avg_ack_seconds = sum(ack_seconds_list) / len(ack_seconds_list)
+            hours = int(avg_ack_seconds // 3600)
+            minutes = int((avg_ack_seconds % 3600) // 60)
+            if hours > 0:
+                avg_ack_time = f"{hours}h {minutes}m"
+            else:
+                avg_ack_time = f"{minutes}m"
+        else:
+            avg_ack_time = "N/A"
+
+        # 3. Avg Resolution Time
+        completed_reqs = [req for req in assigned_requests if req.status == Request.Status.COMPLETED]
+        if completed_reqs:
+            avg_resolution_days = sum(req.days_since_creation for req in completed_reqs) / len(completed_reqs)
+            avg_resolution_time = f"{avg_resolution_days:.1f} days"
+        else:
+            avg_resolution_time = "N/A"
+
+        # 4. Avg Requests per week
+        if assigned_requests:
+            from django.utils import timezone
+            min_date = min(req.created_at for req in assigned_requests)
+            days_span = (timezone.now() - min_date).days
+            weeks = max(1, days_span / 7)
+            avg_requests_per_week = f"{len(assigned_requests) / weeks:.1f}"
+        else:
+            avg_requests_per_week = "0"
+
+        return {
+            "requests_by_requestor": {
+                "labels": list(requestor_counts.keys()),
+                "values": list(requestor_counts.values()),
+            },
+            "avg_ack_time": avg_ack_time,
+            "avg_resolution_time": avg_resolution_time,
+            "avg_requests_per_week": avg_requests_per_week,
+        }
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["role"] = user.role
+        if user.role in ADMIN_PANEL_ROLES:
+            context["role"] = User.Roles.ADMIN
+        elif user.role in ENGINEER_ACCESS_ROLES:
+            context["role"] = User.Roles.ENGINEER
+        else:
+            context["role"] = user.role
+        context["is_admin_ui"] = user.role in ADMIN_PANEL_ROLES
         context["is_requestor_role"] = user.role in REQUESTOR_ROLES
         context["is_pm_ess"] = user.role == PM_ESS_ROLE
+        context["is_pm_esg"] = user.role == PM_ESG_ROLE
         context["is_requestor_ui"] = user.role in REQUESTOR_ROLES or user.role == PM_ESS_ROLE
+        context["is_engineer_access_role"] = user.role in ENGINEER_ACCESS_ROLES
+        context["can_create_request"] = user.role in REQUEST_CREATOR_ROLES
         context["notifications"] = user.notifications.filter(is_read=False)[:10]
 
         if user.role == PM_ESS_ROLE:
@@ -715,11 +887,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if metric_filter not in metric_keys:
                 metric_filter = ""
 
-            requests = list(
-                Request.objects.filter(requestor__role=User.Roles.REQUESTOR_ESS)
+            request_tab = (self.request.GET.get("request_tab") or "all").strip().lower()
+            if request_tab not in {"all", "mine"}:
+                request_tab = "all"
+
+            all_requests = list(
+                Request.objects.filter(
+                    Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user)
+                )
                 .select_related("account", "engineer", "requestor")
                 .order_by("-created_at")
             )
+
+            my_requests = [req for req in all_requests if req.requestor_id == user.id]
+            requests = my_requests if request_tab == "mine" else all_requests
 
             metrics = {
                 "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
@@ -742,10 +923,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
+            request_tab_links = {}
+            for key in ("all", "mine"):
+                params = self.request.GET.copy()
+                if key == "all":
+                    params.pop("request_tab", None)
+                else:
+                    params["request_tab"] = "mine"
+                encoded = params.urlencode()
+                request_tab_links[key] = f"?{encoded}" if encoded else "?"
+
             context["requests"] = filtered_requests
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["pm_ess_request_tab"] = request_tab
+            context["pm_ess_request_tab_links"] = request_tab_links
             context["form_has_errors"] = form.is_bound and bool(form.errors)
             context["request_report_summary"] = {
                 "total": len(requests),
@@ -753,7 +946,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "completed": metrics["completed"],
             }
             context["request_report_data"] = self._build_request_report_data(requests)
-        elif user.role in REQUEST_CREATOR_ROLES:
+        elif user.role in REQUEST_CREATOR_ROLES and user.role != PM_ESG_ROLE:
             form = kwargs.get("form")
             if form is None:
                 form = RequestForm(actor_role=user.role)
@@ -791,10 +984,26 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
+            request_tab = (self.request.GET.get("request_tab") or "mine").strip().lower()
+            if request_tab not in {"all", "mine"}:
+                request_tab = "mine"
+
+            request_tab_links = {}
+            for key in ("all", "mine"):
+                params = self.request.GET.copy()
+                if key == "all":
+                    params.pop("request_tab", None)
+                else:
+                    params["request_tab"] = "mine"
+                encoded = params.urlencode()
+                request_tab_links[key] = f"?{encoded}" if encoded else "?"
+
             context["requests"] = filtered_requests
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+            context["pm_ess_request_tab"] = request_tab
+            context["pm_ess_request_tab_links"] = request_tab_links
             context["form_has_errors"] = form.is_bound and bool(form.errors)
             context["request_report_summary"] = {
                 "total": len(requests),
@@ -802,7 +1011,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "completed": metrics["completed"],
             }
             context["request_report_data"] = self._build_request_report_data(requests)
-        elif user.role == User.Roles.ENGINEER:
+        elif user.role in ENGINEER_ACCESS_ROLES:
             metric_filter = (self.request.GET.get("metric_filter") or "").strip()
             tab = self.request.GET.get("tab") or "assigned"
             valid_metrics = {"ongoing", "due_soon", "overdue", "completed"}
@@ -823,22 +1032,33 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     .order_by("status", "due_date")
                 )
 
+            context["active_tab"] = tab
+            if tab == "report":
+                context["engineer_report_data"] = self._build_engineer_report_data(
+                    requests=[req for req in Request.objects.filter(engineer=user).select_related("requestor")],
+                    user=user
+                )
+
             request_ids = [req.pk for req in requests]
             outlook_limited: set[int] = set()
             teams_limited: set[int] = set()
             if request_ids:
                 communications = RequestCommunication.objects.filter(
                     request_id__in=request_ids,
-                    user=user,
-                ).only("request_id", "channel")
+                    user__role__in=ENGINEER_ACCESS_ROLES,
+                ).only("request_id", "channel", "user_id")
                 for comm in communications:
                     if comm.channel == RequestCommunication.Channel.OUTLOOK:
                         outlook_limited.add(comm.request_id)
                     elif comm.channel == RequestCommunication.Channel.TEAMS:
-                        teams_limited.add(comm.request_id)
+                        if getattr(comm, "user_id", None) == user.id:
+                            teams_limited.add(comm.request_id)
             for req in requests:
                 setattr(req, "outlook_limit_reached", req.pk in outlook_limited)
                 setattr(req, "teams_limit_reached", req.pk in teams_limited)
+
+            self._annotate_acknowledgement_status(requests)
+            self._annotate_engineer_activity(requests)
 
             today = timezone.now().astimezone(MANILA_TZ).date()
             metrics = {
@@ -877,6 +1097,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ]
             elif effective_metric_filter == "completed":
                 filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
+                filtered_requests = sorted(filtered_requests, key=lambda req: req.created_at, reverse=True)
 
             metric_links = {}
             for key in ("ongoing", "due_soon", "overdue", "completed"):
@@ -1024,6 +1245,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metrics"] = {key: len(metric_buckets[key]) for key in metric_keys}
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+
+        if context.get("can_create_request") and "form" not in context:
+            form = kwargs.get("form")
+            if form is None:
+                form = RequestForm(actor_role=user.role)
+            context["form"] = form
+            context["account_name_choices"] = form.account_name_suggestions
+            context["form_has_errors"] = form.is_bound and bool(form.errors)
         return context
 
     @staticmethod
@@ -1150,7 +1379,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ack_rows = (
             RequestCommunication.objects.filter(
                 request_id__in=request_ids,
-                user__role__in=[User.Roles.ENGINEER, User.Roles.ADMIN],
+                user__role__in=[*ENGINEER_ACCESS_ROLES, User.Roles.ADMIN, PM_ESG_ROLE],
                 channel__in=[
                     RequestCommunication.Channel.OUTLOOK,
                     RequestCommunication.Channel.TEAMS,
@@ -1169,6 +1398,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if not req.engineer:
                 req.ack_sla_status = ""
                 req.ack_sla_tooltip = "Awaiting engineer assignment; acknowledgement SLA starts after assignment."
+                req.ack_start_iso = ""
+                req.ack_first_iso = ""
+                req.is_acknowledged = False
                 continue
 
             start_anchor = req.created_at
@@ -1209,6 +1441,75 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
             req.ack_sla_status = status
             req.ack_sla_tooltip = tooltip or "Acknowledgement status unavailable"
+            req.ack_start_iso = start_anchor.isoformat() if start_anchor else ""
+            req.ack_first_iso = ack_time.isoformat() if ack_time else ""
+            req.is_acknowledged = bool(ack_time)
+
+    def _annotate_engineer_activity(self, requests: list[Request]) -> None:
+        """Attach status-log and recent-change hints used by the engineer dashboard."""
+        if not requests:
+            return
+        request_ids = [req.pk for req in requests if req.pk]
+        log_counts: dict[int, int] = {}
+        latest_logs: dict[int, StatusLog] = {}
+        if request_ids:
+            from django.db.models import Count
+
+            count_rows = (
+                StatusLog.objects.filter(request_id__in=request_ids)
+                .values("request_id")
+                .annotate(total=Count("id"))
+            )
+            log_counts = {row["request_id"]: row["total"] for row in count_rows}
+
+            latest_qs = (
+                StatusLog.objects.filter(request_id__in=request_ids)
+                .select_related("author")
+                .order_by("request_id", "-created_at")
+            )
+            seen: set[int] = set()
+            for log in latest_qs:
+                if log.request_id in seen:
+                    continue
+                seen.add(log.request_id)
+                latest_logs[log.request_id] = log
+
+        for req in requests:
+            count = log_counts.get(req.pk, 0)
+            latest = latest_logs.get(req.pk)
+            req.status_log_count = count
+            if latest:
+                author_name = (
+                    latest.author.get_full_name()
+                    or latest.author.username
+                    or "Unknown"
+                )
+                message = (latest.message or "").strip()
+                excerpt = message[:140] + ("…" if len(message) > 140 else "")
+                created_local = timezone.localtime(latest.created_at, MANILA_TZ)
+                req.latest_status_log_tooltip = (
+                    f"Latest update by {author_name} on "
+                    f"{created_local.strftime('%b %d, %Y %I:%M %p')}"
+                    + (f" — {excerpt}" if excerpt else "")
+                )
+            else:
+                req.latest_status_log_tooltip = ""
+
+            # Consider the request "changed" when updated_at is clearly after created_at.
+            has_changes = bool(
+                req.updated_at
+                and req.created_at
+                and (req.updated_at - req.created_at).total_seconds() > 60
+            )
+            req.has_recent_changes = has_changes
+            if has_changes:
+                updated_local = timezone.localtime(req.updated_at, MANILA_TZ)
+                req.recent_change_tooltip = (
+                    f"Request last updated on "
+                    f"{updated_local.strftime('%b %d, %Y %I:%M %p')}"
+                )
+            else:
+                req.recent_change_tooltip = ""
 
     def post(self, request, *args, **kwargs):
         if request.user.role not in REQUEST_CREATOR_ROLES:
@@ -1223,13 +1524,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req._actor_source = "Dashboard · New Request"
             req.save()
             notify_engineer_assignment_notification(req, actor_user=request.user)
-            notify_engineer_assignment_email(
+            assignment_email_result = notify_engineer_assignment_email(
                 req,
                 actor_user=request.user,
                 request=request,
             )
             self._notify_admins_new_request(req)
             messages.success(request, "Request submitted", extra_tags="request-success")
+            flash_assignment_email_feedback(
+                request,
+                assignment_email_result,
+                action_label="submitted",
+                notify_on_no_assignee=True,
+            )
             return redirect("hub:dashboard")
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
@@ -1244,7 +1551,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             f"New {priority_label} ticket {request_obj.reference_code} for {request_obj.account.name} "
             f"({category_label}) submitted by {actor}. Due {due_display}."
         )
-        for admin in User.objects.filter(role=User.Roles.ADMIN):
+        for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
             if admin.pk == request_obj.requestor_id:
                 continue
             Notification.objects.create(
@@ -1254,6 +1561,456 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 actor=actor,
                 source="Dashboard · New Request",
             )
+
+
+class SqrListView(LoginRequiredMixin, TemplateView):
+    template_name = "hub/sqr.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in SQR_ACCESS_ROLES:
+            messages.error(request, "You are not allowed to access SQR.")
+            return redirect("hub:dashboard")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = SqrSubmission.objects.select_related(
+            "engineer",
+            "pm_esg_reviewer",
+            "reviewed_by",
+        ).order_by("-created_at")
+        if self.request.user.role in ENGINEER_ACCESS_ROLES:
+            return queryset.filter(engineer=self.request.user)
+        if self.request.user.role == PM_ESG_ROLE:
+            return queryset.filter(pm_esg_reviewer=self.request.user)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        can_create = user.role in ENGINEER_ACCESS_ROLES
+        can_review = user.role in ADMIN_PANEL_ROLES
+        show_revenue_tracker_tab = user.role == PM_ESG_ROLE
+        active_tab = (self.request.GET.get("tab") or "submissions").strip().lower()
+        if active_tab not in {"submissions", "revenue-tracker"}:
+            active_tab = "submissions"
+        if not show_revenue_tracker_tab and active_tab == "revenue-tracker":
+            active_tab = "submissions"
+
+        form = kwargs.get("form")
+        if can_create and form is None:
+            form = SqrSubmissionForm()
+
+        submissions = list(self.get_queryset())
+
+        quotation_stage_submissions = []
+        order_stage_submissions = []
+        revenue_stage_submissions = []
+        quotation_stage_items = []
+        order_stage_items = []
+        revenue_stage_totals = {
+            "count": 0,
+            "total_price": Decimal("0.00"),
+            "discounted_price": Decimal("0.00"),
+        }
+
+        if show_revenue_tracker_tab:
+            for item in submissions:
+                if item.revenue_stage_key == "quotation":
+                    quotation_stage_submissions.append(item)
+                elif item.revenue_stage_key == "order":
+                    order_stage_submissions.append(item)
+                else:
+                    revenue_stage_submissions.append(item)
+
+            quotation_stage_items = [
+                {
+                    "submission": item,
+                    "form": SqrRevenueQuotationForm(instance=item, prefix=f"quote-{item.pk}"),
+                }
+                for item in quotation_stage_submissions
+            ]
+            order_stage_items = [
+                {
+                    "submission": item,
+                    "form": SqrRevenueOrderForm(instance=item, prefix=f"order-{item.pk}"),
+                }
+                for item in order_stage_submissions
+            ]
+
+            total_price = Decimal("0.00")
+            discounted_price = Decimal("0.00")
+            for item in revenue_stage_submissions:
+                total_price += item.quotation_total_price or Decimal("0.00")
+                discounted_price += item.discounted_price or Decimal("0.00")
+
+            revenue_stage_totals = {
+                "count": len(revenue_stage_submissions),
+                "total_price": total_price,
+                "discounted_price": discounted_price,
+            }
+
+        context.update(
+            {
+                "can_create_sqr": can_create,
+                "can_review_sqr": can_review,
+                "sqr_form": form,
+                "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
+                "sqr_submissions": submissions,
+                "active_sqr_tab": active_tab,
+                "show_revenue_tracker_tab": show_revenue_tracker_tab,
+                "sqr_counts": {
+                    "total": len(submissions),
+                    "processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_PROCESSING),
+                    "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
+                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
+                },
+                "quotation_stage_items": quotation_stage_items,
+                "quotation_stage_count": len(quotation_stage_submissions),
+                "order_stage_items": order_stage_items,
+                "order_stage_count": len(order_stage_submissions),
+                "revenue_stage_submissions": revenue_stage_submissions,
+                "revenue_stage_totals": revenue_stage_totals,
+            }
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
+            messages.error(request, "Only engineers can submit SQR entries.")
+            return redirect("hub:sqr")
+
+        form = SqrSubmissionForm(request.POST)
+        if form.is_valid():
+            submission = form.save(commit=False)
+            submission.engineer = request.user
+            submission.status = SqrSubmission.Status.FOR_PROCESSING
+            submission.save()
+            self._notify_sqr_submission(submission)
+            messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
+            return redirect("hub:sqr")
+
+        context = self.get_context_data(form=form)
+        return self.render_to_response(context)
+
+    @staticmethod
+    def _notify_sqr_submission(submission: SqrSubmission) -> None:
+        actor_name = submission.engineer.get_full_name() or submission.engineer.username
+        message = (
+            f"{actor_name} submitted {submission.reference_code} for {submission.customer_name}."
+        )
+
+        recipients: dict[int, User] = {submission.pm_esg_reviewer_id: submission.pm_esg_reviewer}
+        for admin in User.objects.filter(role=User.Roles.ADMIN):
+            recipients[admin.pk] = admin
+
+        recipients.pop(submission.engineer_id, None)
+        for recipient in recipients.values():
+            Notification.objects.create(
+                recipient=recipient,
+                message=message,
+                actor=actor_name,
+                source="SQR · New Submission",
+            )
+
+
+class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
+    model = SqrSubmission
+    form_class = SqrSubmissionForm
+    template_name = "hub/sqr_submission_form.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
+            messages.error(request, "Only engineers can edit SQR submissions.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer").filter(engineer=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["back_url"] = reverse("hub:sqr")
+        context["form_title"] = f"Edit Submission {self.object.reference_code}"
+        context["submit_label"] = "Save changes"
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"SQR {self.object.reference_code} updated.")
+        return response
+
+
+class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
+    model = SqrSubmission
+    template_name = "hub/sqr_confirm_delete.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
+            messages.error(request, "Only engineers can delete SQR submissions.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return SqrSubmission.objects.filter(engineer=self.request.user)
+
+    def form_valid(self, form):
+        reference_code = self.object.reference_code
+        response = super().form_valid(form)
+        messages.success(self.request, f"SQR {reference_code} deleted.")
+        return response
+
+
+class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
+    model = SqrSubmission
+    form_class = SqrReviewForm
+    template_name = "hub/sqr_review_form.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def get_success_url(self):
+        return reverse("hub:sqr-review", args=[self.object.pk])
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can review SQR submissions.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["reviewer_role"] = self.request.user.role
+        return kwargs
+
+    def get_queryset(self):
+        queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
+        if self.request.user.role == PM_ESG_ROLE:
+            return queryset.filter(pm_esg_reviewer=self.request.user)
+        return queryset
+
+    def form_valid(self, form):
+        original = SqrSubmission.objects.get(pk=form.instance.pk)
+        form.instance.reviewed_by = self.request.user
+        if form.cleaned_data.get("status") == SqrSubmission.Status.APPROVED:
+            if not form.instance.reviewed_at:
+                form.instance.reviewed_at = timezone.now()
+        else:
+            form.instance.reviewed_at = None
+
+        response = super().form_valid(form)
+
+        review_changed = (
+            original.status != self.object.status
+            or (original.review_notes or "") != (self.object.review_notes or "")
+        )
+        if review_changed:
+            self._notify_engineer_review(self.object)
+
+        messages.success(self.request, f"SQR {self.object.reference_code} status updated.")
+        return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["back_url"] = reverse("hub:sqr")
+        context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
+        context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
+        return context
+
+    def _notify_engineer_review(self, submission: SqrSubmission) -> None:
+        reviewer_name = self.request.user.get_full_name() or self.request.user.username
+        status_label = submission.get_status_display()
+        Notification.objects.create(
+            recipient=submission.engineer,
+            message=f"{reviewer_name} marked {submission.reference_code} as {status_label}.",
+            actor=reviewer_name,
+            source="SQR · Review Update",
+        )
+
+
+class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
+    @staticmethod
+    def _flash_form_errors(request, form):
+        for field, errors in form.errors.items():
+            if field == "__all__":
+                for error in errors:
+                    messages.error(request, error)
+                continue
+            label = form.fields.get(field).label if field in form.fields else field
+            for error in errors:
+                messages.error(request, f"{label}: {error}")
+
+    @staticmethod
+    def _tracker_redirect_url():
+        return f"{reverse('hub:sqr')}?{urlencode({'tab': 'revenue-tracker'})}"
+
+    def post(self, request, pk):
+        if request.user.role != PM_ESG_ROLE:
+            messages.error(request, "Only PM-ESG can update Revenue Tracker details.")
+            return redirect(self._tracker_redirect_url())
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+            pm_esg_reviewer=request.user,
+        )
+
+        stage_action = (request.POST.get("stage_action") or "").strip().lower()
+        if stage_action == "quotation":
+            if submission.revenue_stage_key != "quotation":
+                messages.error(request, "Quotation pricing can only be updated in Quotation stage.")
+                return redirect(self._tracker_redirect_url())
+
+            form = SqrRevenueQuotationForm(request.POST, instance=submission, prefix=f"quote-{submission.pk}")
+            if form.is_valid():
+                form.save()
+                messages.success(request, f"Quotation pricing saved for {submission.reference_code}.")
+            else:
+                self._flash_form_errors(request, form)
+            return redirect(self._tracker_redirect_url())
+
+        if stage_action == "order":
+            if submission.revenue_stage_key != "order":
+                messages.error(request, "Only approved SQR entries in Order stage can attach a P.O.")
+                return redirect(self._tracker_redirect_url())
+
+            form = SqrRevenueOrderForm(request.POST, instance=submission, prefix=f"order-{submission.pk}")
+            if form.is_valid():
+                updated_submission = form.save(commit=False)
+                if not updated_submission.quotation_total_price:
+                    messages.error(request, "Set the quotation pricing before attaching a P.O.")
+                    return redirect(self._tracker_redirect_url())
+
+                if not submission.po_attachment_link:
+                    updated_submission.po_attached_at = timezone.now()
+                updated_submission.save()
+                messages.success(request, f"P.O attached for {submission.reference_code}. Moved to Revenue stage.")
+            else:
+                self._flash_form_errors(request, form)
+            return redirect(self._tracker_redirect_url())
+
+        messages.error(request, "Invalid revenue tracker action.")
+        return redirect(self._tracker_redirect_url())
+
+
+class SqrTeamsRedirectView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can create SQR revision Teams groups.")
+            return redirect(redirect_target)
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG approver can create the revision Teams group.")
+            return redirect(redirect_target)
+
+        if submission.status != SqrSubmission.Status.FOR_REVISION:
+            messages.error(request, "Set SQR status to For Revision before creating a Teams group.")
+            return redirect(redirect_target)
+
+        approver_email = submission.pm_esg_reviewer.email if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email else None
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not approver_email or not requestor_email:
+            messages.error(request, "Unable to create Teams group. Ensure both approver and requestor emails are configured.")
+            return redirect(redirect_target)
+
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
+        participants = ",".join(sorted({approver_email, requestor_email}))
+        topic = f"{submission.reference_code}+{submission.customer_name}"
+        comments = (submission.review_notes or "").strip() or "No comments provided."
+        message_body = (
+            f"Hi @{requestor_name}\n"
+            "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
+            f"{comments}\n\n"
+            "Thanks"
+        )
+        teams_url = (
+            "https://teams.microsoft.com/l/chat/0/0?users="
+            f"{quote(participants)}&topicName={quote(topic)}&message={quote(message_body)}"
+        )
+
+        messages.info(request, "Launching Microsoft Teams…")
+        return render(
+            request,
+            "hub/teams_redirect.html",
+            {"teams_url": teams_url},
+        )
+
+
+class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can generate SQR approval advisory emails.")
+            return redirect(redirect_target)
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG approver can generate this approval advisory email.")
+            return redirect(redirect_target)
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Set SQR status to Approved before generating the advisory email.")
+            return redirect(redirect_target)
+
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            messages.error(request, "Unable to draft an email. Ensure the requestor (engineer) has an email configured.")
+            return redirect(redirect_target)
+
+        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
+        recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
+        subject = quote(f"{submission.reference_code}+{submission.customer_name}")
+        total_price_text = f"{submission.quotation_total_price:,.2f}" if submission.quotation_total_price is not None else "TBD"
+        discounted_price_text = f"{submission.discounted_price:,.2f}" if submission.discounted_price is not None else "TBD"
+        discount_rate_text = f"{submission.discount_rate}%"
+
+        body_template = (
+            "Hi @{requestor_name}\n"
+            "Submitted SQR is now approved, please refer to the ff. details below.\n"
+            "SQR ID: {reference_code}\n"
+            "Customer Name: {customer_name}\n"
+            "Service Description: {service_description}\n"
+            "Account Manager: {account_manager}\n"
+            "Scope of Services: {scope_of_services}\n"
+            "Quantity: 1 Lot\n"
+            "Total Price: {total_price}\n"
+            "Discount Rate: {discount_rate}\n"
+            "Discounted Price: {discounted_price}\n"
+            "Remarks: {remarks}"
+        )
+        body = quote(
+            body_template.format(
+                requestor_name=requestor_name,
+                reference_code=submission.reference_code,
+                customer_name=submission.customer_name,
+                service_description=(submission.project_title or "").strip(),
+                account_manager=(submission.customer_contact or "").strip(),
+                scope_of_services=(submission.project_details or "").strip(),
+                total_price=total_price_text,
+                discount_rate=discount_rate_text,
+                discounted_price=discounted_price_text,
+                remarks=(submission.remarks or "").strip(),
+            )
+        )
+
+        mailto_url = f"mailto:{recipients}?subject={subject}&body={body}"
+        messages.info(request, "Drafting approval advisory in your default mail client…")
+        return render(
+            request,
+            "hub/outlook_redirect.html",
+            {"mailto_url": mailto_url},
+        )
 
 
 class RequestDetailView(LoginRequiredMixin, DetailView):
@@ -1268,7 +2025,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             return qs.filter(Q(requestor=user) | Q(requestor__role=User.Roles.REQUESTOR_ESS))
         if user.role in REQUESTOR_ROLES:
             return qs.filter(requestor=user)
-        if user.role == User.Roles.ENGINEER:
+        if user.role in ENGINEER_ACCESS_ROLES:
             return qs.filter(engineer=user)
         return qs
 
@@ -1281,7 +2038,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         if can_comment:
             context["log_form"] = kwargs.get("log_form") or StatusLogForm()
         if (
-            self.request.user.role == User.Roles.ENGINEER
+            self.request.user.role in ENGINEER_ACCESS_ROLES
             and request_obj.engineer_id == self.request.user.id
         ):
             context["status_form"] = kwargs.get("status_form") or RequestStatusForm(instance=request_obj)
@@ -1307,19 +2064,20 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def _user_can_comment(user, request_obj):
         if not user.is_authenticated:
             return False
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             return True
-        if user.role == User.Roles.ENGINEER and request_obj.engineer_id == user.id:
+        if user.role in ENGINEER_ACCESS_ROLES and request_obj.engineer_id == user.id:
             return True
         if user.role in REQUEST_CREATOR_ROLES and request_obj.requestor_id == user.id:
             return True
         return False
 
 
-class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView):
+class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, UpdateView):
     model = Request
     form_class = RequestAdminForm
-    template_name = "hub/request_admin_form.html"
+    template_name = "hub/request_manager_form.html"
+    context_object_name = "service_request"
     success_url = reverse_lazy("hub:dashboard")
 
     def get_form_kwargs(self):
@@ -1341,9 +2099,13 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
         previous_backup_id = original.backup_engineer_id
         changed_fields = list(form.changed_data)
         response = super().form_valid(form)
+        clear_engineer_outlook_lock_on_reassignment(
+            self.object,
+            previous_engineer_id=previous_engineer_id,
+        )
         if changed_fields:
             self._notify_request_update(original, self.object, changed_fields)
-        notify_engineer_assignment_email(
+        assignment_email_result = notify_engineer_assignment_email(
             self.object,
             actor_user=self.request.user,
             request=self.request,
@@ -1357,6 +2119,7 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
             previous_backup_id=previous_backup_id,
         )
         messages.success(self.request, "Request updated.")
+        flash_assignment_email_feedback(self.request, assignment_email_result, action_label="updated")
         return response
 
     def get_context_data(self, **kwargs):
@@ -1376,6 +2139,10 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
         )
         context.setdefault("log_form", StatusLogForm())
         context["engineer_capacity_map"] = self._build_engineer_capacity_map()
+        context["status_form"] = None
+        context["status_allowed"] = False
+        context["account_name_choices"] = []
+        context["is_admin_form"] = True
         return context
 
     def _handle_status_log_post(self, request):
@@ -1426,7 +2193,7 @@ class RequestAdminUpdateView(AdminRequiredMixin, LoginRequiredMixin, UpdateView)
 
     def _build_engineer_capacity_map(self):
         data = {}
-        engineers = User.objects.filter(role=User.Roles.ENGINEER)
+        engineers = User.objects.filter(role__in=ASSIGNABLE_ENGINEER_ROLES)
         for engineer in engineers:
             assigned = Request.objects.filter(engineer=engineer, status=Request.Status.ONGOING)
             if self.object.pk:
@@ -1475,8 +2242,13 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         form.instance._actor_user = self.request.user
         form.instance._actor_source = "Requestor · Edit Request"
         original = Request.objects.get(pk=form.instance.pk)
+        previous_engineer_id = original.engineer_id
         changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
+        clear_engineer_outlook_lock_on_reassignment(
+            self.object,
+            previous_engineer_id=previous_engineer_id,
+        )
         if original.account_id != self.object.account_id and "account" not in changed_fields:
             changed_fields.append("account")
         if changed_fields:
@@ -1495,7 +2267,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in REQUEST_CREATOR_ROLES | {User.Roles.ENGINEER, PM_ESS_ROLE}:
+        if request.user.role not in (REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}):
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -1509,7 +2281,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             queryset = queryset.filter(pk=pk).filter(Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user))
         elif user.role in REQUEST_CREATOR_ROLES:
             queryset = queryset.filter(pk=pk, requestor=user)
-        elif user.role == User.Roles.ENGINEER:
+        elif user.role in ENGINEER_ACCESS_ROLES:
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
         else:
             raise Http404
@@ -1547,7 +2319,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
         if form is None:
             form = RequestForm(instance=request_obj, actor_role=self.request.user.role)
-        status_allowed = self.request.user.role == User.Roles.ENGINEER
+        status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
         if status_allowed and status_form is None:
             status_form = RequestStatusForm(instance=request_obj)
         elif not status_allowed:
@@ -1584,6 +2356,10 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             previous_backup_id = original.backup_engineer_id
             changed_fields = normalize_request_form_changed_fields(form.changed_data)
             form.save()
+            clear_engineer_outlook_lock_on_reassignment(
+                request_obj,
+                previous_engineer_id=previous_engineer_id,
+            )
             if original.account_id != request_obj.account_id and "account" not in changed_fields:
                 changed_fields.append("account")
             if changed_fields:
@@ -1594,7 +2370,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                     changed_fields,
                     source_label,
                 )
-            notify_engineer_assignment_email(
+            assignment_email_result = notify_engineer_assignment_email(
                 request_obj,
                 actor_user=request.user,
                 request=request,
@@ -1608,12 +2384,13 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                 previous_backup_id=previous_backup_id,
             )
             messages.success(request, "Request details updated.")
+            flash_assignment_email_feedback(request, assignment_email_result, action_label="updated")
             return HttpResponseRedirect(request.path)
         context = self.get_context_data(request_obj, form=form)
         return render(request, self.template_name, context)
 
     def _handle_status_update(self, request, request_obj):
-        if request.user.role != User.Roles.ENGINEER:
+        if request.user.role not in ENGINEER_ACCESS_ROLES:
             messages.error(request, "Only the assigned engineer can update the status.")
             return HttpResponseRedirect(request.path)
         status_form = RequestStatusForm(request.POST, instance=request_obj)
@@ -1687,7 +2464,7 @@ class StatusLogUpdateView(LoginRequiredMixin, UpdateView):
     def get_success_url(self):
         request_obj = self.object.request
         user = self.request.user
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             return reverse("hub:request-manage", args=[request_obj.pk])
         # For engineers, PMs, and requestors
         return reverse("hub:request-manage-collab", args=[request_obj.pk])
@@ -1697,7 +2474,7 @@ class StatusLogUpdateView(LoginRequiredMixin, UpdateView):
         # Determine back URL similarly to get_success_url
         request_obj = self.object.request
         user = self.request.user
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             context["back_url"] = reverse("hub:request-manage", args=[request_obj.pk])
         else:
             context["back_url"] = reverse("hub:request-manage-collab", args=[request_obj.pk])
@@ -1712,7 +2489,7 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
-        if user.role == User.Roles.ADMIN:
+        if user.role in ADMIN_PANEL_ROLES:
             return qs
         if user.role in REQUEST_CREATOR_ROLES:
             return qs.filter(requestor=user)
@@ -1749,13 +2526,13 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
 
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
-        if request.user.role == User.Roles.ENGINEER:
+        if request.user.role in ENGINEER_ACCESS_ROLES:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to draft emails for this request.")
                 return redirect(redirect_target)
             already_launched = RequestCommunication.objects.filter(
                 request=request_obj,
-                user=request.user,
+                user__role__in=ENGINEER_ACCESS_ROLES,
                 channel=RequestCommunication.Channel.OUTLOOK,
             ).exists()
             if already_launched:
@@ -1784,7 +2561,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         to_addresses = {engineer_email, manager_email}
         cc_addresses = {"ESGRequestHub@phildata.com"}
         if request_obj.requestor and request_obj.requestor.role == User.Roles.REQUESTOR_ESS:
-            cc_addresses.add("ChristineF@phildata.com")
+            cc_addresses.add("JoanI@phildata.com")
         if backup_email:
             cc_addresses.add(backup_email)
 
@@ -1817,7 +2594,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         if not assigned_engineer_name:
             assigned_engineer_name = "our engineering team"
 
-        if request.user.role == User.Roles.ENGINEER:
+        if request.user.role in ENGINEER_ACCESS_ROLES:
             body_template = (
                 "Hello {requestor_name},\n\n"
                 "This is to acknowledge your request in Request Hub. We've logged the details below and started processing it.\n\n"
@@ -1884,7 +2661,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
             messages.error(request, "Mark the request as completed before sending a closing email.")
             return redirect(redirect_target)
 
-        if request.user.role == User.Roles.ENGINEER:
+        if request.user.role in ENGINEER_ACCESS_ROLES:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to close out this request.")
                 return redirect(redirect_target)
@@ -1982,11 +2759,11 @@ class RequestTeamsRedirectView(LoginRequiredMixin, View):
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:dashboard")
 
         role = request.user.role
-        if role not in {User.Roles.ADMIN, User.Roles.ENGINEER, PM_ESS_ROLE}:
+        if role not in ({User.Roles.ADMIN, PM_ESG_ROLE, PM_ESS_ROLE} | ENGINEER_ACCESS_ROLES):
             messages.error(request, "You are not allowed to start a Teams chat for this request.")
             return redirect(redirect_target)
 
-        if role == User.Roles.ENGINEER:
+        if role in ENGINEER_ACCESS_ROLES:
             if request.user != request_obj.engineer and request.user != request_obj.backup_engineer:
                 messages.error(request, "You are not allowed to start a Teams chat for this request.")
                 return redirect(redirect_target)
@@ -2051,7 +2828,7 @@ class RequestTeamsRedirectView(LoginRequiredMixin, View):
         )
 
 
-class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
+class RequestExportCSVView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
     """Allow administrators to export all requests to a CSV download."""
 
     columns = (
@@ -2109,18 +2886,178 @@ class RequestExportCSVView(AdminRequiredMixin, LoginRequiredMixin, View):
         return response
 
 
-class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
+class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
     template_name = "hub/report.html"
+
+    @staticmethod
+    def _normalize_report_view(value: str | None) -> str:
+        report_view = (value or "operational").lower()
+        if report_view not in {"operational", "activity"}:
+            return "operational"
+        return report_view
+
+    def _get_requested_edit_log(self) -> Optional[EngineerActivityLog]:
+        edit_log_id = (self.request.GET.get("edit_activity") or "").strip()
+        if not edit_log_id:
+            return None
+        try:
+            return EngineerActivityLog.objects.select_related("engineer", "account", "request").get(pk=edit_log_id)
+        except (EngineerActivityLog.DoesNotExist, ValueError):
+            messages.error(self.request, "We could not find that activity log to edit.")
+            return None
+
+    @staticmethod
+    def _normalize_month_value(value: str | None) -> str:
+        month_value = (value or "").strip()
+        if not month_value:
+            return ""
+        try:
+            datetime.strptime(month_value, "%Y-%m")
+        except ValueError:
+            return ""
+        return month_value
+
+    @staticmethod
+    def _month_start(month_value: str | None) -> Optional[date]:
+        if not month_value:
+            return None
+        parsed = datetime.strptime(month_value, "%Y-%m")
+        return date(parsed.year, parsed.month, 1)
+
+    @staticmethod
+    def _next_month_start(month_start: date) -> date:
+        if month_start.month == 12:
+            return date(month_start.year + 1, 1, 1)
+        return date(month_start.year, month_start.month + 1, 1)
+
+    def _resolve_activity_month_filters(
+        self,
+        *,
+        start_month_value: str | None = None,
+        end_month_value: str | None = None,
+    ) -> dict:
+        start_month = self._normalize_month_value(
+            self.request.GET.get("start_month") if start_month_value is None else start_month_value
+        )
+        end_month = self._normalize_month_value(
+            self.request.GET.get("end_month") if end_month_value is None else end_month_value
+        )
+
+        start_month_date = self._month_start(start_month)
+        end_month_date = self._month_start(end_month)
+
+        if start_month_date and end_month_date and start_month_date > end_month_date:
+            start_month, end_month = end_month, start_month
+            start_month_date, end_month_date = end_month_date, start_month_date
+
+        end_exclusive_date = self._next_month_start(end_month_date) if end_month_date else None
+
+        if start_month_date and end_month_date:
+            if start_month_date == end_month_date:
+                label = start_month_date.strftime("%B %Y")
+            else:
+                label = f"{start_month_date.strftime('%B %Y')} to {end_month_date.strftime('%B %Y')}"
+        elif start_month_date:
+            label = f"{start_month_date.strftime('%B %Y')} onwards"
+        elif end_month_date:
+            label = f"Up to {end_month_date.strftime('%B %Y')}"
+        else:
+            label = "All months"
+
+        return {
+            "start_month": start_month,
+            "end_month": end_month,
+            "start_month_date": start_month_date,
+            "end_exclusive_date": end_exclusive_date,
+            "label": label,
+        }
+
+    @staticmethod
+    def _build_activity_report_url(
+        *,
+        start_month: str = "",
+        end_month: str = "",
+        edit_activity: Optional[int] = None,
+    ) -> str:
+        params = {"report_view": "activity"}
+        if start_month:
+            params["start_month"] = start_month
+        if end_month:
+            params["end_month"] = end_month
+        if edit_activity is not None:
+            params["edit_activity"] = str(edit_activity)
+        return f"{reverse('hub:report')}?{urlencode(params)}"
+
+    def post(self, request, *args, **kwargs):
+        report_view = self._normalize_report_view(request.POST.get("report_view"))
+        if report_view != "activity":
+            return redirect("hub:report")
+
+        start_month = self._normalize_month_value(request.POST.get("start_month"))
+        end_month = self._normalize_month_value(request.POST.get("end_month"))
+        activity_report_url = self._build_activity_report_url(start_month=start_month, end_month=end_month)
+
+        log_id = (request.POST.get("log_id") or "").strip()
+        if not log_id:
+            messages.error(request, "No activity log was selected for editing.")
+            return redirect(activity_report_url)
+
+        try:
+            editing_activity_log = EngineerActivityLog.objects.select_related("engineer", "account", "request").get(pk=log_id)
+        except (EngineerActivityLog.DoesNotExist, ValueError):
+            messages.error(request, "Unable to update the selected activity log.")
+            return redirect(activity_report_url)
+
+        activity_form = EngineerActivityLogForm(
+            data=request.POST,
+            engineer=editing_activity_log.engineer,
+            instance=editing_activity_log,
+        )
+        if activity_form.is_valid():
+            activity_form.save()
+            engineer_name = editing_activity_log.engineer.get_full_name() or editing_activity_log.engineer.username
+            messages.success(request, f"Activity log for {engineer_name} updated successfully.")
+            return redirect(activity_report_url)
+
+        context = self.get_context_data(
+            report_view="activity",
+            editing_activity_log=editing_activity_log,
+            activity_form=activity_form,
+            activity_start_month=start_month,
+            activity_end_month=end_month,
+        )
+        return self.render_to_response(context)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        report_view = (self.request.GET.get("report_view") or "operational").lower()
-        if report_view not in {"operational", "activity"}:
-            report_view = "operational"
+        report_view = self._normalize_report_view(kwargs.get("report_view") or self.request.GET.get("report_view"))
         context["report_view"] = report_view
 
         if report_view == "activity":
-            context.update(self._build_activity_log_context())
+            editing_activity_log = kwargs.get("editing_activity_log")
+            activity_form = kwargs.get("activity_form")
+            activity_start_month = kwargs.get("activity_start_month")
+            activity_end_month = kwargs.get("activity_end_month")
+            if editing_activity_log is None:
+                editing_activity_log = self._get_requested_edit_log()
+            if editing_activity_log is not None and activity_form is None:
+                activity_form = EngineerActivityLogForm(
+                    engineer=editing_activity_log.engineer,
+                    instance=editing_activity_log,
+                )
+            try:
+                activity_log_page = max(1, int(self.request.GET.get("activity_log_page") or 1))
+            except (TypeError, ValueError):
+                activity_log_page = 1
+            context.update(
+                self._build_activity_log_context(
+                    start_month_value=activity_start_month,
+                    end_month_value=activity_end_month,
+                    page_num=activity_log_page,
+                )
+            )
+            context["editing_activity_log"] = editing_activity_log
+            context["activity_form"] = activity_form
         else:
             context.update(self._build_operational_context())
         return context
@@ -2294,8 +3231,16 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
             "status_breakdown": status_breakdown,
         }
 
-    def _build_activity_log_context(self):
+    def _build_activity_log_context(self, *, start_month_value: str | None = None, end_month_value: str | None = None, page_num: int = 1):
+        month_filters = self._resolve_activity_month_filters(
+            start_month_value=start_month_value,
+            end_month_value=end_month_value,
+        )
         logs_qs = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+        if month_filters["start_month_date"]:
+            logs_qs = logs_qs.filter(request_date__gte=month_filters["start_month_date"])
+        if month_filters["end_exclusive_date"]:
+            logs_qs = logs_qs.filter(request_date__lt=month_filters["end_exclusive_date"])
 
         total_hours = logs_qs.aggregate(total=Sum("actual_hours")) or {}
         billable_hours = logs_qs.filter(is_billable=True).aggregate(total=Sum("actual_hours")) or {}
@@ -2407,9 +3352,12 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
             ],
         }
 
-        recent_logs = list(
-            logs_qs.order_by("-request_date", "-created_at")[:50]
-        )
+        paginator = Paginator(logs_qs.order_by("-request_date", "-created_at"), 50)
+        try:
+            page_obj = paginator.page(page_num)
+        except InvalidPage:
+            page_obj = paginator.page(1)
+        recent_logs = list(page_obj.object_list)
 
         return {
             "activity_totals": {
@@ -2419,6 +3367,9 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
                 "non_billable_hours": non_billable_hours_value,
                 "unique_accounts": logs_qs.values("account").distinct().count(),
             },
+            "activity_start_month": month_filters["start_month"],
+            "activity_end_month": month_filters["end_month"],
+            "activity_month_filter_label": month_filters["label"],
             "activity_engineer_chart": engineer_chart,
             "activity_engineer_table": engineer_table,
             "activity_type_chart": activity_chart,
@@ -2426,6 +3377,7 @@ class RequestReportView(AdminRequiredMixin, LoginRequiredMixin, TemplateView):
             "activity_location_chart": location_chart,
             "activity_billable_chart": billable_chart,
             "activity_logs": recent_logs,
+            "activity_logs_page_obj": page_obj,
         }
 
 
@@ -2730,6 +3682,7 @@ class NotificationListView(LoginRequiredMixin, ListView):
     model = Notification
     template_name = "hub/notifications.html"
     context_object_name = "notifications"
+    paginate_by = 25
 
     def get_queryset(self):
         queryset = (
@@ -2737,9 +3690,19 @@ class NotificationListView(LoginRequiredMixin, ListView):
             .order_by("-created_at")
         )
         user = self.request.user
-        if getattr(user, "role", None) == User.Roles.ADMIN:
+        if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
             queryset = queryset.filter(source__icontains="new request")
         return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        base_qs = user.notifications.all()
+        if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
+            base_qs = base_qs.filter(source__icontains="new request")
+        context["unread_count"] = base_qs.filter(is_read=False).count()
+        context["total_count"] = base_qs.count()
+        return context
 
 
 class NotificationReadView(LoginRequiredMixin, View):
@@ -2760,7 +3723,7 @@ class NotificationFollowRedirectView(LoginRequiredMixin, View):
         if notification.related_request:
             req = notification.related_request
             # Route to manage views instead of read-only detail.
-            if request.user.role == User.Roles.ADMIN:
+            if request.user.role in ADMIN_PANEL_ROLES:
                 return redirect("hub:request-manage", pk=req.pk)
             return redirect("hub:request-manage-collab", pk=req.pk)
         return redirect("hub:notifications")
@@ -2773,7 +3736,13 @@ class NotificationDeleteView(LoginRequiredMixin, View):
         return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("hub:notifications")))
 
 
-class RequestNudgeView(AdminRequiredMixin, LoginRequiredMixin, View):
+class NotificationMarkAllReadView(LoginRequiredMixin, View):
+    def post(self, request):
+        request.user.notifications.filter(is_read=False).update(is_read=True)
+        return HttpResponseRedirect(request.META.get("HTTP_REFERER", reverse("hub:notifications")))
+
+
+class RequestNudgeView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(Request.objects.select_related("engineer", "backup_engineer"), pk=pk)
 
@@ -2812,7 +3781,7 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             pk=pk,
         )
 
-        if request.user.role != User.Roles.ENGINEER or request_obj.engineer_id != request.user.id:
+        if request.user.role not in ENGINEER_ACCESS_ROLES or request_obj.engineer_id != request.user.id:
             messages.error(request, "You are not allowed to update this request's status.")
             return redirect("hub:request-detail", pk=pk)
 

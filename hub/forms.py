@@ -1,4 +1,6 @@
 from django import forms
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 
 from django.utils import timezone
 
@@ -7,7 +9,7 @@ from typing import Iterable, List
 from django.db.models import Q
 
 from accounts.models import User
-from .models import Account, EngineerActivityLog, Request, StatusLog
+from .models import Account, EngineerActivityLog, Request, SqrSubmission, StatusLog
 
 
 class AvatarSelect(forms.Select):
@@ -15,6 +17,7 @@ class AvatarSelect(forms.Select):
 
     def __init__(self, *args, **kwargs):
         self.avatar_mapping = {}
+        self.option_group_mapping = {}
         super().__init__(*args, **kwargs)
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
@@ -27,6 +30,9 @@ class AvatarSelect(forms.Select):
                     option["attrs"]["data-avatar"] = meta["url"]
                 if meta.get("initial"):
                     option["attrs"]["data-initial"] = meta["initial"]
+            group = self.option_group_mapping.get(str(option_value))
+            if group:
+                option["attrs"]["data-role-group"] = group
         return option
 
 
@@ -50,7 +56,25 @@ def _user_display(user):
     return full_name or user.username
 
 
+def _engineer_queryset(*extra_users):
+    extra_ids = [user.pk for user in extra_users if user and getattr(user, "pk", None)]
+    queryset = User.objects.filter(role__in=User.ASSIGNABLE_ENGINEER_ROLES)
+    if extra_ids:
+        queryset = User.objects.filter(Q(role__in=User.ASSIGNABLE_ENGINEER_ROLES) | Q(pk__in=extra_ids))
+    return queryset.order_by("first_name", "last_name").distinct()
+
+
+def _engineer_access_queryset():
+    return User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES).order_by("first_name", "last_name")
+
+
 class RequestForm(forms.ModelForm):
+    PROJECT_MANAGER_DISPLAY_NAMES = (
+        "Jeram C. Zamora",
+        "Marfelie B. Barcenas",
+        "Princess Nicole D. Nacianceno",
+    )
+
     account_name = forms.CharField(
         label="Account Name",
         help_text="Select from the list or type a new account name.",
@@ -133,7 +157,8 @@ class RequestForm(forms.ModelForm):
     def __init__(self, *args, actor_role=None, **kwargs):
         self.actor_role = actor_role
         super().__init__(*args, **kwargs)
-        include_backup = actor_role == User.Roles.ENGINEER
+        self.project_manager_ids = set()
+        include_backup = actor_role in User.ENGINEER_ACCESS_ROLES
         if not include_backup:
             self.fields.pop("backup_engineer", None)
         desired_order = [
@@ -150,19 +175,63 @@ class RequestForm(forms.ModelForm):
         if include_backup:
             desired_order.append("backup_engineer")
         self.order_fields(desired_order)
-        engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        current_engineer = getattr(self.instance, "engineer", None)
+        current_backup_engineer = getattr(self.instance, "backup_engineer", None)
+        engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
+        project_manager_qs = User.objects.filter(
+            (Q(first_name__icontains="Jeram") & Q(last_name__icontains="Zamora"))
+            | (Q(first_name__icontains="Marfelie") & Q(last_name__icontains="Barcenas"))
+            | (Q(first_name__icontains="Princess") & Q(last_name__icontains="Nacianceno"))
+        ).order_by("first_name", "last_name")
+        self.project_manager_ids = set(project_manager_qs.values_list("id", flat=True))
+
+        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}
+        is_requestor_form = actor_role in requestor_roles
+        all_assignee_ids = set(engineer_qs.values_list("id", flat=True)) | self.project_manager_ids
+        assignee_qs = (
+            User.objects.filter(id__in=all_assignee_ids).order_by("first_name", "last_name")
+            if is_requestor_form
+            else engineer_qs
+        )
+
         engineer_field = self.fields["engineer"]
-        engineer_field.queryset = engineer_qs
+        engineer_field.queryset = assignee_qs
         widget = engineer_field.widget
         if isinstance(widget, AvatarSelect):
-            widget.avatar_mapping = _build_avatar_mapping(engineer_qs)
+            widget.avatar_mapping = _build_avatar_mapping(assignee_qs)
+            if is_requestor_form:
+                widget.option_group_mapping = {
+                    str(user_id): ("project_manager" if user_id in self.project_manager_ids else "engineer")
+                    for user_id in all_assignee_ids
+                }
         engineer_field.label_from_instance = _user_display
-        if actor_role == User.Roles.ENGINEER:
+        if actor_role in User.ENGINEER_ACCESS_ROLES:
             engineer_field.label = "Turn Over Request"
             engineer_field.empty_label = "Keep current assignment"
         else:
             engineer_field.label = "Preferred Engineer"
             engineer_field.empty_label = "Select preferred engineer"
+
+        engagement_value = ""
+        if self.is_bound:
+            engagement_value = (
+                self.data.get(self.add_prefix("engagement_type"))
+                or self.data.get("engagement_type")
+                or ""
+            )
+        elif self.instance.pk and self.instance.engagement_type:
+            engagement_value = self.instance.engagement_type
+
+        if is_requestor_form:
+            engineer_widget_attrs = engineer_field.widget.attrs
+            engineer_widget_attrs["data-engineer-label"] = "Preferred Engineer"
+            engineer_widget_attrs["data-project-manager-label"] = "Preferred Project Manager"
+            engineer_widget_attrs["data-engineer-empty-label"] = "Select preferred engineer"
+            engineer_widget_attrs["data-project-manager-empty-label"] = "Select preferred project manager"
+            engineer_widget_attrs["data-project-management-value"] = Request.Engagement.PROJECT_MANAGEMENT
+            if engagement_value == Request.Engagement.PROJECT_MANAGEMENT:
+                engineer_field.label = "Preferred Project Manager"
+                engineer_field.empty_label = "Select preferred project manager"
         if include_backup:
             backup_field = self.fields["backup_engineer"]
             backup_field.queryset = engineer_qs
@@ -237,7 +306,7 @@ class RequestForm(forms.ModelForm):
         # Enforce per-engineer ongoing capacity rules during turn-over by engineers.
         # If the target engineer already carries a deployment, they are capped at 3 ongoing requests.
         # Otherwise they can handle up to 5 ongoing requests (even when receiving the first deployment).
-        if self.actor_role == User.Roles.ENGINEER:
+        if self.actor_role in User.ENGINEER_ACCESS_ROLES:
             new_engineer = cleaned_data.get("engineer")
             if new_engineer and new_engineer != self.instance.engineer:
                 ongoing_qs = Request.objects.filter(engineer=new_engineer, status=Request.Status.ONGOING)
@@ -306,6 +375,10 @@ class RequestForm(forms.ModelForm):
         if not engineer:
             return engineer
 
+        engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
+        if engagement == Request.Engagement.PROJECT_MANAGEMENT and engineer.pk not in self.project_manager_ids:
+            raise forms.ValidationError("Select a preferred project manager from the approved list.")
+
         ongoing_requests = Request.objects.filter(
             engineer=engineer,
             status=Request.Status.ONGOING,
@@ -314,7 +387,6 @@ class RequestForm(forms.ModelForm):
         if self.instance.pk:
             ongoing_requests = ongoing_requests.exclude(pk=self.instance.pk)
 
-        engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
         deployment_start = self.cleaned_data.get("deployment_start")
         deployment_end = self.cleaned_data.get("deployment_end")
         max_allowed = 5
@@ -376,12 +448,12 @@ class RequestAdminForm(forms.ModelForm):
         help_text="Switch the request owner (Requestor/Requestor-ESS/PM-ESS).",
     )
     engineer = forms.ModelChoiceField(
-        queryset=User.objects.filter(role=User.Roles.ENGINEER),
+        queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
     )
     backup_engineer = forms.ModelChoiceField(
-        queryset=User.objects.filter(role=User.Roles.ENGINEER),
+        queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
         label="Backup Engineer",
@@ -423,14 +495,14 @@ class RequestAdminForm(forms.ModelForm):
         if isinstance(req_widget, AvatarSelect):
             req_widget.avatar_mapping = _build_avatar_mapping(self.fields["requestor"].queryset)
         self.fields["requestor"].label_from_instance = _user_display
-        self.fields["engineer"].queryset = self.fields["engineer"].queryset.order_by("first_name", "last_name")
+        self.fields["engineer"].queryset = _engineer_queryset(getattr(self.instance, "engineer", None))
         widget = self.fields["engineer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
         self.fields["engineer"].label_from_instance = _user_display
         
         # Setup backup engineer field
-        self.fields["backup_engineer"].queryset = self.fields["backup_engineer"].queryset.order_by("first_name", "last_name")
+        self.fields["backup_engineer"].queryset = _engineer_queryset(getattr(self.instance, "backup_engineer", None))
         backup_widget = self.fields["backup_engineer"].widget
         if isinstance(backup_widget, AvatarSelect):
             backup_widget.avatar_mapping = _build_avatar_mapping(self.fields["backup_engineer"].queryset)
@@ -443,6 +515,220 @@ class RequestAdminForm(forms.ModelForm):
     def save(self, commit=True):
         self.instance.start_date = self.cleaned_data.get("request_date") or self.instance.start_date
         return super().save(commit=commit)
+
+
+class SqrSubmissionForm(forms.ModelForm):
+    GROUP_CHOICES = (
+        ("ESS", "ESS"),
+        ("HPE", "HPE"),
+        ("Dell", "Dell"),
+        ("ETC", "ETC"),
+    )
+
+    SCOPE_CHOICES = (
+        ("Training", "Training"),
+        ("Support", "Support"),
+        ("Project Implementation", "Project Implementation"),
+        ("Project Management", "Project Management"),
+        ("Project Implementation and Management", "Project Implementation and Management"),
+        ("Demonstration", "Demonstration"),
+        ("Technical Support Maintenance", "Technical Support Maintenance"),
+    )
+
+    customer_company = forms.ChoiceField(
+        choices=GROUP_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Group Name",
+    )
+
+    project_details = forms.ChoiceField(
+        choices=SCOPE_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Scope of Services",
+    )
+
+    pm_esg_reviewer = forms.ModelChoiceField(
+        queryset=User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name"),
+        required=True,
+        widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Approver Name",
+    )
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "customer_name",
+            "customer_company",
+            "customer_contact",
+            "pm_esg_reviewer",
+            "project_title",
+            "project_details",
+            "sse_manhrs",
+            "documentation_links",
+            "remarks",
+        ]
+        labels = {
+            "customer_name": "Account Name",
+            "customer_company": "Group Name",
+            "customer_contact": "Account Manager",
+            "project_title": "Service Description",
+            "project_details": "Scope of Services",
+            "sse_manhrs": "SSE Manhrs",
+            "documentation_links": "SQR Doc. Ref. Link",
+            "remarks": "Remarks",
+        }
+        widgets = {
+            "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
+            "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account manager"}),
+            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter service description"}),
+            "sse_manhrs": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}),
+            "documentation_links": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 2,
+                    "placeholder": "https://example.com/sqr-reference",
+                }
+            ),
+            "remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Additional notes"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        reviewer_qs = self.fields["pm_esg_reviewer"].queryset
+        self.fields["pm_esg_reviewer"].label_from_instance = _user_display
+        widget = self.fields["pm_esg_reviewer"].widget
+        if isinstance(widget, AvatarSelect):
+            widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
+        self.fields["project_title"].help_text = "Project Name / Engagement Name"
+        self.fields["documentation_links"].help_text = "Provide the SQR document reference link."
+
+        # Preserve editability of historical values created before dropdown enforcement.
+        for field_name in ("customer_company", "project_details"):
+            current_value = getattr(self.instance, field_name, "") if self.instance else ""
+            if current_value and current_value not in dict(self.fields[field_name].choices):
+                self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
+
+    def clean_documentation_links(self):
+        raw = (self.cleaned_data.get("documentation_links") or "").strip()
+        if not raw:
+            raise forms.ValidationError("Provide at least one documentation link.")
+
+        validator = URLValidator(schemes=["http", "https"])
+        cleaned_links = []
+        seen = set()
+        for line in raw.splitlines():
+            link = line.strip()
+            if not link:
+                continue
+            try:
+                validator(link)
+            except ValidationError:
+                raise forms.ValidationError(f"Invalid URL: {link}")
+            if link not in seen:
+                seen.add(link)
+                cleaned_links.append(link)
+
+        if not cleaned_links:
+            raise forms.ValidationError("Provide at least one valid documentation link.")
+        return "\n".join(cleaned_links)
+
+
+class SqrReviewForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.reviewer_role = kwargs.pop("reviewer_role", "")
+        super().__init__(*args, **kwargs)
+        self.fields["status"].choices = [
+            (SqrSubmission.Status.FOR_REVISION, SqrSubmission.Status.FOR_REVISION.label),
+            (SqrSubmission.Status.APPROVED, SqrSubmission.Status.APPROVED.label),
+        ]
+
+        selected_status = ""
+        if self.is_bound:
+            selected_status = (self.data.get("status") or "").strip()
+        else:
+            selected_status = (getattr(self.instance, "status", "") or "").strip()
+
+        if selected_status == SqrSubmission.Status.FOR_REVISION:
+            self.fields["review_notes"].label = "Revision Comments"
+            self.fields["review_notes"].widget.attrs["placeholder"] = "Enter revision comments"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        selected_status = cleaned_data.get("status")
+        comments = (cleaned_data.get("review_notes") or "").strip()
+        if selected_status == SqrSubmission.Status.FOR_REVISION and self.reviewer_role == User.Roles.PM_ESG and not comments:
+            self.add_error("review_notes", "Revision Comments is required when status is For Revision.")
+        return cleaned_data
+
+    class Meta:
+        model = SqrSubmission
+        fields = ["status", "review_notes"]
+        widgets = {
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "review_notes": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 5,
+                    "placeholder": "Review findings, follow-ups, and approval notes",
+                }
+            ),
+        }
+
+
+class SqrRevenueQuotationForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["quotation_total_price", "discount_rate"]
+        widgets = {
+            "quotation_total_price": forms.NumberInput(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+            "discount_rate": forms.Select(attrs={"class": "form-select form-select-sm"}),
+        }
+
+    def clean_quotation_total_price(self):
+        value = self.cleaned_data.get("quotation_total_price")
+        if value is None:
+            raise forms.ValidationError("Enter the quotation amount.")
+        if value <= 0:
+            raise forms.ValidationError("Quotation amount must be greater than zero.")
+        return value
+
+
+class SqrRevenueOrderForm(forms.ModelForm):
+    class Meta:
+        model = SqrSubmission
+        fields = ["po_attachment_link", "revenue_overview"]
+        widgets = {
+            "po_attachment_link": forms.URLInput(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "placeholder": "https://...",
+                }
+            ),
+            "revenue_overview": forms.Textarea(
+                attrs={
+                    "class": "form-control form-control-sm",
+                    "rows": 2,
+                    "placeholder": "Overview details of the revenue",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["po_attachment_link"].required = True
+
+    def clean_po_attachment_link(self):
+        value = (self.cleaned_data.get("po_attachment_link") or "").strip()
+        if not value:
+            raise forms.ValidationError("Attach the purchase order link to move this to Revenue stage.")
+        return value
 
 
 class RequestStatusForm(forms.ModelForm):
@@ -507,12 +793,12 @@ class EngineerActivityLogForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "form-select"}),
     )
     is_billable = forms.TypedChoiceField(
-        label="Billable",
+        label="Billing Type",
         choices=(
+            ("false", "Not Billable"),
             ("true", "Billable"),
-            ("false", "Not billable"),
         ),
-        initial="true",
+        initial="false",
         coerce=lambda value: str(value).lower() in {"true", "1", "yes"},
         widget=forms.Select(attrs={"class": "form-select"}),
     )
@@ -566,7 +852,7 @@ class EngineerActivityLogForm(forms.ModelForm):
         ).order_by("-created_at").select_related("account")
         request_field.queryset = related_requests
         request_field.empty_label = "Select request (optional)"
-        self.fields["is_billable"].initial = "true"
+        self.fields["is_billable"].initial = "false"
 
         request_date_field = self.fields["request_date"]
         request_date_field.required = True
@@ -578,12 +864,13 @@ class EngineerActivityLogForm(forms.ModelForm):
                 self.fields["is_billable"].initial = "true" if self.instance.is_billable else "false"
                 self.fields["activity_type"].initial = self.instance.activity_type
             else:
-                self.fields["is_billable"].initial = "true"
+                self.fields["is_billable"].initial = "false"
                 self.fields["activity_type"].initial = EngineerActivityLog.ActivityType.INTERNAL_SUPPORT
+                self.fields["status"].initial = EngineerActivityLog.Status.COMPLETED
         else:
             raw_billable = self.data.get(self.add_prefix("is_billable"))
             if raw_billable is None:
-                self.fields["is_billable"].initial = "true"
+                self.fields["is_billable"].initial = "false"
 
         if self.is_bound and self.errors:
             for name, field in self.fields.items():
@@ -719,7 +1006,7 @@ class AdminRequestFilterForm(forms.Form):
         self.fields["account_manager"].queryset = requestor_qs
         self.fields["account_manager"].empty_label = "All requestors"
         self.fields["account_manager"].label_from_instance = _user_display
-        engineer_qs = User.objects.filter(role=User.Roles.ENGINEER).order_by("first_name", "last_name")
+        engineer_qs = _engineer_access_queryset()
         self.fields["engineer"].queryset = engineer_qs
         self.fields["engineer"].empty_label = "All engineers"
         self.fields["engineer"].label_from_instance = _user_display

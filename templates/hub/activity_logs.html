@@ -4,26 +4,46 @@
 {% block content %}
 <div class="activity-summary-card mb-4">
     <div class="activity-summary-card__body">
-        <div>
-            <h1 class="h4 mb-1">Engineer Activity Logs</h1>
-            <p class="text-muted mb-0">Capture what you worked on, where it happened, and whether the effort is billable.</p>
+        {# ── Left: title + sub ── #}
+        <div class="activity-summary-card__info">
+            <h1 class="h4 mb-1 d-flex align-items-center gap-2">
+                <span style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.35);display:inline-flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0;">
+                    <i class="bi bi-journal-text"></i>
+                </span>
+                Engineer Activity Logs
+            </h1>
+            <p class="mb-0">Capture what you worked on, where it happened, and whether the effort is billable.</p>
         </div>
+
+        {# ── Centre: metric pills ── #}
         <div class="activity-summary-card__metrics">
-            <span class="activity-summary-pill activity-summary-pill--entries">
-                Total Entries: {{ logs|length }}
+            <span class="activity-summary-pill">
+                <span class="pill-icon"><i class="bi bi-journals"></i></span>
+                <span class="pill-label">Entries</span>
+                <span class="pill-value">{{ logs_total_count }}</span>
             </span>
-            <span class="activity-summary-pill activity-summary-pill--billable">
-                Billable Hours: {{ hours_summary.billable|default:0|floatformat:1 }}
+            <span class="activity-summary-pill">
+                <span class="pill-icon"><i class="bi bi-currency-dollar"></i></span>
+                <span class="pill-label">Billable</span>
+                <span class="pill-value">{{ hours_summary.billable|default:0|floatformat:1 }} h</span>
             </span>
-            <span class="activity-summary-pill activity-summary-pill--nonbillable">
-                Not Billable: {{ hours_summary.non_billable|default:0|floatformat:1 }}
+            <span class="activity-summary-pill">
+                <span class="pill-icon"><i class="bi bi-dash-circle"></i></span>
+                <span class="pill-label">Non-bill</span>
+                <span class="pill-value">{{ hours_summary.non_billable|default:0|floatformat:1 }} h</span>
             </span>
-            <span class="activity-summary-pill activity-summary-pill--total">
-                Total Hours: {{ hours_summary.total|default:0|floatformat:1 }}
+            <span class="activity-summary-pill">
+                <span class="pill-icon"><i class="bi bi-clock-history"></i></span>
+                <span class="pill-label">Total</span>
+                <span class="pill-value">{{ hours_summary.total|default:0|floatformat:1 }} h</span>
             </span>
         </div>
-        <div class="ms-auto">
-            <button type="button" class="btn btn-primary" id="new-activity-btn">Create Activity Report</button>
+
+        {# ── Right: CTA ── #}
+        <div class="activity-summary-card__cta">
+            <button type="button" class="btn-create-activity" id="new-activity-btn">
+                <i class="bi bi-plus-circle-fill"></i>New Activity Report
+            </button>
         </div>
     </div>
 </div>
@@ -39,18 +59,21 @@
 
 <div class="tab-content" id="activity-logs-tab-content">
     <div class="tab-pane fade show active" id="activity-list-pane" role="tabpanel" aria-labelledby="activity-list-tab" tabindex="0">
-        <div class="row g-4 align-items-start">
-            <div class="col-12">
-                <div class="glass-card p-4 h-100 d-flex flex-column">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div class="glass-card p-4">
+
+            {# ── Card header ── #}
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
                 <div>
-                    <h2 class="h5 mb-1">Recent Activity</h2>
-                    <p class="text-muted mb-0">Track your daily work for downstream productivity reporting.</p>
+                    <h2 class="h5 mb-1 fw-bold d-flex align-items-center gap-2">
+                        <span class="rpt-chart-icon rpt-icon--indigo" style="width:32px;height:32px;font-size:0.9rem;"><i class="bi bi-journal-text"></i></span>
+                        Recent Activity
+                    </h2>
+                    <p class="text-muted small mb-0">Track your daily work for downstream productivity reporting.</p>
                 </div>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
                     <form method="get" class="d-flex align-items-center gap-2">
-                        <label for="activity-month-filter" class="small text-muted mb-0">Month</label>
-                        <select id="activity-month-filter" name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <label for="activity-month-filter" class="small fw-semibold mb-0 text-nowrap">Month</label>
+                        <select id="activity-month-filter" name="month" class="form-select form-select-sm" style="min-width:160px;" onchange="this.form.submit()">
                             <option value="">All months</option>
                             {% for month in month_options %}
                                 <option value="{{ month.value }}" {% if selected_month == month.value %}selected{% endif %}>{{ month.label }} ({{ month.count }})</option>
@@ -60,140 +83,268 @@
                             <a href="{% url 'hub:activity-logs' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
                         {% endif %}
                     </form>
-                    <span class="badge bg-light text-dark border">Sorted by most recent</span>
                     {% if selected_month_label %}
-                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Month: {{ selected_month_label }}</span>
+                        <span class="rpt-period-badge"><i class="bi bi-calendar3 me-1"></i>{{ selected_month_label }}</span>
                     {% endif %}
                     {% if editing_log %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Editing: {{ editing_log.request_date|date:"M d, Y" }}</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            <i class="bi bi-pencil-fill me-1"></i>Editing: {{ editing_log.request_date|date:"M d, Y" }}
+                        </span>
+                    {% endif %}
+                    {% if logs_total_count %}
+                        <span class="rpt-log-count-badge"><i class="bi bi-journals me-1"></i>{{ logs_total_count }} entr{{ logs_total_count|pluralize:"y,ies" }}</span>
                     {% endif %}
                 </div>
             </div>
-            <div class="table-responsive flex-grow-1">
-                <table class="table align-middle mb-0">
-                    <thead>
+
+            {# ── Showing X–Y meta ── #}
+            {% if logs %}
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                    <span class="text-muted small">
+                        Showing
+                        <strong>{{ logs_page_obj.start_index }}</strong>–<strong>{{ logs_page_obj.end_index }}</strong>
+                        of <strong>{{ logs_total_count }}</strong>
+                        entr{{ logs_total_count|pluralize:"y,ies" }}
+                    </span>
+                    {% if logs_page_obj.paginator.num_pages > 1 %}
+                        <span class="text-muted small">
+                            Page <strong>{{ logs_page_obj.number }}</strong> of <strong>{{ logs_page_obj.paginator.num_pages }}</strong>
+                        </span>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# ── Table ── #}
+            <div class="table-responsive">
+                <table class="table align-middle rpt-activity-table mb-0">
+                    <thead class="rpt-table-head">
                         <tr>
-                            <th scope="col">Date</th>
-                            <th scope="col">Account</th>
-                            <th scope="col">Request</th>
-                            <th scope="col">Activity</th>
-                            <th scope="col">Hours</th>
-                            <th scope="col">Location</th>
-                            <th scope="col">Billable</th>
-                            <th scope="col" class="text-end">Status</th>
-                            <th scope="col">Actions</th>
+                            <th class="rpt-col-num">#</th>
+                            <th>Date</th>
+                            <th>Account</th>
+                            <th>Request</th>
+                            <th>Activity</th>
+                            <th class="text-center">Hrs</th>
+                            <th>Location</th>
+                            <th>Billable</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for log in logs %}
-                            <tr{% if editing_log and editing_log.pk == log.pk %} class="table-warning"{% endif %}>
-                                <td class="text-nowrap">{{ log.request_date|date:"M d, Y" }}</td>
-                                <td class="text-nowrap">{{ log.account.name }}</td>
+                            <tr class="rpt-activity-row{% if editing_log and editing_log.pk == log.pk %} rpt-activity-row--editing activity-edit-row-focus{% endif %}">
+                                <td class="rpt-row-num">{{ logs_page_obj.start_index|add:forloop.counter0 }}</td>
+                                <td>
+                                    <span class="rpt-date-chip text-nowrap">
+                                        <i class="bi bi-calendar3 me-1 opacity-50"></i>{{ log.request_date|date:"M d, Y" }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="rpt-account-name fw-medium">{{ log.account.name }}</span>
+                                </td>
                                 <td class="text-nowrap">
                                     {% if log.request %}
-                                        <a href="{% url 'hub:request-manage-collab' log.request.pk %}" class="text-decoration-none">{{ log.request.reference_code }}</a>
+                                        <a href="{% url 'hub:request-manage-collab' log.request.pk %}" class="al-req-link">
+                                            <i class="bi bi-link-45deg me-1 opacity-60"></i>{{ log.request.reference_code }}
+                                        </a>
                                     {% else %}
-                                        <span class="text-muted">—</span>
+                                        <span class="text-muted opacity-50">—</span>
                                     {% endif %}
                                 </td>
-                                <td style="min-width: 260px;">
-                                    <div class="fw-semibold">{{ log.get_activity_type_display }}</div>
-                                    <div class="text-muted small">{{ log.details }}</div>
-                                </td>
-                                <td>{{ log.actual_hours|floatformat:1 }}</td>
                                 <td>
-                                    <span class="badge bg-light text-dark border">{{ log.get_location_display }}</span>
+                                    <div class="rpt-activity-cell">
+                                        <span class="rpt-activity-type">{{ log.get_activity_type_display }}</span>
+                                        {% if log.details %}
+                                            <span class="rpt-activity-detail text-muted">{{ log.details|truncatechars:72 }}</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="rpt-hours-badge">{{ log.actual_hours|floatformat:1 }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge rpt-badge--gray">{{ log.get_location_display }}</span>
                                 </td>
                                 <td>
                                     {% if log.is_billable %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Billable</span>
+                                        <span class="badge rpt-badge--green"><i class="bi bi-check-circle-fill me-1"></i>Billable</span>
                                     {% else %}
-                                        <span class="badge bg-secondary text-white">Not billable</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    {% if log.status == 'completed' %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle">{{ log.get_status_display }}</span>
-                                    {% elif log.status == 'in_progress' %}
-                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ log.get_status_display }}</span>
-                                    {% else %}
-                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ log.get_status_display }}</span>
+                                        <span class="badge rpt-badge--muted">Non-billable</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <a href="?edit={{ log.pk }}{% if selected_month %}&month={{ selected_month }}{% endif %}" class="btn btn-outline-primary btn-sm">Edit</a>
+                                    {% if log.status == 'completed' %}
+                                        <span class="badge al-status-badge al-status--done"><i class="bi bi-check2-circle me-1"></i>{{ log.get_status_display }}</span>
+                                    {% elif log.status == 'in_progress' %}
+                                        <span class="badge al-status-badge al-status--wip"><i class="bi bi-arrow-repeat me-1"></i>{{ log.get_status_display }}</span>
+                                    {% else %}
+                                        <span class="badge al-status-badge al-status--pending"><i class="bi bi-hourglass-split me-1"></i>{{ log.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-1">
+                                        <a href="?edit={{ log.pk }}{% if selected_month %}&month={{ selected_month }}{% endif %}"
+                                           class="rpt-edit-btn" title="Edit this entry">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </a>
                                         <form method="post" action="{% url 'hub:activity-log-delete' log.pk %}" class="d-inline">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this activity log?');">Delete</button>
+                                            <button type="submit" class="rpt-delete-btn" title="Delete this entry"
+                                                    onclick="return confirm('Delete this activity log entry?');">
+                                                <i class="bi bi-trash3-fill"></i>
+                                            </button>
                                         </form>
                                     </div>
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="9" class="text-center text-muted py-4">No activity logs yet. Add your first entry using the form.</td>
+                                <td colspan="10" class="text-center py-5">
+                                    <div class="d-flex flex-column align-items-center gap-2 opacity-50">
+                                        <i class="bi bi-journal-x" style="font-size:2rem;"></i>
+                                        <span>No activity logs yet. Create your first entry above.</span>
+                                    </div>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-                </div>
-            </div>
+
+            {# ── Pagination ── #}
+            {% if logs_page_obj.paginator.num_pages > 1 %}
+                <nav class="rpt-log-pagination d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3"
+                     aria-label="Activity log pages">
+                    <span class="text-muted small">50 rows per page</span>
+                    <div class="d-flex align-items-center gap-1">
+                        {% if logs_page_obj.has_previous %}
+                            <a class="rpt-page-btn" title="First page"
+                               href="?{% if selected_month %}month={{ selected_month }}&{% endif %}page=1">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </a>
+                            <a class="rpt-page-btn" title="Previous page"
+                               href="?{% if selected_month %}month={{ selected_month }}&{% endif %}page={{ logs_page_obj.previous_page_number }}">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        {% else %}
+                            <span class="rpt-page-btn rpt-page-btn--disabled"><i class="bi bi-chevron-double-left"></i></span>
+                            <span class="rpt-page-btn rpt-page-btn--disabled"><i class="bi bi-chevron-left"></i></span>
+                        {% endif %}
+
+                        {% for p in logs_page_obj.paginator.page_range %}
+                            {% if p == logs_page_obj.number %}
+                                <span class="rpt-page-btn rpt-page-btn--active">{{ p }}</span>
+                            {% elif p >= logs_page_obj.number|add:"-2" and p <= logs_page_obj.number|add:"2" %}
+                                <a class="rpt-page-btn"
+                                   href="?{% if selected_month %}month={{ selected_month }}&{% endif %}page={{ p }}">{{ p }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if logs_page_obj.has_next %}
+                            <a class="rpt-page-btn" title="Next page"
+                               href="?{% if selected_month %}month={{ selected_month }}&{% endif %}page={{ logs_page_obj.next_page_number }}">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                            <a class="rpt-page-btn" title="Last page"
+                               href="?{% if selected_month %}month={{ selected_month }}&{% endif %}page={{ logs_page_obj.paginator.num_pages }}">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </a>
+                        {% else %}
+                            <span class="rpt-page-btn rpt-page-btn--disabled"><i class="bi bi-chevron-right"></i></span>
+                            <span class="rpt-page-btn rpt-page-btn--disabled"><i class="bi bi-chevron-double-right"></i></span>
+                        {% endif %}
+                    </div>
+                </nav>
+            {% endif %}
+
         </div>
     </div>
 
     <div class="tab-pane fade" id="activity-graph-pane" role="tabpanel" aria-labelledby="activity-graph-tab" tabindex="0">
-        <div class="row g-3 mb-3">
+
+        {# ── KPI row ── #}
+        <div class="row g-3 mb-4">
             <div class="col-12 col-md-4">
-                <div class="glass-card p-3 h-100">
-                    <div class="small text-uppercase text-muted">Total Related Requests</div>
-                    <div class="h4 mb-0">{{ requests_summary.total }}</div>
+                <div class="rpt-kpi-card rpt-kpi--blue h-100">
+                    <div class="rpt-kpi-icon"><i class="bi bi-folder2-open"></i></div>
+                    <div class="rpt-kpi-label">Total Related Requests</div>
+                    <div class="rpt-kpi-value">{{ requests_summary.total }}</div>
+                    <div class="rpt-kpi-sub">All requests linked to your activity logs</div>
                 </div>
             </div>
             <div class="col-12 col-md-4">
-                <div class="glass-card p-3 h-100">
-                    <div class="small text-uppercase text-muted">Ongoing Requests</div>
-                    <div class="h4 mb-0">{{ requests_summary.ongoing }}</div>
+                <div class="rpt-kpi-card rpt-kpi--amber h-100">
+                    <div class="rpt-kpi-icon"><i class="bi bi-arrow-repeat"></i></div>
+                    <div class="rpt-kpi-label">Ongoing Requests</div>
+                    <div class="rpt-kpi-value">{{ requests_summary.ongoing }}</div>
+                    <div class="rpt-kpi-sub">Requests still in progress</div>
                 </div>
             </div>
             <div class="col-12 col-md-4">
-                <div class="glass-card p-3 h-100">
-                    <div class="small text-uppercase text-muted">Completed Requests</div>
-                    <div class="h4 mb-0">{{ requests_summary.completed }}</div>
+                <div class="rpt-kpi-card rpt-kpi--green h-100">
+                    <div class="rpt-kpi-icon"><i class="bi bi-check2-all"></i></div>
+                    <div class="rpt-kpi-label">Completed Requests</div>
+                    <div class="rpt-kpi-value">{{ requests_summary.completed }}</div>
+                    <div class="rpt-kpi-sub">Successfully closed requests</div>
                 </div>
             </div>
         </div>
 
+        {# ── Chart grid ── #}
         <div class="row g-4">
             <div class="col-12 col-lg-6">
-                <div class="glass-card p-3">
-                    <h3 class="h6 mb-3">Request Status Distribution</h3>
-                    <div class="activity-chart-wrap">
+                <div class="glass-card rpt-chart-card">
+                    <div class="rpt-chart-head">
+                        <span class="rpt-chart-icon rpt-icon--blue"><i class="bi bi-pie-chart-fill"></i></span>
+                        <div>
+                            <p class="rpt-chart-title">Request Status Distribution</p>
+                            <p class="rpt-chart-sub">Breakdown of request statuses</p>
+                        </div>
+                    </div>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut">
                         <canvas id="request-status-chart"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-12 col-lg-6">
-                <div class="glass-card p-3">
-                    <h3 class="h6 mb-3">Request Priority Distribution</h3>
-                    <div class="activity-chart-wrap">
+                <div class="glass-card rpt-chart-card">
+                    <div class="rpt-chart-head">
+                        <span class="rpt-chart-icon rpt-icon--violet"><i class="bi bi-bar-chart-fill"></i></span>
+                        <div>
+                            <p class="rpt-chart-title">Request Priority Distribution</p>
+                            <p class="rpt-chart-sub">How priorities are spread across requests</p>
+                        </div>
+                    </div>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut">
                         <canvas id="request-priority-chart"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-12 col-lg-6">
-                <div class="glass-card p-3">
-                    <h3 class="h6 mb-3">Activity Type Breakdown</h3>
-                    <div class="activity-chart-wrap">
+                <div class="glass-card rpt-chart-card">
+                    <div class="rpt-chart-head">
+                        <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-grid-fill"></i></span>
+                        <div>
+                            <p class="rpt-chart-title">Activity Type Breakdown</p>
+                            <p class="rpt-chart-sub">What types of work you logged</p>
+                        </div>
+                    </div>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut">
                         <canvas id="activity-type-chart"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-12 col-lg-6">
-                <div class="glass-card p-3">
-                    <h3 class="h6 mb-3">Monthly Activity Hours</h3>
-                    <div class="activity-chart-wrap">
+                <div class="glass-card rpt-chart-card">
+                    <div class="rpt-chart-head">
+                        <span class="rpt-chart-icon rpt-icon--cyan"><i class="bi bi-graph-up-arrow"></i></span>
+                        <div>
+                            <p class="rpt-chart-title">Monthly Activity Hours</p>
+                            <p class="rpt-chart-sub">Total hours logged per month</p>
+                        </div>
+                    </div>
+                    <div class="rpt-canvas-wrap">
                         <canvas id="activity-monthly-chart"></canvas>
                     </div>
                 </div>
@@ -205,40 +356,125 @@
 
 <div class="requestor-modal" id="create-activity-modal" aria-hidden="true" data-open-on-load="{% if editing_log or form.errors %}true{% else %}false{% endif %}">
     <div class="requestor-modal__backdrop" id="create-activity-backdrop"></div>
-    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-activity-title">
-        <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="create-activity-title">{% if editing_log %}Edit Activity Report{% else %}Create Activity Report{% endif %}</h2>
-            <button type="button" class="btn-close" id="close-activity-btn" aria-label="Close"></button>
+    <div class="requestor-modal__dialog requestor-modal__dialog--act" role="dialog" aria-modal="true" aria-labelledby="create-activity-title">
+
+        
+        <div class="act-modal-header">
+            <div class="act-modal-header__icon">
+                <i class="bi bi-journal-plus"></i>
+            </div>
+            <div class="act-modal-header__text">
+                <h2 class="act-modal-header__title" id="create-activity-title">
+                    {% if editing_log %}Edit Activity Report{% else %}New Activity Report{% endif %}
+                </h2>
+                <p class="act-modal-header__sub">Log what you worked on — fill in the fields below</p>
+            </div>
+            <button type="button" class="act-modal-close" id="close-activity-btn" aria-label="Close">
+                <i class="bi bi-x-lg"></i>
+            </button>
         </div>
-        <div class="requestor-modal__body">
+
+        
+        <div class="requestor-modal__body act-modal-body">
             <form method="post" novalidate id="activity-log-form">
                 {% csrf_token %}
                 {% if form.non_field_errors %}
-                    <div class="alert alert-danger" role="alert">
-                        {{ form.non_field_errors|join:" " }}
+                    <div class="alert alert-danger rounded-3 py-2 mb-3 d-flex align-items-center gap-2" role="alert" style="font-size:0.85rem;">
+                        <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+                        <span>{{ form.non_field_errors|join:" " }}</span>
                     </div>
                 {% endif %}
                 {% if editing_log %}
                     <input type="hidden" name="log_id" value="{{ editing_log.pk }}">
                 {% endif %}
-                {% for field in form %}
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}
-                            <div class="form-text">{{ field.help_text }}</div>
-                        {% endif %}
-                        {% if field.errors %}
-                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                        {% endif %}
+
+                <div class="act-form-grid">
+
+                    
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.request_date.id_for_label }}">
+                            <i class="bi bi-calendar3"></i> Date of Activity
+                        </label>
+                        {{ form.request_date }}
+                        {% if form.request_date.errors %}<div class="act-form-error">{{ form.request_date.errors|join:" " }}</div>{% endif %}
                     </div>
-                {% endfor %}
-                <div class="d-flex justify-content-end gap-2">
-                    <button type="button" class="btn btn-outline-secondary" id="cancel-activity-btn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">{% if editing_log %}Update Activity Report{% else %}Save Activity Report{% endif %}</button>
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.activity_type.id_for_label }}">
+                            <i class="bi bi-tag"></i> Type of Activity
+                        </label>
+                        {{ form.activity_type }}
+                        {% if form.activity_type.errors %}<div class="act-form-error">{{ form.activity_type.errors|join:" " }}</div>{% endif %}
+                    </div>
+
+                    
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.request.id_for_label }}">
+                            <i class="bi bi-link-45deg"></i> Related Request <span class="act-form-optional">optional</span>
+                        </label>
+                        {{ form.request }}
+                        {% if form.request.errors %}<div class="act-form-error">{{ form.request.errors|join:" " }}</div>{% endif %}
+                    </div>
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.account.id_for_label }}">
+                            <i class="bi bi-building"></i> Account <span class="act-form-optional">optional</span>
+                        </label>
+                        {{ form.account }}
+                        {% if form.account.errors %}<div class="act-form-error">{{ form.account.errors|join:" " }}</div>{% endif %}
+                    </div>
+
+                    
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.actual_hours.id_for_label }}">
+                            <i class="bi bi-clock"></i> Actual Hours
+                        </label>
+                        {{ form.actual_hours }}
+                        {% if form.actual_hours.errors %}<div class="act-form-error">{{ form.actual_hours.errors|join:" " }}</div>{% endif %}
+                    </div>
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.location.id_for_label }}">
+                            <i class="bi bi-geo-alt"></i> Work Location
+                        </label>
+                        {{ form.location }}
+                        {% if form.location.errors %}<div class="act-form-error">{{ form.location.errors|join:" " }}</div>{% endif %}
+                    </div>
+
+                    
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.is_billable.id_for_label }}">
+                            <i class="bi bi-currency-dollar"></i> Billing Type
+                        </label>
+                        {{ form.is_billable }}
+                        {% if form.is_billable.errors %}<div class="act-form-error">{{ form.is_billable.errors|join:" " }}</div>{% endif %}
+                    </div>
+                    <div class="act-form-field">
+                        <label class="act-form-label" for="{{ form.status.id_for_label }}">
+                            <i class="bi bi-check2-circle"></i> Status
+                        </label>
+                        {{ form.status }}
+                        {% if form.status.errors %}<div class="act-form-error">{{ form.status.errors|join:" " }}</div>{% endif %}
+                    </div>
+
+                    
+                    <div class="act-form-field act-form-field--full">
+                        <label class="act-form-label" for="{{ form.details.id_for_label }}">
+                            <i class="bi bi-card-text"></i> Details
+                        </label>
+                        {{ form.details }}
+                        {% if form.details.errors %}<div class="act-form-error">{{ form.details.errors|join:" " }}</div>{% endif %}
+                    </div>
+
+                </div>
+
+                <div class="act-form-actions">
+                    <button type="button" class="act-form-cancel" id="cancel-activity-btn">Cancel</button>
+                    <button type="submit" class="act-form-submit">
+                        <i class="bi bi-check2"></i>
+                        {% if editing_log %}Update Activity{% else %}Save Activity{% endif %}
+                    </button>
                 </div>
             </form>
         </div>
+
     </div>
 </div>
 
@@ -314,8 +550,51 @@
         }
 
         const reportData = JSON.parse(dataNode.textContent || '{}');
-        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
         const chartRegistry = {};
+
+        // ── Transparent canvas background plugin ──────────────────────────
+        // Force Chart.js to use a transparent canvas background
+        const transparentBgPlugin = {
+            id: 'transparentBg',
+            beforeDraw(chart) {
+                const { ctx, width, height } = chart;
+                ctx.save();
+                ctx.clearRect(0, 0, width, height);
+                ctx.restore();
+            }
+        };
+        Chart.register(transparentBgPlugin);
+
+        // ── Theme-aware scale colours ──────────────────────────────────────
+        const isDark = () => document.body.classList.contains('dark-mode');
+        const scaleOpts = () => {
+            const dark = isDark();
+            return {
+                grid: {
+                    color: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                    tickColor: 'transparent',
+                },
+                ticks: {
+                    color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.42)',
+                    font: { size: 11 },
+                },
+                border: { color: 'transparent' },
+            };
+        };
+        const pluginOpts = () => ({
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: isDark() ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.95)',
+                titleColor: isDark() ? '#f1f5f9' : '#1e293b',
+                bodyColor:  isDark() ? '#cbd5e1' : '#475569',
+                borderColor: isDark() ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+                borderWidth: 1,
+                padding: 10,
+                cornerRadius: 8,
+                boxPadding: 4,
+            },
+        });
 
         const upsertChart = (canvasId, config) => {
             const canvas = document.getElementById(canvasId);
@@ -328,6 +607,7 @@
 
         const makeBar = (canvasId, labels, values, label) => {
             if (!labels || !labels.length) return;
+            const so = scaleOpts();
             upsertChart(canvasId, {
                 type: 'bar',
                 data: {
@@ -337,18 +617,33 @@
                         data: values,
                         backgroundColor: defaultColors,
                         borderRadius: 8,
+                        borderSkipped: false,
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: pluginOpts(),
+                    scales: {
+                        x: { ...so, grid: { ...so.grid, display: false } },
+                        y: so,
+                    },
+                    animation: { duration: 600, easing: 'easeOutQuart' },
                 }
             });
         };
 
         const makeLine = (canvasId, labels, values, label) => {
             if (!labels || !labels.length) return;
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const so = scaleOpts();
+            // build a gradient fill
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            const dark = isDark();
+            gradient.addColorStop(0, dark ? 'rgba(59,130,246,0.35)' : 'rgba(59,130,246,0.25)');
+            gradient.addColorStop(1, dark ? 'rgba(59,130,246,0.02)' : 'rgba(59,130,246,0.0)');
             upsertChart(canvasId, {
                 type: 'line',
                 data: {
@@ -356,16 +651,27 @@
                     datasets: [{
                         label,
                         data: values,
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: dark ? '#60a5fa' : '#3b82f6',
+                        backgroundColor: gradient,
                         fill: true,
-                        tension: 0.3,
+                        tension: 0.42,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: dark ? '#60a5fa' : '#3b82f6',
+                        pointBorderColor: dark ? 'rgba(15,23,42,0.8)' : '#ffffff',
+                        pointBorderWidth: 2,
+                        borderWidth: 2.5,
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: pluginOpts(),
+                    scales: {
+                        x: { ...so, grid: { ...so.grid, display: false } },
+                        y: so,
+                    },
+                    animation: { duration: 700, easing: 'easeOutQuart' },
                 }
             });
         };

@@ -1,41 +1,334 @@
 {% extends "base.html" %}
 {% block title %}My Profile · Request Hub{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-6">
-        <div class="glass-card p-4">
-            <h1 class="h4 mb-4">Update Profile</h1>
-            <form method="post" enctype="multipart/form-data" novalidate>
-                {% csrf_token %}
-                {% for field in form %}
-                    <div class="mb-3">
-                        <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                        {% if field.name == "profile_photo" %}
-                            {% if form.instance.profile_photo %}
-                                <div class="mb-2">
-                                    <img src="{{ form.instance.profile_photo.url }}" alt="Current profile photo" class="img-thumbnail" style="max-height: 160px;">
-                                </div>
-                                <div class="d-flex gap-2 flex-wrap align-items-center">
-                                    {{ field }}
-                                    <button class="btn btn-outline-danger" type="submit" name="delete_photo" value="1" formnovalidate>Delete Photo</button>
-                                </div>
-                            {% else %}
-                                {{ field }}
-                            {% endif %}
-                        {% else %}
-                            {{ field }}
-                        {% endif %}
-                        {% if field.help_text %}
-                            <div class="form-text">{{ field.help_text|safe }}</div>
-                        {% endif %}
-                        {% if field.errors %}
-                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-                <button class="btn btn-primary" type="submit">Save changes</button>
-            </form>
+<div class="profile-page">
+
+    {# ── Hero / Avatar banner ──────────────────────────────── #}
+    <div class="profile-hero">
+        <div class="profile-hero__banner profile-hero__banner--{{ form.instance.banner_gradient|default:'blue' }}" id="profile-hero-banner">
+            <button type="button" class="profile-hero__banner-edit" id="banner-edit-btn" title="Edit banner" aria-label="Edit banner">
+                <i class="bi bi-image-fill"></i><span>Edit Banner</span>
+            </button>
+        </div>
+        <div class="profile-hero__body">
+            <div class="profile-hero__avatar-wrap" id="profile-avatar-anchor">
+                {% if form.instance.profile_photo %}
+                    <img src="{{ form.instance.profile_photo.url }}" alt="Profile photo" class="profile-hero__avatar">
+                {% else %}
+                    <span class="profile-hero__avatar profile-hero__avatar--placeholder">
+                        {{ form.instance.get_full_name|default:form.instance.username|slice:":1"|upper }}
+                    </span>
+                {% endif %}
+                <label for="id_profile_photo" class="profile-hero__avatar-edit" title="Change photo" aria-label="Change profile photo">
+                    <i class="bi bi-camera-fill"></i>
+                </label>
+            </div>
+            <div class="profile-hero__info">
+                <h1 class="profile-hero__name">{{ form.instance.get_full_name|default:form.instance.username }}</h1>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="profile-hero__role-badge">
+                        <i class="bi bi-shield-check-fill me-1"></i>{{ form.instance.get_role_display|default:form.instance.role|capfirst }}
+                    </span>
+                    {% if form.instance.email %}
+                        <span class="profile-hero__meta"><i class="bi bi-envelope-fill me-1"></i>{{ form.instance.email }}</span>
+                    {% endif %}
+                    {% if form.instance.phone_number %}
+                        <span class="profile-hero__meta"><i class="bi bi-telephone-fill me-1"></i>{{ form.instance.phone_number }}</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
+
+    {# ── Tab navigation ────────────────────────────────────── #}
+    <div class="profile-tabs">
+        <button class="profile-tab profile-tab--active" data-profile-tab="info">
+            <i class="bi bi-person-fill me-1"></i>Personal Info
+        </button>
+        <button class="profile-tab" data-profile-tab="avatar">
+            <i class="bi bi-camera-fill me-1"></i>Update Avatar
+        </button>
+        <button class="profile-tab" data-profile-tab="password">
+            <i class="bi bi-lock-fill me-1"></i>Change Password
+        </button>
+        <button class="profile-tab" data-profile-tab="banner" id="banner-tab-btn">
+            <i class="bi bi-image-fill me-1"></i>Edit Banner
+        </button>
+    </div>
+
+    {# ── Main form ─────────────────────────────────────────── #}
+    <form method="post" enctype="multipart/form-data" novalidate class="profile-form-wrap" id="profile-main-form">
+        {% csrf_token %}
+
+        {# Personal Info tab #}
+        <div class="profile-panel profile-panel--active" id="profile-panel-info">
+            <div class="glass-card profile-card">
+                <h2 class="profile-card__title"><i class="bi bi-person-lines-fill me-2"></i>Personal Information</h2>
+                <div class="row g-3">
+                    {% for field in form %}
+                        {% if field.name in "first_name,last_name,email,phone_number" %}
+                            <div class="col-sm-6">
+                                <label class="form-label profile-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
+                                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-primary" type="submit" name="save_info" value="1">
+                        <i class="bi bi-check2 me-1"></i>Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {# Avatar tab #}
+        <div class="profile-panel" id="profile-panel-avatar">
+            <div class="glass-card profile-card">
+                <h2 class="profile-card__title"><i class="bi bi-image-fill me-2"></i>Profile Avatar</h2>
+                <div class="profile-avatar-section">
+                    <div class="profile-avatar-preview-wrap">
+                        {% if form.instance.profile_photo %}
+                            <img src="{{ form.instance.profile_photo.url }}" alt="Current photo" class="profile-avatar-preview" id="profile-avatar-preview">
+                        {% else %}
+                            <span class="profile-avatar-preview profile-avatar-preview--placeholder" id="profile-avatar-preview">
+                                {{ form.instance.get_full_name|default:form.instance.username|slice:":1"|upper }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="profile-avatar-controls">
+                        <p class="text-muted small mb-3">Upload a clear photo of yourself. JPG, PNG or GIF, max 5 MB.</p>
+                        {% for field in form %}
+                            {% if field.name == "profile_photo" %}
+                                <div class="mb-3">
+                                    <label class="form-label profile-label" for="id_profile_photo">Choose new photo</label>
+                                    {{ field }}
+                                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-primary" type="submit" name="save_avatar" value="1">
+                                <i class="bi bi-upload me-1"></i>Upload Photo
+                            </button>
+                            {% if form.instance.profile_photo %}
+                                <button class="btn btn-outline-danger" type="submit" name="delete_photo" value="1" formnovalidate>
+                                    <i class="bi bi-trash-fill me-1"></i>Remove Photo
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Password tab #}
+        <div class="profile-panel" id="profile-panel-password">
+            <div class="glass-card profile-card">
+                <h2 class="profile-card__title"><i class="bi bi-shield-lock-fill me-2"></i>Change Password</h2>
+                {% if form.instance.must_change_password %}
+                    <div class="alert alert-warning mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        You must set a new password before continuing.
+                    </div>
+                {% endif %}
+                <div class="row g-3">
+                    {% for field in form %}
+                        {% if field.name in "current_password,new_password1,new_password2" %}
+                            <div class="col-sm-6">
+                                <label class="form-label profile-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
+                                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-primary" type="submit" name="save_password" value="1">
+                        <i class="bi bi-lock-fill me-1"></i>Update Password
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {# Banner tab #}
+        <div class="profile-panel" id="profile-panel-banner">
+            <div class="glass-card profile-card">
+                <h2 class="profile-card__title"><i class="bi bi-image-fill me-2"></i>Profile Banner</h2>
+                <p class="text-muted small mb-4">Choose a gradient style for your profile banner.</p>
+
+                {% for field in form %}
+                    {% if field.name == "banner_gradient" %}
+                        {{ field }}
+                    {% endif %}
+                {% endfor %}
+
+                <div class="banner-swatch-grid" id="banner-swatch-grid">
+                    {% with current=form.instance.banner_gradient|default:'blue' %}
+                    <label class="banner-swatch banner-swatch--blue {% if current == 'blue' %}is-active{% endif %}" title="Blue">
+                        <input type="radio" name="banner_choice" value="blue" {% if current == 'blue' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Blue</span>
+                        {% if current == 'blue' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--sunset {% if current == 'sunset' %}is-active{% endif %}" title="Sunset">
+                        <input type="radio" name="banner_choice" value="sunset" {% if current == 'sunset' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Sunset</span>
+                        {% if current == 'sunset' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--forest {% if current == 'forest' %}is-active{% endif %}" title="Forest">
+                        <input type="radio" name="banner_choice" value="forest" {% if current == 'forest' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Forest</span>
+                        {% if current == 'forest' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--crimson {% if current == 'crimson' %}is-active{% endif %}" title="Crimson">
+                        <input type="radio" name="banner_choice" value="crimson" {% if current == 'crimson' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Crimson</span>
+                        {% if current == 'crimson' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--slate {% if current == 'slate' %}is-active{% endif %}" title="Slate">
+                        <input type="radio" name="banner_choice" value="slate" {% if current == 'slate' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Slate</span>
+                        {% if current == 'slate' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--aurora {% if current == 'aurora' %}is-active{% endif %}" title="Aurora">
+                        <input type="radio" name="banner_choice" value="aurora" {% if current == 'aurora' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Aurora</span>
+                        {% if current == 'aurora' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--rose {% if current == 'rose' %}is-active{% endif %}" title="Rose">
+                        <input type="radio" name="banner_choice" value="rose" {% if current == 'rose' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Rose</span>
+                        {% if current == 'rose' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <label class="banner-swatch banner-swatch--teal {% if current == 'teal' %}is-active{% endif %}" title="Teal">
+                        <input type="radio" name="banner_choice" value="teal" {% if current == 'teal' %}checked{% endif %} hidden>
+                        <span class="banner-swatch__label">Teal</span>
+                        {% if current == 'teal' %}<i class="bi bi-check2 banner-swatch__check"></i>{% endif %}
+                    </label>
+                    <div class="banner-swatch banner-swatch--custom" title="Custom banner — coming soon">
+                        <i class="bi bi-cloud-upload banner-swatch__icon"></i>
+                        <span class="banner-swatch__coming-soon">Soon</span>
+                        <span class="banner-swatch__label">Custom</span>
+                    </div>
+                    {% endwith %}
+                </div>
+
+                <div class="mt-4">
+                    <button class="btn btn-primary" type="submit" name="save_banner" value="1">
+                        <i class="bi bi-check2 me-1"></i>Save Banner
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+
 </div>
+
+<script>
+(function () {
+    // Tab switching
+    const tabs = document.querySelectorAll('.profile-tab');
+    const panels = document.querySelectorAll('.profile-panel');
+
+    const activate = (tabName) => {
+        tabs.forEach((t) => t.classList.toggle('profile-tab--active', t.dataset.profileTab === tabName));
+        panels.forEach((p) => p.classList.toggle('profile-panel--active', p.id === `profile-panel-${tabName}`));
+    };
+
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => activate(tab.dataset.profileTab));
+    });
+
+    // Hash-based tab activation
+    if (window.location.hash === '#avatar') activate('avatar');
+    if (window.location.hash === '#banner') activate('banner');
+
+    // "Edit Banner" button on hero banner → jump to banner tab
+    const bannerEditBtn = document.getElementById('banner-edit-btn');
+    if (bannerEditBtn) {
+        bannerEditBtn.addEventListener('click', () => activate('banner'));
+    }
+
+    // Errors on password fields → open password tab
+    const passwordPanel = document.getElementById('profile-panel-password');
+    if (passwordPanel && passwordPanel.querySelector('.invalid-feedback')) {
+        activate('password');
+    }
+
+    // Errors on info fields → keep info tab
+    const infoPanel = document.getElementById('profile-panel-info');
+    if (infoPanel && infoPanel.querySelector('.invalid-feedback')) {
+        activate('info');
+    }
+
+    // Banner swatch picker — live preview + update hidden input
+    const bannerHiddenInput = document.getElementById('id_banner_gradient');
+    const bannerEl = document.getElementById('profile-hero-banner');
+    const swatches = document.querySelectorAll('.banner-swatch:not(.banner-swatch--custom)');
+    const GRADIENT_MAP = {
+        blue:    'linear-gradient(120deg, #1d4ed8 0%, #3b82f6 50%, #6366f1 100%)',
+        sunset:  'linear-gradient(120deg, #f97316 0%, #ec4899 60%, #8b5cf6 100%)',
+        forest:  'linear-gradient(120deg, #065f46 0%, #10b981 60%, #3b82f6 100%)',
+        crimson: 'linear-gradient(120deg, #7f1d1d 0%, #dc2626 50%, #f97316 100%)',
+        slate:   'linear-gradient(120deg, #0f172a 0%, #334155 60%, #475569 100%)',
+        aurora:  'linear-gradient(120deg, #1e1b4b 0%, #7c3aed 50%, #06b6d4 100%)',
+        rose:    'linear-gradient(120deg, #881337 0%, #f43f5e 50%, #fb923c 100%)',
+        teal:    'linear-gradient(120deg, #134e4a 0%, #0d9488 50%, #3b82f6 100%)',
+    };
+    swatches.forEach((swatch) => {
+        swatch.addEventListener('click', () => {
+            const val = swatch.querySelector('input[type=radio]').value;
+            // Update hidden input
+            if (bannerHiddenInput) bannerHiddenInput.value = val;
+            // Live preview on hero banner
+            if (bannerEl && GRADIENT_MAP[val]) {
+                bannerEl.style.backgroundImage = GRADIENT_MAP[val];
+                // Remove old class, add new
+                bannerEl.className = bannerEl.className.replace(/profile-hero__banner--\w+/g, '').trim();
+                bannerEl.classList.add(`profile-hero__banner--${val}`);
+            }
+            // Toggle active state on swatches
+            swatches.forEach((s) => {
+                const isThis = s === swatch;
+                s.classList.toggle('is-active', isThis);
+                const checkIcon = s.querySelector('.banner-swatch__check');
+                if (checkIcon) checkIcon.remove();
+                if (isThis) {
+                    const icon = document.createElement('i');
+                    icon.className = 'bi bi-check2 banner-swatch__check';
+                    s.appendChild(icon);
+                }
+            });
+        });
+    });
+
+    // Live avatar preview
+    const photoInput = document.getElementById('id_profile_photo');
+    const preview = document.getElementById('profile-avatar-preview');
+    if (photoInput && preview) {
+        photoInput.addEventListener('change', () => {
+            const file = photoInput.files && photoInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (preview.tagName === 'IMG') {
+                    preview.src = e.target.result;
+                } else {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'profile-avatar-preview';
+                    img.alt = 'Preview';
+                    preview.replaceWith(img);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+}());
+</script>
 {% endblock %}
+

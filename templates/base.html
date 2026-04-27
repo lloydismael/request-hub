@@ -13,25 +13,32 @@
 <body class="bg-light {% block body_class %}{% endblock %}">
     <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm">
         <div class="container-fluid">
-            <a class="navbar-brand fw-semibold" href="{% if request.user.is_authenticated %}{% url 'hub:dashboard' %}{% else %}{% url 'landing' %}{% endif %}">Request Hub</a>
+            <a class="navbar-brand fw-semibold" href="{% if request.user.is_authenticated %}{% url 'hub:dashboard' %}{% else %}{% url 'landing' %}{% endif %}">
+                <i class="bi bi-hexagon-half me-1"></i>Request Hub
+            </a>
             {% if request.user.is_authenticated %}
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto">
-                        <li class="nav-item"><a class="nav-link" href="{% url 'hub:dashboard' %}">Dashboard</a></li>
-                        {% if request.user.role == 'engineer' %}
-                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:activity-logs' %}">Activity Logs</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'hub:dashboard' %}"><i class="bi bi-grid-fill nav-icon"></i>Dashboard</a></li>
+                        {% if request.user.is_engineer_access_role %}
+                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:activity-logs' %}"><i class="bi bi-activity nav-icon"></i>Activity Logs</a></li>
+                        {% endif %}
+                        {% if request.user.role == 'admin' or request.user.is_engineer_access_role or request.user.role == 'pm_esg' %}
+                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:sqr' %}"><i class="bi bi-clipboard-data-fill nav-icon"></i>SQR</a></li>
                         {% endif %}
                         {% if request.user.role == 'admin' %}
-                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:management' %}">Management</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:report' %}">Reports</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:management' %}"><i class="bi bi-gear-fill nav-icon"></i>Management</a></li>
+                        {% endif %}
+                        {% if request.user.role == 'admin' or request.user.role == 'pm_esg' %}
+                            <li class="nav-item"><a class="nav-link" href="{% url 'hub:report' %}"><i class="bi bi-bar-chart-fill nav-icon"></i>Reports</a></li>
                         {% endif %}
                         <li class="nav-item position-relative">
-                            <a class="nav-link {% if request.user.role == 'admin' or request.user.role == 'engineer' and new_ticket_count %}nav-link-with-dot{% endif %}" href="{% url 'hub:notifications' %}">
-                                Notifications
-                                {% if request.user.role == 'admin' or request.user.role == 'engineer' and new_ticket_count %}
+                            <a class="nav-link {% if request.user.role == 'admin' or request.user.role == 'pm_esg' or request.user.is_engineer_access_role and new_ticket_count %}nav-link-with-dot{% endif %}" href="{% url 'hub:notifications' %}">
+                                <i class="bi bi-bell-fill nav-icon"></i>Notifications
+                                {% if request.user.role == 'admin' or request.user.role == 'pm_esg' or request.user.is_engineer_access_role and new_ticket_count %}
                                     <span class="notification-dot notification-dot--nav" title="New assignments or tickets" aria-label="{{ new_ticket_count }} new items">
                                         <span class="notification-dot__count">{{ new_ticket_count }}</span>
                                     </span>
@@ -48,19 +55,36 @@
                                 <span class="ball"></span>
                             </label>
                         </div>
-                        {% if request.user.profile_photo %}
-                            <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar">
-                        {% else %}
-                            {% with display_name=request.user.get_full_name|default:request.user.username %}
-                                <span class="nav-avatar nav-avatar--placeholder">{{ display_name|slice:":1"|upper }}</span>
-                            {% endwith %}
-                        {% endif %}
-                        <span class="text-white-50 small">{{ request.user.get_full_name|default:request.user.username }}</span>
-                        <a class="btn btn-sm btn-outline-light" href="{% url 'accounts:update' %}">Profile</a>
-                        <form action="{% url 'logout' %}" method="post" class="d-inline">
-                            {% csrf_token %}
-                            <button class="btn btn-sm btn-outline-light" type="submit">Logout</button>
-                        </form>
+                        <!-- Avatar dropdown -->
+                        <div class="nav-avatar-wrap" id="nav-avatar-wrap">
+                            {% if request.user.profile_photo %}
+                                <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">
+                            {% else %}
+                                {% with display_name=request.user.get_full_name|default:request.user.username %}
+                                    <span class="nav-avatar nav-avatar--placeholder" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">{{ display_name|slice:":1"|upper }}</span>
+                                {% endwith %}
+                            {% endif %}
+                            <div class="nav-avatar-menu" id="nav-avatar-menu" role="menu" aria-hidden="true">
+                                <div class="nav-avatar-menu__header">
+                                    <span class="nav-avatar-menu__name">{{ request.user.get_full_name|default:request.user.username }}</span>
+                                    <span class="nav-avatar-menu__role text-muted small">{{ request.user.get_role_display|default:request.user.role }}</span>
+                                </div>
+                                <div class="nav-avatar-menu__divider"></div>
+                                <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}#avatar" role="menuitem">
+                                    <i class="bi bi-camera-fill nav-avatar-menu__icon"></i>Update Avatar
+                                </a>
+                                <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}" role="menuitem">
+                                    <i class="bi bi-person-fill nav-avatar-menu__icon"></i>My Profile
+                                </a>
+                                <div class="nav-avatar-menu__divider"></div>
+                                <form action="{% url 'logout' %}" method="post" class="nav-avatar-menu__logout-form">
+                                    {% csrf_token %}
+                                    <button type="submit" class="nav-avatar-menu__item nav-avatar-menu__item--danger" role="menuitem">
+                                        <i class="bi bi-box-arrow-right nav-avatar-menu__icon"></i>Log Out
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
             {% else %}
@@ -84,8 +108,15 @@
         (function() {
             // Theme Toggle Logic
             const toggle = document.getElementById('theme-checkbox');
+            const toggleLabel = document.querySelector('label[for="theme-checkbox"]');
             const body = document.body;
             const storageKey = 'reqHubTheme';
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const canUseViewTransition = typeof document.startViewTransition === 'function' && !prefersReducedMotion;
+            // Slow, deeply satisfying reveal — 1.65s with a gentle deceleration curve
+            const THEME_REVEAL_DURATION = 1650;
+            const THEME_REVEAL_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+            const THEME_FADE_DURATION = 320;
 
             // Helper to set theme state
             const applyTheme = (isDark) => {
@@ -106,33 +137,120 @@
             }
 
             if (toggle) {
-                // Use click on the LABEL or wrapper to get accurate coordinates
-                // We attach to the toggle change event for logic, but we might need
-                // to capture coordinates from a click listener on the wrapper if accessible
-                
-                // Better approach: Listen for click on the document/wrapper to capture coords
-                // right before the change fires.
                 let lastClickX = window.innerWidth / 2;
                 let lastClickY = window.innerHeight / 2;
+                let themeTransitionInFlight = false;
 
-                document.addEventListener('click', (e) => {
-                    lastClickX = e.clientX;
-                    lastClickY = e.clientY;
-                }, { capture: true, passive: true });
+                const resolveThemeOrigin = () => {
+                    if (toggleLabel) {
+                        const rect = toggleLabel.getBoundingClientRect();
+                        const centerX = rect.left + rect.width / 2;
+                        const centerY = rect.top + rect.height / 2;
 
-                toggle.addEventListener('change', async function(e) {
-                    const isDark = this.checked;
+                        const hasPointerPosition = Number.isFinite(lastClickX) && Number.isFinite(lastClickY) && (lastClickX !== 0 || lastClickY !== 0);
+                        return {
+                            x: hasPointerPosition ? lastClickX : centerX,
+                            y: hasPointerPosition ? lastClickY : centerY
+                        };
+                    }
 
-                    // Fallback for browsers without View Transition API
-                    if (!document.startViewTransition) {
+                    return {
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2
+                    };
+                };
+
+                const runFallbackReveal = async (isDark, x, y) => {
+                    if (prefersReducedMotion) {
                         applyTheme(isDark);
                         return;
                     }
 
-                    // Use captured coordinates or fallback to center
-                    const x = lastClickX;
-                    const y = lastClickY;
-                    
+                    const overlay = document.createElement('span');
+                    overlay.className = 'theme-reveal-overlay';
+                    // Dark → deep navy, Light → clean off-white
+                    overlay.style.background = isDark
+                        ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+                        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)';
+
+                    const endRadius = Math.hypot(
+                        Math.max(x, window.innerWidth - x),
+                        Math.max(y, window.innerHeight - y)
+                    );
+
+                    body.appendChild(overlay);
+                    applyTheme(isDark);
+
+                    const revealAnimation = overlay.animate(
+                        [
+                            {
+                                clipPath: `circle(0px at ${x}px ${y}px)`,
+                                opacity: 0.95,
+                                filter: isDark ? 'brightness(0.9)' : 'brightness(1.05)'
+                            },
+                            {
+                                clipPath: `circle(${endRadius * 0.45}px at ${x}px ${y}px)`,
+                                opacity: 1,
+                                filter: 'brightness(1)',
+                                offset: 0.5
+                            },
+                            {
+                                clipPath: `circle(${endRadius}px at ${x}px ${y}px)`,
+                                opacity: 1,
+                                filter: 'brightness(1)'
+                            }
+                        ],
+                        {
+                            duration: THEME_REVEAL_DURATION,
+                            easing: THEME_REVEAL_EASING,
+                            fill: 'forwards'
+                        }
+                    );
+
+                    await revealAnimation.finished.catch(() => {});
+
+                    const fadeAnimation = overlay.animate(
+                        [{ opacity: 1 }, { opacity: 0 }],
+                        {
+                            duration: THEME_FADE_DURATION,
+                            easing: 'ease-out',
+                            fill: 'forwards'
+                        }
+                    );
+
+                    await fadeAnimation.finished.catch(() => {});
+                    overlay.remove();
+                };
+
+                if (toggleLabel) {
+                    toggleLabel.addEventListener('click', (e) => {
+                        lastClickX = e.clientX;
+                        lastClickY = e.clientY;
+                    }, { passive: true });
+                }
+
+                toggle.addEventListener('change', async function(e) {
+                    if (themeTransitionInFlight) {
+                        return;
+                    }
+                    themeTransitionInFlight = true;
+                    const isDark = this.checked;
+                    body.classList.add('theme-switching');
+
+                    const finishThemeTransition = () => {
+                        body.classList.remove('theme-switching');
+                        themeTransitionInFlight = false;
+                    };
+
+                    // Fallback for browsers without View Transition API
+                    const { x, y } = resolveThemeOrigin();
+
+                    if (!canUseViewTransition) {
+                        await runFallbackReveal(isDark, x, y);
+                        finishThemeTransition();
+                        return;
+                    }
+
                     // Calculate distance to furthest corner ensuring full coverage
                     const endRadius = Math.hypot(
                         Math.max(x, window.innerWidth - x),
@@ -144,23 +262,54 @@
                         applyTheme(isDark);
                     });
 
-                    // Wait for the pseudo-elements to be created
-                    await transition.ready;
+                    try {
+                        // Wait for the pseudo-elements to be created
+                        await transition.ready;
 
-                    // Animate the circular clip-path on the NEW view (the incoming theme)
-                    document.documentElement.animate(
+// Smooth, slow, satisfying circular reveal from toggle origin
+                    const revealAnimation = document.documentElement.animate(
                         {
                             clipPath: [
                                 `circle(0px at ${x}px ${y}px)`,
                                 `circle(${endRadius}px at ${x}px ${y}px)`
-                            ]
+                            ],
+                            filter: [
+                                isDark ? 'brightness(1.08) saturate(0.9)' : 'brightness(0.96) saturate(0.95)',
+                                'brightness(1) saturate(1)'
+                            ],
+                            opacity: [0.92, 1]
                         },
                         {
-                            duration: 600,
-                            easing: 'ease-in-out', // Smoother invasion
+                            duration: THEME_REVEAL_DURATION,
+                            easing: THEME_REVEAL_EASING,
                             pseudoElement: '::view-transition-new(root)'
                         }
                     );
+
+                    const outgoingAnimation = document.documentElement.animate(
+                        {
+                            opacity: [1, 0.12],
+                            filter: [
+                                'brightness(1) saturate(1)',
+                                isDark ? 'brightness(0.7) saturate(0.6)' : 'brightness(1.15) saturate(0.8)'
+                            ],
+                            scale: ['1', '1.005']
+                        },
+                        {
+                            duration: Math.round(THEME_REVEAL_DURATION * 0.72),
+                            easing: 'cubic-bezier(0.4, 0, 1, 1)',
+                                pseudoElement: '::view-transition-old(root)'
+                            }
+                        );
+
+                        await Promise.all([
+                            revealAnimation.finished.catch(() => {}),
+                            outgoingAnimation.finished.catch(() => {})
+                        ]);
+                        await transition.finished;
+                    } finally {
+                        finishThemeTransition();
+                    }
                 });
             }
         })();
@@ -203,6 +352,32 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'js/login-success.js' %}" defer></script>
+    <script>
+        // Nav avatar dropdown
+        (function () {
+            const wrap = document.getElementById('nav-avatar-wrap');
+            const trigger = document.getElementById('nav-avatar-trigger');
+            const menu = document.getElementById('nav-avatar-menu');
+            if (!wrap || !trigger || !menu) return;
+
+            const open = () => {
+                menu.classList.add('nav-avatar-menu--open');
+                trigger.setAttribute('aria-expanded', 'true');
+                menu.setAttribute('aria-hidden', 'false');
+            };
+            const close = () => {
+                menu.classList.remove('nav-avatar-menu--open');
+                trigger.setAttribute('aria-expanded', 'false');
+                menu.setAttribute('aria-hidden', 'true');
+            };
+            const toggle = () => menu.classList.contains('nav-avatar-menu--open') ? close() : open();
+
+            trigger.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+            trigger.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+            document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) close(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        }());
+    </script>
     <script>
         (function () {
             function enhanceSelect(select) {
@@ -318,6 +493,7 @@
 
                 const toggleBtn = document.getElementById('ai-chat-toggle-btn');
                 const chatWindow = document.getElementById('ai-chat-window');
+                const closeBtn = document.getElementById('ai-chat-close-btn');
                 const icon = toggleBtn.querySelector('i');
                 const chatStateKey = 'reqHubChatOpen';
 
@@ -354,6 +530,7 @@
                 };
 
                 if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
+                if (closeBtn) closeBtn.addEventListener('click', () => applyChatState(false, { focus: true }));
 
                 if (localStorage.getItem(chatStateKey) === '1') {
                     applyChatState(true);
@@ -419,6 +596,9 @@
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
         <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" aria-modal="true" tabindex="-1">
+            <button id="ai-chat-close-btn" class="ai-chat-close-btn" type="button" aria-label="Close AI Assistant">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
             <div class="ai-chat-body" style="height: 100%; width: 100%;">
                 <iframe 
                     id="ai-chat-iframe"

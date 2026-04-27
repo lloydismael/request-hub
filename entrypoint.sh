@@ -1,5 +1,8 @@
 #!/bin/sh
-set -e
+set -eu
+
+# Restrict default file permissions for any files created at runtime.
+umask 027
 
 python manage.py collectstatic --noinput
 python manage.py migrate

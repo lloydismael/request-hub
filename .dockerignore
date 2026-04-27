@@ -1,0 +1,31 @@
+# VCS and editor files
+.git
+.gitignore
+.vscode
+
+# Python caches and local virtual envs
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+venv/
+
+# Local environment and secrets
+.env
+.env.*
+
+# Local build/test outputs
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Collected/static artifacts generated locally
+staticfiles/
+media/
+
+# OS noise
+.DS_Store
+Thumbs.db

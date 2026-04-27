@@ -25,7 +25,7 @@ from .forms import (
 class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     form_class = ProfileForm
     template_name = "accounts/profile_form.html"
-    success_url = reverse_lazy("hub:dashboard")
+    success_url = reverse_lazy("accounts:update")
 
     def get_object(self):
         return self.request.user
@@ -33,6 +33,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         password_changed = bool(form.cleaned_data.get("new_password1"))
         delete_photo_requested = form.data.get("delete_photo")
+        save_banner_requested = form.data.get("save_banner")
         photo_deleted = False
 
         if delete_photo_requested:
@@ -43,6 +44,13 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
             form.instance.profile_photo = None
             if "profile_photo" in form.cleaned_data:
                 form.cleaned_data["profile_photo"] = None
+
+        # When saving banner, also propagate the hidden field value from POST
+        if save_banner_requested:
+            banner_val = form.data.get("banner_gradient", "").strip()
+            valid_keys = {"blue", "sunset", "forest", "crimson", "slate", "aurora", "rose", "teal"}
+            if banner_val in valid_keys:
+                form.instance.banner_gradient = banner_val
 
         response = super().form_valid(form)
         user = self.request.user
@@ -76,7 +84,9 @@ class LandingView(TemplateView):
         context = super().get_context_data(**kwargs)
         descriptions = {
             User.Roles.ADMIN: "Oversee requests, assign engineers, and close engagements.",
+            User.Roles.PM_ESG: "Manage requests like administrators, coordinate engineers, and create tickets without user-management access.",
             User.Roles.ENGINEER: "Review assigned tickets, respond to updates, and act on SLAs.",
+            User.Roles.ON_HOLD: "Retain engineer access to previously assigned work while staying unavailable for new assignments.",
             User.Roles.REQUESTOR: "Create new customer requests and monitor progress.",
             User.Roles.REQUESTOR_ESS: "Submit customer requests without Support engagements and track progress.",
             User.Roles.PM_ESS: "Oversee Requestor-ESS requests, create tickets, and track status across accounts.",

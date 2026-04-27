@@ -7,7 +7,9 @@ from .models import User
 
 ROLE_LABELS = {
     User.Roles.ADMIN: "Admin",
+    User.Roles.PM_ESG: "PM-ESG",
     User.Roles.ENGINEER: "Engineer",
+    User.Roles.ON_HOLD: "On Hold",
     User.Roles.REQUESTOR: "Requestor",
     User.Roles.REQUESTOR_ESS: "Requestor-ESS",
     User.Roles.PM_ESS: "PM-ESS",
@@ -58,13 +60,14 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "phone_number", "profile_photo"]
+        fields = ["first_name", "last_name", "email", "phone_number", "profile_photo", "banner_gradient"]
         widgets = {
             "first_name": forms.TextInput(attrs={"class": "form-control"}),
             "last_name": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
             "phone_number": forms.TextInput(attrs={"class": "form-control"}),
             "profile_photo": forms.FileInput(attrs={"class": "form-control"}),
+            "banner_gradient": forms.HiddenInput(),
         }
 
     field_order = [
@@ -73,6 +76,7 @@ class ProfileForm(forms.ModelForm):
         "email",
         "phone_number",
         "profile_photo",
+        "banner_gradient",
         "current_password",
         "new_password1",
         "new_password2",

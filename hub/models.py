@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -33,6 +34,7 @@ class Request(models.Model):
         SUPPORT = "support", "Support"
         INQUIRY = "inquiry", "Inquiry"
         DEPLOYMENT = "deployment", "Deployment"
+        PROJECT_MANAGEMENT = "project_management", "Project Management"
 
     class Status(models.TextChoices):
         ONGOING = "ongoing", "Ongoing"
@@ -48,7 +50,7 @@ class Request(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="requests_made",
-        limit_choices_to={"role__in": ["requestor", "requestor_ess", "pm_ess"]},
+        limit_choices_to={"role__in": ["requestor", "requestor_ess", "pm_ess", "pm_esg"]},
     )
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="requests")
     account_manager = models.CharField(max_length=255)
@@ -77,7 +79,7 @@ class Request(models.Model):
         related_name="requests_assigned",
         blank=True,
         null=True,
-        limit_choices_to={"role": "engineer"},
+        limit_choices_to={"role__in": ["engineer", "on_hold"]},
     )
     backup_engineer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -85,7 +87,7 @@ class Request(models.Model):
         related_name="backup_requests_assigned",
         blank=True,
         null=True,
-        limit_choices_to={"role": "engineer"},
+        limit_choices_to={"role__in": ["engineer", "on_hold"]},
     )
     teams_chat_topic = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)
@@ -407,6 +409,121 @@ class EngineerActivityLog(models.Model):
     def __str__(self) -> str:
         engineer_name = self.engineer.get_full_name() or self.engineer.username or "Engineer"
         return f"{engineer_name} · {self.activity_type} · {self.request_date:%Y-%m-%d}"
+
+
+class SqrSubmission(models.Model):
+    class Status(models.TextChoices):
+        FOR_PROCESSING = "submitted", "For Processing"
+        FOR_REVISION = "for_revision", "For Revision"
+        APPROVED = "reviewed", "Approved"
+
+    reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
+    year = models.PositiveIntegerField(editable=False, db_index=True)
+    sequence_number = models.PositiveIntegerField(editable=False, db_index=True, blank=True, null=True)
+    engineer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_submissions",
+        limit_choices_to={"role": "engineer"},
+    )
+    pm_esg_reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_reviews_assigned",
+        limit_choices_to={"role": "pm_esg"},
+    )
+    customer_name = models.CharField(max_length=255)
+    customer_company = models.CharField(max_length=255, blank=True)
+    customer_contact = models.CharField(max_length=255, blank=True)
+    project_title = models.CharField(max_length=255)
+    project_details = models.TextField()
+    sse_manhrs = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True)
+    documentation_links = models.TextField(help_text="One link per line.")
+    remarks = models.TextField(blank=True)
+    quotation_total_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        blank=True,
+        null=True,
+    )
+    discount_rate = models.PositiveSmallIntegerField(
+        choices=[
+            (5, "5%"),
+            (10, "10%"),
+            (15, "15%"),
+        ],
+        default=5,
+    )
+    po_attachment_link = models.URLField(blank=True)
+    po_attached_at = models.DateTimeField(blank=True, null=True)
+    revenue_overview = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
+    review_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_reviews_completed",
+        blank=True,
+        null=True,
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.reference_code or f"SQR draft #{self.pk}"
+
+    @property
+    def documentation_link_list(self) -> list[str]:
+        links = []
+        for raw in (self.documentation_links or "").splitlines():
+            cleaned = raw.strip()
+            if cleaned:
+                links.append(cleaned)
+        return links
+
+    @property
+    def discounted_price(self):
+        if self.quotation_total_price is None:
+            return None
+        discount = Decimal(self.discount_rate or 0) / Decimal("100")
+        discounted = self.quotation_total_price * (Decimal("1") - discount)
+        return discounted.quantize(Decimal("0.01"))
+
+    @property
+    def revenue_stage_key(self) -> str:
+        if self.status == self.Status.APPROVED and self.po_attachment_link:
+            return "revenue"
+        if self.status == self.Status.APPROVED:
+            return "order"
+        return "quotation"
+
+    def save(self, *args, **kwargs):
+        creating = self.pk is None
+        if creating and not self.year:
+            self.year = timezone.now().astimezone(MANILA_TZ).year
+
+        super().save(*args, **kwargs)
+
+        if creating and not self.reference_code:
+            last_in_year = (
+                SqrSubmission.objects.filter(year=self.year)
+                .exclude(pk=self.pk)
+                .order_by("-sequence_number")
+                .first()
+            )
+            next_number = (last_in_year.sequence_number if last_in_year and last_in_year.sequence_number else 0) + 1
+            reference_code = f"SQR-{self.year}-{next_number:04d}"
+            SqrSubmission.objects.filter(pk=self.pk).update(
+                sequence_number=next_number,
+                reference_code=reference_code,
+            )
+            self.sequence_number = next_number
+            self.reference_code = reference_code
 
 
 class Notification(models.Model):

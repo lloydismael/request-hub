@@ -71,12 +71,16 @@ az webapp config appsettings set ^
     DJANGO_DEBUG="False" ^
     DJANGO_ALLOWED_HOSTS="" ^
     DJANGO_CSRF_TRUSTED_ORIGINS="" ^
+    ACS_EMAIL_CONNECTION_STRING="endpoint=https://esgrequesthub.asiapacific.communication.azure.com/;accesskey=<your-access-key>" ^
+    ACS_EMAIL_SENDER="DoNotReply@dreadops.site" ^
     WEBSITES_PORT="8000"
 ```
 
 - `WEBSITES_PORT` tells App Service which port the container listens on (Gunicorn binds to 8000).
 - Leave `DJANGO_ALLOWED_HOSTS` empty to rely on the automatic `WEBSITE_HOSTNAME` detection added in `settings.py`. Provide extra hosts if needed (comma-separated).
 - If you connect to PostgreSQL, provide `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT` values here as well.
+- `ACS_EMAIL_CONNECTION_STRING` should point at the Request Hub Azure Communication Services endpoint `https://esgrequesthub.asiapacific.communication.azure.com`.
+- `ACS_EMAIL_SENDER` should be the verified sender address `DoNotReply@dreadops.site`.
 
 ## 4. Optional: Configure Startup Commands
 
