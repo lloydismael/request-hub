@@ -17,10 +17,53 @@
                 <i class="bi bi-hexagon-half me-1"></i>Request Hub
             </a>
             {% if request.user.is_authenticated %}
+                <!-- Always-visible controls: theme toggle + avatar.
+                     order-lg-2 → on desktop appears after nav links; on mobile sits between brand and toggler -->
+                <div class="d-flex align-items-center gap-2 ms-auto me-1 order-lg-2">
+                    <div class="theme-toggle-wrapper">
+                        <input type="checkbox" class="checkbox" id="theme-checkbox">
+                        <label for="theme-checkbox" class="checkbox-label" title="Toggle Dark/Light Mode" aria-label="Toggle Dark Mode">
+                            <i class="bi bi-moon-fill"></i>
+                            <i class="bi bi-brightness-high-fill"></i>
+                            <span class="ball"></span>
+                        </label>
+                    </div>
+                    <!-- Avatar dropdown -->
+                    <div class="nav-avatar-wrap" id="nav-avatar-wrap">
+                        {% if request.user.profile_photo %}
+                            <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">
+                        {% else %}
+                            {% with display_name=request.user.get_full_name|default:request.user.username %}
+                                <span class="nav-avatar nav-avatar--placeholder" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">{{ display_name|slice:":1"|upper }}</span>
+                            {% endwith %}
+                        {% endif %}
+                        <div class="nav-avatar-menu" id="nav-avatar-menu" role="menu" aria-hidden="true">
+                            <div class="nav-avatar-menu__header">
+                                <span class="nav-avatar-menu__name">{{ request.user.get_full_name|default:request.user.username }}</span>
+                                <span class="nav-avatar-menu__role text-muted small">{{ request.user.get_role_display|default:request.user.role }}</span>
+                            </div>
+                            <div class="nav-avatar-menu__divider"></div>
+                            <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}#avatar" role="menuitem">
+                                <i class="bi bi-camera-fill nav-avatar-menu__icon"></i>Update Avatar
+                            </a>
+                            <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}" role="menuitem">
+                                <i class="bi bi-person-fill nav-avatar-menu__icon"></i>My Profile
+                            </a>
+                            <div class="nav-avatar-menu__divider"></div>
+                            <form action="{% url 'logout' %}" method="post" class="nav-avatar-menu__logout-form">
+                                {% csrf_token %}
+                                <button type="submit" class="nav-avatar-menu__item nav-avatar-menu__item--danger" role="menuitem">
+                                    <i class="bi bi-box-arrow-right nav-avatar-menu__icon"></i>Log Out
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
+                <!-- Nav links: order-lg-1 → on desktop appears before the always-visible controls -->
+                <div class="collapse navbar-collapse order-lg-1" id="navbarNav">
                     <ul class="navbar-nav me-auto">
                         <li class="nav-item"><a class="nav-link" href="{% url 'hub:dashboard' %}"><i class="bi bi-grid-fill nav-icon"></i>Dashboard</a></li>
                         {% if request.user.is_engineer_access_role %}
@@ -46,46 +89,6 @@
                             </a>
                         </li>
                     </ul>
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <div class="theme-toggle-wrapper">
-                            <input type="checkbox" class="checkbox" id="theme-checkbox">
-                            <label for="theme-checkbox" class="checkbox-label" title="Toggle Dark/Light Mode" aria-label="Toggle Dark Mode">
-                                <i class="bi bi-moon-fill"></i>
-                                <i class="bi bi-brightness-high-fill"></i>
-                                <span class="ball"></span>
-                            </label>
-                        </div>
-                        <!-- Avatar dropdown -->
-                        <div class="nav-avatar-wrap" id="nav-avatar-wrap">
-                            {% if request.user.profile_photo %}
-                                <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">
-                            {% else %}
-                                {% with display_name=request.user.get_full_name|default:request.user.username %}
-                                    <span class="nav-avatar nav-avatar--placeholder" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">{{ display_name|slice:":1"|upper }}</span>
-                                {% endwith %}
-                            {% endif %}
-                            <div class="nav-avatar-menu" id="nav-avatar-menu" role="menu" aria-hidden="true">
-                                <div class="nav-avatar-menu__header">
-                                    <span class="nav-avatar-menu__name">{{ request.user.get_full_name|default:request.user.username }}</span>
-                                    <span class="nav-avatar-menu__role text-muted small">{{ request.user.get_role_display|default:request.user.role }}</span>
-                                </div>
-                                <div class="nav-avatar-menu__divider"></div>
-                                <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}#avatar" role="menuitem">
-                                    <i class="bi bi-camera-fill nav-avatar-menu__icon"></i>Update Avatar
-                                </a>
-                                <a class="nav-avatar-menu__item" href="{% url 'accounts:update' %}" role="menuitem">
-                                    <i class="bi bi-person-fill nav-avatar-menu__icon"></i>My Profile
-                                </a>
-                                <div class="nav-avatar-menu__divider"></div>
-                                <form action="{% url 'logout' %}" method="post" class="nav-avatar-menu__logout-form">
-                                    {% csrf_token %}
-                                    <button type="submit" class="nav-avatar-menu__item nav-avatar-menu__item--danger" role="menuitem">
-                                        <i class="bi bi-box-arrow-right nav-avatar-menu__icon"></i>Log Out
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             {% else %}
                 <div class="d-flex ms-auto align-items-center gap-3">
@@ -105,12 +108,20 @@
         </div>
     </nav>
     <script>
-        // Apply view-mobile class immediately to avoid flash of wrong layout
+        // Apply view-mobile class based on screen width (auto-detection) or saved preference.
+        // Screens ≤ 520 px always get the mobile layout; wider screens use the saved toggle.
         (function() {
             try {
-                if (localStorage.getItem('reqHubViewMode') === 'mobile') {
-                    document.body.classList.add('view-mobile');
+                var MQ = window.matchMedia('(max-width: 520px)');
+                function syncViewMode() {
+                    if (MQ.matches || localStorage.getItem('reqHubViewMode') === 'mobile') {
+                        document.body.classList.add('view-mobile');
+                    } else {
+                        document.body.classList.remove('view-mobile');
+                    }
                 }
+                syncViewMode();
+                MQ.addEventListener('change', syncViewMode);
             } catch (_) {}
         })();
     </script>

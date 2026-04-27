@@ -5324,6 +5324,13 @@ body.view-mobile {
 }
 
 /* ── 2. Strip navbar outer background; reapply gradient to inner container ── */
+/* Avatar dropdown: ensure it floats above all content and stays within the mobile frame */
+body.view-mobile .nav-avatar-menu {
+    z-index: 9999;
+    max-width: 230px;
+    min-width: 200px;
+}
+
 body.view-mobile > nav.navbar {
     background: transparent !important;
     box-shadow: none !important;
@@ -5372,19 +5379,9 @@ body.view-mobile > main.container {
     position: relative;
 }
 
-/* ── 5. "Mobile Preview" label strip at top of content area ── */
+/* ── 5. "Mobile Preview" label — hidden (auto screen-detection makes it unnecessary) ── */
 body.view-mobile > main.container::before {
-    content: "MOBILE PREVIEW";
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    color: rgba(99, 102, 241, 0.42);
-    padding: 6px 0 4px;
-    margin-bottom: 0.6rem;
-    border-bottom: 1px dashed rgba(99, 102, 241, 0.14);
+    display: none;
 }
 
 /* ── 6. Collapse ALL columns to full-width (fixes Bootstrap row-cols-* bare .col bug) ── */
