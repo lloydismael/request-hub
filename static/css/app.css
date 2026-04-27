@@ -5313,48 +5313,32 @@ body.dark-mode .ai-chat-close-btn {
 
 /* ══════════════════════════════════════════════════════════
    MOBILE VIEW MODE  (body.view-mobile)
+   ──────────────────────────────────────────────────────────
+   All rules scoped to body.view-mobile.
+   Changing these has ZERO effect on desktop layout.
    ══════════════════════════════════════════════════════════ */
 
-/* ─── Phone-width column, centered with a device-like frame ─── */
-body.view-mobile > main.container {
-    max-width: 390px !important;       /* ~iPhone 14 viewport width */
-    margin-left: auto !important;
-    margin-right: auto !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-    min-height: calc(100vh - 70px);
-    border-left: 1.5px solid rgba(99, 102, 241, 0.18);
-    border-right: 1.5px solid rgba(99, 102, 241, 0.18);
-    box-shadow:
-        -12px 0 36px rgba(99, 102, 241, 0.06),
-         12px 0 36px rgba(99, 102, 241, 0.06);
-    position: relative;
-}
-body:not(.dark-mode).view-mobile > main.container {
-    border-left-color: rgba(99, 102, 241, 0.22);
-    border-right-color: rgba(99, 102, 241, 0.22);
-    box-shadow:
-        -12px 0 36px rgba(99, 102, 241, 0.08),
-         12px 0 36px rgba(99, 102, 241, 0.08);
+/* ── 1. Dark matte stage — phone "floats" on a near-black backdrop ── */
+body.view-mobile {
+    background: #05111f !important;
 }
 
-/* ─── Mobile preview indicator strip ─── */
-body.view-mobile > main.container::before {
-    content: "\2022\0020Mobile Preview";
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: rgba(99, 102, 241, 0.55);
-    padding: 5px 0 7px;
-    margin-bottom: 0.85rem;
-    border-bottom: 1px dashed rgba(99, 102, 241, 0.18);
+/* ── 2. Strip navbar outer background; reapply gradient to inner container ── */
+body.view-mobile > nav.navbar {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+body.view-mobile > nav.navbar > .container-fluid {
+    max-width: 390px !important;
+    margin: 0 auto !important;
+    background: linear-gradient(120deg, #1d4ed8, #3b82f6) !important;
+    padding: 0.55rem 1rem !important;
+    box-shadow: 0 2px 14px rgba(15, 23, 42, 0.55);
 }
 
-/* ─── Force hamburger navbar inside the narrow frame ─── */
+/* ── 3. Force hamburger menu inside the narrow frame ── */
 body.view-mobile .navbar-expand-lg {
     flex-wrap: wrap !important;
     justify-content: space-between !important;
@@ -5375,48 +5359,135 @@ body.view-mobile .navbar-expand-lg .navbar-nav {
     flex-direction: column !important;
 }
 
-/* ─── Single-column grid ─── */
+/* ── 4. Phone-width content column ── */
+body.view-mobile > main.container {
+    max-width: 390px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    min-height: calc(100vh - 52px);
+    border-left: 1px solid rgba(99, 102, 241, 0.2);
+    border-right: 1px solid rgba(99, 102, 241, 0.2);
+    position: relative;
+}
+
+/* ── 5. "Mobile Preview" label strip at top of content area ── */
+body.view-mobile > main.container::before {
+    content: "MOBILE PREVIEW";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: rgba(99, 102, 241, 0.42);
+    padding: 6px 0 4px;
+    margin-bottom: 0.6rem;
+    border-bottom: 1px dashed rgba(99, 102, 241, 0.14);
+}
+
+/* ── 6. Collapse ALL columns to full-width (fixes Bootstrap row-cols-* bare .col bug) ── */
 body.view-mobile .row {
     flex-direction: column;
 }
-body.view-mobile .row > [class*="col-"] {
+body.view-mobile .row > [class*="col-"],
+body.view-mobile .row > .col {
     width: 100% !important;
     max-width: 100% !important;
-    flex: none !important;
+    flex: 0 0 100% !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
 
-/* ─── Cards ─── */
+/* ── 7. Dashboard metric cards — 2-column grid ── */
+body.view-mobile .dashboard-metrics {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+    flex-direction: unset !important;
+    margin-bottom: 0.9rem !important;
+}
+body.view-mobile .dashboard-metrics > * {
+    width: 100% !important;
+    flex: unset !important;
+    padding: 0 !important;
+}
+body.view-mobile .dashboard-metric-card {
+    min-height: 88px;
+    padding: 0.75rem 0.85rem !important;
+    border-radius: 14px;
+    gap: 0.2rem;
+}
+body.view-mobile .dashboard-metric-card__label {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+}
+body.view-mobile .dashboard-metric-card__value {
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+body.view-mobile .dashboard-metric-card__hint {
+    font-size: 0.68rem;
+}
+
+/* ── 8. Glass cards ── */
 body.view-mobile .glass-card {
     border-radius: 16px;
-    padding: 0.9rem 0.85rem !important;
+    padding: 0.85rem 0.8rem !important;
 }
 body.view-mobile .glass-card .glass-card {
     border-radius: 12px;
-    padding: 0.65rem 0.75rem !important;
+    padding: 0.6rem 0.7rem !important;
 }
 
-/* ─── Typography scale ─── */
+/* ── 9. Typography scale ── */
 body.view-mobile h4, body.view-mobile .h4 { font-size: 1rem !important; }
-body.view-mobile h5, body.view-mobile .h5 { font-size: 0.9rem !important; }
-body.view-mobile h6, body.view-mobile .h6 { font-size: 0.82rem !important; }
-body.view-mobile p, body.view-mobile li { font-size: 0.82rem; }
+body.view-mobile h5, body.view-mobile .h5 { font-size: 0.88rem !important; }
+body.view-mobile h6, body.view-mobile .h6 { font-size: 0.8rem !important; }
+body.view-mobile p, body.view-mobile li  { font-size: 0.82rem; }
 
-/* ─── Tables — horizontal scroll, compact ─── */
+/* ── 10. Dashboard stat pills — keep inline, allow horizontal scroll on their row ── */
+body.view-mobile .dbd-stat-pill { min-width: 0; flex-shrink: 0; }
+body.view-mobile .dbd-stats-row {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.35rem;
+    padding-bottom: 2px;
+}
+body.view-mobile .dbd-stats-row::-webkit-scrollbar { display: none; }
+
+/* ── 11. Dashboard action/filter bar (All, Ongoing … + Export CSV) ── */
+body.view-mobile .d-flex:has(> .dbd-stat-pill) {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.35rem !important;
+    padding-bottom: 4px;
+    justify-content: flex-start !important;
+    margin-left: 0 !important;
+}
+body.view-mobile .d-flex:has(> .dbd-stat-pill)::-webkit-scrollbar { display: none; }
+
+/* ── 12. Tables — horizontal scroll, compact ── */
 body.view-mobile .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-body.view-mobile table { min-width: 320px; font-size: 0.78rem; }
+body.view-mobile table { min-width: 320px; font-size: 0.77rem; }
 body.view-mobile .table th,
-body.view-mobile .table td { padding: 0.4rem 0.55rem; white-space: nowrap; }
+body.view-mobile .table td { padding: 0.38rem 0.5rem; white-space: nowrap; }
 
-/* ─── Buttons & forms ─── */
-body.view-mobile .btn { font-size: 0.78rem; padding: 0.38rem 0.85rem; }
-body.view-mobile .btn-sm { font-size: 0.72rem; padding: 0.3rem 0.65rem; }
+/* ── 13. Buttons & forms ── */
+body.view-mobile .btn        { font-size: 0.78rem; padding: 0.38rem 0.8rem; }
+body.view-mobile .btn-sm     { font-size: 0.72rem; padding: 0.3rem 0.6rem; }
 body.view-mobile .form-control,
 body.view-mobile .form-select { font-size: 0.82rem; padding: 0.38rem 0.65rem; }
-body.view-mobile label { font-size: 0.78rem; }
+body.view-mobile label        { font-size: 0.78rem; }
 
-/* ─── Profile page — compact ─── */
+/* ── 14. Profile page ── */
 body.view-mobile .profile-page { max-width: 100% !important; }
 body.view-mobile .profile-hero__banner { height: 72px !important; }
 body.view-mobile .profile-hero__body { padding: 0 0.6rem 0.75rem; }
@@ -5456,12 +5527,13 @@ body.view-mobile .profile-avatar-preview,
 body.view-mobile .profile-avatar-preview--placeholder { width: 76px !important; height: 76px !important; }
 body.view-mobile .banner-swatch-grid { grid-template-columns: repeat(3, 1fr) !important; }
 
-/* ─── Dashboard stats ─── */
-body.view-mobile .dbd-stat-pill { min-width: 0; }
-body.view-mobile .dbd-stats-row { flex-direction: column; gap: 0.45rem; }
-
-/* ─── Reports KPI row ─── */
-body.view-mobile .rpt-kpi-row { flex-direction: column; gap: 0.45rem; }
+/* ── 15. Reports KPI row — 2-column grid ── */
+body.view-mobile .rpt-kpi-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: unset !important;
+    gap: 0.45rem !important;
+}
 body.view-mobile .rpt-kpi { min-width: 0; }
 
 
