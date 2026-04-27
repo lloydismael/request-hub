@@ -429,54 +429,80 @@ class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
 
 
 def summarize_request_changes(original, updated, changed_fields):
-    field_labels = {
-        "account": "Account",
-        "priority": "Priority",
-        "status": "Status",
-        "due_date": "Due date",
-        "end_date": "End date",
-        "engineer": "Engineer",
-        "backup_engineer": "Backup engineer",
-        "account_manager": "Requestor",
-        "description": "Description",
-        "engagement_type": "Engagement type",
-        "product_category": "Product category",
-        "start_date": "Start date",
-    }
-
     choice_maps = {
         "priority": dict(Request.Priority.choices),
         "status": dict(Request.Status.choices),
         "engagement_type": dict(Request.Engagement.choices),
     }
 
-    def format_value(field, value):
-        if field in choice_maps:
-            return choice_maps[field].get(value, "Not set") if value else "Not set"
-        if field in {"due_date", "end_date", "start_date"}:
-            return value.strftime("%b %d, %Y") if value else "Not set"
-        if field == "account":
-            return value.name if value else "Not set"
-        if field in {"engineer", "backup_engineer"}:
-            if value:
-                return value.get_full_name() or value.username
-            return "Unassigned"
-        if value is None or value == "":
-            return "Not set"
-        return str(value)
+    def fmt_user(u):
+        return (u.get_full_name() or u.username) if u else None
+
+    def fmt_date(v):
+        return v.strftime("%b %d, %Y") if v else None
+
+    def fmt_choice(field, v):
+        return choice_maps[field].get(v, v) if v else None
 
     change_summaries = []
     for field in changed_fields:
-        if field not in field_labels:
+        old = getattr(original, field, None)
+        new = getattr(updated, field, None)
+        if old == new:
             continue
-        old_value = getattr(original, field, None)
-        new_value = getattr(updated, field, None)
-        if old_value == new_value:
-            continue
-        old_display = format_value(field, old_value)
-        new_display = format_value(field, new_value)
-        label = field_labels[field]
-        change_summaries.append(f"{label}: {old_display} → {new_display}")
+
+        if field == "status":
+            label = fmt_choice("status", new) or "Unknown"
+            change_summaries.append(f"Marked as {label}")
+
+        elif field == "engineer":
+            if new:
+                change_summaries.append(f"Assigned engineer: {fmt_user(new)}")
+            else:
+                change_summaries.append("Engineer unassigned")
+
+        elif field == "backup_engineer":
+            if new:
+                change_summaries.append(f"Assigned backup engineer: {fmt_user(new)}")
+            else:
+                change_summaries.append("Backup engineer unassigned")
+
+        elif field == "priority":
+            change_summaries.append(f"Priority set to {fmt_choice('priority', new)}")
+
+        elif field == "due_date":
+            if new:
+                change_summaries.append(f"Due date set to {fmt_date(new)}")
+            else:
+                change_summaries.append("Due date cleared")
+
+        elif field == "end_date":
+            if new:
+                change_summaries.append(f"Closed on {fmt_date(new)}")
+            else:
+                change_summaries.append("End date cleared")
+
+        elif field == "start_date":
+            if new:
+                change_summaries.append(f"Start date set to {fmt_date(new)}")
+
+        elif field == "account":
+            if new:
+                change_summaries.append(f"Account changed to {new.name}")
+
+        elif field == "engagement_type":
+            change_summaries.append(f"Engagement type set to {fmt_choice('engagement_type', new)}")
+
+        elif field == "product_category":
+            if new:
+                change_summaries.append(f"Product category set to {new}")
+
+        elif field == "description":
+            change_summaries.append("Description updated")
+
+        elif field == "account_manager":
+            if new:
+                change_summaries.append(f"Requestor set to {new}")
 
     return "; ".join(change_summaries)
 
@@ -514,7 +540,7 @@ def create_change_status_log(request_obj: Request, actor_user: User, source_labe
         return
 
     actor_name = actor_user.get_full_name() or actor_user.username
-    message = f"{actor_name} updated the request ({source_label}): {summary_text}"
+    message = f"{actor_name} — {summary_text}"
     StatusLog.objects.create(
         request=request_obj,
         author=actor_user,
