@@ -636,27 +636,6 @@
         </div>
     </div>
 
-    {# ── Operational: Status overview ────────────────────────────────────── #}
-    {% if status_breakdown %}
-        <div class="glass-card rpt-chart-card mb-4">
-            <div class="rpt-chart-head">
-                <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-flag-fill"></i></span>
-                <div>
-                    <h3 class="rpt-chart-title">Request Status Overview</h3>
-                    <p class="rpt-chart-sub">Current distribution across all status categories.</p>
-                </div>
-            </div>
-            <div class="d-flex flex-wrap gap-2 mt-1">
-                {% for status in status_breakdown %}
-                    <div class="rpt-status-chip">
-                        <span class="rpt-status-dot"></span>
-                        <span>{{ status.label }}</span>
-                        <span class="rpt-status-count">{{ status.total }}</span>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-    {% endif %}
 
     {{ account_manager_chart|json_script:"account-manager-data" }}
     {{ engineer_chart|json_script:"engineer-data" }}
