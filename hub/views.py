@@ -2077,6 +2077,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
     model = Request
     form_class = RequestAdminForm
     template_name = "hub/request_manager_form.html"
+    context_object_name = "service_request"
     success_url = reverse_lazy("hub:dashboard")
 
     def get_form_kwargs(self):
