@@ -6,7 +6,9 @@
     <div class="col-12">
         <div class="glass-card p-4">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h2 class="h5 mb-0"><i class="bi bi-file-earmark-text-fill me-2"></i>SQR Submissions</h2>
+                <div>
+                    <h2 class="h5 mb-1">SQR Submissions</h2>
+                </div>
                 <div class="d-flex gap-2 flex-wrap align-items-center">
                     {% if active_sqr_tab == 'submissions' %}
                         {% if can_create_sqr %}
@@ -24,301 +26,87 @@
                 </div>
             </div>
 
-            <ul class="nav nav-tabs mb-3">
-                <li class="nav-item">
-                    <a class="nav-link {% if active_sqr_tab == 'submissions' %}active{% endif %}" href="{% url 'hub:sqr' %}?tab=submissions"><i class="bi bi-file-earmark-text me-1"></i>SQR Submissions</a>
-                </li>
-                {% if show_revenue_tracker_tab %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_sqr_tab == 'revenue-tracker' %}active{% endif %}" href="{% url 'hub:sqr' %}?tab=revenue-tracker"><i class="bi bi-graph-up-arrow me-1"></i>Revenue Tracker</a>
-                    </li>
-                {% endif %}
-            </ul>
-
-            {% if active_sqr_tab == 'submissions' %}
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead>
-                            <tr>
-                                <th>SQR ID</th>
-                                <th>Engineer</th>
-                                <th>Account Details</th>
-                                <th>Service</th>
-                                <th>SSE Manhrs</th>
-                                <th>Docs</th>
-                                <th>Approver</th>
-                                <th>Status</th>
-                                <th>Updated</th>
-                                <th class="text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in sqr_submissions %}
-                            <tr>
-                                <td class="fw-semibold">{{ item.reference_code }}</td>
-                                <td>{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
-                                <td>
-                                    <div class="fw-semibold">{{ item.customer_name }}</div>
-                                    {% if item.customer_company %}<div class="small text-muted">Group: {{ item.customer_company }}</div>{% endif %}
-                                    {% if item.customer_contact %}<div class="small text-muted">Manager: {{ item.customer_contact }}</div>{% endif %}
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ item.project_title }}</div>
-                                    <div class="small text-muted">{{ item.project_details|truncatechars:100 }}</div>
-                                    {% if item.remarks %}<div class="small text-muted">Remarks: {{ item.remarks|truncatechars:60 }}</div>{% endif %}
-                                </td>
-                                <td>{{ item.sse_manhrs|default:"-" }}</td>
-                                <td>
-                                    {% if item.documentation_link_list %}
-                                        <ul class="list-unstyled mb-0 small">
-                                            {% for link in item.documentation_link_list %}
-                                                <li><a href="{{ link }}" target="_blank" rel="noopener">Link {{ forloop.counter }}</a></li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <span class="text-muted">No links</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</td>
-                                <td>
-                                    {% if item.status == 'reviewed' %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>
-                                    {% elif item.status == 'for_revision' %}
-                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
-                                    {% else %}
-                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
-                                    {% endif %}
-                                </td>
-                                <td class="small text-muted">
-                                    {% if item.reviewed_at %}
-                                        Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
-                                    {% else %}
-                                        {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    {% if request.user.is_engineer_access_role and item.engineer_id == request.user.id %}
-                                        <div class="d-flex gap-1 justify-content-end">
-                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
-                                            <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
-                                        </div>
-                                    {% elif can_review_sqr %}
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Manage</a>
-                                    {% elif item.status == 'reviewed' %}
-                                        <span class="text-success small">Approved</span>
-                                    {% elif item.status == 'for_revision' %}
-                                        <span class="text-danger small">For Revision</span>
-                                    {% else %}
-                                        <span class="text-muted small">For Processing</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="10" class="text-center text-muted py-4">No SQR submissions yet.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% elif show_revenue_tracker_tab %}
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-uppercase text-muted">Quotation Stage</div>
-                            <div class="h5 mb-0">{{ quotation_stage_count }}</div>
-                            <div class="small text-muted">New and For Revision SQR</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-uppercase text-muted">Order Stage</div>
-                            <div class="h5 mb-0">{{ order_stage_count }}</div>
-                            <div class="small text-muted">Approved and waiting for P.O</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-uppercase text-muted">Revenue Stage</div>
-                            <div class="h5 mb-0">{{ revenue_stage_totals.count }}</div>
-                            <div class="small text-muted">With P.O and revenue details</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <h3 class="h6 mb-2">Quotation Stage</h3>
-                    <p class="small text-muted mb-2">Set quotation amount and discount rate (5%, 10%, 15%).</p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>SQR ID</th>
-                                    <th>Engineer</th>
-                                    <th>Account</th>
-                                    <th>Status</th>
-                                    <th style="min-width: 280px;">Quotation Setup</th>
-                                    <th>Discounted Price</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in quotation_stage_items %}
-                                <tr>
-                                    <td class="fw-semibold">{{ item.submission.reference_code }}</td>
-                                    <td>{{ item.submission.engineer.get_full_name|default:item.submission.engineer.username }}</td>
-                                    <td>{{ item.submission.customer_name }}</td>
-                                    <td>
-                                        {% if item.submission.status == 'for_revision' %}
-                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
-                                        {% else %}
-                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="post" action="{% url 'hub:sqr-revenue-update' item.submission.pk %}" class="row g-2 align-items-end">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="stage_action" value="quotation">
-                                            <div class="col-sm-5">
-                                                <label class="form-label small mb-1" for="{{ item.form.quotation_total_price.id_for_label }}">Total Price</label>
-                                                {{ item.form.quotation_total_price }}
-                                            </div>
-                                            <div class="col-sm-4">
-                                                <label class="form-label small mb-1" for="{{ item.form.discount_rate.id_for_label }}">Discount</label>
-                                                {{ item.form.discount_rate }}
-                                            </div>
-                                            <div class="col-sm-3 d-grid">
-                                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        {% if item.submission.discounted_price is not None %}
-                                            {{ item.submission.discounted_price|floatformat:2 }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No SQR in Quotation stage.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <h3 class="h6 mb-2">Order Stage</h3>
-                    <p class="small text-muted mb-2">Approved SQR with finalized price, waiting for customer Purchase Order.</p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>SQR ID</th>
-                                    <th>Account</th>
-                                    <th>Total Price</th>
-                                    <th>Discounted Price</th>
-                                    <th style="min-width: 320px;">P.O Attachment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in order_stage_items %}
-                                <tr>
-                                    <td class="fw-semibold">{{ item.submission.reference_code }}</td>
-                                    <td>{{ item.submission.customer_name }}</td>
-                                    <td>{{ item.submission.quotation_total_price|default:"-" }}</td>
-                                    <td>
-                                        {% if item.submission.discounted_price is not None %}
-                                            {{ item.submission.discounted_price|floatformat:2 }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="post" action="{% url 'hub:sqr-revenue-update' item.submission.pk %}" class="row g-2 align-items-end">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="stage_action" value="order">
-                                            <div class="col-12">
-                                                <label class="form-label small mb-1" for="{{ item.form.po_attachment_link.id_for_label }}">P.O Attachment Link</label>
-                                                {{ item.form.po_attachment_link }}
-                                            </div>
-                                            <div class="col-12">
-                                                <label class="form-label small mb-1" for="{{ item.form.revenue_overview.id_for_label }}">Revenue Overview</label>
-                                                {{ item.form.revenue_overview }}
-                                            </div>
-                                            <div class="col-12 d-grid d-sm-flex justify-content-sm-end">
-                                                <button class="btn btn-sm btn-outline-success" type="submit">Attach P.O and Move to Revenue</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No SQR in Order stage.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                        <h3 class="h6 mb-0">Revenue Stage</h3>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total Price: {{ revenue_stage_totals.total_price|floatformat:2 }}</span>
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">Discounted Price: {{ revenue_stage_totals.discounted_price|floatformat:2 }}</span>
-                        </div>
-                    </div>
-                    <p class="small text-muted mb-2">Shows finalized revenue details after P.O is attached.</p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>SQR ID</th>
-                                    <th>Account</th>
-                                    <th>Total Price</th>
-                                    <th>Discount</th>
-                                    <th>Discounted Price</th>
-                                    <th>P.O Link</th>
-                                    <th>Revenue Overview</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in revenue_stage_submissions %}
-                                <tr>
-                                    <td class="fw-semibold">{{ item.reference_code }}</td>
-                                    <td>{{ item.customer_name }}</td>
-                                    <td>{{ item.quotation_total_price|default:"-" }}</td>
-                                    <td>{{ item.discount_rate }}%</td>
-                                    <td>
-                                        {% if item.discounted_price is not None %}
-                                            {{ item.discounted_price|floatformat:2 }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if item.po_attachment_link %}
-                                            <a href="{{ item.po_attachment_link }}" target="_blank" rel="noopener">View P.O</a>
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ item.revenue_overview|default:"-"|truncatechars:120 }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No SQR in Revenue stage.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            {% endif %}
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>SQR ID</th>
+                            <th>Engineer</th>
+                            <th>Account Details</th>
+                            <th>Service</th>
+                            <th>SSE Manhrs</th>
+                            <th>Docs</th>
+                            <th>Approver</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in sqr_submissions %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.reference_code }}</td>
+                            <td>{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ item.customer_name }}</div>
+                                {% if item.customer_company %}<div class="small text-muted">Group: {{ item.customer_company }}</div>{% endif %}
+                                {% if item.customer_contact %}<div class="small text-muted">Manager: {{ item.customer_contact }}</div>{% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-semibold">{{ item.project_title }}</div>
+                                <div class="small text-muted">{{ item.project_details|truncatechars:100 }}</div>
+                                {% if item.remarks %}<div class="small text-muted">Remarks: {{ item.remarks|truncatechars:60 }}</div>{% endif %}
+                            </td>
+                            <td>{{ item.sse_manhrs|default:"-" }}</td>
+                            <td>
+                                {% if item.documentation_link_list %}
+                                    <ul class="list-unstyled mb-0 small">
+                                        {% for link in item.documentation_link_list %}
+                                            <li><a href="{{ link }}" target="_blank" rel="noopener">Link {{ forloop.counter }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="text-muted">No links</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</td>
+                            <td>
+                                {% if item.status == 'reviewed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">
+                                {% if item.reviewed_at %}
+                                    Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                {% else %}
+                                    {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if request.user.role == 'engineer' and item.engineer_id == request.user.id %}
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
+                                        <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
+                                    </div>
+                                {% elif can_review_sqr %}
+                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Review</a>
+                                {% elif item.status == 'reviewed' %}
+                                    <span class="text-success small">Reviewed</span>
+                                {% else %}
+                                    <span class="text-muted small">Waiting review</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-4">No SQR submissions yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
