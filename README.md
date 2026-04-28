@@ -1,6 +1,6 @@
 ﻿<div align="center">
 
-<img src="static/img/phil-data-full-logo.png" alt="Phil-Data Logo" width="260"/>
+<img src="https://github.com/lloydismael/request-hub/blob/master/static/img/phil-data-full-logo.png?raw=true" alt="Phil-Data Logo" width="850"/>
 
 # Request Hub
 
