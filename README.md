@@ -1,6 +1,9 @@
 ﻿<div align="center">
 
-<img src="https://github.com/lloydismael/request-hub/blob/master/static/img/phil-data-full-logo.png?raw=true" alt="Phil-Data Logo" width="850"/>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/lloydismael/request-hub/dev/static/img/phil-data-full-logo.png" width="1000" alt="Phil-Data Logo">
+</p>
+
 
 # Request Hub
 
