@@ -617,5 +617,108 @@
         </button>
     </div>
     {% endif %}
+
+    {% if request.user.is_authenticated %}
+    {# ── Auto-logout idle warning ── #}
+    {# Hidden form used to POST to the logout URL (CSRF-safe) #}
+    <form id="alo-logout-form" action="{% url 'logout' %}" method="post" style="display:none">
+        {% csrf_token %}
+    </form>
+
+    <div class="alo-overlay" id="aloOverlay" role="dialog" aria-modal="true" aria-labelledby="aloTitle">
+        <div class="alo-card">
+            <i class="bi bi-clock-history alo-icon" aria-hidden="true"></i>
+            <div class="alo-title" id="aloTitle">Are you still there?</div>
+            <div class="alo-sub">You've been inactive for a while.<br>You'll be logged out automatically in:</div>
+            <div class="alo-countdown" id="aloCountdown" aria-live="polite">60</div>
+            <button class="alo-btn" id="aloStayBtn" type="button">
+                <i class="bi bi-check-circle-fill"></i> Yes, I'm here
+            </button>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        var IDLE_MS      = 5 * 60 * 1000;   // 5 minutes idle → show warning
+        var WARNING_MS   = 1 * 60 * 1000;   // 1 minute countdown before logout
+        var idleTimer    = null;
+        var countTimer   = null;
+        var remaining    = 60;
+        var overlay      = document.getElementById('aloOverlay');
+        var countEl      = document.getElementById('aloCountdown');
+        var stayBtn      = document.getElementById('aloStayBtn');
+        var logoutForm   = document.getElementById('alo-logout-form');
+
+        function logout() {
+            clearTimers();
+            logoutForm.submit();
+        }
+
+        function clearTimers() {
+            clearTimeout(idleTimer);
+            clearInterval(countTimer);
+        }
+
+        function hideWarning() {
+            overlay.classList.remove('is-open');
+            countEl.classList.remove('alo-countdown--warn');
+            clearInterval(countTimer);
+        }
+
+        function startCountdown() {
+            remaining = 60;
+            countEl.textContent = remaining;
+            countEl.classList.remove('alo-countdown--warn');
+
+            countTimer = setInterval(function () {
+                remaining -= 1;
+                countEl.textContent = remaining;
+                // Turn amber in the last 20 seconds
+                if (remaining <= 20) {
+                    countEl.classList.add('alo-countdown--warn');
+                }
+                if (remaining <= 0) {
+                    clearInterval(countTimer);
+                    logout();
+                }
+            }, 1000);
+        }
+
+        function showWarning() {
+            overlay.classList.add('is-open');
+            startCountdown();
+        }
+
+        function resetIdleTimer() {
+            if (overlay.classList.contains('is-open')) return; // don't reset while warning is shown
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(showWarning, IDLE_MS);
+        }
+
+        // User activity events that reset the timer
+        var events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+        events.forEach(function (evt) {
+            document.addEventListener(evt, resetIdleTimer, { passive: true });
+        });
+
+        // "Yes, I'm here" button
+        stayBtn.addEventListener('click', function () {
+            hideWarning();
+            resetIdleTimer();
+        });
+
+        // Keyboard accessibility — pressing Escape also dismisses
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+                hideWarning();
+                resetIdleTimer();
+            }
+        });
+
+        // Start the idle timer on page load
+        resetIdleTimer();
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

@@ -154,6 +154,12 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "hub:dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
+# Session security: expire the session cookie when the browser is closed so
+# users must log in again after closing the tab/window. SERVER-SIDE age is
+# capped at 8 hours (28 800 s) as a fallback for browsers that restore tabs.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 28800  # 8 hours in seconds
+
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.CaseInsensitiveUsernameBackend",
 ]
