@@ -430,6 +430,18 @@ class SqrSubmission(models.Model):
         COMPLETED = "completed", "Completed"
         CANCELLED = "cancelled", "Cancelled"
 
+    class OverallStatus(models.TextChoices):
+        ON_HOLD = "on_hold", "On Hold"
+        PLANNING = "planning", "Planning"
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class RevenueStatus(models.TextChoices):
+        INVOICED = "invoiced", "Invoiced"
+        PARTIAL = "partial", "Partial"
+        PENDING = "pending", "Pending"
+
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
     sequence_number = models.PositiveIntegerField(editable=False, db_index=True, blank=True, null=True)
@@ -462,11 +474,12 @@ class SqrSubmission(models.Model):
     )
     discount_rate = models.PositiveSmallIntegerField(
         choices=[
+            (0, "No Discount"),
             (5, "5%"),
             (10, "10%"),
             (15, "15%"),
         ],
-        default=5,
+        default=0,
     )
     pm_manhrs = models.DecimalField(
         max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True
@@ -475,6 +488,20 @@ class SqrSubmission(models.Model):
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
         help_text="Rate per manhour (PHP).",
     )
+    # Proposal Stage – cost breakdown columns (M, O, P in Excel)
+    sse_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="SSE labour cost (PHP).",
+    )
+    pm_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="PM labour cost (PHP).",
+    )
+    managed_support_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="Managed Support Service amount (PHP).",
+    )
+    validity_due_date = models.DateField(blank=True, null=True)
     po_attachment_link = models.URLField(blank=True)
     po_attached_at = models.DateTimeField(blank=True, null=True)
     revenue_overview = models.TextField(blank=True)
@@ -491,6 +518,39 @@ class SqrSubmission(models.Model):
     delivery_target_finish_date = models.DateField(blank=True, null=True)
     delivery_actual_finish_date = models.DateField(blank=True, null=True)
     delivery_completion_signed_date = models.DateField(blank=True, null=True)
+    # Service Delivery Stage – extra columns (X–AK in Excel)
+    po_pnl_date = models.DateField(blank=True, null=True, verbose_name="PO/PNL Date")
+    assigned_pm = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sqr_assigned_pm",
+        blank=True,
+        null=True,
+        verbose_name="Assigned PM",
+    )
+    assigned_sse = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sqr_assigned_sse",
+        blank=True,
+        null=True,
+        verbose_name="Assigned SSE",
+    )
+    overall_status = models.CharField(
+        max_length=20, choices=OverallStatus.choices, blank=True, default=""
+    )
+    key_updates_risks = models.TextField(blank=True)
+    warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Post-service Warranty End Date")
+    managed_support_start_date = models.DateField(blank=True, null=True)
+    managed_support_end_date = models.DateField(blank=True, null=True)
+    # Revenue Stage – columns (AL–AP in Excel)
+    revenue_date = models.DateField(blank=True, null=True, verbose_name="SI/Revenue Date")
+    revenue_source = models.CharField(max_length=100, blank=True)
+    revenue_reference_no = models.CharField(max_length=100, blank=True)
+    revenue_status = models.CharField(
+        max_length=20, choices=RevenueStatus.choices, blank=True, default=""
+    )
+    revenue_remarks = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(
@@ -545,6 +605,32 @@ class SqrSubmission(models.Model):
             return None
         discount = Decimal(self.discount_rate or 0) / Decimal("100")
         return (base * (Decimal("1") - discount)).quantize(Decimal("0.01"))
+
+    @property
+    def computed_gross_total(self):
+        """SSE Amount + PM Amount + Managed Support Amount."""
+        sse = self.sse_amount or Decimal("0")
+        pm = self.pm_amount or Decimal("0")
+        mgmt = self.managed_support_amount or Decimal("0")
+        gross = sse + pm + mgmt
+        return gross.quantize(Decimal("0.01")) if gross else None
+
+    @property
+    def computed_discount_amount(self):
+        """Gross total × discount_rate / 100."""
+        gross = self.computed_gross_total
+        if gross is None:
+            return None
+        return (gross * Decimal(self.discount_rate or 0) / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def computed_total_price(self):
+        """Gross total after applying discount."""
+        gross = self.computed_gross_total
+        if gross is None:
+            return None
+        discount = Decimal(self.discount_rate or 0) / Decimal("100")
+        return (gross * (Decimal("1") - discount)).quantize(Decimal("0.01"))
 
     @property
     def revenue_stage_key(self) -> str:

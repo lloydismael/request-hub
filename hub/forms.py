@@ -732,44 +732,60 @@ class SqrRevenueOrderForm(forms.ModelForm):
 
 
 class SqrProposalStatusForm(forms.ModelForm):
-    """PM fills this to set pricing, PM manhours, and deal/proposal status."""
+    """PM fills this to set pricing breakdown, manhours, and deal/proposal status."""
 
     class Meta:
         model = SqrSubmission
         fields = [
+            "sse_manhrs",
+            "sse_amount",
             "pm_manhrs",
-            "hourly_rate",
-            "quotation_total_price",
+            "pm_amount",
+            "managed_support_amount",
             "discount_rate",
+            "quotation_total_price",
+            "validity_due_date",
             "proposal_status",
         ]
         labels = {
+            "sse_manhrs": "SSE Manhours",
+            "sse_amount": "SSE Amount (PHP)",
             "pm_manhrs": "PM Manhours",
-            "hourly_rate": "Hourly Rate (PHP)",
-            "quotation_total_price": "Quoted Total Price (PHP)",
+            "pm_amount": "PM Amount (PHP)",
+            "managed_support_amount": "Managed Support Service Amount (PHP)",
             "discount_rate": "Discount Rate",
-            "proposal_status": "Deal / Proposal Status",
+            "quotation_total_price": "Total Price (PHP)",
+            "validity_due_date": "Validity Due Date",
+            "proposal_status": "Proposal Status",
         }
         widgets = {
-            "pm_manhrs": forms.NumberInput(
+            "sse_manhrs": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}
             ),
-            "hourly_rate": forms.NumberInput(
+            "sse_amount": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
             ),
-            "quotation_total_price": forms.NumberInput(
+            "pm_manhrs": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0", "list": "pm-manhrs-list"}
+            ),
+            "pm_amount": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+            ),
+            "managed_support_amount": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
             ),
             "discount_rate": forms.Select(attrs={"class": "form-select"}),
+            "quotation_total_price": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+            ),
+            "validity_due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "proposal_status": forms.Select(attrs={"class": "form-select"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["pm_manhrs"].required = False
-        self.fields["hourly_rate"].required = False
-        self.fields["quotation_total_price"].required = False
-        # Include empty / blank option for proposal_status
+        for f in self.fields.values():
+            f.required = False
         self.fields["proposal_status"].choices = [("", "\u2014 Not set \u2014")] + list(
             SqrSubmission.ProposalStatus.choices
         )
@@ -781,37 +797,66 @@ class SqrDeliveryForm(forms.ModelForm):
     class Meta:
         model = SqrSubmission
         fields = [
+            "po_pnl_date",
+            "assigned_pm",
+            "assigned_sse",
+            "delivery_start_date",
+            "overall_status",
             "delivery_health",
             "delivery_progress",
-            "delivery_start_date",
+            "key_updates_risks",
             "delivery_target_finish_date",
             "delivery_actual_finish_date",
             "delivery_completion_signed_date",
+            "warranty_end_date",
+            "managed_support_start_date",
+            "managed_support_end_date",
         ]
         labels = {
+            "po_pnl_date": "PO / PNL Date",
+            "assigned_pm": "Assigned PM",
+            "assigned_sse": "Assigned SSE",
+            "delivery_start_date": "Start Date (Execution)",
+            "overall_status": "Overall Status",
             "delivery_health": "Health Status",
             "delivery_progress": "Overall Progress (%)",
-            "delivery_start_date": "Execution Start Date",
-            "delivery_target_finish_date": "Target Finish Date",
-            "delivery_actual_finish_date": "Actual Finish Date",
+            "key_updates_risks": "Key Updates / Risks / Issues",
+            "delivery_target_finish_date": "Target Finish Date (Execution)",
+            "delivery_actual_finish_date": "Actual Finish Date (Execution)",
             "delivery_completion_signed_date": "Completion Signed Date",
+            "warranty_end_date": "Post-service Warranty End Date",
+            "managed_support_start_date": "Managed Support Start Date",
+            "managed_support_end_date": "Managed Support End Date",
         }
         widgets = {
+            "po_pnl_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "assigned_pm": forms.Select(attrs={"class": "form-select"}),
+            "assigned_sse": forms.Select(attrs={"class": "form-select"}),
+            "delivery_start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "overall_status": forms.Select(attrs={"class": "form-select"}),
             "delivery_health": forms.Select(attrs={"class": "form-select"}),
             "delivery_progress": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "max": "100", "placeholder": "0\u2013100"}
             ),
-            "delivery_start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "key_updates_risks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
             "delivery_target_finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "delivery_actual_finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "delivery_completion_signed_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "warranty_end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "managed_support_start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "managed_support_end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["overall_status"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.OverallStatus.choices
+        )
         self.fields["delivery_health"].choices = [("", "\u2014 Not set \u2014")] + list(
             SqrSubmission.DeliveryHealth.choices
         )
+        self.fields["assigned_pm"].queryset = User.objects.filter(role="pm_esg").order_by("first_name", "last_name")
+        self.fields["assigned_sse"].queryset = User.objects.filter(role__in=["engineer", "on_hold"]).order_by("first_name", "last_name")
         for f in self.fields.values():
             f.required = False
 
@@ -820,6 +865,42 @@ class SqrDeliveryForm(forms.ModelForm):
         if value is not None and not (0 <= value <= 100):
             raise forms.ValidationError("Progress must be between 0 and 100.")
         return value
+
+
+class SqrRevenueForm(forms.ModelForm):
+    """PM fills this to record revenue recognition details."""
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "revenue_date",
+            "revenue_source",
+            "revenue_reference_no",
+            "revenue_status",
+            "revenue_remarks",
+        ]
+        labels = {
+            "revenue_date": "SI / Revenue Date",
+            "revenue_source": "Source",
+            "revenue_reference_no": "Reference No.",
+            "revenue_status": "Revenue Status",
+            "revenue_remarks": "Remarks",
+        }
+        widgets = {
+            "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. Invoiced"}),
+            "revenue_reference_no": forms.TextInput(attrs={"class": "form-control"}),
+            "revenue_status": forms.Select(attrs={"class": "form-select"}),
+            "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["revenue_status"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.RevenueStatus.choices
+        )
+        for f in self.fields.values():
+            f.required = False
 
 
 class RequestStatusForm(forms.ModelForm):

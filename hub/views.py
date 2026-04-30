@@ -42,6 +42,7 @@ from .forms import (
     RequestAdminForm,
     SqrDeliveryForm,
     SqrProposalStatusForm,
+    SqrRevenueForm,
     SqrRevenueOrderForm,
     SqrRevenueQuotationForm,
     RequestForm,
@@ -1704,6 +1705,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "win_rate": win_rate,
             "top_won": top_won,
             "lost_submissions": lost_submissions,
+            "revenue_submissions": [s for s in all_submissions if s.status == SqrSubmission.Status.APPROVED] if is_pm else [],
         }
 
         context.update(
@@ -1863,8 +1865,13 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
         context["proposal_form"] = SqrProposalStatusForm(instance=self.object)
         context["delivery_form"] = SqrDeliveryForm(instance=self.object)
+        context["revenue_form"] = SqrRevenueForm(instance=self.object)
         context["show_proposal_section"] = self.object.status == SqrSubmission.Status.APPROVED
         context["show_delivery_section"] = (
+            self.object.status == SqrSubmission.Status.APPROVED
+            and self.object.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
+        )
+        context["show_revenue_section"] = (
             self.object.status == SqrSubmission.Status.APPROVED
             and self.object.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
         )
@@ -1997,6 +2004,40 @@ class SqrDeliveryUpdateView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             messages.success(request, f"Service delivery updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr-review", pk=pk)
+
+
+class SqrRevenueUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: record revenue recognition details on an Approved SQR."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Revenue details.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG can update this revenue record.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Revenue details can only be updated after the SQR is Approved.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        form = SqrRevenueForm(request.POST, instance=submission)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Revenue details updated for {submission.reference_code}.")
         else:
             for field, errors in form.errors.items():
                 label = form.fields[field].label if field in form.fields else field

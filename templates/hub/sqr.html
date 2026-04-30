@@ -72,53 +72,86 @@
             </div>
 
             <div class="table-responsive">
-                <table class="table table-hover align-middle">
+                <table class="table table-hover table-sm align-middle">
                     <thead class="table-dark">
                         <tr>
-                            <th>SQR ID</th>
-                            <th>Engineer</th>
-                            <th>Account / Group</th>
+                            <th class="text-nowrap">SQR</th>
+                            <th>Account</th>
                             <th>Service</th>
-                            <th>Manhours<br><small class="fw-normal text-muted">SSE / PM</small></th>
-                            <th>Cost (PHP)<br><small class="fw-normal text-muted">Base / Discounted</small></th>
-                            <th>Review Status</th>
-                            <th>Deal Status</th>
-                            <th>Updated</th>
+                            <th>People</th>
+                            <th class="text-end text-nowrap">SSE</th>
+                            <th class="text-end text-nowrap">PM</th>
+                            <th class="text-end text-nowrap">Managed Svc.</th>
+                            <th class="text-center text-nowrap">Discount</th>
+                            <th class="text-end text-nowrap">Total (PHP)</th>
+                            <th class="text-center text-nowrap">SQR Status</th>
+                            <th class="text-nowrap">Approval</th>
+                            <th class="text-nowrap">Valid Until</th>
+                            <th class="text-center text-nowrap">Deal Stage</th>
                             <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
                         <tr>
-                            <td class="fw-semibold text-nowrap">{{ item.reference_code }}</td>
-                            <td class="text-nowrap">{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
-                            <td>
+                            <td class="text-nowrap">
+                                <div class="small text-muted">{{ item.created_at|timezone:"Asia/Manila"|date:"M d, Y" }}</div>
+                                <div class="fw-semibold">{{ item.reference_code }}</div>
+                            </td>
+                            <td style="min-width:130px;">
                                 <div class="fw-semibold">{{ item.customer_name }}</div>
                                 {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
-                                {% if item.customer_contact %}<div class="small text-muted">{{ item.customer_contact }}</div>{% endif %}
                             </td>
-                            <td>
-                                <div class="fw-semibold">{{ item.project_title }}</div>
-                                <div class="small text-muted">{{ item.project_details }}</div>
-                                {% if item.remarks %}<div class="small text-muted fst-italic">{{ item.remarks|truncatechars:50 }}</div>{% endif %}
+                            <td style="min-width:160px;max-width:220px;">
+                                <div class="fw-semibold small">{{ item.project_title }}</div>
+                                {% if item.project_details %}<div class="small text-muted" style="white-space:normal;">{{ item.project_details|truncatechars:60 }}</div>{% endif %}
                             </td>
-                            <td class="text-nowrap">
-                                <div class="small">SSE: {{ item.sse_manhrs|default:"&ndash;" }} hrs</div>
-                                <div class="small">PM: {{ item.pm_manhrs|default:"&ndash;" }} hrs</div>
-                                {% if item.hourly_rate %}<div class="small text-muted">@ {{ item.hourly_rate }}/hr</div>{% endif %}
+                            <td style="min-width:150px;">
+                                <div class="small"><span class="badge bg-secondary-subtle text-secondary me-1">Mgr</span>{{ item.customer_contact|default:"&ndash;" }}</div>
+                                <div class="small mt-1"><span class="badge bg-secondary-subtle text-secondary me-1">SSE</span>{{ item.engineer.get_full_name|default:item.engineer.username }}</div>
+                                <div class="small mt-1"><span class="badge bg-secondary-subtle text-secondary me-1">PM</span>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</div>
                             </td>
-                            <td class="text-nowrap">
-                                {% if item.base_cost %}
-                                    <div class="small">Base: {{ item.base_cost|floatformat:2 }}</div>
-                                    <div class="small text-success">Disc: {{ item.base_cost_discounted|floatformat:2 }}</div>
-                                {% elif item.quotation_total_price %}
-                                    <div class="small">Quoted: {{ item.quotation_total_price|floatformat:2 }}</div>
-                                    <div class="small text-success">Disc: {{ item.discounted_price|floatformat:2 }}</div>
+                            <td class="text-end text-nowrap">
+                                {% if item.sse_manhrs or item.sse_amount %}
+                                    {% if item.sse_manhrs %}<div class="small text-muted">{{ item.sse_manhrs }} hrs</div>{% endif %}
+                                    {% if item.sse_amount %}<div class="small fw-semibold">{{ item.sse_amount|floatformat:2 }}</div>{% endif %}
                                 {% else %}
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="text-end text-nowrap">
+                                {% if item.pm_manhrs or item.pm_amount %}
+                                    {% if item.pm_manhrs %}<div class="small text-muted">{{ item.pm_manhrs }} hrs</div>{% endif %}
+                                    {% if item.pm_amount %}<div class="small fw-semibold">{{ item.pm_amount|floatformat:2 }}</div>{% endif %}
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap">
+                                {% if item.managed_support_amount %}
+                                    <div class="small fw-semibold">{{ item.managed_support_amount|floatformat:2 }}</div>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center text-nowrap">
+                                {% if item.discount_rate %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ item.discount_rate }}%</span>
+                                    {% if item.computed_discount_amount %}<div class="small text-muted">&minus;{{ item.computed_discount_amount|floatformat:2 }}</div>{% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No Disc.</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap">
+                                {% if item.computed_total_price %}
+                                    <div class="fw-bold text-success">{{ item.computed_total_price|floatformat:2 }}</div>
+                                {% elif item.quotation_total_price %}
+                                    <div class="fw-bold">{{ item.quotation_total_price|floatformat:2 }}</div>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
                                 {% if item.status == 'reviewed' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2 me-1"></i>Approved</span>
                                 {% elif item.status == 'for_revision' %}
@@ -127,11 +160,13 @@
                                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-hourglass me-1"></i>For Processing</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="small text-nowrap">{% if item.reviewed_at %}{{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y" }}{% else %}&ndash;{% endif %}</td>
+                            <td class="small text-nowrap">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="text-center text-nowrap">
                                 {% if item.proposal_status == 'submitted_pending' %}
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-send me-1"></i>Submitted&ndash;Pending</span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-send me-1"></i>Submitted</span>
                                 {% elif item.proposal_status == 'negotiation_review' %}
-                                    <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-chat-dots me-1"></i>Negotiation / Review</span>
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-chat-dots me-1"></i>Negotiation</span>
                                 {% elif item.proposal_status == 'closed_won' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>
                                 {% elif item.proposal_status == 'closed_lost' %}
@@ -140,10 +175,7 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td class="small text-muted text-nowrap">
-                                {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y" }}
-                            </td>
-                            <td class="text-end text-nowrap">
+                            <td class="text-end">
                                 {% if request.user.role == 'engineer' and item.engineer_id == request.user.id %}
                                     <div class="d-flex gap-1 justify-content-end">
                                         {% if item.status != 'reviewed' %}
@@ -162,7 +194,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-5">
+                            <td colspan="14" class="text-center text-muted py-5">
                                 <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
                             </td>
                         </tr>
@@ -209,32 +241,54 @@
             </div>
 
             <div class="table-responsive">
-                <table class="table table-hover align-middle">
+                <table class="table table-hover table-sm align-middle text-nowrap">
                     <thead class="table-dark">
                         <tr>
                             <th>SQR ID</th>
-                            <th>Customer</th>
-                            <th>Service</th>
-                            <th>Health</th>
-                            <th>Progress</th>
+                            <th>Account</th>
+                            <th>PO/PNL Date</th>
+                            <th>Assigned PM</th>
+                            <th>Assigned SSE</th>
                             <th>Start Date</th>
+                            <th>Overall Status</th>
+                            <th>Health</th>
+                            <th>Progress %</th>
+                            <th style="min-width:160px;white-space:normal;">Key Updates / Risks</th>
                             <th>Target Finish</th>
                             <th>Actual Finish</th>
                             <th>Completion Signed</th>
+                            <th>Warranty End</th>
+                            <th>Support Start</th>
+                            <th>Support End</th>
                             <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in delivery_submissions %}
                         <tr>
-                            <td class="fw-semibold text-nowrap">{{ item.reference_code }}</td>
+                            <td class="fw-semibold">{{ item.reference_code }}</td>
                             <td>
                                 <div class="fw-semibold">{{ item.customer_name }}</div>
                                 {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
                             </td>
+                            <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</td>
+                            <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
+                            <td class="small">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             <td>
-                                <div class="fw-semibold">{{ item.project_title }}</div>
-                                <div class="small text-muted">{{ item.project_details }}</div>
+                                {% if item.overall_status == 'on_hold' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
+                                {% elif item.overall_status == 'planning' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">Planning</span>
+                                {% elif item.overall_status == 'in_progress' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>
+                                {% elif item.overall_status == 'completed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>
+                                {% elif item.overall_status == 'cancelled' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if item.delivery_health == 'on_track' %}
@@ -251,7 +305,7 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td style="min-width:130px;">
+                            <td style="min-width:120px;">
                                 {% if item.delivery_progress is not None %}
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="progress flex-grow-1" style="height:8px;">
@@ -261,15 +315,15 @@
                                                  aria-valuenow="{{ item.delivery_progress }}"
                                                  aria-valuemin="0" aria-valuemax="100"></div>
                                         </div>
-                                        <span class="small fw-semibold text-nowrap">{{ item.delivery_progress }}%</span>
+                                        <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
                                     </div>
                                 {% else %}
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td class="small text-nowrap">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            <td class="small text-nowrap">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            <td class="small text-nowrap">
+                            <td style="min-width:160px;max-width:200px;white-space:normal;" class="small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">
                                 {% if item.delivery_actual_finish_date %}
                                     {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
                                         <span class="text-danger">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
@@ -280,7 +334,10 @@
                                     <span class="text-muted">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td class="small text-nowrap">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.warranty_end_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.managed_support_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.managed_support_end_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             <td class="text-end">
                                 <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
                                     <i class="bi bi-pencil-square me-1"></i>Manage
@@ -289,7 +346,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-5">
+                            <td colspan="17" class="text-center text-muted py-5">
                                 <i class="bi bi-tools fs-2 d-block mb-2"></i>No Closed Won projects in Service Delivery yet.
                             </td>
                         </tr>
@@ -409,6 +466,66 @@
             <i class="bi bi-bar-chart-line fs-2 d-block mb-2"></i>No tracked deal data yet. Deal statuses will appear here once opportunities are marked Closed Won or Closed Lost.
         </div>
         {% endif %}
+
+        {# Revenue Tracking Table: columns AL-AP #}
+        <div class="glass-card p-4 mt-4">
+            <h3 class="h6 mb-3"><i class="bi bi-receipt me-2 text-success"></i>Revenue Records (SI / Revenue Tracking)</h3>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle text-nowrap">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>SQR ID</th>
+                            <th>Account</th>
+                            <th>Service</th>
+                            <th>SI/Revenue Date</th>
+                            <th>Source</th>
+                            <th>Reference No.</th>
+                            <th>Revenue Status</th>
+                            <th style="min-width:160px;white-space:normal;">Remarks</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in revenue_data.revenue_submissions %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.reference_code }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ item.customer_name }}</div>
+                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
+                            </td>
+                            <td style="max-width:180px;white-space:normal;" class="small">{{ item.project_title }}</td>
+                            <td class="small">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.revenue_source|default:"&ndash;" }}</td>
+                            <td class="small">{{ item.revenue_reference_no|default:"&ndash;" }}</td>
+                            <td>
+                                {% if item.revenue_status == 'invoiced' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Invoiced</span>
+                                {% elif item.revenue_status == 'partial' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-hourglass-split me-1"></i>Partial</span>
+                                {% elif item.revenue_status == 'pending' %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Pending</span>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td style="min-width:160px;max-width:220px;white-space:normal;" class="small">{{ item.revenue_remarks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
+                                    <i class="bi bi-pencil-square me-1"></i>Manage
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="bi bi-receipt fs-2 d-block mb-2"></i>No approved SQRs yet. Revenue records will appear here once SQRs are Approved.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
         {% endif %}
 
     </div>

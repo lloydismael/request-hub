@@ -453,6 +453,28 @@ body:not(.dark-mode) .btn-outline-info:hover {
     border-bottom-color: rgba(15, 23, 42, 0.08);
 }
 
+/* Ensure table text is readable inside glass cards in light mode.
+   Bootstrap resolves --bs-table-color → --bs-body-color, but the body
+   unconditionally sets color: #e2e8f0 (light grey for the dark bg),
+   causing near-invisible text on the frosted-white glass card.
+   The table rule uses a 3-level var() fallback chain, so we target
+   the cells directly with !important to cut through it. */
+body:not(.dark-mode) .glass-card .table {
+    color: #111827;
+    --bs-table-color: #111827;
+}
+/* Target td/th inside tbody only so thead.table-dark keeps white text */
+body:not(.dark-mode) .glass-card .table > tbody > tr > td,
+body:not(.dark-mode) .glass-card .table > tbody > tr > th {
+    color: #111827 !important;
+}
+body:not(.dark-mode) .glass-card .table .text-muted {
+    color: #6c757d !important;
+}
+body:not(.dark-mode) .glass-card .table .text-secondary {
+    color: #6c757d !important;
+}
+
 .request-id-cell {
     font-weight: 600;
     white-space: nowrap;
