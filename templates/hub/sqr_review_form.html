@@ -111,7 +111,7 @@
             <h2 class="h6 mb-3 fw-bold">
                 <i class="bi bi-clipboard-check me-2 text-primary"></i>Step 1 &mdash; Internal Review
             </h2>
-            <form method="post" novalidate>
+            <form method="post" novalidate id="sqr-review-form">
                 {% csrf_token %}
                 {% for field in form %}
                     <div class="mb-3">
@@ -123,18 +123,19 @@
                         {% endif %}
                     </div>
                 {% endfor %}
-                <div class="d-flex gap-2 flex-wrap">
-                    <button class="btn btn-primary" type="submit">
-                        <i class="bi bi-save me-1"></i>Save Review Status
-                    </button>
-                    <form method="post" action="{% url 'hub:sqr-teams' object.pk %}" class="d-inline d-none" id="teams-btn-form">
-                        {% csrf_token %}
-                        <button class="btn btn-outline-warning" type="submit">
-                            <i class="bi bi-microsoft-teams me-1"></i>Create Teams Revision Group
-                        </button>
-                    </form>
-                </div>
             </form>
+            {# Button row lives OUTSIDE the review form to avoid invalid nested-form HTML #}
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <button class="btn btn-primary" type="submit" form="sqr-review-form">
+                    <i class="bi bi-save me-1"></i>Save Review Status
+                </button>
+                <form method="post" action="{% url 'hub:sqr-teams' object.pk %}" class="d-inline d-none" id="teams-btn-form">
+                    {% csrf_token %}
+                    <button class="btn btn-warning" type="submit">
+                        <i class="bi bi-microsoft-teams me-1"></i>Create Teams Revision Group
+                    </button>
+                </form>
+            </div>
         </div>
 
         {# â”€â”€ SECTION 2: Proposal Details & Deal Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
@@ -538,6 +539,28 @@
         statusField.addEventListener("change", updateTeamsBtn);
         updateCommentsLabel();
         updateTeamsBtn();
+
+        // Intercept Teams form submit → open URL in new tab without leaving the page
+        if (teamsBtnForm) {
+            teamsBtnForm.addEventListener("submit", function (e) {
+                e.preventDefault();
+                const fd = new FormData(teamsBtnForm);
+                fetch(teamsBtnForm.action, {
+                    method: "POST",
+                    headers: {"X-CSRFToken": fd.get("csrfmiddlewaretoken")},
+                    body: fd,
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.teams_url) {
+                        window.open(data.teams_url, "_blank", "noopener,noreferrer");
+                    } else if (data.error) {
+                        alert(data.error);
+                    }
+                })
+                .catch(function () { alert("Could not launch Teams. Please try again."); });
+            });
+        }
     })();
 
     // ── Step 2: Managed Support auto-fill & Total Price auto-calc ──────────

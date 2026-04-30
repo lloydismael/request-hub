@@ -15,7 +15,7 @@ from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -2057,31 +2057,32 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
         redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
 
         if request.user.role not in ADMIN_PANEL_ROLES:
-            messages.error(request, "Only PM-ESG or Admin can create SQR revision Teams groups.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Only PM-ESG or Admin can create SQR revision Teams groups."}, status=403)
 
         if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
-            messages.error(request, "Only the assigned PM-ESG approver can create the revision Teams group.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Only the assigned PM-ESG approver can create the revision Teams group."}, status=403)
 
         if submission.status != SqrSubmission.Status.FOR_REVISION:
-            messages.error(request, "Set SQR status to For Revision before creating a Teams group.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Set SQR status to For Revision before creating a Teams group."}, status=400)
 
         approver_email = submission.pm_esg_reviewer.email if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email else None
         requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
         if not approver_email or not requestor_email:
-            messages.error(request, "Unable to create Teams group. Ensure both approver and requestor emails are configured.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Unable to create Teams group. Ensure both approver and requestor emails are configured."}, status=400)
 
         requestor_name = submission.engineer.get_full_name() or submission.engineer.username
         participants = ",".join(sorted({approver_email, requestor_email}))
-        topic = f"{submission.reference_code}+{submission.customer_name}"
-        comments = (submission.review_notes or "").strip() or "No comments provided."
+        topic = f"SQR {submission.reference_code} {submission.customer_name}"
+        raw_notes = (submission.review_notes or "").strip()
+        if raw_notes:
+            lines = [l.strip() for l in raw_notes.splitlines() if l.strip()]
+            numbered = "\n".join(f"{i + 1}. {line}" for i, line in enumerate(lines))
+        else:
+            numbered = "1.\n2.\n3.\n4.\n5."
         message_body = (
             f"Hi @{requestor_name}\n"
             "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
-            f"{comments}\n\n"
+            f"Comments\n{numbered}\n\n"
             "Thanks"
         )
         teams_url = (
@@ -2089,12 +2090,7 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
             f"{quote(participants)}&topicName={quote(topic)}&message={quote(message_body)}"
         )
 
-        messages.info(request, "Launching Microsoft Teams…")
-        return render(
-            request,
-            "hub/teams_redirect.html",
-            {"teams_url": teams_url},
-        )
+        return JsonResponse({"teams_url": teams_url})
 
 
 class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
