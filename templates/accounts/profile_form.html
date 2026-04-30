@@ -76,9 +76,14 @@
                 <h2 class="profile-card__title"><i class="bi bi-person-lines-fill me-2"></i>Personal Information</h2>
                 <div class="row g-3">
                     {% for field in form %}
-                        {% if field.name in "first_name,last_name,email,phone_number" %}
+                        {% if field.name in "first_name,last_name,email,phone_number,department" %}
                             <div class="col-sm-6">
-                                <label class="form-label profile-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                <label class="form-label profile-label" for="id_{{ field.name }}">
+                                    {{ field.label }}
+                                    {% if field.name == "department" and not request.user.role == "admin" %}
+                                        <i class="bi bi-lock-fill ms-1 text-secondary" style="font-size:0.75em;" title="Only administrators can edit this field"></i>
+                                    {% endif %}
+                                </label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
                                 {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}

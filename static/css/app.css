@@ -4805,15 +4805,15 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
 
 /* Light-mode overrides for the inline toggle */
 body:not(.dark-mode) .profile-tabs__vmt {
-    background: rgba(15, 23, 42, 0.08);
-    border-color: rgba(15, 23, 42, 0.22);
-}
-body:not(.dark-mode) .profile-vmt__btn { color: rgba(15, 23, 42, 0.55); }
-body:not(.dark-mode) .profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
-    color: rgba(15, 23, 42, 0.82);
     background: rgba(15, 23, 42, 0.1);
+    border-color: rgba(15, 23, 42, 0.35);
 }
-body:not(.dark-mode) .profile-vmt__divider { background: rgba(15, 23, 42, 0.2); }
+body:not(.dark-mode) .profile-vmt__btn { color: rgba(15, 23, 42, 0.75); }
+body:not(.dark-mode) .profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
+    color: rgba(15, 23, 42, 0.95);
+    background: rgba(15, 23, 42, 0.14);
+}
+body:not(.dark-mode) .profile-vmt__divider { background: rgba(15, 23, 42, 0.3); }
 body:not(.dark-mode) .profile-vmt__btn--active {
     box-shadow: 0 2px 8px rgba(47, 108, 243, 0.35);
 }

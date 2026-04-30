@@ -30,6 +30,11 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     def get_object(self):
         return self.request.user
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["is_admin"] = self.request.user.role == "admin"
+        return kwargs
+
     def form_valid(self, form):
         password_changed = bool(form.cleaned_data.get("new_password1"))
         delete_photo_requested = form.data.get("delete_photo")
