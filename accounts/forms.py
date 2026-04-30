@@ -66,7 +66,14 @@ class ProfileForm(forms.ModelForm):
             "last_name": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
             "phone_number": forms.TextInput(attrs={"class": "form-control"}),
-            "department": forms.TextInput(attrs={"class": "form-control"}),
+            "department": forms.Select(choices=[
+                ("", "— Select department —"),
+                ("ESS", "ESS"),
+                ("HP", "HP"),
+                ("Dell", "Dell"),
+                ("ENS", "ENS"),
+                ("Other", "Other"),
+            ], attrs={"class": "form-select"}),
             "profile_photo": forms.FileInput(attrs={"class": "form-control"}),
             "banner_gradient": forms.HiddenInput(),
         }
@@ -209,22 +216,32 @@ class UserManagementForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "email", "role"]
+        fields = ["username", "first_name", "last_name", "email", "department", "role"]
         widgets = {
             "username": forms.TextInput(attrs={"class": "form-control", "placeholder": "Username"}),
             "first_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "First name"}),
             "last_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Last name"}),
             "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "name@example.com"}),
+            "department": forms.Select(choices=[
+                ("", "— Select department —"),
+                ("ESS", "ESS"),
+                ("HP", "HP"),
+                ("Dell", "Dell"),
+                ("ENS", "ENS"),
+                ("Other", "Other"),
+            ], attrs={"class": "form-select"}),
         }
         labels = {
             "role": "Account Type",
+            "department": "Department",
         }
 
     field_order = [
-        "username",
         "first_name",
         "last_name",
+        "username",
         "email",
+        "department",
         "role",
         "password1",
         "password2",

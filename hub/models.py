@@ -464,6 +464,7 @@ class SqrSubmission(models.Model):
     project_details = models.TextField()
     sse_manhrs = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True)
     documentation_links = models.TextField(help_text="One link per line.")
+    sqr_folder_link = models.URLField(blank=True)
     remarks = models.TextField(blank=True)
     quotation_total_price = models.DecimalField(
         max_digits=14,

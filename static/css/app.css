@@ -4221,6 +4221,46 @@ body.dark-mode .mgmt-limit-note { color: #64748b; }
 }
 body.dark-mode .mgmt-pagination .mgmt-page-label { color: #64748b; }
 
+/* ── User avatar in management table ── */
+.mgmt-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.mgmt-avatar__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.mgmt-avatar__initial {
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* ── Role badges in management table ── */
+.mgmt-role-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    border-radius: 999px;
+    padding: 0.25em 0.65em;
+}
+.mgmt-role-badge--admin        { background: #7c3aed; color: #fff; }
+.mgmt-role-badge--engineer     { background: #0891b2; color: #fff; }
+.mgmt-role-badge--on_hold      { background: #94a3b8; color: #fff; }
+.mgmt-role-badge--requestor    { background: #059669; color: #fff; }
+.mgmt-role-badge--requestor_ess{ background: #10b981; color: #fff; }
+.mgmt-role-badge--pm_ess       { background: #d97706; color: #fff; }
+.mgmt-role-badge--pm_esg       { background: #dc2626; color: #fff; }
+
 /* ── Management table action buttons: darker amber in light mode ── */
 .mgmt-table .btn-outline-warning {
     --bs-btn-color: #92400e;

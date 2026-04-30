@@ -32,6 +32,7 @@ from .views import (
     SqrApprovalOutlookRedirectView,
     SqrReviewUpdateView,
     StatusLogUpdateView,
+    UserEditView,
     UserManagementView,
     RequestCollaborativeManageView,
 )
@@ -70,6 +71,7 @@ urlpatterns = [
     path("sqr/<int:pk>/approval-email/", SqrApprovalOutlookRedirectView.as_view(), name="sqr-approval-email"),
     path("sqr/<int:pk>/review/", SqrReviewUpdateView.as_view(), name="sqr-review"),
     path("management/", UserManagementView.as_view(), name="management"),
+    path("users/<int:pk>/manage/", UserEditView.as_view(), name="user-edit"),
     path("reports/", RequestReportView.as_view(), name="report"),
     path("reports/export/", ReportExportView.as_view(), name="report-export"),
 ]

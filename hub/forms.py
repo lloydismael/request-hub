@@ -519,26 +519,100 @@ class RequestAdminForm(forms.ModelForm):
 
 class SqrSubmissionForm(forms.ModelForm):
     GROUP_CHOICES = (
+        ("", "— Select Department —"),
         ("ESS", "ESS"),
-        ("HPE", "HPE"),
+        ("HP", "HP"),
         ("Dell", "Dell"),
-        ("ETC", "ETC"),
+        ("ENS", "ENS"),
+        ("Other", "Other"),
     )
 
+    MEMBERS_BY_GROUP = {
+        "ESS": [
+            "Aileen B. Gutierrez",
+            "Leonarda G. Lucena",
+            "Kristel Camill V. Roldan",
+            "Mica Ella R. Labindao",
+            "Anabelle D. Alapide",
+            "Jimlyn Espinosa",
+        ],
+        "HP": [
+            "Ann Irma Tablada",
+            "May V. Andres-Duro",
+            "Aileen S. Felarca",
+            "Genalyn T. Bonto",
+            "Brian A. Delos Santos",
+            "Beverly Edang - Villamor",
+            "Mindy Anne S. Dapon",
+            "Kevin Pangalangan",
+            "Jacqueline Olesco - Tatel",
+            "Lorenz Gabriel M. Dasma\u00f1as",
+        ],
+        "Dell": [
+            "Roberto D. Quiambao Jr.",
+            "Rafael D. Raposas",
+            "Dinalyn D. Llanera",
+            "Ednalyn N. Malang",
+            "Queen Deniece Vergara",
+            "Jennylyn S. Billones",
+            "Ace U. Carlos",
+            "Andrea Marie S. Garcia",
+            "Ruffy P. Umayam",
+            "Lendy Gladys Fabula \u2013 Ogana",
+            "Ronstadt Joyce R. Corpuz",
+            "Mark Ni\u00f1o B. Huberit",
+            "Jelson G. Cabero",
+            "Bjay T. Jacinto",
+            "Ma. Victoria H. Ronquillo",
+        ],
+        "ENS": [
+            "Debbie S. Eusebio",
+            "Christian F. Lamando",
+            "Jhoanna Marie Quijano",
+        ],
+        "Other": [],
+    }
+
+    APPROVER_BY_GROUP = {
+        "ESS": "Marfelie Barcenas",
+        "HP": "Princess Nicole Nacianceno",
+        "Dell": "Jeram Zamora",
+        "ENS": "Jeram Zamora",
+        "Other": "Jeram Zamora",
+    }
+
+    SSE_MANHRS_SCOPES = frozenset([
+        "Training",
+        "Support",
+        "Implementation",
+        "Implementation and Project Management",
+        "Demonstration",
+        "Other",
+    ])
+
     SCOPE_CHOICES = (
+        ("", "— Select Scope —"),
         ("Training", "Training"),
         ("Support", "Support"),
-        ("Project Implementation", "Project Implementation"),
+        ("Implementation", "Implementation"),
         ("Project Management", "Project Management"),
-        ("Project Implementation and Management", "Project Implementation and Management"),
+        ("Implementation and Project Management", "Implementation and Project Management"),
         ("Demonstration", "Demonstration"),
-        ("Technical Support Maintenance", "Technical Support Maintenance"),
+        ("Managed Support and Maintenance Service", "Managed Support and Maintenance Service"),
+        ("Other", "Other"),
     )
 
     customer_company = forms.ChoiceField(
         choices=GROUP_CHOICES,
         widget=forms.Select(attrs={"class": "form-select"}),
-        label="Group Name",
+        label="Department",
+    )
+
+    customer_contact = forms.ChoiceField(
+        choices=[("", "— Select Member —")],
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Account Manager",
+        required=False,
     )
 
     project_details = forms.ChoiceField(
@@ -557,42 +631,51 @@ class SqrSubmissionForm(forms.ModelForm):
     class Meta:
         model = SqrSubmission
         fields = [
-            "customer_name",
             "customer_company",
             "customer_contact",
             "pm_esg_reviewer",
+            "customer_name",
             "project_title",
             "project_details",
             "sse_manhrs",
             "documentation_links",
+            "sqr_folder_link",
             "remarks",
         ]
         labels = {
             "customer_name": "Account Name",
-            "customer_company": "Group Name",
+            "customer_company": "Department",
             "customer_contact": "Account Manager",
             "project_title": "Service Description",
             "project_details": "Scope of Services",
             "sse_manhrs": "SSE Manhrs",
             "documentation_links": "SQR Doc. Ref. Link",
+            "sqr_folder_link": "SQR Folder Link",
             "remarks": "Remarks",
         }
         widgets = {
             "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
-            "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account manager"}),
-            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter service description"}),
-            "sse_manhrs": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}),
-            "documentation_links": forms.Textarea(
-                attrs={
-                    "class": "form-control",
-                    "rows": 2,
-                    "placeholder": "https://example.com/sqr-reference",
-                }
-            ),
+            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter project / engagement name"}),
+            "sse_manhrs": forms.NumberInput(attrs={
+                "class": "form-control",
+                "min": "0",
+                "step": "1",
+                "placeholder": "0",
+                "data-sse-manhrs": "true",
+            }),
+            "documentation_links": forms.TextInput(attrs={
+                "class": "form-control",
+                "placeholder": "https://example.com/sqr-reference",
+            }),
+            "sqr_folder_link": forms.URLInput(attrs={
+                "class": "form-control",
+                "placeholder": "https://example.com/sqr-folder",
+            }),
             "remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Additional notes"}),
         }
 
     def __init__(self, *args, **kwargs):
+        import json
         super().__init__(*args, **kwargs)
         reviewer_qs = self.fields["pm_esg_reviewer"].queryset
         self.fields["pm_esg_reviewer"].label_from_instance = _user_display
@@ -600,9 +683,37 @@ class SqrSubmissionForm(forms.ModelForm):
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
         self.fields["project_title"].help_text = "Project Name / Engagement Name"
-        self.fields["documentation_links"].help_text = "Provide the SQR document reference link."
+        self.fields["documentation_links"].help_text = "SQR document reference link."
 
-        # Preserve editability of historical values created before dropdown enforcement.
+        # Build approver user-ID map: group → pk of matching PM user
+        approver_id_by_group = {}
+        for group, approver_name in self.APPROVER_BY_GROUP.items():
+            name_parts = approver_name.lower().split()
+            for user in reviewer_qs:
+                full = user.get_full_name().lower()
+                if all(p in full for p in name_parts):
+                    approver_id_by_group[group] = str(user.pk)
+                    break
+
+        # Attach JSON maps to the department widget for JS consumption
+        self.fields["customer_company"].widget.attrs["data-member-map"] = json.dumps(self.MEMBERS_BY_GROUP)
+        self.fields["customer_company"].widget.attrs["data-approver-map"] = json.dumps(approver_id_by_group)
+        self.fields["customer_company"].widget.attrs["data-sse-scopes"] = json.dumps(sorted(self.SSE_MANHRS_SCOPES))
+
+        # Populate member choices: all members + preserve any historical free-text value
+        all_contacts = [("", "— Select Member —")]
+        seen = set()
+        for members in self.MEMBERS_BY_GROUP.values():
+            for m in members:
+                if m not in seen:
+                    all_contacts.append((m, m))
+                    seen.add(m)
+        current_contact = (getattr(self.instance, "customer_contact", "") or "") if self.instance else ""
+        if current_contact and current_contact not in seen:
+            all_contacts.append((current_contact, current_contact))
+        self.fields["customer_contact"].choices = all_contacts
+
+        # Preserve editability of historical values created before dropdown enforcement
         for field_name in ("customer_company", "project_details"):
             current_value = getattr(self.instance, field_name, "") if self.instance else ""
             if current_value and current_value not in dict(self.fields[field_name].choices):

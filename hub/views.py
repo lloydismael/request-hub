@@ -3743,6 +3743,8 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
             "default_password": getattr(settings, "DEFAULT_USER_PASSWORD", "@Password"),
+            "users": User.objects.select_related().order_by("date_joined", "username"),
+            "role_choices": User.Roles.choices,
         }
 
     @staticmethod
@@ -3844,6 +3846,24 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         display_name = target_user.get_full_name() or target_user.username
         target_user.delete()
         messages.success(request, f"Deleted user account for {display_name}.")
+        return redirect("hub:management")
+
+
+class UserEditView(AdminRequiredMixin, LoginRequiredMixin, View):
+    """Handle the per-user Manage modal: update info and optionally change password."""
+
+    def post(self, request, pk):
+        target_user = get_object_or_404(User, pk=pk)
+        form = UserManagementForm(request.POST, instance=target_user)
+        if form.is_valid():
+            form.save()
+            display_name = target_user.get_full_name() or target_user.username
+            messages.success(request, f"Updated user account for {display_name}.")
+        else:
+            for field_name, field_errors in form.errors.items():
+                label = form.fields[field_name].label if field_name in form.fields else field_name
+                for error in field_errors:
+                    messages.error(request, f"{label}: {error}")
         return redirect("hub:management")
 
 
