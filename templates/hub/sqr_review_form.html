@@ -127,21 +127,12 @@
                     <button class="btn btn-primary" type="submit">
                         <i class="bi bi-save me-1"></i>Save Review Status
                     </button>
-                    {% if can_launch_revision_teams %}
-                        <form method="post" action="{% url 'hub:sqr-teams' object.pk %}" class="d-inline" id="teams-btn-form">
-                            {% csrf_token %}
-                            <button class="btn btn-outline-warning" type="submit">
-                                <i class="bi bi-microsoft-teams me-1"></i>Create Teams Revision Group
-                            </button>
-                        </form>
-                    {% else %}
-                        <form method="post" action="{% url 'hub:sqr-teams' object.pk %}" class="d-inline d-none" id="teams-btn-form">
-                            {% csrf_token %}
-                            <button class="btn btn-outline-warning" type="submit">
-                                <i class="bi bi-microsoft-teams me-1"></i>Create Teams Revision Group
-                            </button>
-                        </form>
-                    {% endif %}
+                    <form method="post" action="{% url 'hub:sqr-teams' object.pk %}" class="d-inline d-none" id="teams-btn-form">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-warning" type="submit">
+                            <i class="bi bi-microsoft-teams me-1"></i>Create Teams Revision Group
+                        </button>
+                    </form>
                 </div>
             </form>
         </div>
@@ -565,6 +556,8 @@
             ? (GROUP === "ESS" ? 149000.00 : 192000.00)
             : 0;
 
+        const sseMhrs  = document.getElementById("id_sse_manhrs");
+        const pmMhrs   = document.getElementById("id_pm_manhrs");
         const sseAmt   = document.getElementById("id_sse_amount");
         const pmAmt    = document.getElementById("id_pm_amount");
         const managed  = document.getElementById("id_managed_support_amount");
@@ -587,17 +580,36 @@
             managed.value = defaultManaged.toFixed(2);
         }
 
+        const discountSel = document.getElementById("id_discount_rate");
+
         function recalcTotal() {
             if (!total) return;
-            const sse     = parseFloat(sseAmt  && sseAmt.value  ? sseAmt.value  : 0) || 0;
-            const pm      = parseFloat(pmAmt   && pmAmt.value   ? pmAmt.value   : 0) || 0;
-            const mgd     = parseFloat(managed.value ? managed.value : 0) || 0;
-            total.value   = (sse + pm + mgd).toFixed(2);
+            const sse      = parseFloat(sseAmt  && sseAmt.value  ? sseAmt.value  : 0) || 0;
+            const pm       = parseFloat(pmAmt   && pmAmt.value   ? pmAmt.value   : 0) || 0;
+            const mgd      = parseFloat(managed.value ? managed.value : 0) || 0;
+            const rate     = parseFloat(discountSel ? discountSel.value : 0) || 0;
+            const gross    = sse + pm + mgd;
+            const discount = gross * rate / 100;
+            total.value    = Math.round(gross - discount);
+        }
+
+        function calcSseAmount() {
+            if (!sseAmt || !sseMhrs) return;
+            sseAmt.value = Math.round((parseFloat(sseMhrs.value) || 0) * 2000);
+            recalcTotal();
+        }
+        function calcPmAmount() {
+            if (!pmAmt || !pmMhrs) return;
+            pmAmt.value = Math.round((parseFloat(pmMhrs.value) || 0) * 2000);
+            recalcTotal();
         }
 
         recalcTotal();
+        if (sseMhrs) sseMhrs.addEventListener("input", calcSseAmount);
+        if (pmMhrs)  pmMhrs.addEventListener("input", calcPmAmount);
         if (sseAmt)  sseAmt.addEventListener("input", recalcTotal);
         if (pmAmt)   pmAmt.addEventListener("input", recalcTotal);
+        if (discountSel) discountSel.addEventListener("change", recalcTotal);
         managed.addEventListener("input", recalcTotal);
     })();
 </script>

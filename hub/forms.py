@@ -638,9 +638,14 @@ class SqrReviewForm(forms.ModelForm):
         self.reviewer_role = kwargs.pop("reviewer_role", "")
         super().__init__(*args, **kwargs)
         self.fields["status"].choices = [
+            ("", "— Select Status —"),
             (SqrSubmission.Status.FOR_REVISION, SqrSubmission.Status.FOR_REVISION.label),
             (SqrSubmission.Status.APPROVED, SqrSubmission.Status.APPROVED.label),
         ]
+
+        # Always start blank — user must actively choose a status
+        if not self.is_bound:
+            self.initial["status"] = ""
 
         selected_status = ""
         if self.is_bound:
@@ -763,20 +768,20 @@ class SqrProposalStatusForm(forms.ModelForm):
                 attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}
             ),
             "sse_amount": forms.NumberInput(
-                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "pm_manhrs": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0", "list": "pm-manhrs-list"}
             ),
             "pm_amount": forms.NumberInput(
-                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "managed_support_amount": forms.NumberInput(
-                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "discount_rate": forms.Select(attrs={"class": "form-select"}),
             "quotation_total_price": forms.NumberInput(
-                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "validity_due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "proposal_status": forms.Select(attrs={"class": "form-select"}),
