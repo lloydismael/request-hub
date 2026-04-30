@@ -731,6 +731,97 @@ class SqrRevenueOrderForm(forms.ModelForm):
         return value
 
 
+class SqrProposalStatusForm(forms.ModelForm):
+    """PM fills this to set pricing, PM manhours, and deal/proposal status."""
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "pm_manhrs",
+            "hourly_rate",
+            "quotation_total_price",
+            "discount_rate",
+            "proposal_status",
+        ]
+        labels = {
+            "pm_manhrs": "PM Manhours",
+            "hourly_rate": "Hourly Rate (PHP)",
+            "quotation_total_price": "Quoted Total Price (PHP)",
+            "discount_rate": "Discount Rate",
+            "proposal_status": "Deal / Proposal Status",
+        }
+        widgets = {
+            "pm_manhrs": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}
+            ),
+            "hourly_rate": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+            ),
+            "quotation_total_price": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "0.01", "placeholder": "0.00"}
+            ),
+            "discount_rate": forms.Select(attrs={"class": "form-select"}),
+            "proposal_status": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["pm_manhrs"].required = False
+        self.fields["hourly_rate"].required = False
+        self.fields["quotation_total_price"].required = False
+        # Include empty / blank option for proposal_status
+        self.fields["proposal_status"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.ProposalStatus.choices
+        )
+
+
+class SqrDeliveryForm(forms.ModelForm):
+    """PM fills this to track service delivery once a deal is Closed Won."""
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "delivery_health",
+            "delivery_progress",
+            "delivery_start_date",
+            "delivery_target_finish_date",
+            "delivery_actual_finish_date",
+            "delivery_completion_signed_date",
+        ]
+        labels = {
+            "delivery_health": "Health Status",
+            "delivery_progress": "Overall Progress (%)",
+            "delivery_start_date": "Execution Start Date",
+            "delivery_target_finish_date": "Target Finish Date",
+            "delivery_actual_finish_date": "Actual Finish Date",
+            "delivery_completion_signed_date": "Completion Signed Date",
+        }
+        widgets = {
+            "delivery_health": forms.Select(attrs={"class": "form-select"}),
+            "delivery_progress": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "max": "100", "placeholder": "0\u2013100"}
+            ),
+            "delivery_start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "delivery_target_finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "delivery_actual_finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "delivery_completion_signed_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["delivery_health"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.DeliveryHealth.choices
+        )
+        for f in self.fields.values():
+            f.required = False
+
+    def clean_delivery_progress(self):
+        value = self.cleaned_data.get("delivery_progress")
+        if value is not None and not (0 <= value <= 100):
+            raise forms.ValidationError("Progress must be between 0 and 100.")
+        return value
+
+
 class RequestStatusForm(forms.ModelForm):
     class Meta:
         model = Request

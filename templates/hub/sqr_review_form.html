@@ -1,66 +1,121 @@
 {% extends "base.html" %}
 {% load tz %}
-{% block title %}Manage {{ object.reference_code }} · Request Hub{% endblock %}
+{% block title %}Manage {{ object.reference_code }} &middot; Request Hub{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-xl-8">
+    <div class="col-xl-9">
+
+        {# â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
         <div class="glass-card p-4 mb-4">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                 <div>
-                    <h1 class="h5 mb-1">Manage {{ object.reference_code }}</h1>
-                    <p class="text-muted mb-0">Submitted by {{ object.engineer.get_full_name|default:object.engineer.username }} on {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</p>
+                    <h1 class="h5 mb-1">
+                        <i class="bi bi-clipboard-data-fill me-2"></i>{{ object.reference_code }}
+                    </h1>
+                    <p class="text-muted mb-0 small">
+                        Submitted by <strong>{{ object.engineer.get_full_name|default:object.engineer.username }}</strong>
+                        on {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                    </p>
                 </div>
-                <a class="btn btn-outline-secondary" href="{{ back_url }}">Back</a>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ back_url }}">
+                    <i class="bi bi-arrow-left me-1"></i>Back
+                </a>
             </div>
 
+            {# Submission Details (read-only) #}
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <div class="small text-uppercase text-muted">Account Details</div>
-                    <div class="fw-semibold">Account Name: {{ object.customer_name }}</div>
-                    {% if object.customer_company %}<div>Group Name: {{ object.customer_company }}</div>{% endif %}
-                    {% if object.customer_contact %}<div class="text-muted small">Account Manager: {{ object.customer_contact }}</div>{% endif %}
+                    <div class="small text-uppercase text-muted fw-semibold mb-1">Account</div>
+                    <div class="fw-semibold">{{ object.customer_name }}</div>
+                    {% if object.customer_company %}<div class="small text-muted">Group: {{ object.customer_company }}</div>{% endif %}
+                    {% if object.customer_contact %}<div class="small text-muted">Account Manager: {{ object.customer_contact }}</div>{% endif %}
                 </div>
                 <div class="col-md-6">
-                    <div class="small text-uppercase text-muted">Approver Name</div>
+                    <div class="small text-uppercase text-muted fw-semibold mb-1">Approver (PM-ESG)</div>
                     <div class="fw-semibold">{{ object.pm_esg_reviewer.get_full_name|default:object.pm_esg_reviewer.username }}</div>
                 </div>
             </div>
 
-            <div class="mb-3">
-                <div class="small text-uppercase text-muted">Service Details</div>
-                <div class="fw-semibold mb-1">Service Description: {{ object.project_title }}</div>
-                <div class="small text-muted mb-1">Scope of Services</div>
-                <div style="white-space: pre-wrap;">{{ object.project_details }}</div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-8">
+                    <div class="small text-uppercase text-muted fw-semibold mb-1">Service</div>
+                    <div class="fw-semibold">{{ object.project_title }}</div>
+                    <div class="small text-muted">{{ object.project_details }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="small text-uppercase text-muted fw-semibold mb-1">SSE Manhours</div>
+                    <div class="fw-semibold">{{ object.sse_manhrs|default:"&ndash;" }} hrs</div>
+                </div>
             </div>
 
+            {% if object.documentation_link_list %}
             <div class="mb-3">
-                <div class="small text-uppercase text-muted">SSE Manhrs</div>
-                <div class="fw-semibold">{{ object.sse_manhrs|default:"-" }}</div>
+                <div class="small text-uppercase text-muted fw-semibold mb-1">SQR Doc. Ref. Links</div>
+                <ul class="mb-0 ps-3">
+                    {% for link in object.documentation_link_list %}
+                        <li><a href="{{ link }}" target="_blank" rel="noopener" class="small">{{ link }}</a></li>
+                    {% endfor %}
+                </ul>
             </div>
+            {% endif %}
 
-            <div class="mb-3">
-                <div class="small text-uppercase text-muted">SQR Doc. Ref. Link</div>
-                {% if object.documentation_link_list %}
-                    <ul class="mb-0">
-                        {% for link in object.documentation_link_list %}
-                            <li><a href="{{ link }}" target="_blank" rel="noopener">{{ link }}</a></li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted mb-0">No documentation links provided.</p>
-                {% endif %}
+            {% if object.remarks %}
+            <div class="mb-0">
+                <div class="small text-uppercase text-muted fw-semibold mb-1">Remarks</div>
+                <div class="small" style="white-space:pre-wrap;">{{ object.remarks }}</div>
             </div>
+            {% endif %}
+        </div>
 
-            <div class="mb-3">
-                <div class="small text-uppercase text-muted">Remarks</div>
-                <div style="white-space: pre-wrap;">{{ object.remarks|default:"-" }}</div>
+        {# â”€â”€ Stage 1 Progress Indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        <div class="glass-card p-3 mb-4">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <span class="small fw-semibold text-muted me-2">SQR Progress:</span>
+                {# Step 1: Submission Review #}
+                <span class="badge {% if object.status == 'reviewed' %}bg-success{% elif object.status == 'for_revision' %}bg-danger{% else %}bg-warning{% endif %}">
+                    <i class="bi bi-1-circle me-1"></i>
+                    Review:
+                    {% if object.status == 'reviewed' %}Approved
+                    {% elif object.status == 'for_revision' %}For Revision
+                    {% else %}For Processing{% endif %}
+                </span>
+                <i class="bi bi-chevron-right text-muted small"></i>
+                {# Step 2: Deal Stage #}
+                <span class="badge {% if object.proposal_status == 'closed_won' %}bg-success{% elif object.proposal_status == 'closed_lost' %}bg-danger{% elif object.proposal_status %}bg-info{% elif object.status == 'reviewed' %}bg-secondary{% else %}bg-light text-dark border{% endif %}">
+                    <i class="bi bi-2-circle me-1"></i>
+                    Deal:
+                    {% if object.proposal_status == 'submitted_pending' %}Submitted&ndash;Pending
+                    {% elif object.proposal_status == 'negotiation_review' %}Negotiation / Review
+                    {% elif object.proposal_status == 'closed_won' %}Closed Won
+                    {% elif object.proposal_status == 'closed_lost' %}Closed Lost
+                    {% else %}&ndash;{% endif %}
+                </span>
+                <i class="bi bi-chevron-right text-muted small"></i>
+                {# Step 3: Service Delivery #}
+                <span class="badge {% if object.proposal_status == 'closed_won' %}bg-info{% else %}bg-light text-dark border{% endif %}">
+                    <i class="bi bi-3-circle me-1"></i>
+                    Delivery:
+                    {% if object.delivery_health == 'on_track' %}On Track
+                    {% elif object.delivery_health == 'off_track' %}Off Track
+                    {% elif object.delivery_health == 'at_risk' %}At Risk
+                    {% elif object.delivery_health == 'completed' %}Completed
+                    {% elif object.delivery_health == 'cancelled' %}Cancelled
+                    {% elif object.proposal_status == 'closed_won' %}Pending Setup
+                    {% else %}&ndash;{% endif %}
+                </span>
             </div>
+        </div>
 
+        {# â”€â”€ SECTION 1: Internal Review â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        <div class="glass-card p-4 mb-4">
+            <h2 class="h6 mb-3 fw-bold">
+                <i class="bi bi-clipboard-check me-2 text-primary"></i>Step 1 â€” Internal Review
+            </h2>
             <form method="post" novalidate>
                 {% csrf_token %}
                 {% for field in form %}
                     <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                         {% if field.errors %}
@@ -68,49 +123,218 @@
                         {% endif %}
                     </div>
                 {% endfor %}
-                <div class="d-flex gap-2 justify-content-end">
-                    <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
-                    <button class="btn btn-primary" type="submit">Save Status</button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-save me-1"></i>Save Review Status
+                    </button>
+                    {% if can_launch_revision_teams %}
+                        <form method="post" action="{% url 'hub:sqr-teams' object.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button class="btn btn-outline-warning" type="submit">
+                                <i class="bi bi-microsoft-teams me-1"></i>Create Teams Revision Group
+                            </button>
+                        </form>
+                    {% endif %}
+                    {% if can_launch_approval_email %}
+                        <form method="post" action="{% url 'hub:sqr-approval-email' object.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button class="btn btn-outline-success" type="submit">
+                                <i class="bi bi-envelope me-1"></i>Generate Approval Email
+                            </button>
+                        </form>
+                    {% endif %}
                 </div>
             </form>
+        </div>
 
-            <div class="d-flex gap-2 flex-wrap justify-content-end mt-3">
-                {% if can_launch_revision_teams %}
-                    <form method="post" action="{% url 'hub:sqr-teams' object.pk %}">
-                        {% csrf_token %}
-                        <button class="btn btn-outline-primary" type="submit">Create Teams Revision Group</button>
-                    </form>
+        {# â”€â”€ SECTION 2: Proposal Details & Deal Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        {% if show_proposal_section %}
+        <div class="glass-card p-4 mb-4">
+            <h2 class="h6 mb-1 fw-bold">
+                <i class="bi bi-currency-dollar me-2 text-success"></i>Step 2 â€” Proposal Details &amp; Deal Status
+            </h2>
+            <p class="small text-muted mb-3">Set pricing, manhours, and track the deal stage once the SQR is approved.</p>
+
+            {# Current cost summary (read-only) #}
+            {% if object.base_cost or object.quotation_total_price %}
+            <div class="row g-2 mb-3">
+                {% if object.base_cost %}
+                <div class="col-auto">
+                    <div class="border rounded p-2 small text-center">
+                        <div class="text-muted">Computed Base Cost</div>
+                        <div class="fw-bold">PHP {{ object.base_cost|floatformat:2 }}</div>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="border rounded p-2 small text-center bg-success-subtle">
+                        <div class="text-muted">After {{ object.discount_rate }}% Discount</div>
+                        <div class="fw-bold text-success">PHP {{ object.base_cost_discounted|floatformat:2 }}</div>
+                    </div>
+                </div>
                 {% endif %}
-                {% if can_launch_approval_email %}
-                    <form method="post" action="{% url 'hub:sqr-approval-email' object.pk %}">
-                        {% csrf_token %}
-                        <button class="btn btn-outline-success" type="submit">Generate Approval Email</button>
-                    </form>
+                {% if object.quotation_total_price %}
+                <div class="col-auto">
+                    <div class="border rounded p-2 small text-center">
+                        <div class="text-muted">Quoted Total</div>
+                        <div class="fw-bold">PHP {{ object.quotation_total_price|floatformat:2 }}</div>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="border rounded p-2 small text-center bg-success-subtle">
+                        <div class="text-muted">Quoted Discounted</div>
+                        <div class="fw-bold text-success">PHP {{ object.discounted_price|floatformat:2 }}</div>
+                    </div>
+                </div>
                 {% endif %}
             </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'hub:sqr-proposal-update' object.pk %}" novalidate>
+                {% csrf_token %}
+                <div class="row g-3">
+                    {% for field in proposal_form %}
+                    <div class="col-md-{% if field.name == 'proposal_status' %}12{% else %}6{% endif %}">
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-success" type="submit">
+                        <i class="bi bi-save me-1"></i>Save Proposal Details
+                    </button>
+                </div>
+            </form>
         </div>
+        {% else %}
+        <div class="glass-card p-4 mb-4 opacity-50">
+            <h2 class="h6 mb-1 fw-bold text-muted">
+                <i class="bi bi-currency-dollar me-2"></i>Step 2 â€” Proposal Details &amp; Deal Status
+            </h2>
+            <p class="small text-muted mb-0">Available after the SQR is <strong>Approved</strong> in Step 1.</p>
+        </div>
+        {% endif %}
+
+        {# â”€â”€ SECTION 3: Service Delivery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        {% if show_delivery_section %}
+        <div class="glass-card p-4 mb-4">
+            <h2 class="h6 mb-1 fw-bold">
+                <i class="bi bi-tools me-2 text-info"></i>Step 3 â€” Service Delivery Tracking
+            </h2>
+            <p class="small text-muted mb-3">Track execution health, progress, and key milestones for this Closed Won project.</p>
+
+            {# Delivery progress summary (read-only) #}
+            {% if object.delivery_progress is not None %}
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-semibold">Overall Progress</span>
+                    <span class="small fw-semibold">{{ object.delivery_progress }}%</span>
+                </div>
+                <div class="progress" style="height:12px;">
+                    <div class="progress-bar
+                        {% if object.delivery_progress >= 100 %}bg-success
+                        {% elif object.delivery_progress >= 60 %}bg-info
+                        {% elif object.delivery_progress >= 30 %}bg-warning
+                        {% else %}bg-danger{% endif %}"
+                         role="progressbar"
+                         style="width:{{ object.delivery_progress }}%"
+                         aria-valuenow="{{ object.delivery_progress }}"
+                         aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'hub:sqr-delivery-update' object.pk %}" novalidate>
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        {% with field=delivery_form.delivery_health %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with field=delivery_form.delivery_progress %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with field=delivery_form.delivery_start_date %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with field=delivery_form.delivery_target_finish_date %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with field=delivery_form.delivery_actual_finish_date %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with field=delivery_form.delivery_completion_signed_date %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-info text-white" type="submit">
+                        <i class="bi bi-save me-1"></i>Save Delivery Details
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% else %}
+        <div class="glass-card p-4 mb-4 opacity-50">
+            <h2 class="h6 mb-1 fw-bold text-muted">
+                <i class="bi bi-tools me-2"></i>Step 3 â€” Service Delivery Tracking
+            </h2>
+            <p class="small text-muted mb-0">
+                Available after the deal is marked <strong>Closed Won</strong> in Step 2.
+            </p>
+        </div>
+        {% endif %}
+
     </div>
 </div>
+
 <script>
     (function () {
         const statusField = document.getElementById("id_status");
         const commentsField = document.getElementById("id_review_notes");
         const commentsLabel = document.querySelector('label[for="id_review_notes"]');
-        if (!statusField || !commentsField || !commentsLabel) {
-            return;
+        if (!statusField || !commentsField || !commentsLabel) return;
+
+        function updateCommentsLabel() {
+            const val = statusField.value;
+            if (val === "for_revision") {
+                commentsLabel.textContent = "Revision Comments";
+                commentsField.placeholder = "Enter revision comments";
+            } else {
+                commentsLabel.textContent = "Review Notes";
+                commentsField.placeholder = "Review findings, follow-ups, and approval notes";
+            }
         }
-
-        const isPmEsgUser = "{{ request.user.role }}" === "pm_esg";
-
-        const applyCommentMode = () => {
-            const isRevision = statusField.value === "for_revision";
-            commentsLabel.textContent = isRevision ? "Revision Comments" : "Review Notes";
-            commentsField.placeholder = isRevision ? "Enter revision comments" : "Review findings, follow-ups, and approval notes";
-            commentsField.required = isPmEsgUser && isRevision;
-        };
-
-        statusField.addEventListener("change", applyCommentMode);
-        applyCommentMode();
+        statusField.addEventListener("change", updateCommentsLabel);
+        updateCommentsLabel();
     })();
 </script>
 {% endblock %}

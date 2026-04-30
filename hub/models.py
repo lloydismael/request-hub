@@ -417,6 +417,19 @@ class SqrSubmission(models.Model):
         FOR_REVISION = "for_revision", "For Revision"
         APPROVED = "reviewed", "Approved"
 
+    class ProposalStatus(models.TextChoices):
+        SUBMITTED_PENDING = "submitted_pending", "Submitted \u2013 Pending"
+        NEGOTIATION_REVIEW = "negotiation_review", "Negotiation / Review"
+        CLOSED_WON = "closed_won", "Closed Won"
+        CLOSED_LOST = "closed_lost", "Closed Lost"
+
+    class DeliveryHealth(models.TextChoices):
+        ON_TRACK = "on_track", "On Track"
+        OFF_TRACK = "off_track", "Off Track"
+        AT_RISK = "at_risk", "At Risk"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
     sequence_number = models.PositiveIntegerField(editable=False, db_index=True, blank=True, null=True)
@@ -455,9 +468,29 @@ class SqrSubmission(models.Model):
         ],
         default=5,
     )
+    pm_manhrs = models.DecimalField(
+        max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="Rate per manhour (PHP).",
+    )
     po_attachment_link = models.URLField(blank=True)
     po_attached_at = models.DateTimeField(blank=True, null=True)
     revenue_overview = models.TextField(blank=True)
+    # Proposal Stage – deal tracking (set by PM after internal approval)
+    proposal_status = models.CharField(
+        max_length=25, choices=ProposalStatus.choices, blank=True, default=""
+    )
+    # Service Delivery Stage – visible when proposal_status == CLOSED_WON
+    delivery_health = models.CharField(
+        max_length=20, choices=DeliveryHealth.choices, blank=True, default=""
+    )
+    delivery_progress = models.PositiveSmallIntegerField(blank=True, null=True)
+    delivery_start_date = models.DateField(blank=True, null=True)
+    delivery_target_finish_date = models.DateField(blank=True, null=True)
+    delivery_actual_finish_date = models.DateField(blank=True, null=True)
+    delivery_completion_signed_date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(
@@ -493,6 +526,25 @@ class SqrSubmission(models.Model):
         discount = Decimal(self.discount_rate or 0) / Decimal("100")
         discounted = self.quotation_total_price * (Decimal("1") - discount)
         return discounted.quantize(Decimal("0.01"))
+
+    @property
+    def base_cost(self):
+        """Computed cost = (sse_manhrs + pm_manhrs) × hourly_rate."""
+        if not self.hourly_rate:
+            return None
+        total_hrs = (self.sse_manhrs or Decimal("0")) + (self.pm_manhrs or Decimal("0"))
+        if not total_hrs:
+            return None
+        return (total_hrs * self.hourly_rate).quantize(Decimal("0.01"))
+
+    @property
+    def base_cost_discounted(self):
+        """Computed cost after applying discount_rate."""
+        base = self.base_cost
+        if base is None:
+            return None
+        discount = Decimal(self.discount_rate or 0) / Decimal("100")
+        return (base * (Decimal("1") - discount)).quantize(Decimal("0.01"))
 
     @property
     def revenue_stage_key(self) -> str:

@@ -1,133 +1,437 @@
 {% extends "base.html" %}
 {% load tz %}
-{% block title %}SQR · Request Hub{% endblock %}
+{% block title %}SQR &middot; Request Hub{% endblock %}
 {% block content %}
 <div class="row g-4">
     <div class="col-12">
+
+        {# â”€â”€ Stage Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        <div class="glass-card p-3 mb-3">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Service Qualification Report (SQR)</h2>
+                {% if can_create_sqr %}
+                    <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">
+                        <i class="bi bi-plus-lg me-1"></i>New Submission
+                    </button>
+                {% endif %}
+            </div>
+            {# Stage selector tabs #}
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <a href="?tab=proposal"
+                   class="btn btn-sm {% if active_sqr_tab == 'proposal' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    <i class="bi bi-file-earmark-text me-1"></i>Stage 1 &middot; Proposal
+                </a>
+                {% if is_pm %}
+                    <a href="?tab=delivery"
+                       class="btn btn-sm {% if active_sqr_tab == 'delivery' %}btn-info text-white{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-tools me-1"></i>Stage 2 &middot; Service Delivery
+                    </a>
+                    <a href="?tab=revenue-report"
+                       class="btn btn-sm {% if active_sqr_tab == 'revenue-report' %}btn-success text-white{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-bar-chart-line-fill me-1"></i>Stage 3 &middot; Revenue &amp; Report
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        {# â”€â”€ STAGE 1 &ndash; PROPOSAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        {% if active_sqr_tab == 'proposal' %}
         <div class="glass-card p-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <div>
-                    <h2 class="h5 mb-1">SQR Submissions</h2>
-                </div>
-                <div class="d-flex gap-2 flex-wrap align-items-center">
-                    {% if active_sqr_tab == 'submissions' %}
-                        {% if can_create_sqr %}
-                            <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">New Submission</button>
-                        {% endif %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.processing }}</span>
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision: {{ sqr_counts.for_revision }}</span>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Approved: {{ sqr_counts.approved }}</span>
-                    {% elif show_revenue_tracker_tab %}
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Quotation Stage: {{ quotation_stage_count }}</span>
-                        <span class="badge bg-info-subtle text-info border border-info-subtle">Order Stage: {{ order_stage_count }}</span>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Revenue Stage: {{ revenue_stage_totals.count }}</span>
-                    {% endif %}
-                </div>
+            {# Summary badges #}
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle fs-sm">Total: {{ proposal_counts.total }}</span>
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                    <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
+                </span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                    <i class="bi bi-pencil-square me-1"></i>For Revision: {{ proposal_counts.for_revision }}
+                </span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                    <i class="bi bi-check2-circle me-1"></i>Approved: {{ proposal_counts.approved }}
+                </span>
+                {% if proposal_counts.submitted_pending %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                        <i class="bi bi-send me-1"></i>Submitted&ndash;Pending: {{ proposal_counts.submitted_pending }}
+                    </span>
+                {% endif %}
+                {% if proposal_counts.negotiation %}
+                    <span class="badge bg-info-subtle text-info border border-info-subtle">
+                        <i class="bi bi-chat-dots me-1"></i>Negotiation: {{ proposal_counts.negotiation }}
+                    </span>
+                {% endif %}
+                {% if proposal_counts.closed_won %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                        <i class="bi bi-trophy me-1"></i>Closed Won: {{ proposal_counts.closed_won }}
+                    </span>
+                {% endif %}
+                {% if proposal_counts.closed_lost %}
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                        <i class="bi bi-x-circle me-1"></i>Closed Lost: {{ proposal_counts.closed_lost }}
+                    </span>
+                {% endif %}
             </div>
 
             <div class="table-responsive">
-                <table class="table align-middle">
-                    <thead>
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
                         <tr>
                             <th>SQR ID</th>
                             <th>Engineer</th>
-                            <th>Account Details</th>
+                            <th>Account / Group</th>
                             <th>Service</th>
-                            <th>SSE Manhrs</th>
-                            <th>Docs</th>
-                            <th>Approver</th>
-                            <th>Status</th>
+                            <th>Manhours<br><small class="fw-normal text-muted">SSE / PM</small></th>
+                            <th>Cost (PHP)<br><small class="fw-normal text-muted">Base / Discounted</small></th>
+                            <th>Review Status</th>
+                            <th>Deal Status</th>
                             <th>Updated</th>
                             <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in sqr_submissions %}
+                        {% for item in proposal_submissions %}
                         <tr>
-                            <td class="fw-semibold">{{ item.reference_code }}</td>
-                            <td>{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
+                            <td class="fw-semibold text-nowrap">{{ item.reference_code }}</td>
+                            <td class="text-nowrap">{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
                             <td>
                                 <div class="fw-semibold">{{ item.customer_name }}</div>
-                                {% if item.customer_company %}<div class="small text-muted">Group: {{ item.customer_company }}</div>{% endif %}
-                                {% if item.customer_contact %}<div class="small text-muted">Manager: {{ item.customer_contact }}</div>{% endif %}
+                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
+                                {% if item.customer_contact %}<div class="small text-muted">{{ item.customer_contact }}</div>{% endif %}
                             </td>
                             <td>
                                 <div class="fw-semibold">{{ item.project_title }}</div>
-                                <div class="small text-muted">{{ item.project_details|truncatechars:100 }}</div>
-                                {% if item.remarks %}<div class="small text-muted">Remarks: {{ item.remarks|truncatechars:60 }}</div>{% endif %}
+                                <div class="small text-muted">{{ item.project_details }}</div>
+                                {% if item.remarks %}<div class="small text-muted fst-italic">{{ item.remarks|truncatechars:50 }}</div>{% endif %}
                             </td>
-                            <td>{{ item.sse_manhrs|default:"-" }}</td>
-                            <td>
-                                {% if item.documentation_link_list %}
-                                    <ul class="list-unstyled mb-0 small">
-                                        {% for link in item.documentation_link_list %}
-                                            <li><a href="{{ link }}" target="_blank" rel="noopener">Link {{ forloop.counter }}</a></li>
-                                        {% endfor %}
-                                    </ul>
+                            <td class="text-nowrap">
+                                <div class="small">SSE: {{ item.sse_manhrs|default:"&ndash;" }} hrs</div>
+                                <div class="small">PM: {{ item.pm_manhrs|default:"&ndash;" }} hrs</div>
+                                {% if item.hourly_rate %}<div class="small text-muted">@ {{ item.hourly_rate }}/hr</div>{% endif %}
+                            </td>
+                            <td class="text-nowrap">
+                                {% if item.base_cost %}
+                                    <div class="small">Base: {{ item.base_cost|floatformat:2 }}</div>
+                                    <div class="small text-success">Disc: {{ item.base_cost_discounted|floatformat:2 }}</div>
+                                {% elif item.quotation_total_price %}
+                                    <div class="small">Quoted: {{ item.quotation_total_price|floatformat:2 }}</div>
+                                    <div class="small text-success">Disc: {{ item.discounted_price|floatformat:2 }}</div>
                                 {% else %}
-                                    <span class="text-muted">No links</span>
+                                    <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</td>
                             <td>
                                 {% if item.status == 'reviewed' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2 me-1"></i>Approved</span>
+                                {% elif item.status == 'for_revision' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-pencil me-1"></i>For Revision</span>
                                 {% else %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-hourglass me-1"></i>For Processing</span>
                                 {% endif %}
                             </td>
-                            <td class="small text-muted">
-                                {% if item.reviewed_at %}
-                                    Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                            <td>
+                                {% if item.proposal_status == 'submitted_pending' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-send me-1"></i>Submitted&ndash;Pending</span>
+                                {% elif item.proposal_status == 'negotiation_review' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-chat-dots me-1"></i>Negotiation / Review</span>
+                                {% elif item.proposal_status == 'closed_won' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>
+                                {% elif item.proposal_status == 'closed_lost' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed Lost</span>
                                 {% else %}
-                                    {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
+                                    <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">
+                            <td class="small text-muted text-nowrap">
+                                {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y" }}
+                            </td>
+                            <td class="text-end text-nowrap">
                                 {% if request.user.role == 'engineer' and item.engineer_id == request.user.id %}
                                     <div class="d-flex gap-1 justify-content-end">
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
+                                        {% if item.status != 'reviewed' %}
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
+                                        {% endif %}
                                         <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
                                     </div>
                                 {% elif can_review_sqr %}
-                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Review</a>
-                                {% elif item.status == 'reviewed' %}
-                                    <span class="text-success small">Reviewed</span>
+                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
+                                        <i class="bi bi-pencil-square me-1"></i>Manage
+                                    </a>
                                 {% else %}
-                                    <span class="text-muted small">Waiting review</span>
+                                    <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-4">No SQR submissions yet.</td>
+                            <td colspan="10" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+        {% endif %}
+
+        {# â”€â”€ STAGE 2 &ndash; SERVICE DELIVERY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        {% if active_sqr_tab == 'delivery' %}
+        <div class="glass-card p-4">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for key, label in delivery_health_choices %}
+                    {% with cnt=delivery_health_counts|default_if_none:0 %}
+                    {% endwith %}
+                {% endfor %}
+                {% if delivery_health_counts.on_track %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                        <i class="bi bi-check-circle me-1"></i>On Track: {{ delivery_health_counts.on_track }}
+                    </span>
+                {% endif %}
+                {% if delivery_health_counts.off_track %}
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Off Track: {{ delivery_health_counts.off_track }}
+                    </span>
+                {% endif %}
+                {% if delivery_health_counts.at_risk %}
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                        <i class="bi bi-shield-exclamation me-1"></i>At Risk: {{ delivery_health_counts.at_risk }}
+                    </span>
+                {% endif %}
+                {% if delivery_health_counts.completed %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                        <i class="bi bi-patch-check me-1"></i>Completed: {{ delivery_health_counts.completed }}
+                    </span>
+                {% endif %}
+                {% if delivery_health_counts.cancelled %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                        <i class="bi bi-slash-circle me-1"></i>Cancelled: {{ delivery_health_counts.cancelled }}
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>SQR ID</th>
+                            <th>Customer</th>
+                            <th>Service</th>
+                            <th>Health</th>
+                            <th>Progress</th>
+                            <th>Start Date</th>
+                            <th>Target Finish</th>
+                            <th>Actual Finish</th>
+                            <th>Completion Signed</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in delivery_submissions %}
+                        <tr>
+                            <td class="fw-semibold text-nowrap">{{ item.reference_code }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ item.customer_name }}</div>
+                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-semibold">{{ item.project_title }}</div>
+                                <div class="small text-muted">{{ item.project_details }}</div>
+                            </td>
+                            <td>
+                                {% if item.delivery_health == 'on_track' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>
+                                {% elif item.delivery_health == 'off_track' %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Off Track</span>
+                                {% elif item.delivery_health == 'at_risk' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>
+                                {% elif item.delivery_health == 'completed' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>
+                                {% elif item.delivery_health == 'cancelled' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td style="min-width:130px;">
+                                {% if item.delivery_progress is not None %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:8px;">
+                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                 role="progressbar"
+                                                 style="width:{{ item.delivery_progress }}%"
+                                                 aria-valuenow="{{ item.delivery_progress }}"
+                                                 aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <span class="small fw-semibold text-nowrap">{{ item.delivery_progress }}%</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-nowrap">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small text-nowrap">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small text-nowrap">
+                                {% if item.delivery_actual_finish_date %}
+                                    {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
+                                        <span class="text-danger">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
+                                    {% else %}
+                                        <span class="text-success">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-nowrap">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
+                                    <i class="bi bi-pencil-square me-1"></i>Manage
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-5">
+                                <i class="bi bi-tools fs-2 d-block mb-2"></i>No Closed Won projects in Service Delivery yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {# â”€â”€ STAGE 3 &ndash; REVENUE & REPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        {% if active_sqr_tab == 'revenue-report' %}
+        <div class="row g-3 mb-4">
+            {# Summary Cards #}
+            <div class="col-sm-6 col-xl-3">
+                <div class="glass-card p-3 text-center h-100">
+                    <div class="text-muted small mb-1"><i class="bi bi-trophy-fill me-1 text-success"></i>Closed Won</div>
+                    <div class="h3 fw-bold text-success">{{ revenue_data.won_count }}</div>
+                    <div class="small text-muted">opportunities</div>
+                    {% if revenue_data.won_total_price %}
+                        <div class="mt-2 small fw-semibold text-success">PHP {{ revenue_data.won_total_price|floatformat:2 }}</div>
+                        <div class="small text-muted">Discounted: PHP {{ revenue_data.won_discounted_total|floatformat:2 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="glass-card p-3 text-center h-100">
+                    <div class="text-muted small mb-1"><i class="bi bi-x-circle-fill me-1 text-danger"></i>Closed Lost</div>
+                    <div class="h3 fw-bold text-danger">{{ revenue_data.lost_count }}</div>
+                    <div class="small text-muted">opportunities</div>
+                    {% if revenue_data.lost_total_price %}
+                        <div class="mt-2 small fw-semibold text-danger">PHP {{ revenue_data.lost_total_price|floatformat:2 }}</div>
+                        <div class="small text-muted">estimated value lost</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="glass-card p-3 text-center h-100">
+                    <div class="text-muted small mb-1"><i class="bi bi-chat-dots-fill me-1 text-info"></i>In Negotiation</div>
+                    <div class="h3 fw-bold text-info">{{ revenue_data.negotiation_count }}</div>
+                    <div class="small text-muted">active opportunities</div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="glass-card p-3 text-center h-100">
+                    <div class="text-muted small mb-1"><i class="bi bi-percent me-1 text-primary"></i>Win Rate</div>
+                    <div class="h3 fw-bold text-primary">{{ revenue_data.win_rate }}%</div>
+                    <div class="small text-muted">of tracked deals</div>
+                </div>
+            </div>
+        </div>
+
+        {# Top Won Opportunities #}
+        {% if revenue_data.top_won %}
+        <div class="glass-card p-4 mb-4">
+            <h3 class="h6 mb-3"><i class="bi bi-trophy me-2 text-success"></i>Top Won Opportunities</h3>
+            {% for item in revenue_data.top_won %}
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <span class="fw-semibold">{{ item.reference_code }}</span>
+                        <span class="text-muted ms-2">{{ item.customer_name }}</span>
+                        {% if item.customer_company %}<span class="badge bg-secondary-subtle text-secondary ms-1 small">{{ item.customer_company }}</span>{% endif %}
+                    </div>
+                    <div class="text-end text-nowrap">
+                        {% if item.quotation_total_price %}
+                            <div class="fw-semibold text-success">PHP {{ item.quotation_total_price|floatformat:2 }}</div>
+                            <div class="small text-muted">Disc: PHP {{ item.discounted_price|floatformat:2 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="small text-muted">{{ item.project_title }} &middot; {{ item.project_details }}</div>
+                {% if item.quotation_total_price and revenue_data.won_total_price %}
+                    <div class="progress mt-1" style="height:6px;" title="{{ item.reference_code }} revenue share">
+                        {% widthratio item.quotation_total_price revenue_data.won_total_price 100 as share_pct %}
+                        <div class="progress-bar bg-success" role="progressbar" style="width:{{ share_pct }}%"></div>
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Lost Opportunities #}
+        {% if revenue_data.lost_submissions %}
+        <div class="glass-card p-4">
+            <h3 class="h6 mb-3"><i class="bi bi-x-circle me-2 text-danger"></i>Lost Opportunities</h3>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle table-sm">
+                    <thead>
+                        <tr>
+                            <th>SQR ID</th>
+                            <th>Customer</th>
+                            <th>Service</th>
+                            <th class="text-end">Quoted Value (PHP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in revenue_data.lost_submissions %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.reference_code }}</td>
+                            <td>{{ item.customer_name }}{% if item.customer_company %} <span class="text-muted small">&middot; {{ item.customer_company }}</span>{% endif %}</td>
+                            <td class="small text-muted">{{ item.project_title }}</td>
+                            <td class="text-end text-danger">
+                                {% if item.quotation_total_price %}{{ item.quotation_total_price|floatformat:2 }}{% else %}&ndash;{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not revenue_data.top_won and not revenue_data.lost_submissions %}
+        <div class="glass-card p-5 text-center text-muted">
+            <i class="bi bi-bar-chart-line fs-2 d-block mb-2"></i>No tracked deal data yet. Deal statuses will appear here once opportunities are marked Closed Won or Closed Lost.
+        </div>
+        {% endif %}
+        {% endif %}
+
     </div>
 </div>
 
+{# â”€â”€ New SQR Submission Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
 {% if can_create_sqr %}
 <div class="requestor-modal" id="create-sqr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
     <div class="requestor-modal__backdrop" id="create-sqr-backdrop"></div>
     <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-sqr-title">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="create-sqr-title">New Submission</h2>
+            <h2 class="h5 mb-0" id="create-sqr-title"><i class="bi bi-plus-circle me-2"></i>New SQR Submission</h2>
             <button type="button" class="btn-close" id="close-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
             <form method="post" novalidate>
                 {% csrf_token %}
                 {% if sqr_form.errors %}
-                    <div class="alert alert-danger" role="alert">Please resolve the highlighted fields before submitting.</div>
+                    <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-2"></i>Please resolve the highlighted fields before submitting.</div>
                 {% endif %}
                 {% for field in sqr_form %}
                     <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                         {% if field.errors %}
@@ -137,7 +441,9 @@
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end mt-4">
                     <button type="button" class="btn btn-outline-secondary" id="cancel-sqr-btn">Cancel</button>
-                    <button class="btn btn-primary" type="submit">Submit Submission</button>
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-send me-1"></i>Submit
+                    </button>
                 </div>
             </form>
         </div>
@@ -147,49 +453,29 @@
 <script>
     (function () {
         const modal = document.getElementById("create-sqr-modal");
-        if (!modal) {
-            return;
-        }
-
+        if (!modal) return;
         const openBtn = document.getElementById("new-sqr-btn");
         const closeBtn = document.getElementById("close-sqr-btn");
         const cancelBtn = document.getElementById("cancel-sqr-btn");
         const backdrop = document.getElementById("create-sqr-backdrop");
-
         const openModal = () => {
             modal.classList.add("requestor-modal--visible");
             modal.setAttribute("aria-hidden", "false");
             document.body.classList.add("requestor-modal-open");
         };
-
         const closeModal = () => {
             modal.classList.remove("requestor-modal--visible");
             modal.setAttribute("aria-hidden", "true");
             document.body.classList.remove("requestor-modal-open");
         };
-
-        if (openBtn) {
-            openBtn.addEventListener("click", openModal);
-        }
-        if (closeBtn) {
-            closeBtn.addEventListener("click", closeModal);
-        }
-        if (cancelBtn) {
-            cancelBtn.addEventListener("click", closeModal);
-        }
-        if (backdrop) {
-            backdrop.addEventListener("click", closeModal);
-        }
-
-        document.addEventListener("keydown", function (event) {
-            if (event.key === "Escape" && modal.classList.contains("requestor-modal--visible")) {
-                closeModal();
-            }
+        if (openBtn) openBtn.addEventListener("click", openModal);
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+        if (backdrop) backdrop.addEventListener("click", closeModal);
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && modal.classList.contains("requestor-modal--visible")) closeModal();
         });
-
-        if (modal.dataset.openOnLoad === "true") {
-            openModal();
-        }
+        if (modal.dataset.openOnLoad === "true") openModal();
     })();
 </script>
 {% endif %}

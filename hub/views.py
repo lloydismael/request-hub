@@ -40,6 +40,8 @@ from .forms import (
     AdminRequestFilterForm,
     EngineerActivityLogForm,
     RequestAdminForm,
+    SqrDeliveryForm,
+    SqrProposalStatusForm,
     SqrRevenueOrderForm,
     SqrRevenueQuotationForm,
     RequestForm,
@@ -1592,6 +1594,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 class SqrListView(LoginRequiredMixin, TemplateView):
     template_name = "hub/sqr.html"
 
+    VALID_TABS = {"proposal", "delivery", "revenue-report"}
+    PM_ONLY_TABS = {"delivery", "revenue-report"}
+
     def dispatch(self, request, *args, **kwargs):
         if request.user.role not in SQR_ACCESS_ROLES:
             messages.error(request, "You are not allowed to access SQR.")
@@ -1615,87 +1620,105 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         can_create = user.role in ENGINEER_ACCESS_ROLES
         can_review = user.role in ADMIN_PANEL_ROLES
-        show_revenue_tracker_tab = user.role == PM_ESG_ROLE
-        active_tab = (self.request.GET.get("tab") or "submissions").strip().lower()
-        if active_tab not in {"submissions", "revenue-tracker"}:
-            active_tab = "submissions"
-        if not show_revenue_tracker_tab and active_tab == "revenue-tracker":
-            active_tab = "submissions"
+        is_pm = user.role in ADMIN_PANEL_ROLES
+
+        active_tab = (self.request.GET.get("tab") or "proposal").strip().lower()
+        if active_tab not in self.VALID_TABS:
+            active_tab = "proposal"
+        if active_tab in self.PM_ONLY_TABS and not is_pm:
+            active_tab = "proposal"
 
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
 
-        submissions = list(self.get_queryset())
+        all_submissions = list(self.get_queryset())
 
-        quotation_stage_submissions = []
-        order_stage_submissions = []
-        revenue_stage_submissions = []
-        quotation_stage_items = []
-        order_stage_items = []
-        revenue_stage_totals = {
-            "count": 0,
-            "total_price": Decimal("0.00"),
-            "discounted_price": Decimal("0.00"),
+        # ── Proposal Stage ──────────────────────────────────────────────────
+        proposal_counts = {
+            "total": len(all_submissions),
+            "processing": sum(1 for s in all_submissions if s.status == SqrSubmission.Status.FOR_PROCESSING),
+            "for_revision": sum(1 for s in all_submissions if s.status == SqrSubmission.Status.FOR_REVISION),
+            "approved": sum(1 for s in all_submissions if s.status == SqrSubmission.Status.APPROVED),
+            "submitted_pending": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.SUBMITTED_PENDING
+            ),
+            "negotiation": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.NEGOTIATION_REVIEW
+            ),
+            "closed_won": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
+            ),
+            "closed_lost": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+            ),
         }
 
-        if show_revenue_tracker_tab:
-            for item in submissions:
-                if item.revenue_stage_key == "quotation":
-                    quotation_stage_submissions.append(item)
-                elif item.revenue_stage_key == "order":
-                    order_stage_submissions.append(item)
-                else:
-                    revenue_stage_submissions.append(item)
+        # ── Service Delivery Stage ───────────────────────────────────────────
+        delivery_submissions = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON]
+            if is_pm else []
+        )
+        delivery_health_counts = {}
+        for choice_val, choice_label in SqrSubmission.DeliveryHealth.choices:
+            delivery_health_counts[choice_val] = sum(
+                1 for s in delivery_submissions if s.delivery_health == choice_val
+            )
 
-            quotation_stage_items = [
-                {
-                    "submission": item,
-                    "form": SqrRevenueQuotationForm(instance=item, prefix=f"quote-{item.pk}"),
-                }
-                for item in quotation_stage_submissions
-            ]
-            order_stage_items = [
-                {
-                    "submission": item,
-                    "form": SqrRevenueOrderForm(instance=item, prefix=f"order-{item.pk}"),
-                }
-                for item in order_stage_submissions
-            ]
+        # ── Revenue & Report Stage ──────────────────────────────────────────
+        won_submissions = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON]
+            if is_pm else []
+        )
+        lost_submissions = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST]
+            if is_pm else []
+        )
+        in_negotiation = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.NEGOTIATION_REVIEW]
+            if is_pm else []
+        )
+        total_with_deal_status = sum(
+            1 for s in all_submissions if s.proposal_status
+        ) if is_pm else 0
+        won_total_price = sum(s.quotation_total_price or Decimal("0") for s in won_submissions)
+        won_discounted_total = sum(s.discounted_price or Decimal("0") for s in won_submissions)
+        lost_total_price = sum(s.quotation_total_price or Decimal("0") for s in lost_submissions)
+        win_rate = (
+            round(len(won_submissions) / total_with_deal_status * 100, 1)
+            if total_with_deal_status > 0 else 0
+        )
+        top_won = sorted(won_submissions, key=lambda s: s.quotation_total_price or Decimal("0"), reverse=True)[:5]
 
-            total_price = Decimal("0.00")
-            discounted_price = Decimal("0.00")
-            for item in revenue_stage_submissions:
-                total_price += item.quotation_total_price or Decimal("0.00")
-                discounted_price += item.discounted_price or Decimal("0.00")
-
-            revenue_stage_totals = {
-                "count": len(revenue_stage_submissions),
-                "total_price": total_price,
-                "discounted_price": discounted_price,
-            }
+        revenue_data = {
+            "won_count": len(won_submissions),
+            "lost_count": len(lost_submissions),
+            "negotiation_count": len(in_negotiation),
+            "won_total_price": won_total_price,
+            "won_discounted_total": won_discounted_total,
+            "lost_total_price": lost_total_price,
+            "win_rate": win_rate,
+            "top_won": top_won,
+            "lost_submissions": lost_submissions,
+        }
 
         context.update(
             {
                 "can_create_sqr": can_create,
                 "can_review_sqr": can_review,
+                "is_pm": is_pm,
                 "sqr_form": form,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
-                "sqr_submissions": submissions,
                 "active_sqr_tab": active_tab,
-                "show_revenue_tracker_tab": show_revenue_tracker_tab,
-                "sqr_counts": {
-                    "total": len(submissions),
-                    "processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_PROCESSING),
-                    "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
-                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
-                },
-                "quotation_stage_items": quotation_stage_items,
-                "quotation_stage_count": len(quotation_stage_submissions),
-                "order_stage_items": order_stage_items,
-                "order_stage_count": len(order_stage_submissions),
-                "revenue_stage_submissions": revenue_stage_submissions,
-                "revenue_stage_totals": revenue_stage_totals,
+                "proposal_submissions": all_submissions,
+                "proposal_counts": proposal_counts,
+                "delivery_submissions": delivery_submissions,
+                "delivery_health_counts": delivery_health_counts,
+                "revenue_data": revenue_data,
             }
         )
         return context
@@ -1724,11 +1747,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         message = (
             f"{actor_name} submitted {submission.reference_code} for {submission.customer_name}."
         )
-
         recipients: dict[int, User] = {submission.pm_esg_reviewer_id: submission.pm_esg_reviewer}
         for admin in User.objects.filter(role=User.Roles.ADMIN):
             recipients[admin.pk] = admin
-
         recipients.pop(submission.engineer_id, None)
         for recipient in recipients.values():
             Notification.objects.create(
@@ -1840,6 +1861,13 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         context["back_url"] = reverse("hub:sqr")
         context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
         context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
+        context["proposal_form"] = SqrProposalStatusForm(instance=self.object)
+        context["delivery_form"] = SqrDeliveryForm(instance=self.object)
+        context["show_proposal_section"] = self.object.status == SqrSubmission.Status.APPROVED
+        context["show_delivery_section"] = (
+            self.object.status == SqrSubmission.Status.APPROVED
+            and self.object.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
+        )
         return context
 
     def _notify_engineer_review(self, submission: SqrSubmission) -> None:
@@ -1916,6 +1944,66 @@ class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
 
         messages.error(request, "Invalid revenue tracker action.")
         return redirect(self._tracker_redirect_url())
+
+
+class SqrProposalUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: update pricing and deal/proposal status on an approved SQR."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Proposal details.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG can update this proposal.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Proposal details can only be updated after the SQR is Approved.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        form = SqrProposalStatusForm(request.POST, instance=submission)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Proposal details updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr-review", pk=pk)
+
+
+class SqrDeliveryUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: update Service Delivery tracking on a Closed Won SQR."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Service Delivery details.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        form = SqrDeliveryForm(request.POST, instance=submission)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Service delivery updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr-review", pk=pk)
 
 
 class SqrTeamsRedirectView(LoginRequiredMixin, View):
@@ -2000,19 +2088,32 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
         total_price_text = f"{submission.quotation_total_price:,.2f}" if submission.quotation_total_price is not None else "TBD"
         discounted_price_text = f"{submission.discounted_price:,.2f}" if submission.discounted_price is not None else "TBD"
         discount_rate_text = f"{submission.discount_rate}%"
+        sse_manhrs_text = f"{submission.sse_manhrs:,.2f}" if submission.sse_manhrs is not None else "TBD"
+        pm_manhrs_text = f"{submission.pm_manhrs:,.2f}" if submission.pm_manhrs is not None else "TBD"
+        hourly_rate_text = f"{submission.hourly_rate:,.2f}" if submission.hourly_rate is not None else "TBD"
+        base_cost_text = f"{submission.base_cost:,.2f}" if submission.base_cost is not None else "TBD"
 
         body_template = (
             "Hi @{requestor_name}\n"
             "Submitted SQR is now approved, please refer to the ff. details below.\n"
+            "\n"
             "SQR ID: {reference_code}\n"
             "Customer Name: {customer_name}\n"
-            "Service Description: {service_description}\n"
+            "Group Name: {group_name}\n"
             "Account Manager: {account_manager}\n"
+            "Service Description: {service_description}\n"
             "Scope of Services: {scope_of_services}\n"
+            "\n"
+            "SSE Manhours: {sse_manhrs}\n"
+            "PM Manhours: {pm_manhrs}\n"
+            "Hourly Rate: PHP {hourly_rate}\n"
+            "Computed Base Cost: PHP {base_cost}\n"
+            "\n"
             "Quantity: 1 Lot\n"
-            "Total Price: {total_price}\n"
+            "Quoted Total Price: PHP {total_price}\n"
             "Discount Rate: {discount_rate}\n"
-            "Discounted Price: {discounted_price}\n"
+            "Discounted Price: PHP {discounted_price}\n"
+            "\n"
             "Remarks: {remarks}"
         )
         body = quote(
@@ -2020,9 +2121,14 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
                 requestor_name=requestor_name,
                 reference_code=submission.reference_code,
                 customer_name=submission.customer_name,
-                service_description=(submission.project_title or "").strip(),
+                group_name=(submission.customer_company or "").strip(),
                 account_manager=(submission.customer_contact or "").strip(),
+                service_description=(submission.project_title or "").strip(),
                 scope_of_services=(submission.project_details or "").strip(),
+                sse_manhrs=sse_manhrs_text,
+                pm_manhrs=pm_manhrs_text,
+                hourly_rate=hourly_rate_text,
+                base_cost=base_cost_text,
                 total_price=total_price_text,
                 discount_rate=discount_rate_text,
                 discounted_price=discounted_price_text,
