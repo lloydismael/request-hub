@@ -4795,8 +4795,8 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.13);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 999px;
     padding: 3px 4px;
     margin-bottom: 0;
@@ -4811,7 +4811,7 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     border-radius: 999px;
     font-size: 11px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.42);
+    color: rgba(255, 255, 255, 0.70);
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
@@ -4832,30 +4832,26 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     transform: scale(1.04);
 }
 .profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
-    color: rgba(255, 255, 255, 0.75);
-    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.90);
+    background: rgba(255, 255, 255, 0.12);
 }
 .profile-vmt__divider {
     display: block;
     width: 1px;
     height: 16px;
-    background: rgba(255, 255, 255, 0.13);
+    background: rgba(255, 255, 255, 0.25);
     flex-shrink: 0;
 }
 
 /* Light-mode overrides for the inline toggle */
 body:not(.dark-mode) .profile-tabs__vmt {
-    background: rgba(15, 23, 42, 0.1);
-    border-color: rgba(15, 23, 42, 0.35);
+    background: rgba(255, 255, 255, 0.13);
+    border-color: rgba(255, 255, 255, 0.22);
 }
-body:not(.dark-mode) .profile-vmt__btn { color: rgba(15, 23, 42, 0.75); }
-body:not(.dark-mode) .profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
-    color: rgba(15, 23, 42, 0.95);
-    background: rgba(15, 23, 42, 0.14);
-}
-body:not(.dark-mode) .profile-vmt__divider { background: rgba(15, 23, 42, 0.3); }
 body:not(.dark-mode) .profile-vmt__btn--active {
-    box-shadow: 0 2px 8px rgba(47, 108, 243, 0.35);
+    background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(47, 108, 243, 0.45);
 }
 
 /* Mobile: stack view-mode below tabs */

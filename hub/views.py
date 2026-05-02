@@ -1878,6 +1878,7 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
             self.object.status == SqrSubmission.Status.APPROVED
             and self.object.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
         )
+        context["revenue_unlocked"] = self.object.revenue_unlocked
         return context
 
     def _notify_engineer_review(self, submission: SqrSubmission) -> None:
@@ -1987,6 +1988,23 @@ class SqrProposalUpdateView(LoginRequiredMixin, View):
                 for error in errors:
                     messages.error(request, f"{label}: {error}")
 
+        return redirect("hub:sqr-review", pk=pk)
+
+
+class SqrToRevenueView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: unlock Step 4 Revenue Stage by clicking 'To Revenue'."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can unlock the Revenue Stage.")
+            return redirect("hub:sqr-review", pk=pk)
+
+        submission = get_object_or_404(SqrSubmission, pk=pk)
+
+        if not submission.revenue_unlocked:
+            submission.revenue_unlocked = True
+            submission.save(update_fields=["revenue_unlocked", "updated_at"])
+            messages.success(request, f"Revenue Stage unlocked for {submission.reference_code}.")
         return redirect("hub:sqr-review", pk=pk)
 
 

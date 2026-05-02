@@ -435,10 +435,22 @@
                         {% endwith %}
                     </div>
                 </div>
-                <div class="mt-3">
+                <div class="mt-3 d-flex gap-2 flex-wrap">
                     <button class="btn btn-info text-white" type="submit">
                         <i class="bi bi-save me-1"></i>Save Delivery Details
                     </button>
+                    {% if not revenue_unlocked %}
+                    <form method="post" action="{% url 'hub:sqr-to-revenue' object.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button class="btn btn-success" type="submit">
+                            <i class="bi bi-arrow-right-circle me-1"></i>To Revenue
+                        </button>
+                    </form>
+                    {% else %}
+                    <span class="btn btn-success disabled">
+                        <i class="bi bi-check-circle me-1"></i>Revenue Stage Unlocked
+                    </span>
+                    {% endif %}
                 </div>
             </form>
         </div>
@@ -455,11 +467,18 @@
 
         {# ── SECTION 4: Revenue Stage ─────────────────────────────────────────── #}
         {% if show_revenue_section %}
-        <div class="glass-card p-4 mb-4">
+        <div class="glass-card p-4 mb-4{% if not revenue_unlocked %} opacity-50{% endif %}">
             <h2 class="h6 mb-1 fw-bold">
                 <i class="bi bi-receipt me-2 text-success"></i>Step 4 &ndash; Revenue Stage
+                {% if not revenue_unlocked %}<span class="badge bg-secondary ms-2 fw-normal small"><i class="bi bi-lock me-1"></i>Locked</span>{% endif %}
             </h2>
-            <p class="small text-muted mb-3">Record SI / revenue recognition details for this approved SQR.</p>
+            <p class="small text-muted mb-3">
+                {% if revenue_unlocked %}
+                Record SI / revenue recognition details for this approved SQR.
+                {% else %}
+                Click <strong>To Revenue</strong> in Step 3 to enable editing.
+                {% endif %}
+            </p>
 
             {% if object.revenue_status %}
             <div class="alert border border-success-subtle small mb-3 d-flex gap-2 align-items-center bg-success-subtle">
@@ -472,8 +491,9 @@
             </div>
             {% endif %}
 
-            <form method="post" action="{% url 'hub:sqr-revenue-stage-update' object.pk %}" novalidate>
+            <form method="post" action="{% url 'hub:sqr-revenue-stage-update' object.pk %}" novalidate{% if not revenue_unlocked %} id="revenue-form-locked"{% endif %}>
                 {% csrf_token %}
+                <fieldset{% if not revenue_unlocked %} disabled{% endif %}>
                 <div class="row g-3">
                     <div class="col-md-6">
                         {% with field=revenue_form.revenue_date %}
@@ -511,8 +531,9 @@
                         {% endwith %}
                     </div>
                 </div>
+                </fieldset>
                 <div class="mt-3">
-                    <button class="btn btn-success" type="submit">
+                    <button class="btn btn-success{% if not revenue_unlocked %} disabled{% endif %}" type="submit"{% if not revenue_unlocked %} aria-disabled="true"{% endif %}>
                         <i class="bi bi-save me-1"></i>Save Revenue Details
                     </button>
                 </div>

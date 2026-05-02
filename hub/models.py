@@ -562,6 +562,10 @@ class SqrSubmission(models.Model):
         null=True,
     )
     reviewed_at = models.DateTimeField(blank=True, null=True)
+    revenue_unlocked = models.BooleanField(
+        default=False,
+        help_text="Set to True when PM clicks 'To Revenue' in Step 3 to enable Step 4.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
