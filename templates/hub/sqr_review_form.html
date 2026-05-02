@@ -152,21 +152,21 @@
                 <div class="col-auto">
                     <div class="border rounded p-2 small text-center">
                         <div class="text-muted">Gross Total</div>
-                        <div class="fw-bold">PHP {{ object.computed_gross_total|floatformat:2 }}</div>
+                        <div class="fw-bold">PHP {{ object.computed_gross_total|floatformat:0 }}</div>
                     </div>
                 </div>
                 {% if object.discount_rate %}
                 <div class="col-auto">
                     <div class="border rounded p-2 small text-center">
                         <div class="text-muted">Discount ({{ object.discount_rate }}%)</div>
-                        <div class="fw-bold text-danger">&minus; PHP {{ object.computed_discount_amount|floatformat:2 }}</div>
+                        <div class="fw-bold text-danger">&minus; PHP {{ object.computed_discount_amount|floatformat:0 }}</div>
                     </div>
                 </div>
                 {% endif %}
                 <div class="col-auto">
                     <div class="border rounded p-2 small text-center bg-success-subtle">
                         <div class="text-muted">Total Price</div>
-                        <div class="fw-bold text-success">PHP {{ object.computed_total_price|floatformat:2 }}</div>
+                        <div class="fw-bold text-success">PHP {{ object.computed_total_price|floatformat:0 }}</div>
                     </div>
                 </div>
             </div>
@@ -194,13 +194,17 @@
                     <div class="col-md-6">
                         {% with field=proposal_form.pm_manhrs %}
                         <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        <datalist id="pm-manhrs-list">
-                            <option value="16"></option>
-                            <option value="24"></option>
-                            <option value="48"></option>
-                        </datalist>
-                        <div class="form-text">Select a preset or type a whole number.</div>
+                        <div class="input-group">
+                            <select class="form-select flex-grow-0" id="pm-manhrs-preset"
+                                    style="width:auto;min-width:90px;" aria-label="PM manhours preset">
+                                <option value="">Custom</option>
+                                <option value="16">16</option>
+                                <option value="24">24</option>
+                                <option value="48">48</option>
+                            </select>
+                            {{ field }}
+                        </div>
+                        <div class="form-text">Pick a preset or type directly. Whole numbers only.</div>
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                         {% endwith %}
                     </div>
@@ -222,9 +226,22 @@
                     </div>
                     <div class="col-md-6">
                         {% with field=proposal_form.discount_rate %}
-                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        <label class="form-label fw-semibold" for="discount-preset">{{ field.label }}</label>
+                        <div class="input-group">
+                            <select class="form-select" id="discount-preset" aria-label="Discount preset">
+                                <option value="0">0%</option>
+                                <option value="5">5%</option>
+                                <option value="10">10%</option>
+                                <option value="15">15%</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <input type="number" id="discount-custom-input" class="form-control d-none"
+                                   min="0" max="100" step="1" placeholder="0" style="max-width:90px;">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <input type="hidden" name="discount_rate" id="id_discount_rate"
+                               value="{{ field.value|default:0 }}">
+                        <div class="form-text">Select a preset or enter a custom percentage (whole number).</div>
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                         {% endwith %}
                     </div>
@@ -259,12 +276,19 @@
                         <i class="bi bi-save me-1"></i>Save Proposal Details
                     </button>
                     {% if can_launch_approval_email %}
-                        <form method="post" action="{% url 'hub:sqr-approval-email' object.pk %}" class="d-inline">
-                            {% csrf_token %}
-                            <button class="btn btn-outline-success" type="submit">
-                                <i class="bi bi-envelope me-1"></i>Generate Approval Email
-                            </button>
-                        </form>
+                        <a id="approval-email-btn"
+                           class="btn btn-outline-success"
+                           href="#"
+                           data-sqr="{{ object.reference_code }}"
+                           data-customer="{{ object.customer_name }}"
+                           data-service="{{ object.project_title }}"
+                           data-am="{{ object.customer_contact }}"
+                           data-total="{% if object.computed_total_price %}{{ object.computed_total_price|floatformat:0 }}{% endif %}"
+                           data-discount="{{ object.discount_rate }}"
+                           data-requestor-name="{{ object.engineer.get_full_name|default:object.engineer.username }}"
+                           data-requestor-email="{{ object.engineer.email }}">
+                            <i class="bi bi-envelope me-1"></i>Generate Approval Email
+                        </a>
                     {% endif %}
                 </div>
             </form>
@@ -569,9 +593,9 @@
         const SCOPE = "{{ object.project_details|escapejs }}";
 
         const QUALIFYING_SCOPES = [
-            "Project Implementation",
-            "Project Implementation and Management",
-            "Technical Support Maintenance",
+            "Implementation",
+            "Implementation and Project Management",
+            "Managed Support and Maintenance Service",
         ];
 
         const isQualifying = QUALIFYING_SCOPES.includes(SCOPE);
@@ -580,6 +604,10 @@
             : 0;
 
         const sseMhrs  = document.getElementById("id_sse_manhrs");
+        // Strip trailing .00 from SSE manhours display (DB stores as decimal)
+        if (sseMhrs && sseMhrs.value && parseFloat(sseMhrs.value) === Math.floor(parseFloat(sseMhrs.value))) {
+            sseMhrs.value = Math.floor(parseFloat(sseMhrs.value));
+        }
         const pmMhrs   = document.getElementById("id_pm_manhrs");
         const sseAmt   = document.getElementById("id_sse_amount");
         const pmAmt    = document.getElementById("id_pm_amount");
@@ -592,28 +620,30 @@
         // Show hint about the auto-fill rule
         if (hint) {
             if (isQualifying) {
-                hint.textContent = "Auto-filled: " + (GROUP === "ESS" ? "ESS rate \u20b1149,000" : "Non-ESS rate \u20b1192,000") + ". You can override."
+                hint.textContent = "Auto-filled: " + (GROUP === "ESS" ? "ESS rate \u20b1149,000" : "Non-ESS rate \u20b1192,000") + ". You can override if needed.";
             } else {
-                hint.textContent = "Not applicable for this scope. Set manually if needed.";
+                hint.textContent = "Not applicable for this scope. Set to 0 or enter manually if needed.";
             }
         }
 
         // Pre-fill only when the field is currently empty
         if ((!managed.value || managed.value === "0" || managed.value === "0.00") && defaultManaged > 0) {
-            managed.value = defaultManaged.toFixed(2);
+            managed.value = Math.round(defaultManaged);
         }
 
-        const discountSel = document.getElementById("id_discount_rate");
+        const discountSel    = document.getElementById("id_discount_rate");   // hidden field
+        const discountPreset = document.getElementById("discount-preset");
+        const discountCustom = document.getElementById("discount-custom-input");
 
         function recalcTotal() {
             if (!total) return;
             const sse      = parseFloat(sseAmt  && sseAmt.value  ? sseAmt.value  : 0) || 0;
             const pm       = parseFloat(pmAmt   && pmAmt.value   ? pmAmt.value   : 0) || 0;
             const mgd      = parseFloat(managed.value ? managed.value : 0) || 0;
-            const rate     = parseFloat(discountSel ? discountSel.value : 0) || 0;
-            const gross    = sse + pm + mgd;
-            const discount = gross * rate / 100;
-            total.value    = Math.round(gross - discount);
+            const rate         = parseFloat(discountSel ? discountSel.value : 0) || 0;
+            const gross        = Math.round(sse) + Math.round(pm) + Math.round(mgd);
+            const discountAmt  = Math.round(gross * rate / 100);
+            total.value        = gross - discountAmt;
         }
 
         function calcSseAmount() {
@@ -627,13 +657,111 @@
             recalcTotal();
         }
 
+        // On load: auto-compute SSE/PM amounts from manhours if the amount fields are empty,
+        // then recalculate total = SUM(SSE, PM, Managed) - Discount Amount
+        if (sseAmt && sseMhrs && !sseAmt.value) { calcSseAmount(); }
+        if (pmAmt  && pmMhrs  && !pmAmt.value)  { calcPmAmount();  }
         recalcTotal();
         if (sseMhrs) sseMhrs.addEventListener("input", calcSseAmount);
         if (pmMhrs)  pmMhrs.addEventListener("input", calcPmAmount);
         if (sseAmt)  sseAmt.addEventListener("input", recalcTotal);
         if (pmAmt)   pmAmt.addEventListener("input", recalcTotal);
-        if (discountSel) discountSel.addEventListener("change", recalcTotal);
         managed.addEventListener("input", recalcTotal);
+
+        // Discount preset select ↔ custom input ↔ hidden field sync
+        (function initDiscountWidget() {
+            if (!discountPreset) return;
+            var savedVal = parseInt(discountSel ? discountSel.value : 0, 10) || 0;
+            var presets  = ["0","5","10","15"];
+            if (presets.indexOf(String(savedVal)) !== -1) {
+                discountPreset.value = String(savedVal);
+            } else {
+                discountPreset.value = "custom";
+                if (discountCustom) {
+                    discountCustom.classList.remove("d-none");
+                    discountCustom.value = savedVal;
+                }
+            }
+            discountPreset.addEventListener("change", function () {
+                if (this.value === "custom") {
+                    if (discountCustom) discountCustom.classList.remove("d-none");
+                    // keep hidden field unchanged until user types
+                } else {
+                    if (discountCustom) discountCustom.classList.add("d-none");
+                    if (discountSel) discountSel.value = this.value;
+                    recalcTotal();
+                }
+            });
+            if (discountCustom) {
+                discountCustom.addEventListener("input", function () {
+                    var v = parseInt(this.value, 10);
+                    if (!isNaN(v) && v >= 0 && v <= 100) {
+                        if (discountSel) discountSel.value = v;
+                        recalcTotal();
+                    }
+                });
+            }
+        })();
+
+        // PM manhours preset select ↔ number input sync
+        const pmPreset = document.getElementById("pm-manhrs-preset");
+        if (pmPreset && pmMhrs) {
+            // Sync select to current value on load
+            var curVal = String(parseInt(pmMhrs.value, 10));
+            if (["16", "24", "48"].indexOf(curVal) !== -1) {
+                pmPreset.value = curVal;
+            }
+            // Preset → fill input
+            pmPreset.addEventListener("change", function () {
+                if (this.value) {
+                    pmMhrs.value = this.value;
+                    calcPmAmount();
+                }
+            });
+            // Manual typing → reset select to Custom
+            pmMhrs.addEventListener("input", function () {
+                var typed = String(parseInt(this.value, 10));
+                pmPreset.value = (["16", "24", "48"].indexOf(typed) !== -1) ? typed : "";
+            });
+        }
+
+        // Generate Approval Email → open Outlook draft via mailto:
+        var approvalEmailBtn = document.getElementById("approval-email-btn");
+        if (approvalEmailBtn) {
+            approvalEmailBtn.addEventListener("click", function (e) {
+                e.preventDefault();
+                var sqr           = this.dataset.sqr        || "";
+                var customer      = this.dataset.customer   || "";
+                var service       = this.dataset.service    || "";
+                var am            = this.dataset.am         || "";
+                var totalPrice    = this.dataset.total      || "";
+                var discount      = parseInt(this.dataset.discount, 10) || 0;
+                var requestorName = this.dataset.requestorName  || "";
+                var requestorEmail= this.dataset.requestorEmail || "";
+
+                var subject = sqr + " " + customer;
+                var to      = requestorEmail + ";ESGRequestHub@phildata.com";
+
+                var body  = "Hi " + requestorName + ",\r\n\r\n";
+                body += "Submitted SQR is now approved, please refer to the ff. details below.\r\n\r\n";
+                body += "SQR ID: "              + sqr      + "\r\n";
+                body += "Customer Name: "       + customer + "\r\n";
+                body += "Service Description: " + service  + "\r\n";
+                body += "Account Manager: "     + am       + "\r\n";
+                body += "Scope of Services:\r\n";
+                body += "Managed Support and Maintenance Service (1\u2011Year Coverage)\r\n";
+                body += "Quantity: 1 Lot\r\n";
+                body += "Total Price: PHP "     + totalPrice + "\r\n";
+                if (discount > 0) {
+                    body += "Remarks: Discounted Price\r\n";
+                }
+
+                window.location.href = "mailto:" + to
+                    + "?subject=" + encodeURIComponent(subject)
+                    + "&body="    + encodeURIComponent(body);
+            });
+        }
+
     })();
 </script>
 {% endblock %}

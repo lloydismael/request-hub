@@ -850,6 +850,17 @@ class SqrRevenueOrderForm(forms.ModelForm):
 class SqrProposalStatusForm(forms.ModelForm):
     """PM fills this to set pricing breakdown, manhours, and deal/proposal status."""
 
+    # Override so any integer 0-100 is accepted (not restricted to model choices)
+    discount_rate = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=100,
+        initial=0,
+        widget=forms.NumberInput(
+            attrs={"class": "form-control", "min": "0", "max": "100", "step": "1", "placeholder": "0"}
+        ),
+    )
+
     class Meta:
         model = SqrSubmission
         fields = [
@@ -882,7 +893,7 @@ class SqrProposalStatusForm(forms.ModelForm):
                 attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "pm_manhrs": forms.NumberInput(
-                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0", "list": "pm-manhrs-list"}
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "pm_amount": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
@@ -890,7 +901,6 @@ class SqrProposalStatusForm(forms.ModelForm):
             "managed_support_amount": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
-            "discount_rate": forms.Select(attrs={"class": "form-select"}),
             "quotation_total_price": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),

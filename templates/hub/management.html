@@ -345,15 +345,10 @@
                                 </div>
                             </div>
                             <div class="mb-2">
-                                <form method="post" action="{% url 'hub:management' %}" id="mu-reset-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="active_tab" value="users">
-                                    <input type="hidden" id="mu-reset-pk" name="user_action" value="">
-                                    <button type="submit" class="btn btn-sm btn-outline-warning"
-                                            onclick="return confirm('Reset password to default and force re-login?');">
-                                        <i class="bi bi-key-fill me-1"></i>Reset to Default Password
-                                    </button>
-                                </form>
+                                <button type="submit" form="mu-reset-form" class="btn btn-sm btn-outline-warning"
+                                        onclick="return confirm('Reset password to default and force re-login?');">
+                                    <i class="bi bi-key-fill me-1"></i>Reset to Default Password
+                                </button>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -366,6 +361,13 @@
                 </div>
             </div>
         </div>
+
+        {# Standalone reset-password form (outside modal to avoid nested-form issue) #}
+        <form method="post" action="{% url 'hub:management' %}" id="mu-reset-form" class="d-none">
+            {% csrf_token %}
+            <input type="hidden" name="active_tab" value="users">
+            <input type="hidden" id="mu-reset-pk" name="user_action" value="">
+        </form>
 
         {% if show_create_user_modal %}
             <script>
@@ -615,7 +617,7 @@
                 }
 
                 /* Set form action */
-                manageForm.action = '/hub/users/' + pk + '/manage/';
+                manageForm.action = '/users/' + pk + '/manage/';
 
                 /* Populate fields */
                 manageForm.querySelector('#mu-first-name').value  = firstName;

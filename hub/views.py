@@ -1862,7 +1862,10 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         context["back_url"] = reverse("hub:sqr")
         context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
-        context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
+        context["can_launch_approval_email"] = (
+            self.object.status == SqrSubmission.Status.APPROVED
+            and self.object.quotation_total_price is not None
+        )
         context["proposal_form"] = SqrProposalStatusForm(instance=self.object)
         context["delivery_form"] = SqrDeliveryForm(instance=self.object)
         context["revenue_form"] = SqrRevenueForm(instance=self.object)
