@@ -332,7 +332,7 @@
             </div>
             {% endif %}
 
-            <form method="post" action="{% url 'hub:sqr-delivery-update' object.pk %}" novalidate>
+            <form id="delivery-form-{{ object.pk }}" method="post" action="{% url 'hub:sqr-delivery-update' object.pk %}" novalidate>
                 {% csrf_token %}
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -436,16 +436,13 @@
                     </div>
                 </div>
                 <div class="mt-3 d-flex gap-2 flex-wrap">
-                    <button class="btn btn-info text-white" type="submit">
+                    <button class="btn btn-info text-white" type="submit" form="delivery-form-{{ object.pk }}">
                         <i class="bi bi-save me-1"></i>Save Delivery Details
                     </button>
                     {% if not revenue_unlocked %}
-                    <form method="post" action="{% url 'hub:sqr-to-revenue' object.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <button class="btn btn-success" type="submit">
-                            <i class="bi bi-arrow-right-circle me-1"></i>To Revenue
-                        </button>
-                    </form>
+                    <button class="btn btn-success" type="submit" form="to-revenue-form-{{ object.pk }}">
+                        <i class="bi bi-arrow-right-circle me-1"></i>To Revenue
+                    </button>
                     {% else %}
                     <span class="btn btn-success disabled">
                         <i class="bi bi-check-circle me-1"></i>Revenue Stage Unlocked
@@ -453,6 +450,11 @@
                     {% endif %}
                 </div>
             </form>
+            {% if not revenue_unlocked %}
+            <form id="to-revenue-form-{{ object.pk }}" method="post" action="{% url 'hub:sqr-to-revenue' object.pk %}" class="d-none">
+                {% csrf_token %}
+            </form>
+            {% endif %}
         </div>
         {% else %}
         <div class="glass-card p-4 mb-4 opacity-50">
