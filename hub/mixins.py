@@ -8,6 +8,8 @@ class RoleRequiredMixin(UserPassesTestMixin):
     required_roles: set[str] | None = None
 
     def test_func(self):
+        if not self.request.user.is_authenticated:
+            return False
         roles = set(self.required_roles or set())
         if self.required_role:
             roles.add(self.required_role)
@@ -34,5 +36,7 @@ class AdminOrPmEsgRequiredMixin(RoleRequiredMixin):
 
 class AdminOrEngineerRequiredMixin(UserPassesTestMixin):
     def test_func(self):
+        if not self.request.user.is_authenticated:
+            return False
         engineer_roles = set(getattr(User, "ENGINEER_ACCESS_ROLES", (User.Roles.ENGINEER,)))
         return self.request.user.role in ({User.Roles.ADMIN, User.Roles.PM_ESG} | engineer_roles)
