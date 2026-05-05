@@ -1,6 +1,5 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
 
 from django.utils import timezone
 
@@ -638,7 +637,6 @@ class SqrSubmissionForm(forms.ModelForm):
             "project_title",
             "project_details",
             "sse_manhrs",
-            "documentation_links",
             "sqr_folder_link",
             "remarks",
         ]
@@ -649,7 +647,6 @@ class SqrSubmissionForm(forms.ModelForm):
             "project_title": "Service Description",
             "project_details": "Scope of Services",
             "sse_manhrs": "SSE Manhrs",
-            "documentation_links": "SQR Doc. Ref. Link",
             "sqr_folder_link": "SQR Folder Link",
             "remarks": "Remarks",
         }
@@ -662,10 +659,6 @@ class SqrSubmissionForm(forms.ModelForm):
                 "step": "1",
                 "placeholder": "0",
                 "data-sse-manhrs": "true",
-            }),
-            "documentation_links": forms.TextInput(attrs={
-                "class": "form-control",
-                "placeholder": "https://example.com/sqr-reference",
             }),
             "sqr_folder_link": forms.URLInput(attrs={
                 "class": "form-control",
@@ -683,7 +676,6 @@ class SqrSubmissionForm(forms.ModelForm):
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
         self.fields["project_title"].help_text = "Project Name / Engagement Name"
-        self.fields["documentation_links"].help_text = "SQR document reference link."
 
         # Build approver user-ID map: group → pk of matching PM user
         approver_id_by_group = {}
@@ -719,29 +711,7 @@ class SqrSubmissionForm(forms.ModelForm):
             if current_value and current_value not in dict(self.fields[field_name].choices):
                 self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
 
-    def clean_documentation_links(self):
-        raw = (self.cleaned_data.get("documentation_links") or "").strip()
-        if not raw:
-            raise forms.ValidationError("Provide at least one documentation link.")
 
-        validator = URLValidator(schemes=["http", "https"])
-        cleaned_links = []
-        seen = set()
-        for line in raw.splitlines():
-            link = line.strip()
-            if not link:
-                continue
-            try:
-                validator(link)
-            except ValidationError:
-                raise forms.ValidationError(f"Invalid URL: {link}")
-            if link not in seen:
-                seen.add(link)
-                cleaned_links.append(link)
-
-        if not cleaned_links:
-            raise forms.ValidationError("Provide at least one valid documentation link.")
-        return "\n".join(cleaned_links)
 
 
 class SqrReviewForm(forms.ModelForm):

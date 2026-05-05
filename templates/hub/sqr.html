@@ -594,6 +594,66 @@
         });
         if (modal.dataset.openOnLoad === "true") openModal();
     })();
+
+    // Department → Account Manager filtering
+    (function () {
+        var deptSel = document.getElementById('id_customer_company');
+        var memberSel = document.getElementById('id_customer_contact');
+        var approverSel = document.getElementById('id_pm_esg_reviewer');
+        var scopeSel = document.getElementById('id_project_details');
+        var sseManhrsInput = document.querySelector('[data-sse-manhrs]');
+
+        if (!deptSel) return;
+
+        var memberMap = {}, approverMap = {}, sseScopes = [];
+        try { memberMap = JSON.parse(deptSel.dataset.memberMap || '{}'); } catch (e) {}
+        try { approverMap = JSON.parse(deptSel.dataset.approverMap || '{}'); } catch (e) {}
+        try { sseScopes = JSON.parse(deptSel.dataset.sseScopes || '[]'); } catch (e) {}
+
+        function updateMembers(dept) {
+            if (!memberSel) return;
+            var currentVal = memberSel.value;
+            memberSel.innerHTML = '';
+            var emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '— Select Member —';
+            memberSel.appendChild(emptyOpt);
+            var members = memberMap[dept] || [];
+            members.forEach(function (m) {
+                var opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                if (m === currentVal) opt.selected = true;
+                memberSel.appendChild(opt);
+            });
+        }
+
+        function updateApprover(dept) {
+            if (!approverSel || !approverMap[dept]) return;
+            approverSel.value = approverMap[dept];
+        }
+
+        function updateSseManhrs() {
+            if (!sseManhrsInput) return;
+            var row = sseManhrsInput.closest('.mb-3');
+            if (!row) return;
+            var show = scopeSel ? sseScopes.indexOf(scopeSel.value) !== -1 : false;
+            row.style.display = show ? '' : 'none';
+            if (!show) sseManhrsInput.value = '';
+        }
+
+        deptSel.addEventListener('change', function () {
+            updateMembers(this.value);
+            updateApprover(this.value);
+        });
+
+        if (scopeSel) {
+            scopeSel.addEventListener('change', updateSseManhrs);
+            updateSseManhrs();
+        }
+
+        updateMembers(deptSel.value);
+    })();
 </script>
 {% endif %}
 {% endblock %}
