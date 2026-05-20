@@ -2401,6 +2401,11 @@ body.dark-mode .requestor-modal__header {
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
+body.dark-mode .requestor-modal__header h2,
+body.dark-mode .requestor-modal__header .h5 {
+    color: #f1f5f9;
+}
+
 body.dark-mode .requestor-modal__body .form-label,
 body.dark-mode .requestor-modal__body .form-text,
 body.dark-mode .requestor-modal__body .text-muted {

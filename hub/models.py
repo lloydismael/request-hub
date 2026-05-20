@@ -650,6 +650,16 @@ class SqrSubmission(models.Model):
         if creating and not self.year:
             self.year = timezone.now().astimezone(MANILA_TZ).year
 
+        # Auto-compute SSE Amount (col M = col L × 2000) and PM Amount (col O = col N × 3000)
+        if self.sse_manhrs is not None:
+            self.sse_amount = (Decimal(str(self.sse_manhrs)) * Decimal("2000")).quantize(Decimal("0.01"))
+        else:
+            self.sse_amount = None
+        if self.pm_manhrs is not None:
+            self.pm_amount = (Decimal(str(self.pm_manhrs)) * Decimal("3000")).quantize(Decimal("0.01"))
+        else:
+            self.pm_amount = None
+
         super().save(*args, **kwargs)
 
         if creating and not self.reference_code:

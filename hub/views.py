@@ -49,6 +49,7 @@ from .forms import (
     RequestStatusForm,
     SqrReviewForm,
     SqrSubmissionForm,
+    SqrTrackerEditForm,
     StatusLogForm,
 )
 from .constants import ACCOUNT_NAME_RAW
@@ -1622,6 +1623,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         can_create = user.role in ENGINEER_ACCESS_ROLES
         can_review = user.role in ADMIN_PANEL_ROLES
         is_pm = user.role in ADMIN_PANEL_ROLES
+        is_admin = user.role == User.Roles.ADMIN
 
         active_tab = (self.request.GET.get("tab") or "proposal").strip().lower()
         if active_tab not in self.VALID_TABS:
@@ -1713,7 +1715,10 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "can_create_sqr": can_create,
                 "can_review_sqr": can_review,
                 "is_pm": is_pm,
+                "is_admin": is_admin,
                 "sqr_form": form,
+                "sqr_edit_form": SqrSubmissionForm(auto_id="edit_%s") if (can_create or is_admin) else None,
+                "sqr_pm_edit_form": SqrTrackerEditForm(auto_id="pm_edit_%s") if is_pm else None,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "active_sqr_tab": active_tab,
                 "proposal_submissions": all_submissions,
@@ -1769,12 +1774,14 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
     success_url = reverse_lazy("hub:sqr")
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in ENGINEER_ACCESS_ROLES:
-            messages.error(request, "Only engineers can edit SQR submissions.")
+        if request.user.role not in ENGINEER_ACCESS_ROLES and request.user.role != User.Roles.ADMIN:
+            messages.error(request, "Only engineers or admins can edit SQR submissions.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
+        if self.request.user.role == User.Roles.ADMIN:
+            return SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer")
         return SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer").filter(engineer=self.request.user)
 
     def get_context_data(self, **kwargs):
@@ -1796,18 +1803,52 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("hub:sqr")
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in ENGINEER_ACCESS_ROLES:
-            messages.error(request, "Only engineers can delete SQR submissions.")
+        if request.user.role not in ENGINEER_ACCESS_ROLES and request.user.role != User.Roles.ADMIN:
+            messages.error(request, "Only engineers or admins can delete SQR submissions.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
+        if self.request.user.role == User.Roles.ADMIN:
+            return SqrSubmission.objects.all()
         return SqrSubmission.objects.filter(engineer=self.request.user)
 
     def form_valid(self, form):
         reference_code = self.object.reference_code
         response = super().form_valid(form)
         messages.success(self.request, f"SQR {reference_code} deleted.")
+        return response
+
+
+class SqrPmAdminUpdateView(LoginRequiredMixin, UpdateView):
+    """Update view for PM / Admin to edit tracker columns (N, Q, T, W, X, AA–AP)."""
+
+    model = SqrSubmission
+    form_class = SqrTrackerEditForm
+    template_name = "hub/sqr_submission_form.html"
+    success_url = reverse_lazy("hub:sqr")
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.role not in {User.Roles.PM_ESG, User.Roles.ADMIN}:
+            messages.error(request, "Only PM or admin users can edit tracker fields.")
+            return redirect("hub:sqr")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        if self.request.user.role == User.Roles.ADMIN:
+            return SqrSubmission.objects.all()
+        return SqrSubmission.objects.filter(pm_esg_reviewer=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["back_url"] = reverse("hub:sqr")
+        context["form_title"] = f"Edit Tracker – {self.object.reference_code}"
+        context["submit_label"] = "Save Changes"
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"SQR {self.object.reference_code} tracker updated.")
         return response
 
 

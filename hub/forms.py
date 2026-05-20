@@ -712,6 +712,107 @@ class SqrSubmissionForm(forms.ModelForm):
                 self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
 
 
+class SqrTrackerEditForm(forms.ModelForm):
+    """Edit form for PM / Admin — columns N, Q, T, W, X, AA–AP."""
+
+    pm_manhrs = forms.IntegerField(
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={
+            "class": "form-control",
+            "min": "0",
+            "step": "1",
+            "list": "pm-manhrs-datalist",
+            "placeholder": "e.g. 16, 24, 48",
+        }),
+        label="PM Man-hrs (N)",
+    )
+
+    discount_rate = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=100,
+        initial=0,
+        widget=forms.NumberInput(attrs={
+            "class": "form-control",
+            "min": "0",
+            "max": "100",
+            "step": "1",
+            "list": "discount-rate-datalist",
+            "placeholder": "0",
+        }),
+        label="Discount Rate % (Q)",
+    )
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "pm_manhrs",
+            "discount_rate",
+            "status",
+            "proposal_status",
+            "po_pnl_date",
+            "delivery_start_date",
+            "overall_status",
+            "delivery_health",
+            "delivery_progress",
+            "key_updates_risks",
+            "delivery_target_finish_date",
+            "delivery_actual_finish_date",
+            "delivery_completion_signed_date",
+            "warranty_end_date",
+            "revenue_source",
+            "revenue_reference_no",
+            "revenue_remarks",
+        ]
+        labels = {
+            "status": "SQR Status (T)",
+            "proposal_status": "Proposal Status (W)",
+            "po_pnl_date": "PO / PNL Date (X)",
+            "delivery_start_date": "Start Date (AA)",
+            "overall_status": "Overall Status (AB)",
+            "delivery_health": "Health Status (AC)",
+            "delivery_progress": "Overall Progress % (AD)",
+            "key_updates_risks": "Key Updates / Risks / Issues (AE)",
+            "delivery_target_finish_date": "Target Finish Date (AF)",
+            "delivery_actual_finish_date": "Actual Finish Date (AG)",
+            "delivery_completion_signed_date": "Completion Signed Date (AH)",
+            "warranty_end_date": "Warranty End Date (AI)",
+            "revenue_source": "Source (AM)",
+            "revenue_reference_no": "Reference No. (AN)",
+            "revenue_remarks": "Remarks (AP)",
+        }
+        widgets = {
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "proposal_status": forms.Select(attrs={"class": "form-select"}),
+            "po_pnl_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "delivery_start_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "overall_status": forms.Select(attrs={"class": "form-select"}),
+            "delivery_health": forms.Select(attrs={"class": "form-select"}),
+            "delivery_progress": forms.NumberInput(attrs={
+                "class": "form-control", "min": "0", "max": "100", "step": "1", "placeholder": "0–100",
+            }),
+            "key_updates_risks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Updates, risks, issues…"}),
+            "delivery_target_finish_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "delivery_actual_finish_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "delivery_completion_signed_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "warranty_end_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "Revenue source"}),
+            "revenue_reference_no": forms.TextInput(attrs={"class": "form-control", "placeholder": "Reference number"}),
+            "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Revenue remarks…"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add empty leading option to optional choice fields
+        for fname in ("proposal_status", "overall_status", "delivery_health"):
+            if fname in self.fields:
+                current = list(self.fields[fname].choices)
+                if not current or current[0][0] != "":
+                    self.fields[fname].choices = [("", "— Select —")] + current
+        # Set default discount_rate to 0 when displaying unbound form
+        if not self.is_bound:
+            self.initial.setdefault("discount_rate", 0)
 
 
 class SqrReviewForm(forms.ModelForm):

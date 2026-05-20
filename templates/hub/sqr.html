@@ -1,45 +1,121 @@
 {% extends "base.html" %}
 {% load tz %}
 {% block title %}SQR &middot; Request Hub{% endblock %}
+
 {% block content %}
+<style>
+/* ── SQR Tracker Wide Table ──────────────────────────────────────────── */
+.sqr-tracker-wrap {
+    overflow-x: auto;
+    border-radius: 0.5rem;
+    /* Ensure scroll container doesn't clip sticky shadows */
+    padding-bottom: 2px;
+}
+.sqr-tracker {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.78rem;
+    min-width: max-content;
+    table-layout: fixed; /* Honour explicit widths */
+}
+.sqr-tracker th,
+.sqr-tracker td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.4rem 0.65rem;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    vertical-align: middle;
+}
+
+/* ── Frozen columns A-E: explicit widths that match left offsets exactly ── */
+/* Width ladder:  A=110  B=130  C=144  D=160  E=160  → cumulative: 110 240 384 544 704 */
+.sqr-tracker .col-sticky-0 { position: sticky; left: 0px;   z-index: 3; width: 110px; min-width: 110px; max-width: 110px; }
+.sqr-tracker .col-sticky-1 { position: sticky; left: 110px; z-index: 3; width: 130px; min-width: 130px; max-width: 130px; }
+.sqr-tracker .col-sticky-2 { position: sticky; left: 240px; z-index: 3; width: 144px; min-width: 144px; max-width: 144px; }
+.sqr-tracker .col-sticky-3 { position: sticky; left: 384px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; }
+.sqr-tracker .col-sticky-4 { position: sticky; left: 544px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; }
+
+/* Elevated z-index for thead sticky cells so they stay above scrolling data cells */
+.sqr-tracker thead .col-sticky-0,
+.sqr-tracker thead .col-sticky-1,
+.sqr-tracker thead .col-sticky-2,
+.sqr-tracker thead .col-sticky-3,
+.sqr-tracker thead .col-sticky-4 { z-index: 5; }
+
+/* Opaque backgrounds for all sticky cells — parent backdrop-filter creates stacking context */
+.sqr-tracker thead .col-sticky-0,
+.sqr-tracker thead .col-sticky-1,
+.sqr-tracker thead .col-sticky-2,
+.sqr-tracker thead .col-sticky-3,
+.sqr-tracker thead .col-sticky-4 { background-color: #1a1f2e !important; }
+.sqr-tracker tbody tr td.col-sticky-0,
+.sqr-tracker tbody tr td.col-sticky-1,
+.sqr-tracker tbody tr td.col-sticky-2,
+.sqr-tracker tbody tr td.col-sticky-3,
+.sqr-tracker tbody tr td.col-sticky-4 { background-color: #151929 !important; }
+.sqr-tracker tbody tr:hover td.col-sticky-0,
+.sqr-tracker tbody tr:hover td.col-sticky-1,
+.sqr-tracker tbody tr:hover td.col-sticky-2,
+.sqr-tracker tbody tr:hover td.col-sticky-3,
+.sqr-tracker tbody tr:hover td.col-sticky-4 { background-color: #1d2236 !important; }
+
+/* Stage group header colours */
+.sqr-stage-frozen   { background-color: #111827 !important; color: #94a3b8; }
+.sqr-stage-proposal { background-color: #0c2d42; color: #7dd3fc; }
+.sqr-stage-delivery { background-color: #162616; color: #86efac; }
+.sqr-stage-revenue  { background-color: #27162b; color: #d8b4fe; }
+.sqr-stage-action   { background-color: #111827; color: #94a3b8; }
+
+/* Column letter row */
+.sqr-col-letter { background-color: #0d1117; color: #4b5563; font-size: 0.67rem; text-align: center; }
+/* Column name row */
+.sqr-col-name   { background-color: #1a1f2e; color: #e2e8f0; }
+
+/* Divider shadow after last frozen column (E) — mimics Excel frozen-pane separator */
+.sqr-tracker .col-sticky-border {
+    border-right: 2px solid #38bdf8 !important;
+    box-shadow: 4px 0 8px -2px rgba(0,0,0,0.6) !important;
+}
+
+/* Non-fixed-width cells that may wrap (used outside frozen area) */
+.sqr-tracker .cell-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: visible; }
+/* Scrollable columns — reasonable default min widths */
+.sqr-tracker th:not([class*="col-sticky"]),
+.sqr-tracker td:not([class*="col-sticky"]) { min-width: 90px; }
+.sqr-tracker th.sqr-col-wide,
+.sqr-tracker td.sqr-col-wide { min-width: 160px; }
+
+/* ── Light-mode overrides: sticky body cells must be light so dark text is readable ── */
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-4 { background-color: #f0f4f8 !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-color: #e2e8f0 !important; }
+</style>
+
 <div class="row g-4">
     <div class="col-12">
 
-        {# â”€â”€ Stage Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+        {# ── Header card ──────────────────────────────────────────────────── #}
         <div class="glass-card p-3 mb-3">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Service Qualification Report (SQR)</h2>
+                <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Services &amp; Revenue Tracker (SQR)</h2>
                 {% if can_create_sqr %}
                     <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">
                         <i class="bi bi-plus-lg me-1"></i>New Submission
                     </button>
                 {% endif %}
             </div>
-            {# Stage selector tabs #}
-            <div class="d-flex flex-wrap gap-2 mt-3">
-                <a href="?tab=proposal"
-                   class="btn btn-sm {% if active_sqr_tab == 'proposal' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                    <i class="bi bi-file-earmark-text me-1"></i>Stage 1 &middot; Proposal
-                </a>
-                {% if is_pm %}
-                    <a href="?tab=delivery"
-                       class="btn btn-sm {% if active_sqr_tab == 'delivery' %}btn-info text-white{% else %}btn-outline-secondary{% endif %}">
-                        <i class="bi bi-tools me-1"></i>Stage 2 &middot; Service Delivery
-                    </a>
-                    <a href="?tab=revenue-report"
-                       class="btn btn-sm {% if active_sqr_tab == 'revenue-report' %}btn-success text-white{% else %}btn-outline-secondary{% endif %}">
-                        <i class="bi bi-bar-chart-line-fill me-1"></i>Stage 3 &middot; Revenue &amp; Report
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-
-        {# â”€â”€ STAGE 1 &ndash; PROPOSAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
-        {% if active_sqr_tab == 'proposal' %}
-        <div class="glass-card p-4">
             {# Summary badges #}
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle fs-sm">Total: {{ proposal_counts.total }}</span>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Total: {{ proposal_counts.total }}</span>
                 <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
                     <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
                 </span>
@@ -47,126 +123,197 @@
                     <i class="bi bi-pencil-square me-1"></i>For Revision: {{ proposal_counts.for_revision }}
                 </span>
                 <span class="badge bg-success-subtle text-success border border-success-subtle">
-                    <i class="bi bi-check2-circle me-1"></i>Approved: {{ proposal_counts.approved }}
+                    <i class="bi bi-check2-circle me-1"></i>Reviewed: {{ proposal_counts.approved }}
                 </span>
                 {% if proposal_counts.submitted_pending %}
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
-                        <i class="bi bi-send me-1"></i>Submitted&ndash;Pending: {{ proposal_counts.submitted_pending }}
-                    </span>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                    <i class="bi bi-send me-1"></i>Submitted&ndash;Pending: {{ proposal_counts.submitted_pending }}
+                </span>
                 {% endif %}
                 {% if proposal_counts.negotiation %}
-                    <span class="badge bg-info-subtle text-info border border-info-subtle">
-                        <i class="bi bi-chat-dots me-1"></i>Negotiation: {{ proposal_counts.negotiation }}
-                    </span>
+                <span class="badge bg-info-subtle text-info border border-info-subtle">
+                    <i class="bi bi-chat-dots me-1"></i>Negotiation: {{ proposal_counts.negotiation }}
+                </span>
                 {% endif %}
                 {% if proposal_counts.closed_won %}
-                    <span class="badge bg-success-subtle text-success border border-success-subtle">
-                        <i class="bi bi-trophy me-1"></i>Closed Won: {{ proposal_counts.closed_won }}
-                    </span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                    <i class="bi bi-trophy me-1"></i>Closed Won: {{ proposal_counts.closed_won }}
+                </span>
                 {% endif %}
                 {% if proposal_counts.closed_lost %}
-                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
-                        <i class="bi bi-x-circle me-1"></i>Closed Lost: {{ proposal_counts.closed_lost }}
-                    </span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                    <i class="bi bi-x-circle me-1"></i>Closed Lost: {{ proposal_counts.closed_lost }}
+                </span>
                 {% endif %}
             </div>
+        </div>
 
-            <div class="table-responsive">
-                <table class="table table-hover table-sm align-middle">
-                    <thead class="table-dark">
+        {# ── Main Tracker Table ────────────────────────────────────────────── #}
+        <div class="glass-card p-2">
+            <div class="sqr-tracker-wrap">
+                <table class="sqr-tracker table-hover">
+                    <thead>
+                        {# Row 1: Stage group headers #}
                         <tr>
-                            <th class="text-nowrap">SQR</th>
-                            <th>Account</th>
-                            <th>Service</th>
-                            <th>People</th>
-                            <th class="text-end text-nowrap">SSE</th>
-                            <th class="text-end text-nowrap">PM</th>
-                            <th class="text-end text-nowrap">Managed Svc.</th>
-                            <th class="text-center text-nowrap">Discount</th>
-                            <th class="text-end text-nowrap">Total (PHP)</th>
-                            <th class="text-center text-nowrap">SQR Status</th>
-                            <th class="text-nowrap">Approval</th>
-                            <th class="text-nowrap">Valid Until</th>
-                            <th class="text-center text-nowrap">Deal Stage</th>
-                            <th class="text-end">Action</th>
+                            {# A-E: individual sticky frozen cells (each must be its own <th> for correct sticky anchoring) #}
+                            <th class="sqr-stage-frozen col-sticky-0"></th>
+                            <th class="sqr-stage-frozen col-sticky-1"></th>
+                            <th class="sqr-stage-frozen col-sticky-2"></th>
+                            <th class="sqr-stage-frozen col-sticky-3"></th>
+                            <th class="sqr-stage-frozen col-sticky-4 col-sticky-border"></th>
+                            {# F(RQ ID) + G-W = 18 cols, Proposal Stage #}
+                            <th colspan="18" class="sqr-stage-proposal text-center">
+                                <i class="bi bi-file-earmark-text me-1"></i>Proposal Stage
+                            </th>
+                            {# X-AK = cols 24-37 = 14 cols, Service Delivery Stage #}
+                            <th colspan="14" class="sqr-stage-delivery text-center">
+                                <i class="bi bi-tools me-1"></i>Service Delivery Stage
+                            </th>
+                            {# AL-AP = cols 38-42 = 5 cols, Revenue Stage #}
+                            <th colspan="5" class="sqr-stage-revenue text-center">
+                                <i class="bi bi-bar-chart-line-fill me-1"></i>Revenue Stage
+                            </th>
+                            {# Action col #}
+                            <th class="sqr-stage-action text-center">Action</th>
+                        </tr>
+                        {# Row 2: Column letters #}
+                        <tr class="sqr-col-letter">
+                            <th class="col-sticky-0">A</th>
+                            <th class="col-sticky-1">B</th>
+                            <th class="col-sticky-2">C</th>
+                            <th class="col-sticky-3">D</th>
+                            <th class="col-sticky-4 col-sticky-border">E</th>
+                            <th>F</th>
+                            <th>G</th><th>H</th><th>I</th><th>J</th><th>K</th>
+                            <th>L</th><th>M</th><th>N</th><th>O</th><th>P</th>
+                            <th>Q</th><th>R</th><th>S</th><th>T</th><th>U</th>
+                            <th>V</th><th>W</th>
+                            <th>X</th><th>Y</th><th>Z</th><th>AA</th><th>AB</th>
+                            <th>AC</th><th>AD</th><th>AE</th><th>AF</th><th>AG</th>
+                            <th>AH</th><th>AI</th><th>AJ</th><th>AK</th>
+                            <th>AL</th><th>AM</th><th>AN</th><th>AO</th><th>AP</th>
+                            <th>&mdash;</th>
+                        </tr>
+                        {# Row 3: Column names #}
+                        <tr class="sqr-col-name">
+                            <th class="col-sticky-0">SQR Date</th>
+                            <th class="col-sticky-1">SQR ID</th>
+                            <th class="col-sticky-2">Account Name</th>
+                            <th class="col-sticky-3">Service Description</th>
+                            <th class="col-sticky-4 col-sticky-border">Scope of Services</th>
+                            <th>RQ ID</th>
+                            <th class="sqr-col-wide">Group Name</th>
+                            <th class="sqr-col-wide">Account Manager</th>
+                            <th class="sqr-col-wide">Requester Name</th>
+                            <th class="sqr-col-wide">Approver Name</th>
+                            <th class="sqr-col-wide">SQR Doc. Ref. Link</th>
+                            <th>SSE Man-hrs</th>
+                            <th>SSE Amount</th>
+                            <th>PM Man-hrs</th>
+                            <th>PM Amount</th>
+                            <th class="sqr-col-wide">Managed Support Svc. Amt.</th>
+                            <th>Discount Rate</th>
+                            <th>Discount Amount</th>
+                            <th>Total Price</th>
+                            <th>SQR Status</th>
+                            <th>Approval Date</th>
+                            <th>Validity Due Date</th>
+                            <th>Proposal Status</th>
+                            <th>PO / PNL Date</th>
+                            <th class="sqr-col-wide">Assigned PM</th>
+                            <th class="sqr-col-wide">Assigned SSE</th>
+                            <th>Start Date</th>
+                            <th>Overall Status</th>
+                            <th>Health Status</th>
+                            <th>Overall Progress %</th>
+                            <th class="sqr-col-wide">Key Updates / Risks / Issues</th>
+                            <th>Target Finish Date</th>
+                            <th>Actual Finish Date</th>
+                            <th>Completion Signed Date</th>
+                            <th class="sqr-col-wide">Post-svc Warranty End Date</th>
+                            <th>Support Start Date</th>
+                            <th>Support End Date</th>
+                            <th>SI / Revenue Date</th>
+                            <th>Source</th>
+                            <th>Reference No.</th>
+                            <th>Revenue Status</th>
+                            <th class="sqr-col-wide">Remarks</th>
+                            <th class="text-center" style="min-width:80px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
                         <tr>
-                            <td class="text-nowrap">
-                                <div class="small text-muted">{{ item.created_at|timezone:"Asia/Manila"|date:"M d, Y" }}</div>
-                                <div class="fw-semibold">{{ item.reference_code }}</div>
-                            </td>
-                            <td style="min-width:130px;">
-                                <div class="fw-semibold">{{ item.customer_name }}</div>
-                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
-                            </td>
-                            <td style="min-width:160px;max-width:220px;">
-                                <div class="fw-semibold small">{{ item.project_title }}</div>
-                                {% if item.project_details %}<div class="small text-muted" style="white-space:normal;">{{ item.project_details|truncatechars:60 }}</div>{% endif %}
-                            </td>
-                            <td style="min-width:150px;">
-                                <div class="small"><span class="badge bg-secondary-subtle text-secondary me-1">Mgr</span>{{ item.customer_contact|default:"&ndash;" }}</div>
-                                <div class="small mt-1"><span class="badge bg-secondary-subtle text-secondary me-1">SSE</span>{{ item.engineer.get_full_name|default:item.engineer.username }}</div>
-                                <div class="small mt-1"><span class="badge bg-secondary-subtle text-secondary me-1">PM</span>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</div>
-                            </td>
-                            <td class="text-end text-nowrap">
-                                {% if item.sse_manhrs or item.sse_amount %}
-                                    {% if item.sse_manhrs %}<div class="small text-muted">{{ item.sse_manhrs }} hrs</div>{% endif %}
-                                    {% if item.sse_amount %}<div class="small fw-semibold">{{ item.sse_amount|floatformat:2 }}</div>{% endif %}
+                            {# A: SQR Date #}
+                            <td class="col-sticky-0 small">{{ item.created_at|date:"M d, Y" }}</td>
+                            {# B: SQR ID #}
+                            <td class="col-sticky-1 fw-semibold">{{ item.reference_code }}</td>
+                            {# C: Account Name #}
+                            <td class="col-sticky-2">{{ item.customer_name }}</td>
+                            {# D: Service Description #}
+                            <td class="col-sticky-3">{{ item.project_title }}</td>
+                            {# E: Scope of Services #}
+                            <td class="col-sticky-4 col-sticky-border">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</td>
+                            {# F: RQ ID (no direct field — placeholder; scrollable) #}
+                            <td class="small text-muted">&ndash;</td>
+                            {# G: Group Name #}
+                            <td class="small">{{ item.customer_company|default:"&ndash;" }}</td>
+                            {# H: Account Manager #}
+                            <td class="small">{{ item.customer_contact|default:"&ndash;" }}</td>
+                            {# I: Requester Name #}
+                            <td class="small">{% if item.engineer %}{{ item.engineer.get_full_name|default:item.engineer.username }}{% else %}&ndash;{% endif %}</td>
+                            {# J: Approver Name #}
+                            <td class="small">{% if item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
+                            {# K: SQR Doc. Ref. Link #}
+                            <td class="small">
+                                {% if item.documentation_link_list %}
+                                    {% for link in item.documentation_link_list %}
+                                        <a href="{{ link }}" target="_blank" rel="noopener" class="text-info d-block text-truncate" style="max-width:120px;" title="{{ link }}">
+                                            <i class="bi bi-link-45deg"></i> Link
+                                        </a>
+                                    {% endfor %}
                                 {% else %}
-                                    <span class="text-muted small">&ndash;</span>
+                                    <span class="text-muted">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end text-nowrap">
-                                {% if item.pm_manhrs or item.pm_amount %}
-                                    {% if item.pm_manhrs %}<div class="small text-muted">{{ item.pm_manhrs }} hrs</div>{% endif %}
-                                    {% if item.pm_amount %}<div class="small fw-semibold">{{ item.pm_amount|floatformat:2 }}</div>{% endif %}
-                                {% else %}
-                                    <span class="text-muted small">&ndash;</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-nowrap">
-                                {% if item.managed_support_amount %}
-                                    <div class="small fw-semibold">{{ item.managed_support_amount|floatformat:2 }}</div>
-                                {% else %}
-                                    <span class="text-muted small">&ndash;</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center text-nowrap">
-                                {% if item.discount_rate %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ item.discount_rate }}%</span>
-                                    {% if item.computed_discount_amount %}<div class="small text-muted">&minus;{{ item.computed_discount_amount|floatformat:2 }}</div>{% endif %}
-                                {% else %}
-                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No Disc.</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-nowrap">
-                                {% if item.computed_total_price %}
-                                    <div class="fw-bold text-success">{{ item.computed_total_price|floatformat:2 }}</div>
-                                {% elif item.quotation_total_price %}
-                                    <div class="fw-bold">{{ item.quotation_total_price|floatformat:2 }}</div>
-                                {% else %}
-                                    <span class="text-muted small">&ndash;</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                {% if item.status == 'reviewed' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2 me-1"></i>Approved</span>
+                            {# L: SSE Man-hrs #}
+                            <td class="text-end small">{{ item.sse_manhrs|default:"&ndash;" }}</td>
+                            {# M: SSE Amount #}
+                            <td class="text-end small">{% if item.sse_amount %}{{ item.sse_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            {# N: PM Man-hrs #}
+                            <td class="text-end small">{{ item.pm_manhrs|default:"&ndash;" }}</td>
+                            {# O: PM Amount #}
+                            <td class="text-end small">{% if item.pm_amount %}{{ item.pm_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            {# P: Managed Support Service Amount #}
+                            <td class="text-end small">{% if item.managed_support_amount %}{{ item.managed_support_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            {# Q: Discount Rate #}
+                            <td class="text-end small">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</td>
+                            {# R: Discount Amount #}
+                            <td class="text-end small">{% if item.computed_discount_amount %}{{ item.computed_discount_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            {# S: Total Price #}
+                            <td class="text-end small fw-semibold">{% if item.computed_total_price %}{{ item.computed_total_price|floatformat:2 }}{% elif item.quotation_total_price %}{{ item.quotation_total_price|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            {# T: SQR Status #}
+                            <td>
+                                {% if item.status == 'for_processing' %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
                                 {% elif item.status == 'for_revision' %}
-                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-pencil me-1"></i>For Revision</span>
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
+                                {% elif item.status == 'reviewed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
                                 {% else %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-hourglass me-1"></i>For Processing</span>
+                                    <span class="text-muted small">{{ item.status }}</span>
                                 {% endif %}
                             </td>
-                            <td class="small text-nowrap">{% if item.reviewed_at %}{{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y" }}{% else %}&ndash;{% endif %}</td>
-                            <td class="small text-nowrap">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            <td class="text-center text-nowrap">
+                            {# U: Approval Date #}
+                            <td class="small">{{ item.reviewed_at|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# V: Validity Due Date #}
+                            <td class="small">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# W: Proposal Status #}
+                            <td>
                                 {% if item.proposal_status == 'submitted_pending' %}
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-send me-1"></i>Submitted</span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted&ndash;Pending</span>
                                 {% elif item.proposal_status == 'negotiation_review' %}
-                                    <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-chat-dots me-1"></i>Negotiation</span>
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>
                                 {% elif item.proposal_status == 'closed_won' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>
                                 {% elif item.proposal_status == 'closed_lost' %}
@@ -175,106 +322,16 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">
-                                {% if request.user.role == 'engineer' and item.engineer_id == request.user.id %}
-                                    <div class="d-flex gap-1 justify-content-end">
-                                        {% if item.status != 'reviewed' %}
-                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
-                                        {% endif %}
-                                        <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
-                                    </div>
-                                {% elif can_review_sqr %}
-                                    <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
-                                        <i class="bi bi-pencil-square me-1"></i>Manage
-                                    </a>
-                                {% else %}
-                                    <span class="text-muted small">&ndash;</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="14" class="text-center text-muted py-5">
-                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-
-        {# â”€â”€ STAGE 2 &ndash; SERVICE DELIVERY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
-        {% if active_sqr_tab == 'delivery' %}
-        <div class="glass-card p-4">
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                {% for key, label in delivery_health_choices %}
-                    {% with cnt=delivery_health_counts|default_if_none:0 %}
-                    {% endwith %}
-                {% endfor %}
-                {% if delivery_health_counts.on_track %}
-                    <span class="badge bg-success-subtle text-success border border-success-subtle">
-                        <i class="bi bi-check-circle me-1"></i>On Track: {{ delivery_health_counts.on_track }}
-                    </span>
-                {% endif %}
-                {% if delivery_health_counts.off_track %}
-                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
-                        <i class="bi bi-exclamation-triangle me-1"></i>Off Track: {{ delivery_health_counts.off_track }}
-                    </span>
-                {% endif %}
-                {% if delivery_health_counts.at_risk %}
-                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
-                        <i class="bi bi-shield-exclamation me-1"></i>At Risk: {{ delivery_health_counts.at_risk }}
-                    </span>
-                {% endif %}
-                {% if delivery_health_counts.completed %}
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
-                        <i class="bi bi-patch-check me-1"></i>Completed: {{ delivery_health_counts.completed }}
-                    </span>
-                {% endif %}
-                {% if delivery_health_counts.cancelled %}
-                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
-                        <i class="bi bi-slash-circle me-1"></i>Cancelled: {{ delivery_health_counts.cancelled }}
-                    </span>
-                {% endif %}
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-hover table-sm align-middle text-nowrap">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>SQR ID</th>
-                            <th>Account</th>
-                            <th>PO/PNL Date</th>
-                            <th>Assigned PM</th>
-                            <th>Assigned SSE</th>
-                            <th>Start Date</th>
-                            <th>Overall Status</th>
-                            <th>Health</th>
-                            <th>Progress %</th>
-                            <th style="min-width:160px;white-space:normal;">Key Updates / Risks</th>
-                            <th>Target Finish</th>
-                            <th>Actual Finish</th>
-                            <th>Completion Signed</th>
-                            <th>Warranty End</th>
-                            <th>Support Start</th>
-                            <th>Support End</th>
-                            <th class="text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in delivery_submissions %}
-                        <tr>
-                            <td class="fw-semibold">{{ item.reference_code }}</td>
-                            <td>
-                                <div class="fw-semibold">{{ item.customer_name }}</div>
-                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
-                            </td>
+                            {# X: PO/PNL Date — delivery stage, PM only #}
+                            {% if is_pm %}
                             <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# Y: Assigned PM #}
                             <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</td>
+                            {# Z: Assigned SSE #}
                             <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
+                            {# AA: Start Date #}
                             <td class="small">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AB: Overall Status #}
                             <td>
                                 {% if item.overall_status == 'on_hold' %}
                                     <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
@@ -290,6 +347,7 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
+                            {# AC: Health Status #}
                             <td>
                                 {% if item.delivery_health == 'on_track' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>
@@ -305,10 +363,11 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
+                            {# AD: Overall Progress % #}
                             <td style="min-width:120px;">
                                 {% if item.delivery_progress is not None %}
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="progress flex-grow-1" style="height:8px;">
+                                        <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
                                             <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
                                                  role="progressbar"
                                                  style="width:{{ item.delivery_progress }}%"
@@ -321,8 +380,11 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td style="min-width:160px;max-width:200px;white-space:normal;" class="small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            {# AE: Key Updates/Risks/Issues #}
+                            <td class="cell-wrap small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            {# AF: Target Finish Date #}
                             <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AG: Actual Finish Date #}
                             <td class="small">
                                 {% if item.delivery_actual_finish_date %}
                                     {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
@@ -334,169 +396,21 @@
                                     <span class="text-muted">&ndash;</span>
                                 {% endif %}
                             </td>
+                            {# AH: Completion Signed Date #}
                             <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AI: Warranty End Date #}
                             <td class="small">{{ item.warranty_end_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AJ: Managed Support Start Date #}
                             <td class="small">{{ item.managed_support_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AK: Managed Support End Date #}
                             <td class="small">{{ item.managed_support_end_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            <td class="text-end">
-                                <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
-                                    <i class="bi bi-pencil-square me-1"></i>Manage
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="17" class="text-center text-muted py-5">
-                                <i class="bi bi-tools fs-2 d-block mb-2"></i>No Closed Won projects in Service Delivery yet.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-
-        {# â”€â”€ STAGE 3 &ndash; REVENUE & REPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
-        {% if active_sqr_tab == 'revenue-report' %}
-        <div class="row g-3 mb-4">
-            {# Summary Cards #}
-            <div class="col-sm-6 col-xl-3">
-                <div class="glass-card p-3 text-center h-100">
-                    <div class="text-muted small mb-1"><i class="bi bi-trophy-fill me-1 text-success"></i>Closed Won</div>
-                    <div class="h3 fw-bold text-success">{{ revenue_data.won_count }}</div>
-                    <div class="small text-muted">opportunities</div>
-                    {% if revenue_data.won_total_price %}
-                        <div class="mt-2 small fw-semibold text-success">PHP {{ revenue_data.won_total_price|floatformat:2 }}</div>
-                        <div class="small text-muted">Discounted: PHP {{ revenue_data.won_discounted_total|floatformat:2 }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="col-sm-6 col-xl-3">
-                <div class="glass-card p-3 text-center h-100">
-                    <div class="text-muted small mb-1"><i class="bi bi-x-circle-fill me-1 text-danger"></i>Closed Lost</div>
-                    <div class="h3 fw-bold text-danger">{{ revenue_data.lost_count }}</div>
-                    <div class="small text-muted">opportunities</div>
-                    {% if revenue_data.lost_total_price %}
-                        <div class="mt-2 small fw-semibold text-danger">PHP {{ revenue_data.lost_total_price|floatformat:2 }}</div>
-                        <div class="small text-muted">estimated value lost</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="col-sm-6 col-xl-3">
-                <div class="glass-card p-3 text-center h-100">
-                    <div class="text-muted small mb-1"><i class="bi bi-chat-dots-fill me-1 text-info"></i>In Negotiation</div>
-                    <div class="h3 fw-bold text-info">{{ revenue_data.negotiation_count }}</div>
-                    <div class="small text-muted">active opportunities</div>
-                </div>
-            </div>
-            <div class="col-sm-6 col-xl-3">
-                <div class="glass-card p-3 text-center h-100">
-                    <div class="text-muted small mb-1"><i class="bi bi-percent me-1 text-primary"></i>Win Rate</div>
-                    <div class="h3 fw-bold text-primary">{{ revenue_data.win_rate }}%</div>
-                    <div class="small text-muted">of tracked deals</div>
-                </div>
-            </div>
-        </div>
-
-        {# Top Won Opportunities #}
-        {% if revenue_data.top_won %}
-        <div class="glass-card p-4 mb-4">
-            <h3 class="h6 mb-3"><i class="bi bi-trophy me-2 text-success"></i>Top Won Opportunities</h3>
-            {% for item in revenue_data.top_won %}
-            <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <div>
-                        <span class="fw-semibold">{{ item.reference_code }}</span>
-                        <span class="text-muted ms-2">{{ item.customer_name }}</span>
-                        {% if item.customer_company %}<span class="badge bg-secondary-subtle text-secondary ms-1 small">{{ item.customer_company }}</span>{% endif %}
-                    </div>
-                    <div class="text-end text-nowrap">
-                        {% if item.quotation_total_price %}
-                            <div class="fw-semibold text-success">PHP {{ item.quotation_total_price|floatformat:2 }}</div>
-                            <div class="small text-muted">Disc: PHP {{ item.discounted_price|floatformat:2 }}</div>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="small text-muted">{{ item.project_title }} &middot; {{ item.project_details }}</div>
-                {% if item.quotation_total_price and revenue_data.won_total_price %}
-                    <div class="progress mt-1" style="height:6px;" title="{{ item.reference_code }} revenue share">
-                        {% widthratio item.quotation_total_price revenue_data.won_total_price 100 as share_pct %}
-                        <div class="progress-bar bg-success" role="progressbar" style="width:{{ share_pct }}%"></div>
-                    </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        {# Lost Opportunities #}
-        {% if revenue_data.lost_submissions %}
-        <div class="glass-card p-4">
-            <h3 class="h6 mb-3"><i class="bi bi-x-circle me-2 text-danger"></i>Lost Opportunities</h3>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle table-sm">
-                    <thead>
-                        <tr>
-                            <th>SQR ID</th>
-                            <th>Customer</th>
-                            <th>Service</th>
-                            <th class="text-end">Quoted Value (PHP)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in revenue_data.lost_submissions %}
-                        <tr>
-                            <td class="fw-semibold">{{ item.reference_code }}</td>
-                            <td>{{ item.customer_name }}{% if item.customer_company %} <span class="text-muted small">&middot; {{ item.customer_company }}</span>{% endif %}</td>
-                            <td class="small text-muted">{{ item.project_title }}</td>
-                            <td class="text-end text-danger">
-                                {% if item.quotation_total_price %}{{ item.quotation_total_price|floatformat:2 }}{% else %}&ndash;{% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-
-        {% if not revenue_data.top_won and not revenue_data.lost_submissions %}
-        <div class="glass-card p-5 text-center text-muted">
-            <i class="bi bi-bar-chart-line fs-2 d-block mb-2"></i>No tracked deal data yet. Deal statuses will appear here once opportunities are marked Closed Won or Closed Lost.
-        </div>
-        {% endif %}
-
-        {# Revenue Tracking Table: columns AL-AP #}
-        <div class="glass-card p-4 mt-4">
-            <h3 class="h6 mb-3"><i class="bi bi-receipt me-2 text-success"></i>Revenue Records (SI / Revenue Tracking)</h3>
-            <div class="table-responsive">
-                <table class="table table-hover table-sm align-middle text-nowrap">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>SQR ID</th>
-                            <th>Account</th>
-                            <th>Service</th>
-                            <th>SI/Revenue Date</th>
-                            <th>Source</th>
-                            <th>Reference No.</th>
-                            <th>Revenue Status</th>
-                            <th style="min-width:160px;white-space:normal;">Remarks</th>
-                            <th class="text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in revenue_data.revenue_submissions %}
-                        <tr>
-                            <td class="fw-semibold">{{ item.reference_code }}</td>
-                            <td>
-                                <div class="fw-semibold">{{ item.customer_name }}</div>
-                                {% if item.customer_company %}<div class="small text-muted">{{ item.customer_company }}</div>{% endif %}
-                            </td>
-                            <td style="max-width:180px;white-space:normal;" class="small">{{ item.project_title }}</td>
+                            {# AL: SI/Revenue Date #}
                             <td class="small">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AM: Source #}
                             <td class="small">{{ item.revenue_source|default:"&ndash;" }}</td>
+                            {# AN: Reference No. #}
                             <td class="small">{{ item.revenue_reference_no|default:"&ndash;" }}</td>
+                            {# AO: Revenue Status #}
                             <td>
                                 {% if item.revenue_status == 'invoiced' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Invoiced</span>
@@ -508,17 +422,135 @@
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
                             </td>
-                            <td style="min-width:160px;max-width:220px;white-space:normal;" class="small">{{ item.revenue_remarks|truncatechars:80|default:"&ndash;" }}</td>
-                            <td class="text-end">
-                                <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">
-                                    <i class="bi bi-pencil-square me-1"></i>Manage
-                                </a>
+                            {# AP: Remarks #}
+                            <td class="cell-wrap small">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</td>
+                            {% else %}
+                            {# Non-PM: show 14 empty delivery+revenue cells #}
+                            <td class="text-muted text-center small" colspan="14"><span class="opacity-25">&middot;&middot;&middot;</span></td>
+                            <td class="text-muted text-center small" colspan="5"><span class="opacity-25">&middot;&middot;&middot;</span></td>
+                            {% endif %}
+                            {# Action col #}
+                            <td class="text-center" style="min-width:100px;">
+                                {% if is_admin %}
+                                    {# Admin: SSE edit + Tracker edit + Delete #}
+                                    <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary py-0 px-2 sqr-open-edit-btn"
+                                                title="Edit SSE Fields"
+                                                data-pk="{{ item.pk }}"
+                                                data-url="{% url 'hub:sqr-edit' item.pk %}"
+                                                data-customer-name="{{ item.customer_name }}"
+                                                data-customer-company="{{ item.customer_company|default:'' }}"
+                                                data-customer-contact="{{ item.customer_contact|default:'' }}"
+                                                data-project-title="{{ item.project_title }}"
+                                                data-project-details="{{ item.project_details|default:'' }}"
+                                                data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
+                                                data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                                data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
+                                                data-remarks="{{ item.remarks|default:'' }}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info py-0 px-2 sqr-open-pm-edit-btn"
+                                                title="Edit Tracker"
+                                                data-pk="{{ item.pk }}"
+                                                data-url="{% url 'hub:sqr-pm-edit' item.pk %}"
+                                                data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                                data-sse-amount="{{ item.sse_amount|default:'' }}"
+                                                data-pm-manhrs="{{ item.pm_manhrs|default:'' }}"
+                                                data-discount-rate="{{ item.discount_rate|default:'0' }}"
+                                                data-status="{{ item.status|default:'' }}"
+                                                data-proposal-status="{{ item.proposal_status|default:'' }}"
+                                                data-po-pnl-date="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"
+                                                data-delivery-start-date="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"
+                                                data-overall-status="{{ item.overall_status|default:'' }}"
+                                                data-delivery-health="{{ item.delivery_health|default:'' }}"
+                                                data-delivery-progress="{{ item.delivery_progress|default:'' }}"
+                                                data-key-updates-risks="{{ item.key_updates_risks|default:'' }}"
+                                                data-delivery-target-finish-date="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"
+                                                data-delivery-actual-finish-date="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}"
+                                                data-delivery-completion-signed-date="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"
+                                                data-warranty-end-date="{{ item.warranty_end_date|date:'Y-m-d'|default:'' }}"
+                                                data-revenue-source="{{ item.revenue_source|default:'' }}"
+                                                data-revenue-reference-no="{{ item.revenue_reference_no|default:'' }}"
+                                                data-revenue-remarks="{{ item.revenue_remarks|default:'' }}">
+                                            <i class="bi bi-sliders"></i>
+                                        </button>
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                           href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                {% elif is_pm %}
+                                    {# PM: Tracker edit + Delete #}
+                                    <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info py-0 px-2 sqr-open-pm-edit-btn"
+                                                title="Edit Tracker"
+                                                data-pk="{{ item.pk }}"
+                                                data-url="{% url 'hub:sqr-pm-edit' item.pk %}"
+                                                data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                                data-sse-amount="{{ item.sse_amount|default:'' }}"
+                                                data-pm-manhrs="{{ item.pm_manhrs|default:'' }}"
+                                                data-discount-rate="{{ item.discount_rate|default:'0' }}"
+                                                data-status="{{ item.status|default:'' }}"
+                                                data-proposal-status="{{ item.proposal_status|default:'' }}"
+                                                data-po-pnl-date="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"
+                                                data-delivery-start-date="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"
+                                                data-overall-status="{{ item.overall_status|default:'' }}"
+                                                data-delivery-health="{{ item.delivery_health|default:'' }}"
+                                                data-delivery-progress="{{ item.delivery_progress|default:'' }}"
+                                                data-key-updates-risks="{{ item.key_updates_risks|default:'' }}"
+                                                data-delivery-target-finish-date="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"
+                                                data-delivery-actual-finish-date="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}"
+                                                data-delivery-completion-signed-date="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"
+                                                data-warranty-end-date="{{ item.warranty_end_date|date:'Y-m-d'|default:'' }}"
+                                                data-revenue-source="{{ item.revenue_source|default:'' }}"
+                                                data-revenue-reference-no="{{ item.revenue_reference_no|default:'' }}"
+                                                data-revenue-remarks="{{ item.revenue_remarks|default:'' }}">
+                                            <i class="bi bi-sliders"></i>
+                                        </button>
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                           href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                {% elif request.user.role == 'engineer' and item.engineer_id == request.user.id %}
+                                    {% if item.status != 'reviewed' %}
+                                        <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-primary py-0 px-2 sqr-open-edit-btn"
+                                                    title="Edit"
+                                                    data-pk="{{ item.pk }}"
+                                                    data-url="{% url 'hub:sqr-edit' item.pk %}"
+                                                    data-customer-name="{{ item.customer_name }}"
+                                                    data-customer-company="{{ item.customer_company|default:'' }}"
+                                                    data-customer-contact="{{ item.customer_contact|default:'' }}"
+                                                    data-project-title="{{ item.project_title }}"
+                                                    data-project-details="{{ item.project_details|default:'' }}"
+                                                    data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
+                                                    data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                                    data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
+                                                    data-remarks="{{ item.remarks|default:'' }}">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                               href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    {% else %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem;">Reviewed</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">&ndash;</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
-                                <i class="bi bi-receipt fs-2 d-block mb-2"></i>No approved SQRs yet. Revenue records will appear here once SQRs are Approved.
+                            <td colspan="43" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
                             </td>
                         </tr>
                         {% endfor %}
@@ -526,12 +558,11 @@
                 </table>
             </div>
         </div>
-        {% endif %}
 
     </div>
 </div>
 
-{# â”€â”€ New SQR Submission Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+{# ── New SQR Submission Modal ──────────────────────────────────────────── #}
 {% if can_create_sqr %}
 <div class="requestor-modal" id="create-sqr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
     <div class="requestor-modal__backdrop" id="create-sqr-backdrop"></div>
@@ -653,6 +684,373 @@
         }
 
         updateMembers(deptSel.value);
+    })();
+</script>
+{% endif %}
+
+{# ── Edit SQR Submission Modal ────────────────────────────────────────── #}
+{% if sqr_edit_form %}
+<div class="requestor-modal" id="edit-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="edit-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="edit-sqr-title">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="edit-sqr-title"><i class="bi bi-pencil-square me-2"></i>Edit SQR Submission</h2>
+            <button type="button" class="btn-close" id="close-edit-sqr-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <form id="edit-sqr-form" method="post" action="" novalidate>
+                {% csrf_token %}
+                {% for field in sqr_edit_form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    </div>
+                    {% if field.name == 'sse_manhrs' %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">SSE Amount (M = L × 2,000) — computed</label>
+                        <input type="text" id="edit-sse-amount-display" readonly class="form-control" placeholder="—">
+                        <div class="form-text">Auto-calculated: SSE Man-hrs × ₱2,000.</div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-edit-sqr-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Edit SQR Modal ────────────────────────────────────────────────────
+    (function () {
+        var editModal  = document.getElementById('edit-sqr-modal');
+        if (!editModal) return;
+        var editForm   = document.getElementById('edit-sqr-form');
+        var backdrop   = document.getElementById('edit-sqr-backdrop');
+        var closeBtn   = document.getElementById('close-edit-sqr-btn');
+        var cancelBtn  = document.getElementById('cancel-edit-sqr-btn');
+        var activeRow  = null;
+
+        function setVal(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.value = (val != null) ? String(val) : '';
+        }
+
+        function openEditModal(btn) {
+            activeRow = btn.closest('tr');
+            editForm.action = btn.dataset.url;
+
+            // Set department & rebuild member options with preserved contact
+            var deptSel   = document.getElementById('edit_customer_company');
+            var memberSel = document.getElementById('edit_customer_contact');
+            var contact   = btn.dataset.customerContact || '';
+            if (deptSel) {
+                deptSel.value = btn.dataset.customerCompany || '';
+                if (typeof window.rebuildEditMembers === 'function') {
+                    window.rebuildEditMembers(deptSel.value, contact);
+                }
+            }
+            if (memberSel) memberSel.value = contact;
+
+            setVal('edit_customer_name',   btn.dataset.customerName);
+            setVal('edit_project_title',   btn.dataset.projectTitle);
+            setVal('edit_project_details', btn.dataset.projectDetails);
+            setVal('edit_pm_esg_reviewer', btn.dataset.pmEsgReviewer);
+            setVal('edit_sse_manhrs',      btn.dataset.sseManhrs);
+            setVal('edit_sqr_folder_link', btn.dataset.sqrFolderLink);
+            setVal('edit_remarks',         btn.dataset.remarks);
+
+            // Refresh live SSE Amount (M) display on open
+            var mDisp = document.getElementById('edit-sse-amount-display');
+            if (mDisp) {
+                var sv2 = parseFloat(btn.dataset.sseManhrs);
+                mDisp.value = isNaN(sv2) ? '' : (sv2 * 2000).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+            }
+
+            // Re-evaluate SSE manhrs visibility
+            var scopeSel = document.getElementById('edit_project_details');
+            if (scopeSel) scopeSel.dispatchEvent(new Event('change'));
+
+            // Show modal
+            editModal.classList.add('requestor-modal--visible');
+            editModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('requestor-modal-open');
+
+            // Reveal delete button in the row
+            if (activeRow) {
+                var delBtn = activeRow.querySelector('.sqr-delete-btn');
+                if (delBtn) delBtn.classList.remove('d-none');
+            }
+        }
+
+        function closeEditModal() {
+            editModal.classList.remove('requestor-modal--visible');
+            editModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+            if (activeRow) {
+                var delBtn = activeRow.querySelector('.sqr-delete-btn');
+                if (delBtn) delBtn.classList.add('d-none');
+            }
+            activeRow = null;
+        }
+
+        document.querySelectorAll('.sqr-open-edit-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () { openEditModal(this); });
+        });
+        if (closeBtn)  closeBtn.addEventListener('click', closeEditModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+        if (backdrop)  backdrop.addEventListener('click', closeEditModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && editModal.classList.contains('requestor-modal--visible')) closeEditModal();
+        });
+    })();
+
+    // ── Dept → Account Manager filtering for EDIT form ───────────────────
+    (function () {
+        var deptSel    = document.getElementById('edit_customer_company');
+        var memberSel  = document.getElementById('edit_customer_contact');
+        var approverSel = document.getElementById('edit_pm_esg_reviewer');
+        var scopeSel   = document.getElementById('edit_project_details');
+
+        if (!deptSel) return;
+
+        // Read data maps — edit_customer_company carries the same attrs as id_customer_company
+        var memberMap = {}, approverMap = {}, sseScopes = [];
+        try { memberMap   = JSON.parse(deptSel.dataset.memberMap   || '{}'); } catch (e) {}
+        try { approverMap = JSON.parse(deptSel.dataset.approverMap || '{}'); } catch (e) {}
+        try { sseScopes   = JSON.parse(deptSel.dataset.sseScopes   || '[]'); } catch (e) {}
+
+        // Exposed so openEditModal() can call with a preserved contact value
+        window.rebuildEditMembers = function (dept, preserve) {
+            if (!memberSel) return;
+            memberSel.innerHTML = '';
+            var empty = document.createElement('option');
+            empty.value = ''; empty.textContent = '— Select Member —';
+            memberSel.appendChild(empty);
+            var members = memberMap[dept] || [];
+            members.forEach(function (m) {
+                var opt = document.createElement('option');
+                opt.value = m; opt.textContent = m;
+                if (m === preserve) opt.selected = true;
+                memberSel.appendChild(opt);
+            });
+            // If preserved value is not in the list, append it so it displays correctly
+            if (preserve && preserve !== '' && !members.includes(preserve)) {
+                var opt = document.createElement('option');
+                opt.value = preserve; opt.textContent = preserve; opt.selected = true;
+                memberSel.appendChild(opt);
+            }
+        };
+
+        deptSel.addEventListener('change', function () {
+            window.rebuildEditMembers(this.value, '');
+            if (approverSel && approverMap[this.value]) approverSel.value = approverMap[this.value];
+        });
+
+        function updateEditSseManhrs() {
+            var sseManhrsInput = document.getElementById('edit_sse_manhrs');
+            if (!sseManhrsInput) return;
+            var row = sseManhrsInput.closest('.mb-3');
+            if (!row) return;
+            var show = scopeSel ? sseScopes.indexOf(scopeSel.value) !== -1 : false;
+            row.style.display = show ? '' : 'none';
+        }
+        if (scopeSel) scopeSel.addEventListener('change', updateEditSseManhrs);
+
+        // Live SSE Amount (M = L × 2 000) display inside SSE edit modal
+        (function () {
+            var sseInput = document.getElementById('edit_sse_manhrs');
+            var display  = document.getElementById('edit-sse-amount-display');
+            function refresh() {
+                if (!display) return;
+                var v = parseFloat(sseInput ? sseInput.value : '');
+                display.value = isNaN(v) ? '' : (v * 2000).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+            }
+            if (sseInput) sseInput.addEventListener('input', refresh);
+        })();
+    })();
+</script>
+{% endif %}
+
+{# ── datalists (shared) ─────────────────────────────────────────────────── #}
+<datalist id="pm-manhrs-datalist">
+    <option value="16">
+    <option value="24">
+    <option value="48">
+</datalist>
+<datalist id="discount-rate-datalist">
+    <option value="0">
+    <option value="5">
+    <option value="10">
+    <option value="15">
+</datalist>
+
+{# ── PM / Admin Tracker Edit Modal ──────────────────────────────────────── #}
+{% if sqr_pm_edit_form %}
+<div class="requestor-modal" id="pm-admin-edit-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="pm-admin-edit-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="pm-admin-edit-sqr-title">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="pm-admin-edit-sqr-title">
+                <i class="bi bi-sliders me-2"></i>Edit SQR Tracker
+            </h2>
+            <button type="button" class="btn-close" id="close-pm-admin-edit-sqr-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            {# Read-only computed row for context #}
+            <div class="row g-2 mb-3 p-2 rounded" style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);">
+                <div class="col-6">
+                    <label class="form-label small fw-semibold mb-1">SSE Man-hrs (L)</label>
+                    <input type="text" id="pm-edit-sse-manhrs-display" readonly class="form-control form-control-sm" placeholder="—">
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-semibold mb-1">SSE Amount (M = L×2,000)</label>
+                    <input type="text" id="pm-edit-sse-amount-display" readonly class="form-control form-control-sm" placeholder="—">
+                </div>
+            </div>
+            <form id="pm-admin-edit-sqr-form" method="post" action="" novalidate>
+                {% csrf_token %}
+                {# PM Manhrs (N) with live PM Amount (O) display #}
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        {% with field=sqr_pm_edit_form.pm_manhrs %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% endwith %}
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold mb-1">PM Amount (O = N×3,000)</label>
+                        <input type="text" id="pm-edit-pm-amount-display" readonly class="form-control" placeholder="—">
+                    </div>
+                </div>
+                {# Discount Rate (Q) #}
+                {% with field=sqr_pm_edit_form.discount_rate %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    <div class="input-group">
+                        {{ field }}
+                        <span class="input-group-text">%</span>
+                    </div>
+                    <div class="form-text">System default: 0%. Options: 0, 5, 10, 15 or enter manually.</div>
+                </div>
+                {% endwith %}
+                {# Remaining fields #}
+                {% for field in sqr_pm_edit_form %}
+                    {% if field.name != 'pm_manhrs' and field.name != 'discount_rate' %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-pm-admin-edit-sqr-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── PM / Admin Tracker Edit Modal ─────────────────────────────────────
+    (function () {
+        var modal     = document.getElementById('pm-admin-edit-sqr-modal');
+        if (!modal) return;
+        var form      = document.getElementById('pm-admin-edit-sqr-form');
+        var backdrop  = document.getElementById('pm-admin-edit-sqr-backdrop');
+        var closeBtn  = document.getElementById('close-pm-admin-edit-sqr-btn');
+        var cancelBtn = document.getElementById('cancel-pm-admin-edit-sqr-btn');
+        var activeRow = null;
+
+        function sv(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.value = (val !== undefined && val !== null) ? String(val) : '';
+        }
+
+        function fmt(n) {
+            return isNaN(n) ? '' : n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        function refreshPmAmount() {
+            var pmInput  = document.getElementById('pm_edit_pm_manhrs');
+            var display  = document.getElementById('pm-edit-pm-amount-display');
+            if (!display) return;
+            var v = parseFloat(pmInput ? pmInput.value : '');
+            display.value = isNaN(v) ? '' : fmt(v * 3000);
+        }
+
+        function openModal(btn) {
+            activeRow = btn.closest('tr');
+            form.action = btn.dataset.url;
+
+            // Read-only SSE context (L and M)
+            var sseManhrs = btn.dataset.sseManhrs;
+            sv('pm-edit-sse-manhrs-display', sseManhrs);
+            var sseAmt = parseFloat(sseManhrs);
+            document.getElementById('pm-edit-sse-amount-display').value = isNaN(sseAmt) ? '' : fmt(sseAmt * 2000);
+
+            // Populate tracker fields
+            sv('pm_edit_pm_manhrs',                       btn.dataset.pmManhrs);
+            sv('pm_edit_discount_rate',                   btn.dataset.discountRate || '0');
+            sv('pm_edit_status',                          btn.dataset.status);
+            sv('pm_edit_proposal_status',                 btn.dataset.proposalStatus);
+            sv('pm_edit_po_pnl_date',                     btn.dataset.poPnlDate);
+            sv('pm_edit_delivery_start_date',             btn.dataset.deliveryStartDate);
+            sv('pm_edit_overall_status',                  btn.dataset.overallStatus);
+            sv('pm_edit_delivery_health',                 btn.dataset.deliveryHealth);
+            sv('pm_edit_delivery_progress',               btn.dataset.deliveryProgress);
+            sv('pm_edit_key_updates_risks',               btn.dataset.keyUpdatesRisks);
+            sv('pm_edit_delivery_target_finish_date',     btn.dataset.deliveryTargetFinishDate);
+            sv('pm_edit_delivery_actual_finish_date',     btn.dataset.deliveryActualFinishDate);
+            sv('pm_edit_delivery_completion_signed_date', btn.dataset.deliveryCompletionSignedDate);
+            sv('pm_edit_warranty_end_date',               btn.dataset.warrantyEndDate);
+            sv('pm_edit_revenue_source',                  btn.dataset.revenueSource);
+            sv('pm_edit_revenue_reference_no',            btn.dataset.revenueReferenceNo);
+            sv('pm_edit_revenue_remarks',                 btn.dataset.revenueRemarks);
+            refreshPmAmount();
+
+            modal.classList.add('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('requestor-modal-open');
+            if (activeRow) {
+                var del = activeRow.querySelector('.sqr-delete-btn');
+                if (del) del.classList.remove('d-none');
+            }
+        }
+
+        function closeModal() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+            if (activeRow) {
+                var del = activeRow.querySelector('.sqr-delete-btn');
+                if (del) del.classList.add('d-none');
+            }
+            activeRow = null;
+        }
+
+        document.querySelectorAll('.sqr-open-pm-edit-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () { openModal(this); });
+        });
+        if (closeBtn)  closeBtn.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (backdrop)  backdrop.addEventListener('click', closeModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('requestor-modal--visible')) closeModal();
+        });
+
+        // Live PM Amount as N is typed
+        var pmInput = document.getElementById('pm_edit_pm_manhrs');
+        if (pmInput) pmInput.addEventListener('input', refreshPmAmount);
     })();
 </script>
 {% endif %}
