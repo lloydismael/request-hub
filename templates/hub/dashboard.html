@@ -367,7 +367,16 @@
                                         {% endif %}
                                     </a>
                                 </th>
-                                <th>Backup Engineer</th>
+                                <th>
+                                    <a href="{{ sort_links.backup_engineer }}" class="table-sort-link{% if current_sort == 'backup_engineer' %} table-sort-link--active{% endif %}">
+                                        Backup Engineer
+                                        {% if current_sort == 'backup_engineer' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
                             {% elif role == 'engineer' %}
                                 <th>Requestor</th>
                             {% elif is_requestor_ui %}

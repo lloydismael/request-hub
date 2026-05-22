@@ -755,6 +755,14 @@ def _admin_sort_engineer_key(request_obj):
     return (1, "")
 
 
+def _admin_sort_backup_engineer_key(request_obj):
+    backup = getattr(request_obj, "backup_engineer", None)
+    if backup:
+        name = (backup.get_full_name() or backup.username or "").strip().lower()
+        return (0, name)
+    return (1, "")
+
+
 def _admin_sort_date_key(value):
     if value is None:
         return (1, date.max)
@@ -1176,6 +1184,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "account": lambda req: (req.account.name.lower() if req.account else ""),
                 "account_manager": _admin_sort_account_manager_key,
                 "engineer": _admin_sort_engineer_key,
+                "backup_engineer": _admin_sort_backup_engineer_key,
                 "engagement": lambda req: req.engagement_type or "",
                 "product_category": lambda req: req.product_category or "",
                 "status": lambda req: req.status or "",
