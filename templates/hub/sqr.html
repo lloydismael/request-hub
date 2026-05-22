@@ -476,7 +476,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                                                 data-revenue-remarks="{{ item.revenue_remarks|default:'' }}">
                                             <i class="bi bi-sliders"></i>
                                         </button>
-                                        <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2"
                                            href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
                                             <i class="bi bi-trash"></i>
                                         </a>
@@ -515,7 +515,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                                             <i class="bi bi-trash"></i>
                                         </a>
                                     </div>
-                                {% elif request.user.role == 'engineer' and item.engineer_id == request.user.id %}
+                                {% elif can_create_sqr and item.engineer_id == request.user.id %}
                                     {% if item.status != 'reviewed' %}
                                         <div class="d-flex gap-1 justify-content-center flex-nowrap">
                                             <button type="button"

@@ -367,6 +367,7 @@
                                         {% endif %}
                                     </a>
                                 </th>
+                                <th>Backup Engineer</th>
                             {% elif role == 'engineer' %}
                                 <th>Requestor</th>
                             {% elif is_requestor_ui %}
@@ -567,6 +568,22 @@
                                             {% endwith %}
                                         {% else %}
                                             <span class="text-muted text-nowrap">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-nowrap">
+                                        {% if item.backup_engineer %}
+                                            {% with be_name=item.backup_engineer.get_full_name|default:item.backup_engineer.username %}
+                                            <div class="table-cell-nowrap">
+                                                {% if item.backup_engineer.profile_photo %}
+                                                    <img src="{{ item.backup_engineer.profile_photo.url }}" alt="{{ be_name }}" class="table-avatar">
+                                                {% else %}
+                                                    <span class="table-avatar table-avatar--placeholder">{{ be_name|slice:":1"|upper }}</span>
+                                                {% endif %}
+                                                <span>{{ be_name }}</span>
+                                            </div>
+                                            {% endwith %}
+                                        {% else %}
+                                            <span class="text-muted text-nowrap">&ndash;</span>
                                         {% endif %}
                                     </td>
                                     {% elif role == 'engineer' %}

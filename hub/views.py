@@ -1161,7 +1161,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if not metric_filter or metric_filter not in metric_keys:
                 metric_filter = "open"
 
-            queryset = Request.objects.select_related("account", "engineer", "requestor")
+            queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
             filter_form = AdminRequestFilterForm(self.request.GET or None)
             filtered_queryset = filter_form.filter_queryset(queryset)
             requests = filter_form.filter_sequence(filtered_queryset)
