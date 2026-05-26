@@ -1622,8 +1622,6 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         ).order_by("-created_at")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
-        if self.request.user.role == PM_ESG_ROLE:
-            return queryset.filter(pm_esg_reviewer=self.request.user)
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -1844,9 +1842,7 @@ class SqrPmAdminUpdateView(LoginRequiredMixin, UpdateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        if self.request.user.role == User.Roles.ADMIN:
-            return SqrSubmission.objects.all()
-        return SqrSubmission.objects.filter(pm_esg_reviewer=self.request.user)
+        return SqrSubmission.objects.all()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1883,8 +1879,6 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_queryset(self):
         queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
-        if self.request.user.role == PM_ESG_ROLE:
-            return queryset.filter(pm_esg_reviewer=self.request.user)
         return queryset
 
     def form_valid(self, form):
