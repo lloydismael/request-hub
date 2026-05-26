@@ -63,6 +63,15 @@ def _engineer_queryset(*extra_users):
     return queryset.order_by("first_name", "last_name").distinct()
 
 
+def _admin_engineer_queryset(*extra_users):
+    """Like _engineer_queryset but includes ON_HOLD engineers so admins can assign them."""
+    extra_ids = [user.pk for user in extra_users if user and getattr(user, "pk", None)]
+    queryset = User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES)
+    if extra_ids:
+        queryset = User.objects.filter(Q(role__in=User.ENGINEER_ACCESS_ROLES) | Q(pk__in=extra_ids))
+    return queryset.order_by("first_name", "last_name").distinct()
+
+
 def _engineer_access_queryset():
     return User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES).order_by("first_name", "last_name")
 
@@ -494,14 +503,14 @@ class RequestAdminForm(forms.ModelForm):
         if isinstance(req_widget, AvatarSelect):
             req_widget.avatar_mapping = _build_avatar_mapping(self.fields["requestor"].queryset)
         self.fields["requestor"].label_from_instance = _user_display
-        self.fields["engineer"].queryset = _engineer_queryset(getattr(self.instance, "engineer", None))
+        self.fields["engineer"].queryset = _admin_engineer_queryset(getattr(self.instance, "engineer", None))
         widget = self.fields["engineer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
         self.fields["engineer"].label_from_instance = _user_display
         
         # Setup backup engineer field
-        self.fields["backup_engineer"].queryset = _engineer_queryset(getattr(self.instance, "backup_engineer", None))
+        self.fields["backup_engineer"].queryset = _admin_engineer_queryset(getattr(self.instance, "backup_engineer", None))
         backup_widget = self.fields["backup_engineer"].widget
         if isinstance(backup_widget, AvatarSelect):
             backup_widget.avatar_mapping = _build_avatar_mapping(self.fields["backup_engineer"].queryset)

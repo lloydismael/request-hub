@@ -65,6 +65,7 @@ class Request(models.Model):
             ("Dell", "Dell"),
             ("HP", "HP"),
             ("Network", "Network"),
+            ("Veeam", "Veeam"),
             ("Others", "Others"),
         ],
     )
