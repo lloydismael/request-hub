@@ -80,7 +80,7 @@ class Request(models.Model):
         related_name="requests_assigned",
         blank=True,
         null=True,
-        limit_choices_to={"role__in": ["engineer", "on_hold"]},
+        limit_choices_to={"role__in": ["engineer", "on_hold", "pm_esg"]},
     )
     backup_engineer = models.ForeignKey(
         settings.AUTH_USER_MODEL,

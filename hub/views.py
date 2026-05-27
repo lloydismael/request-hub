@@ -1171,7 +1171,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if not metric_filter or metric_filter not in metric_keys:
                 metric_filter = "open"
 
+            pm_esg_tab = ""
+            if user.role == PM_ESG_ROLE:
+                pm_esg_tab = (self.request.GET.get("pm_esg_tab") or "all").strip().lower()
+                if pm_esg_tab not in {"all", "assigned", "my_requests"}:
+                    pm_esg_tab = "all"
+
             queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
+            if pm_esg_tab == "assigned":
+                queryset = queryset.filter(engineer=user)
+            elif pm_esg_tab == "my_requests":
+                queryset = queryset.filter(requestor=user)
             filter_form = AdminRequestFilterForm(self.request.GET or None)
             filtered_queryset = filter_form.filter_queryset(queryset)
             requests = filter_form.filter_sequence(filtered_queryset)
@@ -1286,6 +1296,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metrics"] = {key: len(metric_buckets[key]) for key in metric_keys}
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
+
+            pm_esg_tab_links = {}
+            if user.role == PM_ESG_ROLE:
+                for key in ("all", "assigned", "my_requests"):
+                    params = self.request.GET.copy()
+                    if key == "all":
+                        params.pop("pm_esg_tab", None)
+                    else:
+                        params["pm_esg_tab"] = key
+                    encoded = params.urlencode()
+                    pm_esg_tab_links[key] = f"?{encoded}" if encoded else "?"
+            context["pm_esg_tab"] = pm_esg_tab
+            context["pm_esg_tab_links"] = pm_esg_tab_links
 
         if context.get("can_create_request") and "form" not in context:
             form = kwargs.get("form")

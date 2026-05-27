@@ -29,7 +29,21 @@
                         </li>
                     </ul>
                 {% else %}
-                    <h2 class="h5 mb-0"><i class="bi {% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %}{% elif is_requestor_ui %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %} me-2"></i>{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    {% if is_pm_esg %}
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link {% if pm_esg_tab != 'assigned' and pm_esg_tab != 'my_requests' %}active{% endif %}" href="{{ pm_esg_tab_links.all }}"><i class="bi bi-grid-fill me-1"></i>All Requests</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if pm_esg_tab == 'assigned' %}active{% endif %}" href="{{ pm_esg_tab_links.assigned }}"><i class="bi bi-clipboard2-check-fill me-1"></i>Assigned Requests</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if pm_esg_tab == 'my_requests' %}active{% endif %}" href="{{ pm_esg_tab_links.my_requests }}"><i class="bi bi-person-lines-fill me-1"></i>My Requests</a>
+                            </li>
+                        </ul>
+                    {% else %}
+                        <h2 class="h5 mb-0"><i class="bi {% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %}{% elif is_requestor_ui %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %} me-2"></i>{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    {% endif %}
                 {% endif %}
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
