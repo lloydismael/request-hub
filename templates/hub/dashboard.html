@@ -373,7 +373,7 @@
                                 </th>
                                 <th>
                                     <a href="{{ sort_links.engineer }}" class="table-sort-link{% if current_sort == 'engineer' %} table-sort-link--active{% endif %}">
-                                        Assigned Engineer
+                                        Assigned Person
                                         {% if current_sort == 'engineer' %}
                                             <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
                                         {% else %}
@@ -383,7 +383,7 @@
                                 </th>
                                 <th>
                                     <a href="{{ sort_links.backup_engineer }}" class="table-sort-link{% if current_sort == 'backup_engineer' %} table-sort-link--active{% endif %}">
-                                        Backup Engineer
+                                        Backup
                                         {% if current_sort == 'backup_engineer' %}
                                             <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
                                         {% else %}
@@ -397,7 +397,7 @@
                                 {% if is_pm_ess %}
                                     <th>Requestor</th>
                                 {% endif %}
-                                <th>Assigned Engineer</th>
+                                <th>Assigned Person</th>
                             {% endif %}
                             {% if not is_requestor_ui %}
                                 {% if role == 'admin' %}

@@ -459,12 +459,13 @@ class RequestAdminForm(forms.ModelForm):
         queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Assigned Person",
     )
     backup_engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
-        label="Backup Engineer",
+        label="Backup",
         empty_label="Select backup engineer (optional)",
     )
 
