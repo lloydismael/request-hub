@@ -162,8 +162,9 @@ class RequestForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
 
-    def __init__(self, *args, actor_role=None, **kwargs):
+    def __init__(self, *args, actor_role=None, actor_user=None, **kwargs):
         self.actor_role = actor_role
+        self.actor_user = actor_user
         super().__init__(*args, **kwargs)
         self.project_manager_ids = set()
         include_backup = actor_role in User.ENGINEER_ACCESS_ROLES
@@ -186,14 +187,13 @@ class RequestForm(forms.ModelForm):
         current_engineer = getattr(self.instance, "engineer", None)
         current_backup_engineer = getattr(self.instance, "backup_engineer", None)
         engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
-        project_manager_qs = User.objects.filter(
-            (Q(first_name__icontains="Jeram") & Q(last_name__icontains="Zamora"))
-            | (Q(first_name__icontains="Marfelie") & Q(last_name__icontains="Barcenas"))
-            | (Q(first_name__icontains="Princess") & Q(last_name__icontains="Nacianceno"))
-        ).order_by("first_name", "last_name")
+        project_manager_qs = User.objects.filter(role=User.Roles.PM_ESG, is_active=True)
+        if actor_user and actor_user.pk:
+            project_manager_qs = project_manager_qs.exclude(pk=actor_user.pk)
+        project_manager_qs = project_manager_qs.order_by("first_name", "last_name")
         self.project_manager_ids = set(project_manager_qs.values_list("id", flat=True))
 
-        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}
+        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS, User.Roles.PM_ESG}
         is_requestor_form = actor_role in requestor_roles
         all_assignee_ids = set(engineer_qs.values_list("id", flat=True)) | self.project_manager_ids
         assignee_qs = (

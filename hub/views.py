@@ -917,7 +917,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if user.role == PM_ESS_ROLE:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=user.role)
+                form = RequestForm(actor_role=user.role, actor_user=user)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
@@ -987,7 +987,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         elif user.role in REQUEST_CREATOR_ROLES and user.role != PM_ESG_ROLE:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=user.role)
+                form = RequestForm(actor_role=user.role, actor_user=user)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
@@ -1105,6 +1105,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     1
                     for req in requests
                     if req.status == Request.Status.ONGOING
+                    and req.engagement_type != Request.Engagement.DEPLOYMENT
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ),
@@ -1124,6 +1125,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     req
                     for req in requests
                     if req.status == Request.Status.ONGOING
+                    and req.engagement_type != Request.Engagement.DEPLOYMENT
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ]
@@ -1288,7 +1290,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if context.get("can_create_request") and "form" not in context:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=user.role)
+                form = RequestForm(actor_role=user.role, actor_user=user)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             context["form_has_errors"] = form.is_bound and bool(form.errors)
@@ -1312,6 +1314,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 req
                 for req in requests
                 if req.status == Request.Status.ONGOING
+                and req.engagement_type != Request.Engagement.DEPLOYMENT
                 and req.due_date
                 and 0 <= (req.due_date - today).days <= 3
             ]
@@ -1553,7 +1556,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if request.user.role not in REQUEST_CREATOR_ROLES:
             return redirect("hub:dashboard")
-        form = RequestForm(request.POST, actor_role=request.user.role)
+        form = RequestForm(request.POST, actor_role=request.user.role, actor_user=request.user)
         if form.is_valid():
             req = form.save(commit=False)
             req.requestor = request.user
@@ -2552,7 +2555,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
 
     def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
         if form is None:
-            form = RequestForm(instance=request_obj, actor_role=self.request.user.role)
+            form = RequestForm(instance=request_obj, actor_role=self.request.user.role, actor_user=self.request.user)
         status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
         if status_allowed and status_form is None:
             status_form = RequestStatusForm(instance=request_obj)
@@ -2580,7 +2583,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         }
 
     def _handle_details_update(self, request, request_obj):
-        form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role)
+        form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role, actor_user=request.user)
         if form.is_valid():
             source_label = self._source_label("Manage Request")
             form.instance._actor_user = request.user
