@@ -1810,7 +1810,11 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
         if request.user.role not in ENGINEER_ACCESS_ROLES and request.user.role != User.Roles.ADMIN:
             messages.error(request, "Only engineers or admins can edit SQR submissions.")
             return redirect("hub:sqr")
-        return super().dispatch(request, *args, **kwargs)
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That SQR submission no longer exists.")
+            return redirect("hub:sqr")
 
     def get_queryset(self):
         if self.request.user.role == User.Roles.ADMIN:
@@ -1838,6 +1842,11 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
     def dispatch(self, request, *args, **kwargs):
         if request.user.role not in ENGINEER_ACCESS_ROLES and request.user.role != User.Roles.ADMIN:
             messages.error(request, "Only engineers or admins can delete SQR submissions.")
+            return redirect("hub:sqr")
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That SQR submission no longer exists.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
 
@@ -2340,6 +2349,13 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
     context_object_name = "service_request"
     success_url = reverse_lazy("hub:dashboard")
 
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That request no longer exists.")
+            return redirect("hub:dashboard")
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["allow_capacity_override"] = self.request.method == "POST" and self.request.POST.get("override_capacity") == "1"
@@ -2745,6 +2761,13 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
     model = Request
     success_url = reverse_lazy("hub:dashboard")
     template_name = "hub/request_confirm_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That request no longer exists.")
+            return redirect("hub:dashboard")
 
     def get_queryset(self):
         qs = super().get_queryset()
