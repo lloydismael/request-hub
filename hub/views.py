@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
@@ -1750,8 +1751,8 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "is_pm": is_pm,
                 "is_admin": is_admin,
                 "sqr_form": form,
-                "sqr_edit_form": SqrSubmissionForm(auto_id="edit_%s") if (can_create or is_admin) else None,
-                "sqr_pm_edit_form": SqrTrackerEditForm(auto_id="pm_edit_%s") if is_pm else None,
+                "sqr_edit_form": SqrSubmissionForm(auto_id="edit_%s") if can_create else None,
+                "sqr_pm_edit_form": None,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "active_sqr_tab": active_tab,
                 "proposal_submissions": all_submissions,
@@ -1890,6 +1891,70 @@ class SqrPmAdminUpdateView(LoginRequiredMixin, UpdateView):
         response = super().form_valid(form)
         messages.success(self.request, f"SQR {self.object.reference_code} tracker updated.")
         return response
+
+
+class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
+    """AJAX endpoint for inline cell editing of SQR submissions (Admin / PM-ESG)."""
+
+    _ADMIN_ALLOWED = frozenset([
+        "customer_name", "customer_company", "customer_contact",
+        "project_title", "project_details", "sse_manhrs",
+        "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
+        "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
+        "delivery_actual_finish_date", "delivery_completion_signed_date",
+        "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+    ])
+    _PM_ESG_ALLOWED = frozenset([
+        "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
+        "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
+        "delivery_actual_finish_date", "delivery_completion_signed_date",
+        "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+    ])
+    _DATE_FIELDS = frozenset([
+        "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
+        "delivery_actual_finish_date", "delivery_completion_signed_date", "warranty_end_date",
+    ])
+    _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
+    _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs"])
+
+    def post(self, request, pk):
+        if request.user.role == User.Roles.ADMIN:
+            allowed = self._ADMIN_ALLOWED
+        elif request.user.role == User.Roles.PM_ESG:
+            allowed = self._PM_ESG_ALLOWED
+        else:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        try:
+            data = json.loads(request.body)
+        except (ValueError, KeyError):
+            return JsonResponse({"ok": False, "error": "Invalid request"}, status=400)
+
+        field = data.get("field", "")
+        value = data.get("value", "")
+
+        if not field or field not in allowed:
+            return JsonResponse({"ok": False, "error": "Field not allowed"}, status=400)
+
+        submission = get_object_or_404(SqrSubmission, pk=pk)
+
+        try:
+            if field in self._DATE_FIELDS:
+                coerced = date.fromisoformat(value) if value else None
+            elif field in self._INT_FIELDS:
+                coerced = int(value) if value not in ("", None) else None
+            elif field in self._DECIMAL_FIELDS:
+                coerced = Decimal(str(value)) if value not in ("", None) else None
+            else:
+                coerced = value  # str fields — allow empty string
+        except (ValueError, TypeError):
+            return JsonResponse({"ok": False, "error": f"Invalid value for {field}"}, status=400)
+
+        setattr(submission, field, coerced)
+        submission.save(update_fields=[field])
+        return JsonResponse({"ok": True})
 
 
 class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
