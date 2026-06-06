@@ -1646,6 +1646,8 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "engineer",
             "pm_esg_reviewer",
             "reviewed_by",
+            "assigned_pm",
+            "assigned_sse",
         ).order_by("-created_at")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
@@ -1760,6 +1762,16 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "delivery_submissions": delivery_submissions,
                 "delivery_health_counts": delivery_health_counts,
                 "revenue_data": revenue_data,
+                "sqr_pm_users": list(
+                    User.objects.filter(role=User.Roles.PM_ESG)
+                    .values("pk", "first_name", "last_name", "username")
+                    .order_by("first_name", "last_name")
+                ) if is_pm else [],
+                "sqr_pm_users_json": json.dumps(list(
+                    User.objects.filter(role=User.Roles.PM_ESG)
+                    .values("pk", "first_name", "last_name", "username")
+                    .order_by("first_name", "last_name")
+                )) if is_pm else "[]",
             }
         )
         return context
@@ -1774,6 +1786,20 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             submission = form.save(commit=False)
             submission.engineer = request.user
             submission.status = SqrSubmission.Status.FOR_PROCESSING
+            # Auto-compute Managed Support Service Amount (col P) per business rules
+            _MANAGED_SCOPES = frozenset([
+                "Implementation",
+                "Implementation and Project Management",
+                "Managed Support and Maintenance Service",
+            ])
+            scope = form.cleaned_data.get("project_details", "") or ""
+            group = form.cleaned_data.get("customer_company", "") or ""
+            if scope in _MANAGED_SCOPES:
+                submission.managed_support_amount = (
+                    Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+                )
+            else:
+                submission.managed_support_amount = None
             submission.save()
             self._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
@@ -1904,6 +1930,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
         "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "managed_support_amount", "assigned_pm",
     ])
     _PM_ESG_ALLOWED = frozenset([
         "pm_manhrs", "discount_rate", "status", "proposal_status",
@@ -1911,13 +1938,15 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
         "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "managed_support_amount", "assigned_pm",
     ])
     _DATE_FIELDS = frozenset([
         "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date", "warranty_end_date",
     ])
     _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
-    _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs"])
+    _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs", "managed_support_amount"])
+    _FK_FIELDS = frozenset(["assigned_pm"])
 
     def post(self, request, pk):
         if request.user.role == User.Roles.ADMIN:
@@ -1947,14 +1976,65 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 coerced = int(value) if value not in ("", None) else None
             elif field in self._DECIMAL_FIELDS:
                 coerced = Decimal(str(value)) if value not in ("", None) else None
+            elif field in self._FK_FIELDS:
+                coerced = int(value) if value not in ("", None) else None
             else:
                 coerced = value  # str fields — allow empty string
         except (ValueError, TypeError):
             return JsonResponse({"ok": False, "error": f"Invalid value for {field}"}, status=400)
 
-        setattr(submission, field, coerced)
-        submission.save(update_fields=[field])
-        return JsonResponse({"ok": True})
+        # For FK fields, set the _id attribute directly
+        if field in self._FK_FIELDS:
+            setattr(submission, field + "_id", coerced)
+        else:
+            setattr(submission, field, coerced)
+        save_fields = [field]
+
+        # Auto-recompute Managed Support Svc. Amt. (col P) when scope or group changes
+        _MANAGED_SCOPES = frozenset([
+            "Implementation",
+            "Implementation and Project Management",
+            "Managed Support and Maintenance Service",
+        ])
+        if field in ("project_details", "customer_company"):
+            scope = coerced if field == "project_details" else submission.project_details
+            group = coerced if field == "customer_company" else submission.customer_company
+            new_msa = (
+                Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+            ) if scope in _MANAGED_SCOPES else None
+            submission.managed_support_amount = new_msa
+            save_fields.append("managed_support_amount")
+
+        # When status changes: auto-set reviewed_at, validity_due_date, reviewed_by, assigned_pm
+        if field == "status":
+            if coerced == SqrSubmission.Status.APPROVED:
+                now = timezone.now()
+                if not submission.reviewed_at:
+                    submission.reviewed_at = now
+                submission.validity_due_date = submission.reviewed_at.date() + timedelta(days=90)
+                submission.reviewed_by = request.user
+                save_fields += ["reviewed_at", "reviewed_by", "validity_due_date"]
+                if not submission.assigned_pm_id:
+                    submission.assigned_pm_id = submission.pm_esg_reviewer_id
+                    save_fields.append("assigned_pm")
+            else:
+                submission.reviewed_at = None
+                submission.validity_due_date = None
+                save_fields += ["reviewed_at", "validity_due_date"]
+
+        submission.save(update_fields=save_fields)
+        response_data = {"ok": True}
+        if "managed_support_amount" in save_fields:
+            msa = submission.managed_support_amount
+            response_data["managed_support_amount"] = str(msa) if msa is not None else ""
+        if "validity_due_date" in save_fields:
+            vdd = submission.validity_due_date
+            response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""
+        if "assigned_pm" in save_fields:
+            pm = submission.assigned_pm
+            response_data["assigned_pm_pk"] = pm.pk if pm else ""
+            response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
+        return JsonResponse(response_data)
 
 
 class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
@@ -1987,8 +2067,12 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         if form.cleaned_data.get("status") == SqrSubmission.Status.APPROVED:
             if not form.instance.reviewed_at:
                 form.instance.reviewed_at = timezone.now()
+            form.instance.validity_due_date = form.instance.reviewed_at.date() + timedelta(days=90)
+            if not form.instance.assigned_pm_id:
+                form.instance.assigned_pm = form.instance.pm_esg_reviewer
         else:
             form.instance.reviewed_at = None
+            form.instance.validity_due_date = None
 
         response = super().form_valid(form)
 

@@ -309,7 +309,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             {# O: PM Amount #}
                             <td class="text-end small">{% if item.pm_amount %}{{ item.pm_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
                             {# P: Managed Support Service Amount #}
-                            <td class="text-end small">{% if item.managed_support_amount %}{{ item.managed_support_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}{{ item.managed_support_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</span></td>
                             {# Q: Discount Rate #}
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="discount_rate" data-sqr-type="number" data-sqr-value="{{ item.discount_rate|default:'0' }}"{% endif %}><span class="sqr-display">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</span></td>
                             {# R: Discount Amount #}
@@ -353,8 +353,8 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             {# X: PO/PNL Date — delivery stage, PM only #}
                             {% if is_pm %}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {# Y: Assigned PM #}
-                            <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</td>
+                            {# Y: Assigned PM — defaults to col J (pm_esg_reviewer) on Approval; editable #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# Z: Assigned SSE #}
                             <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
                             {# AA: Start Date #}
@@ -597,6 +597,21 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
 
         if (!deptSel) return;
 
+        // Managed Support Service Amount preview
+        var MANAGED_SCOPES_NEW = ['Implementation', 'Implementation and Project Management', 'Managed Support and Maintenance Service'];
+        function updateManagedSupportPreview() {
+            var scope = scopeSel ? scopeSel.value : '';
+            var dept  = deptSel  ? deptSel.value  : '';
+            var disp  = document.getElementById('new-managed-support-display');
+            if (!disp) return;
+            if (MANAGED_SCOPES_NEW.indexOf(scope) !== -1) {
+                var amt = dept === 'ESS' ? 149000 : 192000;
+                disp.value = amt.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } else {
+                disp.value = '0.00';
+            }
+        }
+
         var memberMap = {}, approverMap = {}, sseScopes = [];
         try { memberMap = JSON.parse(deptSel.dataset.memberMap || '{}'); } catch (e) {}
         try { approverMap = JSON.parse(deptSel.dataset.approverMap || '{}'); } catch (e) {}
@@ -637,11 +652,13 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
         deptSel.addEventListener('change', function () {
             updateMembers(this.value);
             updateApprover(this.value);
+            updateManagedSupportPreview();
         });
 
         if (scopeSel) {
-            scopeSel.addEventListener('change', updateSseManhrs);
+            scopeSel.addEventListener('change', function() { updateSseManhrs(); updateManagedSupportPreview(); });
             updateSseManhrs();
+            updateManagedSupportPreview();
         }
 
         updateMembers(deptSel.value);
@@ -856,7 +873,18 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
 <script>
 (function () {
     'use strict';
-    var CSRF = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+    var CSRF = '{{ csrf_token }}';
+
+    /* PM users for Assigned PM dropdown — from context */
+    var SQR_PM_USERS = {{ sqr_pm_users_json|default:"[]"|safe }};
+    /* Build choices array: [['', '— Select PM —'], [pk, 'Full Name'], ...] */
+    var PM_USER_CHOICES = [['', '\u2014 Select PM \u2014']];
+    var PM_USER_MAP = {};  /* pk (string) → display name */
+    SQR_PM_USERS.forEach(function(u) {
+        var name = (u.first_name + ' ' + u.last_name).trim() || u.username;
+        PM_USER_CHOICES.push([String(u.pk), name]);
+        PM_USER_MAP[String(u.pk)] = name;
+    });
 
     /* Choice maps — value → label (for display after save) */
     var LABELS = {
@@ -874,6 +902,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
         delivery_health: [['','—'],['on_track','On Track'],['off_track','Off Track'],['at_risk','At Risk'],['completed','Completed'],['cancelled','Cancelled']],
         project_details: [['','— Select Scope —'],['Training','Training'],['Support','Support'],['Implementation','Implementation'],['Project Management','Project Management'],['Implementation and Project Management','Implementation and Project Management'],['Demonstration','Demonstration'],['Managed Support and Maintenance Service','Managed Support and Maintenance Service'],['Other','Other']],
         customer_company: [['','— Select —'],['ESS','ESS'],['HP','HP'],['Dell','Dell'],['ENS','ENS'],['Other','Other']],
+        assigned_pm: PM_USER_CHOICES,
     };
 
     function fmtDate(iso) {
@@ -885,12 +914,17 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
     }
 
     function getDisplay(field, value) {
-        if (!value) return '\u2013';
+        if (!value && value !== 0) return '\u2013';
+        if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';
         if (LABELS[field]) return LABELS[field][value] || value;
         var lower = field.toLowerCase();
         if (lower.indexOf('date') !== -1) return fmtDate(value);
         if (field === 'delivery_progress') return value + '%';
         if (field === 'discount_rate') return value + '%';
+        if (field === 'managed_support_amount' || field === 'pm_manhrs' || field === 'sse_manhrs') {
+            var n = parseFloat(value);
+            return isNaN(n) ? value : n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
         return value;
     }
 
@@ -913,6 +947,12 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
             w = document.createElement('textarea');
             w.className = 'sqr-inline-input';
             w.rows = 2; w.style.minWidth = '160px';
+            w.value = currentValue || '';
+        } else if (field === 'managed_support_amount') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'number'; w.min = '0'; w.step = '0.01';
+            w.style.width = '110px';
             w.value = currentValue || '';
         } else if (field === 'delivery_progress' || field === 'pm_manhrs' || field === 'sse_manhrs' || field === 'discount_rate') {
             w = document.createElement('input');
@@ -945,6 +985,55 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                 displayEl.innerHTML = getDisplay(field, value);
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
+                var row = cell.closest('tr');
+                // Refresh Managed Support Svc. Amt. (col P) when scope or group changes
+                if ('managed_support_amount' in data) {
+                    if (row) {
+                        var msaCell = row.querySelector('[data-sqr-field="managed_support_amount"]');
+                        if (msaCell) {
+                            var msaVal = data.managed_support_amount;
+                            msaCell.dataset.sqrValue = msaVal;
+                            var msaDisp = msaCell.querySelector('.sqr-display');
+                            if (msaDisp) {
+                                if (msaVal) {
+                                    var n = parseFloat(msaVal);
+                                    msaDisp.innerHTML = isNaN(n) ? msaVal : n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+                                } else {
+                                    msaDisp.innerHTML = '\u2013';
+                                }
+                            }
+                        }
+                    }
+                }
+                // Refresh Validity Due Date (col V) when status changes
+                if ('validity_due_date' in data && row) {
+                    var vddCells = row.querySelectorAll('td');
+                    /* col V is the 22nd td (index 21) in the row — find it by position */
+                    var vddText = data.validity_due_date || '\u2013';
+                    /* Walk cells to find the one after col U (approval date) */
+                    /* Simpler: mark it with a data attr in the template, but we can rely on order */
+                    /* col U = reviewed_at (no data attr), col V = validity_due_date (no data attr) */
+                    /* Instead search by sibling position: T=status, U=approval, V=validity */
+                    var statusCell = row.querySelector('[data-sqr-field="status"]');
+                    if (statusCell) {
+                        var uCell = statusCell.nextElementSibling; // col U (approval date)
+                        if (uCell) {
+                            var vCell = uCell.nextElementSibling; // col V (validity due date)
+                            if (vCell) vCell.textContent = vddText;
+                        }
+                    }
+                }
+                // Refresh Assigned PM (col Y) when status → Approved auto-sets it
+                if ('assigned_pm_pk' in data && row) {
+                    var pmCell = row.querySelector('[data-sqr-field="assigned_pm"]');
+                    if (pmCell) {
+                        var pmPk = data.assigned_pm_pk ? String(data.assigned_pm_pk) : '';
+                        var pmName = data.assigned_pm_name || '\u2013';
+                        pmCell.dataset.sqrValue = pmPk;
+                        var pmDisp = pmCell.querySelector('.sqr-display');
+                        if (pmDisp) pmDisp.innerHTML = pmName;
+                    }
+                }
             } else {
                 cell.classList.add('sqr-error');
                 setTimeout(function() { cell.classList.remove('sqr-error'); }, 2500);
