@@ -2370,6 +2370,10 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         if "managed_support_amount" in save_fields:
             msa = submission.managed_support_amount
             response_data["managed_support_amount"] = str(msa) if msa is not None else ""
+        if "reviewed_at" in save_fields:
+            rat = submission.reviewed_at
+            rat_manila = rat.astimezone(MANILA_TZ) if rat else None
+            response_data["reviewed_at"] = rat_manila.strftime("%b %d, %Y") if rat_manila else ""
         if "validity_due_date" in save_fields:
             vdd = submission.validity_due_date
             response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""

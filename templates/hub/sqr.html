@@ -387,16 +387,16 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                                 {% elif item.status == 'for_revision' %}
                                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
                                 {% elif item.status == 'reviewed' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Reviewed</span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>
                                 {% else %}
                                     <span class="text-muted small">{{ item.status }}</span>
                                 {% endif %}
                                 </span>
                             </td>
                             {# U: Approval Date #}
-                            <td class="small">{{ item.reviewed_at|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small" data-sqr-computed="reviewed_at">{{ item.reviewed_at|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# V: Validity Due Date #}
-                            <td class="small">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small" data-sqr-computed="validity_due_date">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# W: Proposal Status #}
                             <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="proposal_status" data-sqr-type="select" data-sqr-value="{{ item.proposal_status|default:'' }}"{% endif %}>
                                 <span class="sqr-display">
@@ -564,7 +564,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                                             </a>
                                         </div>
                                     {% else %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem;">Reviewed</span>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem;">Approved</span>
                                     {% endif %}
                                 {% else %}
                                     <span class="text-muted">&ndash;</span>
@@ -1129,22 +1129,15 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                         }
                     }
                 }
-                // Refresh Validity Due Date (col V) when status changes
-                if ('validity_due_date' in data && row) {
-                    var vddCells = row.querySelectorAll('td');
-                    /* col V is the 22nd td (index 21) in the row — find it by position */
-                    var vddText = data.validity_due_date || '\u2013';
-                    /* Walk cells to find the one after col U (approval date) */
-                    /* Simpler: mark it with a data attr in the template, but we can rely on order */
-                    /* col U = reviewed_at (no data attr), col V = validity_due_date (no data attr) */
-                    /* Instead search by sibling position: T=status, U=approval, V=validity */
-                    var statusCell = row.querySelector('[data-sqr-field="status"]');
-                    if (statusCell) {
-                        var uCell = statusCell.nextElementSibling; // col U (approval date)
-                        if (uCell) {
-                            var vCell = uCell.nextElementSibling; // col V (validity due date)
-                            if (vCell) vCell.textContent = vddText;
-                        }
+                // Refresh Approval Date (col U) and Validity Due Date (col V) when status changes
+                if (('reviewed_at' in data || 'validity_due_date' in data) && row) {
+                    if ('reviewed_at' in data) {
+                        var raCell = row.querySelector('[data-sqr-computed="reviewed_at"]');
+                        if (raCell) raCell.textContent = data.reviewed_at || '\u2013';
+                    }
+                    if ('validity_due_date' in data) {
+                        var vddCell = row.querySelector('[data-sqr-computed="validity_due_date"]');
+                        if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
                     }
                 }
                 // Refresh Assigned PM (col Y) when status → Approved auto-sets it
