@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from .views import (
     DashboardView,
@@ -10,7 +11,6 @@ from .views import (
     NotificationMarkAllReadView,
     RequestAdminUpdateView,
     RequestDeleteView,
-    RequestDetailView,
     RequestExportCSVView,
     RequestNudgeView,
     RequestOutlookRedirectView,
@@ -47,7 +47,7 @@ urlpatterns = [
     path("activity-logs/", EngineerActivityLogView.as_view(), name="activity-logs"),
     path("activity-logs/<int:pk>/delete/", EngineerActivityLogDeleteView.as_view(), name="activity-log-delete"),
     path("requests/export/csv/", RequestExportCSVView.as_view(), name="request-export"),
-    path("requests/<int:pk>/", RequestDetailView.as_view(), name="request-detail"),
+    path("requests/<int:pk>/", RedirectView.as_view(pattern_name="hub:request-manage-collab", permanent=True), name="request-detail"),
     path("requests/<int:pk>/edit/", RequestUpdateView.as_view(), name="request-edit"),
     path("requests/<int:pk>/status/", RequestStatusUpdateView.as_view(), name="request-status"),
     path("requests/<int:pk>/manage/", RequestAdminUpdateView.as_view(), name="request-manage"),

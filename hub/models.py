@@ -102,7 +102,7 @@ class Request(models.Model):
     def get_absolute_url(self):
         from django.urls import reverse
 
-        return reverse("hub:request-detail", args=[self.pk])
+        return reverse("hub:request-manage-collab", args=[self.pk])
 
     def clean(self):
         super().clean()

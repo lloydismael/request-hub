@@ -282,7 +282,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="linked_request" data-sqr-type="select" data-sqr-value="{{ item.linked_request_id|default:'' }}"{% endif %}>
                                 <span class="sqr-display">
                                 {% if item.linked_request %}
-                                    <a href="{% url 'hub:request-detail' item.linked_request.pk %}" class="text-info" target="_blank">{{ item.linked_request.reference_code }}</a>
+                                    <a href="{% url 'hub:request-manage-collab' item.linked_request.pk %}" class="text-info" target="_blank">{{ item.linked_request.reference_code }}</a>
                                 {% else %}&ndash;{% endif %}
                                 </span>
                             </td>
@@ -1069,7 +1069,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                     var rqDisp = cell.querySelector('.sqr-display');
                     if (rqDisp) {
                         if (rqPk && rqCode) {
-                            rqDisp.innerHTML = '<a href="/requests/' + rqPk + '/" class="text-info" target="_blank">' + rqCode + '</a>';
+                            rqDisp.innerHTML = '<a href="/requests/' + rqPk + '/manage/collab/" class="text-info" target="_blank">' + rqCode + '</a>';
                         } else {
                             rqDisp.innerHTML = '\u2013';
                         }

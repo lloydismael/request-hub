@@ -1671,11 +1671,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
-            # Scope RQ ID dropdown to requests the engineer is involved with
+            # Scope RQ ID dropdown to requests assigned to this engineer only
             form.fields["linked_request"].queryset = (
-                Request.objects.filter(
-                    Q(engineer=user) | Q(requestor=user)
-                ).order_by("-id")[:100]
+                Request.objects.filter(engineer=user).order_by("-id")
             )
 
         all_submissions = list(self.get_queryset())
@@ -1794,9 +1792,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
 
         form = SqrSubmissionForm(request.POST)
         form.fields["linked_request"].queryset = (
-            Request.objects.filter(
-                Q(engineer=request.user) | Q(requestor=request.user)
-            ).order_by("-id")[:100]
+            Request.objects.filter(engineer=request.user).order_by("-id")
         )
         if form.is_valid():
             submission = form.save(commit=False)
@@ -2488,7 +2484,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if not self._user_can_comment(request.user, self.object):
-            return redirect("hub:request-detail", pk=self.object.pk)
+            return redirect("hub:request-manage-collab", pk=self.object.pk)
         form = StatusLogForm(request.POST)
         if form.is_valid():
             log = form.save(commit=False)
@@ -2497,7 +2493,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             log.save()
             notify_status_update(log, "Request Detail · Status Update")
             messages.success(request, "Status log saved.")
-            return redirect("hub:request-detail", pk=self.object.pk)
+            return redirect("hub:request-manage-collab", pk=self.object.pk)
         context = self.get_context_data(log_form=form)
         return self.render_to_response(context)
 
@@ -2715,7 +2711,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in (REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}):
+        allowed = ADMIN_PANEL_ROLES | REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}
+        if request.user.role not in allowed:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -2725,11 +2722,17 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         pk = self.kwargs["pk"]
         user = self.request.user
 
+        # Admins and PM-ESG can view any request
+        if user.role in ADMIN_PANEL_ROLES:
+            return get_object_or_404(queryset, pk=pk)
+
         if user.role == PM_ESS_ROLE:
             queryset = queryset.filter(pk=pk).filter(Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user))
         elif user.role in REQUEST_CREATOR_ROLES:
+            # Requestors can only see their own requests
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role in ENGINEER_ACCESS_ROLES:
+            # Engineers can only see requests they are assigned to (primary or backup)
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
         else:
             raise Http404
@@ -4258,7 +4261,7 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
 
         if request.user.role not in ENGINEER_ACCESS_ROLES or request_obj.engineer_id != request.user.id:
             messages.error(request, "You are not allowed to update this request's status.")
-            return redirect("hub:request-detail", pk=pk)
+            return redirect("hub:request-manage-collab", pk=pk)
 
         original = Request.objects.get(pk=request_obj.pk)
         form = RequestStatusForm(request.POST, instance=request_obj)
@@ -4277,4 +4280,4 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             messages.success(request, "Request status updated.")
         else:
             messages.error(request, "Unable to update status. Please try again.")
-        return redirect("hub:request-detail", pk=pk)
+        return redirect("hub:request-manage-collab", pk=pk)
