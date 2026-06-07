@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load tz %}
+{% load tz humanize %}
 {% block title %}SQR &middot; Request Hub{% endblock %}
 
 {% block content %}
@@ -366,19 +366,19 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                             {# L: SSE Man-hrs #}
                             <td class="text-end small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{{ item.sse_manhrs|default:"&ndash;" }}</span></td>
                             {# M: SSE Amount #}
-                            <td class="text-end small">{% if item.sse_amount %}{{ item.sse_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="sse_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# N: PM Man-hrs #}
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{{ item.pm_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{{ item.pm_manhrs|default:"&ndash;" }}</span></td>
                             {# O: PM Amount #}
-                            <td class="text-end small">{% if item.pm_amount %}{{ item.pm_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.pm_amount %}&#8369;{{ item.pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# P: Managed Support Service Amount #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}{{ item.managed_support_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</span></td>
                             {# Q: Discount Rate #}
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="discount_rate" data-sqr-type="number" data-sqr-value="{{ item.discount_rate|default:'0' }}"{% endif %}><span class="sqr-display">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</span></td>
                             {# R: Discount Amount #}
-                            <td class="text-end small">{% if item.computed_discount_amount %}{{ item.computed_discount_amount|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="discount_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.computed_discount_amount %}&#8369;{{ item.computed_discount_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# S: Total Price #}
-                            <td class="text-end small fw-semibold">{% if item.computed_total_price %}{{ item.computed_total_price|floatformat:2 }}{% elif item.quotation_total_price %}{{ item.quotation_total_price|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small fw-semibold" data-sqr-computed="total_price" data-sqr-row-pk="{{ item.pk }}">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# T: SQR Status #}
                             <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="status" data-sqr-type="select" data-sqr-value="{{ item.status|default:'' }}"{% endif %}>
                                 <span class="sqr-display">
@@ -1013,7 +1013,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         if (field === 'discount_rate') return value + '%';
         if (field === 'managed_support_amount' || field === 'pm_manhrs' || field === 'sse_manhrs') {
             var n = parseFloat(value);
-            return isNaN(n) ? value : n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            return isNaN(n) ? value : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
         return value;
     }
@@ -1086,29 +1086,34 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                         row.classList.remove('sqr-row--revision');
                     }
                 }
+                // Helper: format a number as ₱X,XXX.XX
+                function pesoFmt(raw) {
+                    if (!raw && raw !== 0) return '\u2013';
+                    var n = parseFloat(raw);
+                    return isNaN(n) ? String(raw) : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+                }
                 // Refresh PM Amount (col O) when pm_manhrs (col N) changes
                 if ('pm_amount' in data) {
                     var pmAmtCell = cell.nextElementSibling;
-                    if (pmAmtCell) {
-                        var pmAmt = data.pm_amount;
-                        if (pmAmt) {
-                            var n = parseFloat(pmAmt);
-                            pmAmtCell.textContent = isNaN(n) ? pmAmt : n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
-                        } else {
-                            pmAmtCell.textContent = '\u2013';
-                        }
-                    }
+                    if (pmAmtCell) pmAmtCell.textContent = pesoFmt(data.pm_amount);
                 }
                 // Refresh SSE Amount (col M) when sse_manhrs (col L) changes
                 if ('sse_amount' in data) {
                     var sseAmtCell = cell.nextElementSibling;
-                    if (sseAmtCell) {
-                        var sseAmt = data.sse_amount;
-                        if (sseAmt) {
-                            var n = parseFloat(sseAmt);
-                            sseAmtCell.textContent = isNaN(n) ? sseAmt : n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
-                        } else {
-                            sseAmtCell.textContent = '\u2013';
+                    if (sseAmtCell) sseAmtCell.textContent = pesoFmt(data.sse_amount);
+                }
+                // Refresh Discount Amount (col R) and Total Price (col S) when any component changes
+                if ('computed_discount_amount' in data || 'computed_total_price' in data) {
+                    var rowEl = cell.closest('tr');
+                    if (rowEl) {
+                        var pk = String(cell.dataset.sqrPk || (cell.closest('[data-sqr-pk]') ? cell.closest('[data-sqr-pk]').dataset.sqrPk : ''));
+                        if ('computed_discount_amount' in data) {
+                            var daCell = rowEl.querySelector('[data-sqr-computed="discount_amount"]');
+                            if (daCell) daCell.textContent = pesoFmt(data.computed_discount_amount);
+                        }
+                        if ('computed_total_price' in data) {
+                            var tpCell = rowEl.querySelector('[data-sqr-computed="total_price"]');
+                            if (tpCell) tpCell.textContent = pesoFmt(data.computed_total_price);
                         }
                     }
                 }
@@ -1120,14 +1125,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                             var msaVal = data.managed_support_amount;
                             msaCell.dataset.sqrValue = msaVal;
                             var msaDisp = msaCell.querySelector('.sqr-display');
-                            if (msaDisp) {
-                                if (msaVal) {
-                                    var n = parseFloat(msaVal);
-                                    msaDisp.innerHTML = isNaN(n) ? msaVal : n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
-                                } else {
-                                    msaDisp.innerHTML = '\u2013';
-                                }
-                            }
+                            if (msaDisp) msaDisp.innerHTML = pesoFmt(msaVal);
                         }
                     }
                 }

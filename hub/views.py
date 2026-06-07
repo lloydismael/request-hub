@@ -2211,6 +2211,13 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
         if "sse_amount" in save_fields:
             response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
+        # Return recomputed discount amount and total price whenever any component changes
+        _PRICE_TRIGGERS = frozenset(["pm_amount", "sse_amount", "managed_support_amount", "discount_rate"])
+        if any(f in save_fields for f in _PRICE_TRIGGERS) or field in _PRICE_TRIGGERS:
+            da = submission.computed_discount_amount
+            tp = submission.computed_total_price
+            response_data["computed_discount_amount"] = str(da) if da is not None else ""
+            response_data["computed_total_price"] = str(tp) if tp is not None else ""
         if "managed_support_amount" in save_fields:
             msa = submission.managed_support_amount
             response_data["managed_support_amount"] = str(msa) if msa is not None else ""
