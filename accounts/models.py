@@ -75,6 +75,7 @@ class User(AbstractUser):
     ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
+    show_chatbot = models.BooleanField(default=True, verbose_name="Show AI Chatbot")
 
     def must_complete_profile(self) -> bool:
         required_fields = [self.email, self.phone_number, self.profile_photo]

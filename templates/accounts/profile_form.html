@@ -54,6 +54,9 @@
         <button class="profile-tab" data-profile-tab="banner" id="banner-tab-btn">
             <i class="bi bi-image-fill me-1"></i>Edit Banner
         </button>
+        <button class="profile-tab" data-profile-tab="settings">
+            <i class="bi bi-sliders me-1"></i>Settings
+        </button>
         {# ── View mode toggle — inline in tab bar ── #}
         <div class="profile-tabs__vmt ms-auto" id="profile-vmt-clone" role="group" aria-label="View mode">
             <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
@@ -241,7 +244,42 @@
 
     </form>
 
-    <div class="text-center mt-4 mb-2" style="font-size:0.75rem; opacity:0.45;">
+    {# ── Settings tab (outside main form — its own POST) ─── #}
+    <div class="profile-panel" id="profile-panel-settings">
+        <div class="glass-card profile-card">
+            <h2 class="profile-card__title"><i class="bi bi-sliders me-2"></i>Settings</h2>
+            <p class="text-muted small mb-4">Personalise your Request Hub experience. Changes are saved immediately.</p>
+
+            <form method="post" id="profile-settings-form">
+                {% csrf_token %}
+                <input type="hidden" name="save_settings" value="1">
+
+                <div class="list-group list-group-flush">
+
+                    {# ── Chatbot ── #}
+                    <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                        <div>
+                            <div class="fw-semibold"><i class="bi bi-robot me-2 text-info"></i>AI Chatbot</div>
+                            <div class="text-muted small mt-1">Show or hide the floating AI assistant button on every page.</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input settings-toggle" type="checkbox" role="switch"
+                                   id="toggle_show_chatbot" name="show_chatbot" value="1"
+                                   {% if form.instance.show_chatbot %}checked{% endif %}
+                                   style="width:2.5em;height:1.4em;cursor:pointer;">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-4">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-check2 me-1"></i>Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
         App Version {{ app_version }}
     </div>
 
@@ -265,6 +303,7 @@
     // Hash-based tab activation
     if (window.location.hash === '#avatar') activate('avatar');
     if (window.location.hash === '#banner') activate('banner');
+    if (window.location.hash === '#settings') activate('settings');
 
     // "Edit Banner" button on hero banner → jump to banner tab
     const bannerEditBtn = document.getElementById('banner-edit-btn');
@@ -347,6 +386,16 @@
             reader.readAsDataURL(file);
         });
     }
+}());
+
+// ── Settings tab: auto-submit on toggle change ──
+(function () {
+    document.querySelectorAll('.settings-toggle').forEach(function (toggle) {
+        toggle.addEventListener('change', function () {
+            var form = document.getElementById('profile-settings-form');
+            if (form) form.submit();
+        });
+    });
 }());
 
 // ── Profile page: inline view-mode toggle ──

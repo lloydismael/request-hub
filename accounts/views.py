@@ -35,6 +35,16 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         kwargs["is_admin"] = self.request.user.role == "admin"
         return kwargs
 
+    def post(self, request, *args, **kwargs):
+        # Settings tab has its own lightweight POST — handle before the main form
+        if request.POST.get("save_settings"):
+            user = request.user
+            user.show_chatbot = request.POST.get("show_chatbot") == "1"
+            user.save(update_fields=["show_chatbot"])
+            messages.success(request, "Settings saved.")
+            return redirect(reverse_lazy("accounts:update") + "#settings")
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         password_changed = bool(form.cleaned_data.get("new_password1"))
         delete_photo_requested = form.data.get("delete_photo")

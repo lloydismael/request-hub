@@ -612,7 +612,7 @@
         })();
     </script>
 
-    {% if request.user.is_authenticated %}
+    {% if request.user.is_authenticated and request.user.show_chatbot %}
     <!-- AI Chat Bot Widget -->
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
