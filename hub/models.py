@@ -446,6 +446,14 @@ class SqrSubmission(models.Model):
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
     sequence_number = models.PositiveIntegerField(editable=False, db_index=True, blank=True, null=True)
+    linked_request = models.ForeignKey(
+        "Request",
+        on_delete=models.SET_NULL,
+        related_name="sqr_links",
+        blank=True,
+        null=True,
+        verbose_name="RQ ID",
+    )
     engineer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

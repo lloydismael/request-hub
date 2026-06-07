@@ -1648,6 +1648,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "reviewed_by",
             "assigned_pm",
             "assigned_sse",
+            "linked_request",
         ).order_by("-created_at")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
@@ -1670,6 +1671,12 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
+            # Scope RQ ID dropdown to requests the engineer is involved with
+            form.fields["linked_request"].queryset = (
+                Request.objects.filter(
+                    Q(engineer=user) | Q(requestor=user)
+                ).order_by("-id")[:100]
+            )
 
         all_submissions = list(self.get_queryset())
 
@@ -1762,15 +1769,19 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "delivery_submissions": delivery_submissions,
                 "delivery_health_counts": delivery_health_counts,
                 "revenue_data": revenue_data,
-                "sqr_pm_users": list(
-                    User.objects.filter(role=User.Roles.PM_ESG)
-                    .values("pk", "first_name", "last_name", "username")
-                    .order_by("first_name", "last_name")
-                ) if is_pm else [],
                 "sqr_pm_users_json": json.dumps(list(
                     User.objects.filter(role=User.Roles.PM_ESG)
                     .values("pk", "first_name", "last_name", "username")
                     .order_by("first_name", "last_name")
+                )) if is_pm else "[]",
+                "sqr_sse_users_json": json.dumps(list(
+                    User.objects.filter(role=User.Roles.ENGINEER)
+                    .values("pk", "first_name", "last_name", "username")
+                    .order_by("first_name", "last_name")
+                )) if is_pm else "[]",
+                "sqr_rq_options_json": json.dumps(list(
+                    Request.objects.order_by("-id")[:300]
+                    .values("pk", "reference_code")
                 )) if is_pm else "[]",
             }
         )
@@ -1782,6 +1793,11 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             return redirect("hub:sqr")
 
         form = SqrSubmissionForm(request.POST)
+        form.fields["linked_request"].queryset = (
+            Request.objects.filter(
+                Q(engineer=request.user) | Q(requestor=request.user)
+            ).order_by("-id")[:100]
+        )
         if form.is_valid():
             submission = form.save(commit=False)
             submission.engineer = request.user
@@ -1930,7 +1946,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
         "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
-        "managed_support_amount", "assigned_pm",
+        "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
         "pm_manhrs", "discount_rate", "status", "proposal_status",
@@ -1938,7 +1954,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
         "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
-        "managed_support_amount", "assigned_pm",
+        "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _DATE_FIELDS = frozenset([
         "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
@@ -1946,7 +1962,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
     ])
     _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
     _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs", "managed_support_amount"])
-    _FK_FIELDS = frozenset(["assigned_pm"])
+    _FK_FIELDS = frozenset(["assigned_pm", "assigned_sse", "linked_request"])
 
     def post(self, request, pk):
         if request.user.role == User.Roles.ADMIN:
@@ -2034,6 +2050,13 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             pm = submission.assigned_pm
             response_data["assigned_pm_pk"] = pm.pk if pm else ""
             response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
+        if field == "assigned_sse":
+            sse = submission.assigned_sse
+            response_data["assigned_sse_name"] = (sse.get_full_name() or sse.username) if sse else ""
+        if field == "linked_request":
+            req = submission.linked_request
+            response_data["rq_pk"] = req.pk if req else ""
+            response_data["rq_code"] = req.reference_code if req else ""
         return JsonResponse(response_data)
 
 

@@ -617,6 +617,14 @@ class SqrSubmissionForm(forms.ModelForm):
         label="Department",
     )
 
+    linked_request = forms.ModelChoiceField(
+        queryset=Request.objects.all().order_by("-id"),
+        required=False,
+        empty_label="— Link to RQ ID (optional) —",
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="RQ ID",
+    )
+
     customer_contact = forms.ChoiceField(
         choices=[("", "— Select Member —")],
         widget=forms.Select(attrs={"class": "form-select"}),
@@ -640,6 +648,7 @@ class SqrSubmissionForm(forms.ModelForm):
     class Meta:
         model = SqrSubmission
         fields = [
+            "linked_request",
             "customer_company",
             "customer_contact",
             "pm_esg_reviewer",

@@ -278,8 +278,14 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             <td class="col-sticky-3{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_title" data-sqr-type="text" data-sqr-value="{{ item.project_title|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_title }}</span></td>
                             {# E: Scope of Services #}
                             <td class="col-sticky-4 col-sticky-border{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_details" data-sqr-type="select" data-sqr-value="{{ item.project_details|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</span></td>
-                            {# F: RQ ID (no direct field — placeholder; scrollable) #}
-                            <td class="small text-muted">&ndash;</td>
+                            {# F: RQ ID — supplied by engineer; links to Request; editable inline by PM/Admin #}
+                            <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="linked_request" data-sqr-type="select" data-sqr-value="{{ item.linked_request_id|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
+                                {% if item.linked_request %}
+                                    <a href="{% url 'hub:request-detail' item.linked_request.pk %}" class="text-info" target="_blank">{{ item.linked_request.reference_code }}</a>
+                                {% else %}&ndash;{% endif %}
+                                </span>
+                            </td>
                             {# G: Group Name #}
                             <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_company" data-sqr-type="select" data-sqr-value="{{ item.customer_company|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_company|default:"&ndash;" }}</span></td>
                             {# H: Account Manager #}
@@ -355,8 +361,8 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# Y: Assigned PM — defaults to col J (pm_esg_reviewer) on Approval; editable #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</span></td>
-                            {# Z: Assigned SSE #}
-                            <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
+                            {# Z: Assigned SSE — inline-editable by PM/Admin #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_sse" data-sqr-type="select" data-sqr-value="{{ item.assigned_sse_id|default:'' }}"><span class="sqr-display">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# AA: Start Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_start_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AB: Overall Status #}
@@ -877,13 +883,31 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
 
     /* PM users for Assigned PM dropdown — from context */
     var SQR_PM_USERS = {{ sqr_pm_users_json|default:"[]"|safe }};
-    /* Build choices array: [['', '— Select PM —'], [pk, 'Full Name'], ...] */
     var PM_USER_CHOICES = [['', '\u2014 Select PM \u2014']];
-    var PM_USER_MAP = {};  /* pk (string) → display name */
+    var PM_USER_MAP = {};
     SQR_PM_USERS.forEach(function(u) {
         var name = (u.first_name + ' ' + u.last_name).trim() || u.username;
         PM_USER_CHOICES.push([String(u.pk), name]);
         PM_USER_MAP[String(u.pk)] = name;
+    });
+
+    /* SSE (Engineer) users for Assigned SSE dropdown */
+    var SQR_SSE_USERS = {{ sqr_sse_users_json|default:"[]"|safe }};
+    var SSE_USER_CHOICES = [['', '\u2014 Select SSE \u2014']];
+    var SSE_USER_MAP = {};
+    SQR_SSE_USERS.forEach(function(u) {
+        var name = (u.first_name + ' ' + u.last_name).trim() || u.username;
+        SSE_USER_CHOICES.push([String(u.pk), name]);
+        SSE_USER_MAP[String(u.pk)] = name;
+    });
+
+    /* Request options for RQ ID dropdown */
+    var SQR_RQ_OPTIONS = {{ sqr_rq_options_json|default:"[]"|safe }};
+    var RQ_CHOICES = [['', '\u2014 Select RQ ID \u2014']];
+    var RQ_MAP = {};
+    SQR_RQ_OPTIONS.forEach(function(r) {
+        RQ_CHOICES.push([String(r.pk), r.reference_code]);
+        RQ_MAP[String(r.pk)] = r.reference_code;
     });
 
     /* Choice maps — value → label (for display after save) */
@@ -903,6 +927,8 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
         project_details: [['','— Select Scope —'],['Training','Training'],['Support','Support'],['Implementation','Implementation'],['Project Management','Project Management'],['Implementation and Project Management','Implementation and Project Management'],['Demonstration','Demonstration'],['Managed Support and Maintenance Service','Managed Support and Maintenance Service'],['Other','Other']],
         customer_company: [['','— Select —'],['ESS','ESS'],['HP','HP'],['Dell','Dell'],['ENS','ENS'],['Other','Other']],
         assigned_pm: PM_USER_CHOICES,
+        assigned_sse: SSE_USER_CHOICES,
+        linked_request: RQ_CHOICES,
     };
 
     function fmtDate(iso) {
@@ -916,6 +942,8 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
     function getDisplay(field, value) {
         if (!value && value !== 0) return '\u2013';
         if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';
+        if (field === 'assigned_sse') return SSE_USER_MAP[String(value)] || '\u2013';
+        if (field === 'linked_request') return RQ_MAP[String(value)] || String(value);
         if (LABELS[field]) return LABELS[field][value] || value;
         var lower = field.toLowerCase();
         if (lower.indexOf('date') !== -1) return fmtDate(value);
@@ -1032,6 +1060,19 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                         pmCell.dataset.sqrValue = pmPk;
                         var pmDisp = pmCell.querySelector('.sqr-display');
                         if (pmDisp) pmDisp.innerHTML = pmName;
+                    }
+                }
+                // For linked_request: update display with clickable REQ link
+                if (field === 'linked_request' && 'rq_pk' in data) {
+                    var rqPk = data.rq_pk;
+                    var rqCode = data.rq_code || '';
+                    var rqDisp = cell.querySelector('.sqr-display');
+                    if (rqDisp) {
+                        if (rqPk && rqCode) {
+                            rqDisp.innerHTML = '<a href="/requests/' + rqPk + '/" class="text-info" target="_blank">' + rqCode + '</a>';
+                        } else {
+                            rqDisp.innerHTML = '\u2013';
+                        }
                     }
                 }
             } else {
