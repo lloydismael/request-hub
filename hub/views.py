@@ -1629,6 +1629,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
 
+def _make_sqr_edit_form(user):
+    """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests."""
+    form = SqrSubmissionForm(auto_id="edit_%s")
+    form.fields["linked_request"].queryset = (
+        Request.objects.filter(engineer=user).only("id", "reference_code").order_by("-id")
+    )
+    return form
+
+
 class SqrListView(LoginRequiredMixin, TemplateView):
     template_name = "hub/sqr.html"
 
@@ -1673,7 +1682,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             form = SqrSubmissionForm()
             # Scope RQ ID dropdown to requests assigned to this engineer only
             form.fields["linked_request"].queryset = (
-                Request.objects.filter(engineer=user).order_by("-id")
+                Request.objects.filter(engineer=user).only("id", "reference_code").order_by("-id")
             )
 
         all_submissions = list(self.get_queryset())
@@ -1758,7 +1767,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "is_pm": is_pm,
                 "is_admin": is_admin,
                 "sqr_form": form,
-                "sqr_edit_form": SqrSubmissionForm(auto_id="edit_%s") if can_create else None,
+                "sqr_edit_form": _make_sqr_edit_form(user) if can_create else None,
                 "sqr_pm_edit_form": None,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "active_sqr_tab": active_tab,
@@ -1792,7 +1801,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
 
         form = SqrSubmissionForm(request.POST)
         form.fields["linked_request"].queryset = (
-            Request.objects.filter(engineer=request.user).order_by("-id")
+            Request.objects.filter(engineer=request.user).only("id", "reference_code").order_by("-id")
         )
         if form.is_valid():
             submission = form.save(commit=False)

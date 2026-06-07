@@ -271,7 +271,28 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             {# A: SQR Date #}
                             <td class="col-sticky-0 small">{{ item.created_at|date:"M d, Y" }}</td>
                             {# B: SQR ID #}
-                            <td class="col-sticky-1 fw-semibold">{{ item.reference_code }}</td>
+                            <td class="col-sticky-1 fw-semibold">
+                                {% if is_pm %}
+                                    <a href="{% url 'hub:sqr-pm-edit' item.pk %}" class="fw-semibold text-decoration-none text-reset">{{ item.reference_code }}</a>
+                                {% elif can_create_sqr and item.engineer_id == request.user.id and item.status != 'reviewed' %}
+                                    <button type="button"
+                                            class="btn btn-link p-0 fw-semibold text-decoration-none text-reset sqr-open-edit-btn"
+                                            style="font-size:inherit;line-height:inherit;"
+                                            data-pk="{{ item.pk }}"
+                                            data-url="{% url 'hub:sqr-edit' item.pk %}"
+                                            data-customer-name="{{ item.customer_name }}"
+                                            data-customer-company="{{ item.customer_company|default:'' }}"
+                                            data-customer-contact="{{ item.customer_contact|default:'' }}"
+                                            data-project-title="{{ item.project_title }}"
+                                            data-project-details="{{ item.project_details|default:'' }}"
+                                            data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
+                                            data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                            data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
+                                            data-remarks="{{ item.remarks|default:'' }}">{{ item.reference_code }}</button>
+                                {% else %}
+                                    {{ item.reference_code }}
+                                {% endif %}
+                            </td>
                             {# C: Account Name #}
                             <td class="col-sticky-2{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_name" data-sqr-type="text" data-sqr-value="{{ item.customer_name|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_name }}</span></td>
                             {# D: Service Description #}
@@ -296,12 +317,8 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
                             <td class="small">{% if item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
                             {# K: SQR Doc. Ref. Link #}
                             <td class="small">
-                                {% if item.documentation_link_list %}
-                                    {% for link in item.documentation_link_list %}
-                                        <a href="{{ link }}" target="_blank" rel="noopener" class="text-info d-block text-truncate" style="max-width:120px;" title="{{ link }}">
-                                            <i class="bi bi-link-45deg"></i> Link
-                                        </a>
-                                    {% endfor %}
+                                {% if item.sqr_folder_link %}
+                                    <a href="{{ item.sqr_folder_link }}" target="_blank" rel="noopener" class="text-info">Link</a>
                                 {% else %}
                                     <span class="text-muted">&ndash;</span>
                                 {% endif %}

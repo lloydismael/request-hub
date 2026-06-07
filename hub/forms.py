@@ -618,7 +618,7 @@ class SqrSubmissionForm(forms.ModelForm):
     )
 
     linked_request = forms.ModelChoiceField(
-        queryset=Request.objects.all().order_by("-id"),
+        queryset=Request.objects.only("id", "reference_code").order_by("-id"),
         required=False,
         empty_label="— Link to RQ ID (optional) —",
         widget=forms.Select(attrs={"class": "form-select"}),
@@ -689,6 +689,10 @@ class SqrSubmissionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         import json
         super().__init__(*args, **kwargs)
+        # Use only reference_code for the RQ ID dropdown label — avoids N+1 account joins
+        self.fields["linked_request"].label_from_instance = (
+            lambda obj: obj.reference_code or f"Request #{obj.pk}"
+        )
         reviewer_qs = self.fields["pm_esg_reviewer"].queryset
         self.fields["pm_esg_reviewer"].label_from_instance = _user_display
         widget = self.fields["pm_esg_reviewer"].widget
