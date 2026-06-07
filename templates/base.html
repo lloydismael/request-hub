@@ -639,7 +639,7 @@
     </div>
     {% endif %}
 
-    {% if request.user.is_authenticated %}
+    {% if request.user.is_authenticated and request.user.idle_timeout_enabled %}
     {# ── Auto-logout idle warning ── #}
     {# Hidden form used to POST to the logout URL (CSRF-safe) #}
     <form id="alo-logout-form" action="{% url 'logout' %}" method="post" style="display:none">

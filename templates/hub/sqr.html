@@ -124,25 +124,33 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
 .sqr-inline-cell[title]::after { display: none; }
 
 /* ── For Revision row highlight ─────────────────────────────────────────── */
+/* Non-sticky cells: semi-transparent tint is fine (they scroll behind sticky cols) */
 .sqr-tracker tbody tr.sqr-row--revision td { background-color: rgba(239,68,68,0.08) !important; }
 .sqr-tracker tbody tr.sqr-row--revision:hover td { background-color: rgba(239,68,68,0.16) !important; }
+/* Sticky cells MUST use opaque colours — transparent backgrounds cause scrolling content to bleed through */
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0,
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-1,
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-2,
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-3,
-.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-4 { background-color: rgba(239,68,68,0.12) !important; }
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-4 { background-color: #271520 !important; }
 .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-0,
 .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-1,
 .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-2,
 .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-3,
-.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: rgba(239,68,68,0.22) !important; }
+.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #321826 !important; }
+/* Light mode */
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td { background-color: rgba(220,38,38,0.06) !important; }
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td { background-color: rgba(220,38,38,0.12) !important; }
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0,
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-1,
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-2,
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-3,
-body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-4 { background-color: rgba(220,38,38,0.09) !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-4 { background-color: #fde8e8 !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #fbd5d5 !important; }
 @keyframes sqr-revision-pulse { 0%,100%{ box-shadow: inset 3px 0 0 #ef4444; } 50%{ box-shadow: inset 3px 0 0 #fca5a5; } }
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 { animation: sqr-revision-pulse 1.8s ease-in-out infinite; }
 </style>

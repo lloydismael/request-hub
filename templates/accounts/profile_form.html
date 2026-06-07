@@ -270,6 +270,20 @@
                         </div>
                     </div>
 
+                    {# ── Idle timeout ── #}
+                    <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                        <div>
+                            <div class="fw-semibold"><i class="bi bi-clock-history me-2 text-warning"></i>5-Minute Idle Timeout</div>
+                            <div class="text-muted small mt-1">Automatically log you out after 5 minutes of inactivity. Recommended for shared or public computers.</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input settings-toggle" type="checkbox" role="switch"
+                                   id="toggle_idle_timeout" name="idle_timeout_enabled" value="1"
+                                   {% if form.instance.idle_timeout_enabled %}checked{% endif %}
+                                   style="width:2.5em;height:1.4em;cursor:pointer;">
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="mt-4">

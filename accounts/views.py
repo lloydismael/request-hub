@@ -40,7 +40,8 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         if request.POST.get("save_settings"):
             user = request.user
             user.show_chatbot = request.POST.get("show_chatbot") == "1"
-            user.save(update_fields=["show_chatbot"])
+            user.idle_timeout_enabled = request.POST.get("idle_timeout_enabled") == "1"
+            user.save(update_fields=["show_chatbot", "idle_timeout_enabled"])
             messages.success(request, "Settings saved.")
             return redirect(reverse_lazy("accounts:update") + "#settings")
         return super().post(request, *args, **kwargs)

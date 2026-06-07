@@ -76,6 +76,7 @@ class User(AbstractUser):
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
     show_chatbot = models.BooleanField(default=True, verbose_name="Show AI Chatbot")
+    idle_timeout_enabled = models.BooleanField(default=True, verbose_name="5-Minute Idle Timeout")
 
     def must_complete_profile(self) -> bool:
         required_fields = [self.email, self.phone_number, self.profile_photo]
