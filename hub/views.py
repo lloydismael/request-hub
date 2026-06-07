@@ -1753,7 +1753,7 @@ def _make_sqr_edit_form(user):
     """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests."""
     form = SqrSubmissionForm(auto_id="edit_%s")
     form.fields["linked_request"].queryset = (
-        Request.objects.filter(engineer=user).only("id", "reference_code").order_by("-id")
+        Request.objects.filter(engineer=user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
     )
     return form
 
@@ -1802,7 +1802,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             form = SqrSubmissionForm()
             # Scope RQ ID dropdown to requests assigned to this engineer only
             form.fields["linked_request"].queryset = (
-                Request.objects.filter(engineer=user).only("id", "reference_code").order_by("-id")
+                Request.objects.filter(engineer=user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
             )
 
         all_submissions = list(self.get_queryset())
@@ -1921,7 +1921,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
 
         form = SqrSubmissionForm(request.POST)
         form.fields["linked_request"].queryset = (
-            Request.objects.filter(engineer=request.user).only("id", "reference_code").order_by("-id")
+            Request.objects.filter(engineer=request.user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
         )
         if form.is_valid():
             submission = form.save(commit=False)
@@ -2135,6 +2135,22 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             setattr(submission, field, coerced)
         save_fields = [field]
 
+        # Auto-recompute PM Amount (col O = col N × 3000) when pm_manhrs changes
+        if field == "pm_manhrs":
+            submission.pm_amount = (
+                (Decimal(str(coerced)) * Decimal("3000")).quantize(Decimal("0.01"))
+                if coerced is not None else None
+            )
+            save_fields.append("pm_amount")
+
+        # Auto-recompute SSE Amount (col M = col L × 2000) when sse_manhrs changes
+        if field == "sse_manhrs":
+            submission.sse_amount = (
+                (Decimal(str(coerced)) * Decimal("2000")).quantize(Decimal("0.01"))
+                if coerced is not None else None
+            )
+            save_fields.append("sse_amount")
+
         # Auto-recompute Managed Support Svc. Amt. (col P) when scope or group changes
         _MANAGED_SCOPES = frozenset([
             "Implementation",
@@ -2191,6 +2207,10 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             )
 
         response_data = {"ok": True}
+        if "pm_amount" in save_fields:
+            response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
+        if "sse_amount" in save_fields:
+            response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
         if "managed_support_amount" in save_fields:
             msa = submission.managed_support_amount
             response_data["managed_support_amount"] = str(msa) if msa is not None else ""

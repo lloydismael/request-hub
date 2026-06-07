@@ -618,11 +618,11 @@ class SqrSubmissionForm(forms.ModelForm):
     )
 
     linked_request = forms.ModelChoiceField(
-        queryset=Request.objects.only("id", "reference_code").order_by("-id"),
+        queryset=Request.objects.select_related("account").only("id", "reference_code", "account__name").order_by("-id"),
         required=False,
-        empty_label="— Link to RQ ID (optional) —",
+        empty_label="— Link to Request ID (optional) —",
         widget=forms.Select(attrs={"class": "form-select"}),
-        label="RQ ID",
+        label="Request ID",
     )
 
     customer_contact = forms.ChoiceField(
@@ -689,9 +689,13 @@ class SqrSubmissionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         import json
         super().__init__(*args, **kwargs)
-        # Use only reference_code for the RQ ID dropdown label — avoids N+1 account joins
+        # Include account name in the Request ID dropdown label to help identify requests
         self.fields["linked_request"].label_from_instance = (
-            lambda obj: obj.reference_code or f"Request #{obj.pk}"
+            lambda obj: (
+                f"{obj.reference_code} \u2013 {obj.account.name}"
+                if obj.reference_code and getattr(obj, 'account', None) and obj.account.name
+                else obj.reference_code or f"Request #{obj.pk}"
+            )
         )
         reviewer_qs = self.fields["pm_esg_reviewer"].queryset
         self.fields["pm_esg_reviewer"].label_from_instance = _user_display

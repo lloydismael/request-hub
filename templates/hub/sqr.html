@@ -1086,6 +1086,32 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                         row.classList.remove('sqr-row--revision');
                     }
                 }
+                // Refresh PM Amount (col O) when pm_manhrs (col N) changes
+                if ('pm_amount' in data) {
+                    var pmAmtCell = cell.nextElementSibling;
+                    if (pmAmtCell) {
+                        var pmAmt = data.pm_amount;
+                        if (pmAmt) {
+                            var n = parseFloat(pmAmt);
+                            pmAmtCell.textContent = isNaN(n) ? pmAmt : n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+                        } else {
+                            pmAmtCell.textContent = '\u2013';
+                        }
+                    }
+                }
+                // Refresh SSE Amount (col M) when sse_manhrs (col L) changes
+                if ('sse_amount' in data) {
+                    var sseAmtCell = cell.nextElementSibling;
+                    if (sseAmtCell) {
+                        var sseAmt = data.sse_amount;
+                        if (sseAmt) {
+                            var n = parseFloat(sseAmt);
+                            sseAmtCell.textContent = isNaN(n) ? sseAmt : n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+                        } else {
+                            sseAmtCell.textContent = '\u2013';
+                        }
+                    }
+                }
                 // Refresh Managed Support Svc. Amt. (col P) when scope or group changes
                 if ('managed_support_amount' in data) {
                     if (row) {
