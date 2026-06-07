@@ -382,7 +382,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                             {# T: SQR Status #}
                             <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="status" data-sqr-type="select" data-sqr-value="{{ item.status|default:'' }}"{% endif %}>
                                 <span class="sqr-display">
-                                {% if item.status == 'for_processing' %}
+                                {% if item.status == 'submitted' %}
                                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
                                 {% elif item.status == 'for_revision' %}
                                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
