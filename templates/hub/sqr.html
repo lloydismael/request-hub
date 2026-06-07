@@ -1003,6 +1003,29 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             if (value === 'for_revision') return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>';
             return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>';
         }
+        if (field === 'proposal_status') {
+            if (value === 'submitted_pending')  return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted\u2013Pending</span>';
+            if (value === 'negotiation_review') return '<span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>';
+            if (value === 'closed_won')         return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>';
+            if (value === 'closed_lost')        return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed Lost</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'overall_status') {
+            if (value === 'on_hold')    return '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>';
+            if (value === 'planning')   return '<span class="badge bg-info-subtle text-info border border-info-subtle">Planning</span>';
+            if (value === 'in_progress')return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>';
+            if (value === 'completed')  return '<span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>';
+            if (value === 'cancelled')  return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'delivery_health') {
+            if (value === 'on_track')  return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>';
+            if (value === 'off_track') return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Off Track</span>';
+            if (value === 'at_risk')   return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>';
+            if (value === 'completed') return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>';
+            if (value === 'cancelled') return '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
         if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';
         if (field === 'assigned_sse') return SSE_USER_MAP[String(value)] || '\u2013';
         if (field === 'linked_request') return RQ_MAP[String(value)] || String(value);

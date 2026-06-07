@@ -2038,7 +2038,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                     .order_by("first_name", "last_name")
                 )) if is_pm else "[]",
                 "sqr_sse_users_json": json.dumps(list(
-                    User.objects.filter(role=User.Roles.ENGINEER)
+                    User.objects.filter(role__in=[User.Roles.ENGINEER, User.Roles.ON_HOLD])
                     .values("pk", "first_name", "last_name", "username")
                     .order_by("first_name", "last_name")
                 )) if is_pm else "[]",
