@@ -748,6 +748,126 @@ def _admin_sort_account_manager_key(request_obj):
     return (has_name, normalized)
 
 
+def _send_sqr_for_revision_email(
+    submission: SqrSubmission,
+    reviewer_name: str,
+    *,
+    http_request=None,
+) -> None:
+    """Send an email to the SQR creator when the status is set to For Revision."""
+    engineer = submission.engineer
+    engineer_email = (getattr(engineer, "email", "") or "").strip()
+    if not engineer_email:
+        logger.warning(
+            "SQR for-revision email skipped: engineer %s has no email (SQR %s)",
+            getattr(engineer, "username", "?"),
+            submission.reference_code,
+        )
+        return
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+    if not use_acs:
+        logger.warning(
+            "ACS email not configured; SQR for-revision email skipped for %s",
+            submission.reference_code,
+        )
+        return
+
+    engineer_name = engineer.get_full_name() or engineer.username
+    sqr_edit_path = reverse("hub:sqr-edit", args=[submission.pk])
+    if http_request:
+        try:
+            sqr_url = http_request.build_absolute_uri(sqr_edit_path)
+        except Exception:
+            sqr_url = sqr_edit_path
+    else:
+        sqr_url = sqr_edit_path
+
+    review_notes = (submission.review_notes or "").strip()
+    customer_company = (submission.customer_company or "").strip()
+    reviewed_date = (
+        submission.updated_at.strftime("%B %d, %Y  %I:%M %p")
+        if submission.updated_at
+        else "—"
+    )
+    divider = "─" * 56
+
+    body_lines = [
+        f"Hi {engineer_name},",
+        "",
+        "Your SQR submission has been reviewed and marked For Revision.",
+        "Please address the reviewer's comments and resubmit at your earliest convenience.",
+        "",
+        divider,
+        "  SQR DETAILS",
+        divider,
+        f"  Reference:      {submission.reference_code}",
+        f"  Customer:       {submission.customer_name}",
+    ]
+    if customer_company:
+        body_lines.append(f"  Company/Group:  {customer_company}")
+    body_lines += [
+        f"  Project Title:  {submission.project_title}",
+        f"  Reviewed By:    {reviewer_name}",
+        f"  Date Reviewed:  {reviewed_date}",
+        "",
+        divider,
+        "  REVIEWER COMMENTS",
+        divider,
+        (
+            review_notes
+            if review_notes
+            else "No specific comments were provided. Please follow up with the reviewer for details."
+        ),
+        "",
+        divider,
+        "  NEXT STEPS",
+        divider,
+        "  1. Log in to Request Hub and navigate to your SQR submissions.",
+        "  2. Carefully review the comments above.",
+        "  3. Update your SQR submission accordingly.",
+        "  4. Resubmit for review once the changes are complete.",
+        "",
+        f"  View & Edit your SQR:  {sqr_url}",
+        "",
+        divider,
+        "If you have questions, please reach out to your reviewer directly.",
+        "",
+        "This is an automated notification from Request Hub.",
+        "ESG Request Hub  |  ESGRequestHub@phildata.com",
+    ]
+
+    subject = f"[Request Hub] {submission.reference_code} \u2014 Action Required: For Revision"
+    plain_text = "\n".join(body_lines)
+
+    try:
+        from azure.communication.email import EmailClient
+
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {"to": [{"address": engineer_email}]},
+            "content": {
+                "subject": subject,
+                "plainText": plain_text,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        logger.info(
+            "SQR for-revision email sent to %s for %s",
+            engineer_email,
+            submission.reference_code,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "SQR for-revision email send failed for %s to %s",
+            submission.reference_code,
+            engineer_email,
+            exc_info=exc,
+        )
+
+
 def _admin_sort_engineer_key(request_obj):
     engineer = getattr(request_obj, "engineer", None)
     if engineer:
@@ -1984,11 +2104,15 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
 
         field = data.get("field", "")
         value = data.get("value", "")
+        review_notes_override = data.get("review_notes", None)  # supplied when status → for_revision
 
         if not field or field not in allowed:
             return JsonResponse({"ok": False, "error": "Field not allowed"}, status=400)
 
-        submission = get_object_or_404(SqrSubmission, pk=pk)
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer"), pk=pk
+        )
+        old_status = submission.status
 
         try:
             if field in self._DATE_FIELDS:
@@ -2042,8 +2166,30 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 submission.reviewed_at = None
                 submission.validity_due_date = None
                 save_fields += ["reviewed_at", "validity_due_date"]
+            # Save review_notes when status → for_revision (provided by the comments modal)
+            if coerced == SqrSubmission.Status.FOR_REVISION and review_notes_override is not None:
+                submission.review_notes = review_notes_override
+                submission.reviewed_by = request.user
+                if "review_notes" not in save_fields:
+                    save_fields.append("review_notes")
+                if "reviewed_by" not in save_fields:
+                    save_fields.append("reviewed_by")
 
         submission.save(update_fields=save_fields)
+
+        # Email engineer when status changed to For Revision via inline edit
+        if (
+            field == "status"
+            and coerced == SqrSubmission.Status.FOR_REVISION
+            and old_status != SqrSubmission.Status.FOR_REVISION
+        ):
+            reviewer_name = request.user.get_full_name() or request.user.username
+            _send_sqr_for_revision_email(
+                submission,
+                reviewer_name,
+                http_request=request,
+            )
+
         response_data = {"ok": True}
         if "managed_support_amount" in save_fields:
             msa = submission.managed_support_amount
@@ -2146,6 +2292,12 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
             actor=reviewer_name,
             source="SQR · Review Update",
         )
+        if submission.status == SqrSubmission.Status.FOR_REVISION:
+            _send_sqr_for_revision_email(
+                submission,
+                reviewer_name,
+                http_request=self.request,
+            )
 
 
 class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):

@@ -998,6 +998,11 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
 
     function getDisplay(field, value) {
         if (!value && value !== 0) return '\u2013';
+        if (field === 'status') {
+            if (value === 'reviewed')     return '<span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>';
+            if (value === 'for_revision') return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>';
+            return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>';
+        }
         if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';
         if (field === 'assigned_sse') return SSE_USER_MAP[String(value)] || '\u2013';
         if (field === 'linked_request') return RQ_MAP[String(value)] || String(value);
@@ -1054,13 +1059,15 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         return w;
     }
 
-    function saveField(pk, field, value, cell, displayEl) {
+    function saveField(pk, field, value, cell, displayEl, reviewNotes) {
         var url = '/sqr/' + pk + '/inline-update/';
         cell.classList.add('sqr-saving');
+        var payload = {field: field, value: value};
+        if (reviewNotes !== undefined && reviewNotes !== null) payload.review_notes = reviewNotes;
         fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-            body: JSON.stringify({field: field, value: value}),
+            body: JSON.stringify(payload),
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -1071,6 +1078,14 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
                 var row = cell.closest('tr');
+                // Sync revision row highlighting after status change
+                if (field === 'status' && row) {
+                    if (value === 'for_revision') {
+                        row.classList.add('sqr-row--revision');
+                    } else {
+                        row.classList.remove('sqr-row--revision');
+                    }
+                }
                 // Refresh Managed Support Svc. Amt. (col P) when scope or group changes
                 if ('managed_support_amount' in data) {
                     if (row) {
@@ -1165,7 +1180,11 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             widget.remove();
             if (displayEl) displayEl.style.display = '';
             if (newVal !== currentValue) {
-                saveField(pk, field, newVal, cell, displayEl || cell);
+                if (field === 'status' && newVal === 'for_revision') {
+                    openRevisionModal(pk, newVal, cell, displayEl || cell);
+                } else {
+                    saveField(pk, field, newVal, cell, displayEl || cell);
+                }
             }
         }
 
@@ -1192,6 +1211,45 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         }
     }
 
+    function openRevisionModal(pk, statusVal, cell, displayEl) {
+        var modal     = document.getElementById('sqr-revision-modal');
+        var notesArea = document.getElementById('sqr-revision-notes');
+        var confirmBtn = document.getElementById('sqr-revision-confirm');
+        var cancelBtn  = document.getElementById('sqr-revision-cancel');
+        var closeBtn   = document.getElementById('sqr-revision-close');
+        var backdrop   = document.getElementById('sqr-revision-backdrop');
+        if (!modal || !notesArea) return;
+
+        notesArea.value = '';
+        modal.classList.add('requestor-modal--visible');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('requestor-modal-open');
+        setTimeout(function() { notesArea.focus(); }, 100);
+
+        function closeModal() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            if (closeBtn)  closeBtn.removeEventListener('click', onCancel);
+            if (backdrop)  backdrop.removeEventListener('click', onCancel);
+        }
+
+        function onConfirm() {
+            var notes = notesArea.value.trim();
+            closeModal();
+            saveField(pk, 'status', statusVal, cell, displayEl, notes);
+        }
+
+        function onCancel() { closeModal(); }
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        if (closeBtn) closeBtn.addEventListener('click', onCancel);
+        if (backdrop) backdrop.addEventListener('click', onCancel);
+    }
+
     document.querySelectorAll('.sqr-inline-cell').forEach(function(cell) {
         cell.title = 'Click to edit';
         cell.addEventListener('click', function(e) {
@@ -1200,5 +1258,42 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
     });
 })();
 </script>
+{% endif %}
+
+{# ── For Revision Comments Modal (PM/Admin inline edit) ───────────────── #}
+{% if is_pm %}
+<div class="requestor-modal" id="sqr-revision-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="sqr-revision-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-revision-title" style="max-width:500px;">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="sqr-revision-title">
+                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>For Revision &mdash; Add Comments
+            </h2>
+            <button type="button" class="btn-close" id="sqr-revision-close" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <p class="text-muted small mb-3">
+                Provide clear comments or instructions for the engineer.
+                These will be saved to the SQR and included in the email notification sent to them.
+            </p>
+            <div class="mb-4">
+                <label class="form-label fw-semibold" for="sqr-revision-notes">
+                    <i class="bi bi-chat-left-text me-1"></i>Revision Comments <span class="text-danger">*</span>
+                </label>
+                <textarea id="sqr-revision-notes" class="form-control" rows="6"
+                    placeholder="e.g. Please update the project scope and revise the SSE man-hours. The current estimate appears underquoted for an Implementation engagement. Ensure the documentation links are also attached before resubmitting."></textarea>
+                <div class="form-text">These notes will be saved to the SQR record and emailed to the engineer.</div>
+            </div>
+            <div class="d-flex gap-2 justify-content-end">
+                <button type="button" class="btn btn-outline-secondary" id="sqr-revision-cancel">
+                    <i class="bi bi-x me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="sqr-revision-confirm">
+                    <i class="bi bi-send me-1"></i>Submit &amp; Notify Engineer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endif %}
 {% endblock %}
