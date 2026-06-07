@@ -868,6 +868,142 @@ def _send_sqr_for_revision_email(
         )
 
 
+def _send_sqr_approved_email(
+    submission: SqrSubmission,
+    reviewer_name: str,
+    *,
+    http_request=None,
+) -> None:
+    """Send an email to the SQR creator when the status is set to Approved."""
+    engineer = submission.engineer
+    engineer_email = (getattr(engineer, "email", "") or "").strip()
+    if not engineer_email:
+        logger.warning(
+            "SQR approved email skipped: engineer %s has no email (SQR %s)",
+            getattr(engineer, "username", "?"),
+            submission.reference_code,
+        )
+        return
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+    if not use_acs:
+        logger.warning(
+            "ACS email not configured; SQR approved email skipped for %s",
+            submission.reference_code,
+        )
+        return
+
+    engineer_name = engineer.get_full_name() or engineer.username
+    sqr_path = reverse("hub:sqr-review", args=[submission.pk])
+    if http_request:
+        try:
+            sqr_url = http_request.build_absolute_uri(sqr_path)
+        except Exception:
+            sqr_url = sqr_path
+    else:
+        sqr_url = sqr_path
+
+    customer_company = (submission.customer_company or "").strip()
+    approved_date = (
+        submission.reviewed_at.astimezone(MANILA_TZ).strftime("%B %d, %Y  %I:%M %p")
+        if submission.reviewed_at
+        else "—"
+    )
+    validity_due = (
+        submission.validity_due_date.strftime("%B %d, %Y")
+        if submission.validity_due_date
+        else "—"
+    )
+    total_price = (
+        f"₱{submission.computed_total_price:,.2f}"
+        if submission.computed_total_price
+        else (
+            f"₱{submission.quotation_total_price:,.2f}"
+            if submission.quotation_total_price
+            else "—"
+        )
+    )
+    assigned_pm = (
+        (submission.assigned_pm.get_full_name() or submission.assigned_pm.username)
+        if submission.assigned_pm
+        else "—"
+    )
+    divider = "─" * 56
+
+    body_lines = [
+        f"Hi {engineer_name},",
+        "",
+        "Great news! Your SQR submission has been reviewed and officially Approved.",
+        "Please see the approval details below.",
+        "",
+        divider,
+        "  APPROVAL DETAILS",
+        divider,
+        f"  Reference:        {submission.reference_code}",
+        f"  Customer:         {submission.customer_name}",
+    ]
+    if customer_company:
+        body_lines.append(f"  Company/Group:    {customer_company}")
+    body_lines += [
+        f"  Project Title:    {submission.project_title}",
+        f"  Approved By:      {reviewer_name}",
+        f"  Date Approved:    {approved_date}",
+        f"  Validity Until:   {validity_due}",
+        "",
+        divider,
+        "  QUOTATION SUMMARY",
+        divider,
+        f"  Total Price:      {total_price}",
+        f"  Assigned PM:      {assigned_pm}",
+        "",
+        divider,
+        "  NEXT STEPS",
+        divider,
+        "  1. Share the approved quotation with the customer.",
+        "  2. Coordinate with your assigned PM for project scheduling.",
+        "  3. Once a Purchase Order is received, update the SQR accordingly.",
+        "  4. Log in to Request Hub to track proposal and delivery status.",
+        "",
+        f"  View your SQR:  {sqr_url}",
+        "",
+        divider,
+        "If you have questions, please reach out to your PM or reviewer directly.",
+        "",
+        "This is an automated notification from Request Hub.",
+        "ESG Request Hub  |  ESGRequestHub@phildata.com",
+    ]
+
+    subject = f"[Request Hub] {submission.reference_code} — Approved"
+    plain_text = "\n".join(body_lines)
+
+    try:
+        from azure.communication.email import EmailClient
+
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {"to": [{"address": engineer_email}]},
+            "content": {
+                "subject": subject,
+                "plainText": plain_text,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        logger.info(
+            "SQR approved email sent to %s for %s",
+            engineer_email,
+            submission.reference_code,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "SQR approved email send failed for %s to %s",
+            submission.reference_code,
+            engineer_email,
+            exc_info=exc,
+        )
+
+
 def _admin_sort_engineer_key(request_obj):
     engineer = getattr(request_obj, "engineer", None)
     if engineer:
@@ -2206,6 +2342,19 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 http_request=request,
             )
 
+        # Email engineer when status changed to Approved via inline edit
+        if (
+            field == "status"
+            and coerced == SqrSubmission.Status.APPROVED
+            and old_status != SqrSubmission.Status.APPROVED
+        ):
+            reviewer_name = request.user.get_full_name() or request.user.username
+            _send_sqr_approved_email(
+                submission,
+                reviewer_name,
+                http_request=request,
+            )
+
         response_data = {"ok": True}
         if "pm_amount" in save_fields:
             response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
@@ -2321,6 +2470,12 @@ class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
         )
         if submission.status == SqrSubmission.Status.FOR_REVISION:
             _send_sqr_for_revision_email(
+                submission,
+                reviewer_name,
+                http_request=self.request,
+            )
+        if submission.status == SqrSubmission.Status.APPROVED:
+            _send_sqr_approved_email(
                 submission,
                 reviewer_name,
                 http_request=self.request,
