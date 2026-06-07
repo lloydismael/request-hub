@@ -661,6 +661,21 @@ class SqrSubmission(models.Model):
         return None
 
     @property
+    def computed_warranty_end_date(self):
+        """Completion Signed Date + 30 days — for all warranty scopes (Impl / Impl+PM / Managed Support)."""
+        if self.project_details in self._WARRANTY_SCOPES and self.delivery_completion_signed_date:
+            return self.delivery_completion_signed_date + timedelta(days=30)
+        return None
+
+    @property
+    def computed_managed_support_end_date(self):
+        """Support Start Date (Col AJ) + 365 days — only when AJ has a value."""
+        aj = self.computed_warranty_end_date
+        if aj:
+            return aj + timedelta(days=365)
+        return None
+
+    @property
     def revenue_stage_key(self) -> str:
         if self.status == self.Status.APPROVED and self.po_attachment_link:
             return "revenue"

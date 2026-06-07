@@ -2206,7 +2206,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
         "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
@@ -2214,12 +2214,13 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
         "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _DATE_FIELDS = frozenset([
         "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date", "warranty_end_date",
+        "revenue_date",
     ])
     _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
     _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs", "managed_support_amount"])

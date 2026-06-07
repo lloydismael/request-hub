@@ -478,11 +478,16 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                                 </span>
                             </td>
                             {# AE: Key Updates/Risks/Issues #}
-                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="key_updates_risks" data-sqr-type="textarea" data-sqr-value="{{ item.key_updates_risks|default:''|escapejs }}"><span class="sqr-display">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</span></td>
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="key_updates_risks" data-sqr-type="text" data-sqr-value="{{ item.key_updates_risks|default:''|escapejs }}"><span class="sqr-display">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</span></td>
                             {# AF: Target Finish Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AG: Actual Finish Date #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_actual_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}">
+                            <td class="small sqr-inline-cell"
+                                data-sqr-pk="{{ item.pk }}"
+                                data-sqr-field="delivery_actual_finish_date"
+                                data-sqr-type="date"
+                                data-sqr-value="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}"
+                                data-sqr-target-date="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}">
                                 <span class="sqr-display">
                                 {% if item.delivery_actual_finish_date %}
                                     {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
@@ -499,46 +504,44 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AI: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Implementation / Impl+PM only) #}
                             <td class="small">
-                                {% if item.project_details == 'Implementation' or item.project_details == 'Implementation and Project Management' %}
-                                    {% if item.computed_post_svc_warranty_end_date %}
-                                        {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
-                                    {% else %}
-                                        <span class="text-muted">&ndash;</span>
-                                    {% endif %}
+                                {% if item.computed_post_svc_warranty_end_date %}
+                                    {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
                                 {% else %}
                                     <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
-                            {# AJ: Support Start Date — shows warranty_end_date for Implementation / Impl+PM / Managed Support scopes #}
-                            {% if item.project_details == 'Implementation' or item.project_details == 'Implementation and Project Management' or item.project_details == 'Managed Support and Maintenance Service' %}
-                            <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"
-                                {% if is_pm %}data-sqr-pk="{{ item.pk }}" data-sqr-field="warranty_end_date" data-sqr-type="date" data-sqr-value="{{ item.warranty_end_date|date:'Y-m-d'|default:'' }}" title="Click to edit"{% endif %}
-                            ><span class="sqr-display">{{ item.warranty_end_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {% else %}
-                            <td class="small"><span class="text-muted fst-italic">NA</span></td>
-                            {% endif %}
-                            {# AK: Managed Support End Date #}
-                            <td class="small">{{ item.managed_support_end_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            {# AL: SI/Revenue Date #}
-                            <td class="small">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            {# AM: Source #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="text" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}"><span class="sqr-display">{{ item.revenue_source|default:"&ndash;" }}</span></td>
-                            {# AN: Reference No. #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text" data-sqr-value="{{ item.revenue_reference_no|default:''|escapejs }}"><span class="sqr-display">{{ item.revenue_reference_no|default:"&ndash;" }}</span></td>
-                            {# AO: Revenue Status #}
-                            <td>
-                                {% if item.revenue_status == 'invoiced' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Invoiced</span>
-                                {% elif item.revenue_status == 'partial' %}
-                                    <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-hourglass-split me-1"></i>Partial</span>
-                                {% elif item.revenue_status == 'pending' %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Pending</span>
+                            {# AJ: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Impl / Impl+PM / Managed Support) #}
+                            <td class="small">
+                                {% if item.computed_warranty_end_date %}
+                                    {{ item.computed_warranty_end_date|date:"M d, Y" }}
                                 {% else %}
-                                    <span class="text-muted small">&ndash;</span>
+                                    <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
-                            {# AP: Remarks #}
-                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}"><span class="sqr-display">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</span></td>
+                            {# AK: Managed Support End Date — computed: Col AJ + 365 days #}
+                            <td class="small">
+                                {% if item.computed_managed_support_end_date %}
+                                    {{ item.computed_managed_support_end_date|date:"M d, Y" }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">NA</span>
+                                {% endif %}
+                            </td>
+                            {# AL: SI/Revenue Date — inline calendar date input #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_date" data-sqr-type="date" data-sqr-value="{{ item.revenue_date|date:'Y-m-d'|default:'' }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# AM: Source — dropdown: Internal / Invoiced #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="select" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</span></td>
+                            {# AN: Reference No. — alphanumeric uppercase #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</span></td>
+                            {# AO: Revenue Status — computed: "Billed" if revenue_date set, else "For Billing" #}
+                            <td class="small">
+                                {% if item.revenue_date %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>
+                                {% endif %}
+                            </td>
+                            {# AP: Remarks — short text input #}
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="text" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</span></td>
                             {% else %}
                             {# Non-PM: show 14 empty delivery+revenue cells #}
                             <td class="text-muted text-center small" colspan="14"><span class="opacity-25">&middot;&middot;&middot;</span></td>
@@ -991,6 +994,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         delivery_health: {on_track:'On Track', off_track:'Off Track', at_risk:'At Risk', completed:'Completed', cancelled:'Cancelled'},
         project_details: {'Training':'Training','Support':'Support','Implementation':'Implementation','Project Management':'Project Management','Implementation and Project Management':'Implementation and Project Management','Demonstration':'Demonstration','Managed Support and Maintenance Service':'Managed Support and Maintenance Service','Other':'Other'},
         customer_company: {ESS:'ESS', HP:'HP', Dell:'Dell', ENS:'ENS', Other:'Other'},
+        revenue_source: {internal:'Internal', invoiced:'Invoiced'},
     };
     var CHOICES = {
         status: [['','—'],['submitted','For Processing'],['for_revision','For Revision'],['reviewed','Approved']],
@@ -999,6 +1003,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         delivery_health: [['','—'],['on_track','On Track'],['off_track','Off Track'],['at_risk','At Risk'],['completed','Completed'],['cancelled','Cancelled']],
         project_details: [['','— Select Scope —'],['Training','Training'],['Support','Support'],['Implementation','Implementation'],['Project Management','Project Management'],['Implementation and Project Management','Implementation and Project Management'],['Demonstration','Demonstration'],['Managed Support and Maintenance Service','Managed Support and Maintenance Service'],['Other','Other']],
         customer_company: [['','— Select —'],['ESS','ESS'],['HP','HP'],['Dell','Dell'],['ENS','ENS'],['Other','Other']],
+        revenue_source: [['','— Select —'],['internal','Internal'],['invoiced','Invoiced']],
         assigned_pm: PM_USER_CHOICES,
         assigned_sse: SSE_USER_CHOICES,
         linked_request: RQ_CHOICES,
@@ -1047,9 +1052,30 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         if (field === 'linked_request') return RQ_MAP[String(value)] || String(value);
         if (LABELS[field]) return LABELS[field][value] || value;
         var lower = field.toLowerCase();
-        if (lower.indexOf('date') !== -1) return fmtDate(value);
-        if (field === 'delivery_progress') return value + '%';
+        if (lower.indexOf('date') !== -1 && field !== 'key_updates_risks') return fmtDate(value);
+        if (field === 'delivery_progress') {
+            if (value === '' || value === null || value === undefined) return '<span class="text-muted small">\u2013</span>';
+            var pct = parseInt(value, 10);
+            if (isNaN(pct)) return value + '%';
+            var barClass = pct >= 100 ? 'bg-success' : pct >= 60 ? 'bg-info' : pct >= 30 ? 'bg-warning' : 'bg-danger';
+            return '<div class="d-flex align-items-center gap-2">'
+                + '<div class="progress flex-grow-1" style="height:6px;min-width:60px;">'
+                + '<div class="progress-bar ' + barClass + '" role="progressbar" style="width:' + pct + '%" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"></div>'
+                + '</div>'
+                + '<span class="small fw-semibold">' + pct + '%</span>'
+                + '</div>';
+        }
         if (field === 'discount_rate') return value + '%';
+        if (field === 'delivery_actual_finish_date') {
+            if (!value) return '<span class="text-muted">\u2013</span>';
+            var actCell = arguments[2];
+            var targetDate = actCell ? (actCell.dataset.sqrTargetDate || '') : '';
+            var formatted = fmtDate(value);
+            if (targetDate && value > targetDate) {
+                return '<span class="text-danger">' + formatted + '</span>';
+            }
+            return '<span class="text-success">' + formatted + '</span>';
+        }
         if (field === 'managed_support_amount' || field === 'pm_manhrs' || field === 'sse_manhrs') {
             var n = parseFloat(value);
             return isNaN(n) ? value : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -1068,15 +1094,16 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                 if (c[0] === currentValue) o.selected = true;
                 w.appendChild(o);
             });
-        } else if (field.indexOf('date') !== -1) {
+        } else if (field.indexOf('date') !== -1 && field !== 'key_updates_risks') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'date'; w.value = currentValue || '';
-        } else if (field === 'key_updates_risks' || field === 'revenue_remarks') {
-            w = document.createElement('textarea');
+        } else if (field === 'revenue_reference_no') {
+            w = document.createElement('input');
             w.className = 'sqr-inline-input';
-            w.rows = 2; w.style.minWidth = '160px';
-            w.value = currentValue || '';
+            w.type = 'text'; w.value = (currentValue || '').toUpperCase();
+            w.style.minWidth = '120px'; w.style.textTransform = 'uppercase';
+            w.addEventListener('input', function() { this.value = this.value.toUpperCase(); });
         } else if (field === 'managed_support_amount') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
@@ -1113,7 +1140,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             cell.classList.remove('sqr-saving');
             if (data.ok) {
                 cell.dataset.sqrValue = value;
-                displayEl.innerHTML = getDisplay(field, value);
+                displayEl.innerHTML = getDisplay(field, value, cell);
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
                 var row = cell.closest('tr');
@@ -1177,6 +1204,26 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                     if ('validity_due_date' in data) {
                         var vddCell = row.querySelector('[data-sqr-computed="validity_due_date"]');
                         if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
+                    }
+                }
+                // Refresh AO Revenue Status badge when revenue_date changes
+                if (field === 'revenue_date' && row) {
+                    var aoCell = row.querySelector('[data-sqr-field="revenue_date"]');
+                    if (aoCell) {
+                        var aoRow = aoCell.closest('tr');
+                        if (aoRow) {
+                            var tds = aoRow.querySelectorAll('td');
+                            // AO is the next non-editable td after AN (revenue_reference_no)
+                            var anCell = aoRow.querySelector('[data-sqr-field="revenue_reference_no"]');
+                            if (anCell && anCell.nextElementSibling) {
+                                var aoStatusCell = anCell.nextElementSibling;
+                                if (value) {
+                                    aoStatusCell.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>';
+                                } else {
+                                    aoStatusCell.innerHTML = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>';
+                                }
+                            }
+                        }
                     }
                 }
                 // Refresh Assigned PM (col Y) when status → Approved auto-sets it
