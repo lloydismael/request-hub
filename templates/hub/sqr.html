@@ -497,10 +497,26 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                             </td>
                             {# AH: Completion Signed Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {# AI: Warranty End Date #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="warranty_end_date" data-sqr-type="date" data-sqr-value="{{ item.warranty_end_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.warranty_end_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {# AJ: Managed Support Start Date #}
-                            <td class="small">{{ item.managed_support_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AI: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Implementation / Impl+PM only) #}
+                            <td class="small">
+                                {% if item.project_details == 'Implementation' or item.project_details == 'Implementation and Project Management' %}
+                                    {% if item.computed_post_svc_warranty_end_date %}
+                                        {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">&ndash;</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted fst-italic">NA</span>
+                                {% endif %}
+                            </td>
+                            {# AJ: Support Start Date — shows warranty_end_date for Implementation / Impl+PM / Managed Support scopes #}
+                            {% if item.project_details == 'Implementation' or item.project_details == 'Implementation and Project Management' or item.project_details == 'Managed Support and Maintenance Service' %}
+                            <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"
+                                {% if is_pm %}data-sqr-pk="{{ item.pk }}" data-sqr-field="warranty_end_date" data-sqr-type="date" data-sqr-value="{{ item.warranty_end_date|date:'Y-m-d'|default:'' }}" title="Click to edit"{% endif %}
+                            ><span class="sqr-display">{{ item.warranty_end_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {% else %}
+                            <td class="small"><span class="text-muted fst-italic">NA</span></td>
+                            {% endif %}
                             {# AK: Managed Support End Date #}
                             <td class="small">{{ item.managed_support_end_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AL: SI/Revenue Date #}

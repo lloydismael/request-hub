@@ -646,6 +646,20 @@ class SqrSubmission(models.Model):
         discount = Decimal(self.discount_rate or 0) / Decimal("100")
         return (gross * (Decimal("1") - discount)).quantize(Decimal("0.01"))
 
+    _IMPL_SCOPES = frozenset(["Implementation", "Implementation and Project Management"])
+    _WARRANTY_SCOPES = frozenset([
+        "Implementation",
+        "Implementation and Project Management",
+        "Managed Support and Maintenance Service",
+    ])
+
+    @property
+    def computed_post_svc_warranty_end_date(self):
+        """Completion Signed Date + 30 days — only for Implementation / Impl+PM scopes."""
+        if self.project_details in self._IMPL_SCOPES and self.delivery_completion_signed_date:
+            return self.delivery_completion_signed_date + timedelta(days=30)
+        return None
+
     @property
     def revenue_stage_key(self) -> str:
         if self.status == self.Status.APPROVED and self.po_attachment_link:
