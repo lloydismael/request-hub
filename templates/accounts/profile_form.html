@@ -284,6 +284,20 @@
                         </div>
                     </div>
 
+                    {# ── Welcome banner ── #}
+                    <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                        <div>
+                            <div class="fw-semibold"><i class="bi bi-stars me-2 text-success"></i>Welcome Banner</div>
+                            <div class="text-muted small mt-1">Show the &ldquo;Welcome back!&rdquo; splash screen after every login.</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input settings-toggle" type="checkbox" role="switch"
+                                   id="toggle_show_login_banner" name="show_login_banner" value="1"
+                                   {% if form.instance.show_login_banner %}checked{% endif %}
+                                   style="width:2.5em;height:1.4em;cursor:pointer;">
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="mt-4">

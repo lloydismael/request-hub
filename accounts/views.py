@@ -41,7 +41,8 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
             user = request.user
             user.show_chatbot = request.POST.get("show_chatbot") == "1"
             user.idle_timeout_enabled = request.POST.get("idle_timeout_enabled") == "1"
-            user.save(update_fields=["show_chatbot", "idle_timeout_enabled"])
+            user.show_login_banner = request.POST.get("show_login_banner") == "1"
+            user.save(update_fields=["show_chatbot", "idle_timeout_enabled", "show_login_banner"])
             messages.success(request, "Settings saved.")
             return redirect(reverse_lazy("accounts:update") + "#settings")
         return super().post(request, *args, **kwargs)
@@ -137,7 +138,8 @@ class RoleLoginView(LoginView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        messages.success(self.request, "Login successful. Redirecting to your dashboard…", extra_tags="login-success")
+        if self.request.user.show_login_banner:
+            messages.success(self.request, "Login successful. Redirecting to your dashboard\u2026", extra_tags="login-success")
         return response
 
 
