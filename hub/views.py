@@ -748,6 +748,126 @@ def _admin_sort_account_manager_key(request_obj):
     return (has_name, normalized)
 
 
+def _send_sqr_new_submission_email(
+    submission: SqrSubmission,
+    *,
+    http_request=None,
+) -> None:
+    """Send an email to the assigned PM-ESG reviewer when a new SQR is submitted."""
+    reviewer = submission.pm_esg_reviewer
+    if not reviewer:
+        logger.warning(
+            "SQR new-submission email skipped: no PM-ESG reviewer assigned (SQR %s)",
+            submission.reference_code,
+        )
+        return
+
+    reviewer_email = (getattr(reviewer, "email", "") or "").strip()
+    if not reviewer_email:
+        # Fall back to username if it looks like an email address
+        username = (getattr(reviewer, "username", "") or "").strip()
+        if "@" in username:
+            reviewer_email = username
+    if not reviewer_email:
+        logger.warning(
+            "SQR new-submission email skipped: reviewer %s has no email (SQR %s)",
+            getattr(reviewer, "username", "?"),
+            submission.reference_code,
+        )
+        return
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+    if not use_acs:
+        logger.warning(
+            "ACS email not configured; SQR new-submission email skipped for %s",
+            submission.reference_code,
+        )
+        return
+
+    reviewer_name = reviewer.get_full_name() or reviewer.username
+    engineer_name = submission.engineer.get_full_name() or submission.engineer.username
+    sqr_path = reverse("hub:sqr-review", args=[submission.pk])
+    if http_request:
+        try:
+            sqr_url = http_request.build_absolute_uri(sqr_path)
+        except Exception:
+            sqr_url = sqr_path
+    else:
+        sqr_url = sqr_path
+
+    customer_company = (submission.customer_company or "").strip()
+    submitted_date = (
+        submission.created_at.astimezone(MANILA_TZ).strftime("%B %d, %Y  %I:%M %p")
+        if submission.created_at
+        else "—"
+    )
+    divider = "─" * 56
+
+    body_lines = [
+        f"Hi {reviewer_name},",
+        "",
+        f"A new SQR submission has been created and assigned to you for review.",
+        f"Please review it at your earliest convenience.",
+        "",
+        divider,
+        "  SUBMISSION DETAILS",
+        divider,
+        f"  Reference:      {submission.reference_code}",
+        f"  Submitted By:   {engineer_name}",
+        f"  Customer:       {submission.customer_name}",
+    ]
+    if customer_company:
+        body_lines.append(f"  Company/Group:  {customer_company}")
+    body_lines += [
+        f"  Project Title:  {submission.project_title}",
+        f"  Scope of Svc:   {submission.project_details or '—'}",
+        f"  Date Submitted: {submitted_date}",
+        "",
+        divider,
+        "  NEXT STEPS",
+        divider,
+        "  1. Log in to Request Hub and open the SQR Review page.",
+        "  2. Review the submission details and quotation.",
+        "  3. Approve or request revision with your comments.",
+        "",
+        f"  Review here: {sqr_url}",
+        "",
+        divider,
+        "This is an automated notification from Request Hub.",
+        "Please do not reply directly to this message.",
+    ]
+
+    subject = f"[Request Hub] New SQR Submitted — {submission.reference_code} ({submission.customer_name})"
+    plain_text = "\n".join(body_lines)
+
+    try:
+        from azure.communication.email import EmailClient
+
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {"to": [{"address": reviewer_email}]},
+            "content": {
+                "subject": subject,
+                "plainText": plain_text,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        logger.info(
+            "SQR new-submission email sent to %s for %s",
+            reviewer_email,
+            submission.reference_code,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "SQR new-submission email send failed for %s to %s",
+            submission.reference_code,
+            reviewer_email,
+            exc_info=exc,
+        )
+
+
 def _send_sqr_for_revision_email(
     submission: SqrSubmission,
     reviewer_name: str,
@@ -2078,6 +2198,12 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             else:
                 submission.managed_support_amount = None
             submission.save()
+            # Reload with reviewer to ensure email field is populated
+            submission = (
+                SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer")
+                .get(pk=submission.pk)
+            )
+            _send_sqr_new_submission_email(submission, http_request=request)
             self._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
             return redirect("hub:sqr")
