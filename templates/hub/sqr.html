@@ -543,9 +543,81 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
                             {# AP: Remarks — short text input #}
                             <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="text" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</span></td>
                             {% else %}
-                            {# Non-PM: show 14 empty delivery+revenue cells #}
-                            <td class="text-muted text-center small" colspan="14"><span class="opacity-25">&middot;&middot;&middot;</span></td>
-                            <td class="text-muted text-center small" colspan="5"><span class="opacity-25">&middot;&middot;&middot;</span></td>
+                            {# Non-PM/Engineer: read-only view of delivery + revenue columns #}
+                            {# X: PO/PNL Date #}
+                            <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# Y: Assigned PM #}
+                            <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</td>
+                            {# Z: Assigned SSE #}
+                            <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
+                            {# AA: Start Date #}
+                            <td class="small">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AB: Overall Status #}
+                            <td>
+                                {% if item.overall_status == 'on_hold' %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
+                                {% elif item.overall_status == 'planning' %}<span class="badge bg-info-subtle text-info border border-info-subtle">Planning</span>
+                                {% elif item.overall_status == 'in_progress' %}<span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>
+                                {% elif item.overall_status == 'completed' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>
+                                {% elif item.overall_status == 'cancelled' %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
+                            </td>
+                            {# AC: Health Status #}
+                            <td>
+                                {% if item.delivery_health == 'on_track' %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>
+                                {% elif item.delivery_health == 'off_track' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Off Track</span>
+                                {% elif item.delivery_health == 'at_risk' %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>
+                                {% elif item.delivery_health == 'completed' %}<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>
+                                {% elif item.delivery_health == 'cancelled' %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
+                            </td>
+                            {# AD: Overall Progress % #}
+                            <td style="min-width:120px;">
+                                {% if item.delivery_progress is not None %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
+                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                 role="progressbar" style="width:{{ item.delivery_progress }}%"
+                                                 aria-valuenow="{{ item.delivery_progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
+                                    </div>
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
+                            </td>
+                            {# AE: Key Updates #}
+                            <td class="cell-wrap small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            {# AF: Target Finish Date #}
+                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AG: Actual Finish Date #}
+                            <td class="small">
+                                {% if item.delivery_actual_finish_date %}
+                                    {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
+                                        <span class="text-danger">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
+                                    {% else %}
+                                        <span class="text-success">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                {% else %}<span class="text-muted">&ndash;</span>{% endif %}
+                            </td>
+                            {# AH: Completion Signed Date #}
+                            <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AI: Post-svc Warranty End Date #}
+                            <td class="small">{% if item.computed_post_svc_warranty_end_date %}{{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AJ: Support Start Date #}
+                            <td class="small">{% if item.computed_warranty_end_date %}{{ item.computed_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AK: Managed Support End Date #}
+                            <td class="small">{% if item.computed_managed_support_end_date %}{{ item.computed_managed_support_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AL: SI/Revenue Date #}
+                            <td class="small">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AM: Source #}
+                            <td class="small">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</td>
+                            {# AN: Reference No. #}
+                            <td class="small">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
+                            {# AO: Revenue Status #}
+                            <td class="small">
+                                {% if item.revenue_date %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% else %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>{% endif %}
+                            </td>
+                            {# AP: Remarks #}
+                            <td class="cell-wrap small">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</td>
                             {% endif %}
                             {# Action col #}
                             <td class="text-center" style="min-width:80px;">
