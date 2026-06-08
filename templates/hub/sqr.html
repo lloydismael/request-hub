@@ -1250,7 +1250,45 @@ body:not(.dark-mode) #sqr-cell-preview {
             wrapper.appendChild(sel);
             wrapper.appendChild(inp);
             w = wrapper;
-        } else if (field === 'delivery_progress' || field === 'sse_manhrs' || field === 'discount_rate') {
+        } else if (field === 'discount_rate') {
+            var drPresets = ['5', '10', '15'];
+            var drCustom = currentValue !== '' && currentValue !== '0' && drPresets.indexOf(currentValue) === -1;
+            var wrapper = document.createElement('div');
+            wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
+            var sel = document.createElement('select');
+            sel.className = 'sqr-inline-input form-select form-select-sm';
+            sel.style.width = '90px';
+            var emptyOpt = document.createElement('option');
+            emptyOpt.value = ''; emptyOpt.textContent = '\u2014';
+            sel.appendChild(emptyOpt);
+            drPresets.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v; o.textContent = v + '%';
+                if (!drCustom && currentValue === v) o.selected = true;
+                sel.appendChild(o);
+            });
+            var customOpt = document.createElement('option');
+            customOpt.value = '__custom__'; customOpt.textContent = 'Custom\u2026';
+            if (drCustom) customOpt.selected = true;
+            sel.appendChild(customOpt);
+            var inp = document.createElement('input');
+            inp.type = 'number'; inp.min = '0'; inp.max = '100'; inp.step = '1';
+            inp.className = 'sqr-inline-input';
+            inp.style.width = '65px';
+            inp.style.display = drCustom ? '' : 'none';
+            inp.value = drCustom ? currentValue : '';
+            inp.placeholder = '%';
+            sel.addEventListener('change', function() {
+                inp.style.display = sel.value === '__custom__' ? '' : 'none';
+                if (sel.value === '__custom__') { inp.focus(); if (inp.select) inp.select(); }
+            });
+            Object.defineProperty(wrapper, 'value', {
+                get: function() { return sel.value === '__custom__' ? inp.value : sel.value; }
+            });
+            wrapper.appendChild(sel);
+            wrapper.appendChild(inp);
+            w = wrapper;
+        } else if (field === 'delivery_progress' || field === 'sse_manhrs') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.step = '1';
