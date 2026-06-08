@@ -41,7 +41,7 @@ main.container {
 .sqr-tracker .col-sticky-0 { position: sticky; left: 0px;   z-index: 3; width: 110px; min-width: 110px; max-width: 110px; }
 .sqr-tracker .col-sticky-1 { position: sticky; left: 110px; z-index: 3; width: 130px; min-width: 130px; max-width: 130px; }
 .sqr-tracker .col-sticky-2 { position: sticky; left: 240px; z-index: 3; width: 144px; min-width: 144px; max-width: 144px; }
-.sqr-tracker .col-sticky-3 { position: sticky; left: 384px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; }
+.sqr-tracker .col-sticky-3 { position: sticky; left: 384px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sqr-tracker .col-sticky-4 { position: sticky; left: 544px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; }
 
 /* Elevated z-index for thead sticky cells so they stay above scrolling data cells */
@@ -87,7 +87,7 @@ main.container {
 }
 
 /* Non-fixed-width cells that may wrap (used outside frozen area) */
-.sqr-tracker .cell-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: visible; }
+.sqr-tracker .cell-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 /* Scrollable columns — reasonable default min widths */
 .sqr-tracker th:not([class*="col-sticky"]),
 .sqr-tracker td:not([class*="col-sticky"]) { min-width: 90px; }
@@ -153,6 +153,32 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #fbd5d5 !important; }
 @keyframes sqr-revision-pulse { 0%,100%{ box-shadow: inset 3px 0 0 #ef4444; } 50%{ box-shadow: inset 3px 0 0 #fca5a5; } }
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 { animation: sqr-revision-pulse 1.8s ease-in-out infinite; }
+/* Hover preview popover */
+#sqr-cell-preview {
+    position: fixed;
+    z-index: 9999;
+    max-width: 340px;
+    padding: 0.45rem 0.7rem;
+    background: #1e2436;
+    color: #e2e8f0;
+    border: 1px solid rgba(99,102,241,0.4);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+body:not(.dark-mode) #sqr-cell-preview {
+    background: #fff;
+    color: #1e293b;
+    border-color: rgba(99,102,241,0.3);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+}
+#sqr-cell-preview.visible { opacity: 1; }
 </style>
 
 <div class="row g-4">
@@ -1497,16 +1523,73 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
         });
     });
 
-    // Auto-tooltip for any td whose text is clipped (scrollWidth > offsetWidth)
-    document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
-        if (td.title) return; // already has a title (e.g. inline-edit cells)
-        var span = td.querySelector('.sqr-display') || td;
-        var fullText = span.textContent.trim();
-        if (!fullText || fullText === '–' || fullText === 'NA') return;
-        if (span.scrollWidth > span.offsetWidth || td.scrollWidth > td.offsetWidth) {
-            td.title = fullText;
+    // Hover preview popover for clipped/wrapped cells
+    (function() {
+        var preview = document.createElement('div');
+        preview.id = 'sqr-cell-preview';
+        document.body.appendChild(preview);
+
+        var hoverTimer = null;
+        var activeCell = null;
+
+        function isClipped(td) {
+            // Ellipsis clip (standard)
+            if (td.scrollWidth > td.offsetWidth) return true;
+            // Line-clamp clip (cell-wrap): content scrollHeight exceeds visible height
+            var span = td.querySelector('.sqr-display') || td;
+            if (span.scrollHeight > span.offsetHeight + 2) return true;
+            if (span.scrollWidth > span.offsetWidth) return true;
+            return false;
         }
-    });
+
+        function showPreview(td, e) {
+            var span = td.querySelector('.sqr-display') || td;
+            // Use data-sqr-value for editable cells (preserves newlines), else textContent
+            var fullText = td.dataset.sqrValue !== undefined
+                ? td.dataset.sqrValue
+                : span.textContent.trim();
+            if (!fullText || fullText === '\u2013' || fullText === 'NA') return;
+            preview.textContent = fullText;
+            positionPreview(e);
+            preview.classList.add('visible');
+            activeCell = td;
+        }
+
+        function positionPreview(e) {
+            var vw = window.innerWidth, vh = window.innerHeight;
+            var pw = 340, ph = 120; // approx max size
+            var x = e.clientX + 14;
+            var y = e.clientY + 14;
+            if (x + pw > vw - 10) x = e.clientX - pw - 10;
+            if (y + ph > vh - 10) y = e.clientY - ph - 10;
+            preview.style.left = x + 'px';
+            preview.style.top = y + 'px';
+        }
+
+        function hidePreview() {
+            preview.classList.remove('visible');
+            activeCell = null;
+        }
+
+        document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
+            td.addEventListener('mouseenter', function(e) {
+                if (td.classList.contains('sqr-editing')) return;
+                if (!isClipped(td)) return;
+                hoverTimer = setTimeout(function() { showPreview(td, e); }, 350);
+            });
+            td.addEventListener('mousemove', function(e) {
+                if (activeCell === td) positionPreview(e);
+            });
+            td.addEventListener('mouseleave', function() {
+                clearTimeout(hoverTimer);
+                hidePreview();
+            });
+            td.addEventListener('click', function() {
+                clearTimeout(hoverTimer);
+                hidePreview();
+            });
+        });
+    })();
 })();
 </script>
 {% endif %}
