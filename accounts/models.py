@@ -70,7 +70,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
     department = models.CharField(max_length=100, blank=True, default="")
     REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)
-    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG)
+    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG, Roles.ADMIN)
     ENGINEER_ACCESS_ROLES = (Roles.ENGINEER, Roles.ON_HOLD)
     ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)

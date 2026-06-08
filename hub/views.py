@@ -1360,7 +1360,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "completed": metrics["completed"],
             }
             context["request_report_data"] = self._build_request_report_data(requests)
-        elif user.role in REQUEST_CREATOR_ROLES and user.role != PM_ESG_ROLE:
+        elif user.role in REQUEST_CREATOR_ROLES and user.role not in ADMIN_PANEL_ROLES:
             form = kwargs.get("form")
             if form is None:
                 form = RequestForm(actor_role=user.role, actor_user=user)

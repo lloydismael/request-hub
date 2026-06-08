@@ -193,7 +193,7 @@ class RequestForm(forms.ModelForm):
         project_manager_qs = project_manager_qs.order_by("first_name", "last_name")
         self.project_manager_ids = set(project_manager_qs.values_list("id", flat=True))
 
-        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS, User.Roles.PM_ESG}
+        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS, User.Roles.PM_ESG, User.Roles.ADMIN}
         is_requestor_form = actor_role in requestor_roles
         all_assignee_ids = set(engineer_qs.values_list("id", flat=True)) | self.project_manager_ids
         assignee_qs = (
