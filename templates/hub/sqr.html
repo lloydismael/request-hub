@@ -1288,7 +1288,20 @@ body:not(.dark-mode) #sqr-cell-preview {
             wrapper.appendChild(sel);
             wrapper.appendChild(inp);
             w = wrapper;
-        } else if (field === 'delivery_progress' || field === 'sse_manhrs') {
+        } else if (field === 'delivery_progress') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'number'; w.min = '0'; w.max = '100'; w.step = '1';
+            w.style.width = '80px';
+            w.value = currentValue || '';
+            w.addEventListener('input', function() {
+                var v = parseInt(this.value, 10);
+                if (!isNaN(v)) {
+                    if (v > 100) this.value = '100';
+                    if (v < 0)   this.value = '0';
+                }
+            });
+        } else if (field === 'sse_manhrs') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.step = '1';
@@ -1561,76 +1574,79 @@ body:not(.dark-mode) #sqr-cell-preview {
         });
     });
 
-    // Hover preview popover for clipped/wrapped cells
-    (function() {
-        var preview = document.createElement('div');
-        preview.id = 'sqr-cell-preview';
-        document.body.appendChild(preview);
-
-        var hoverTimer = null;
-        var activeCell = null;
-
-        function isClipped(td) {
-            // Ellipsis clip (standard)
-            if (td.scrollWidth > td.offsetWidth) return true;
-            // Line-clamp clip (cell-wrap): content scrollHeight exceeds visible height
-            var span = td.querySelector('.sqr-display') || td;
-            if (span.scrollHeight > span.offsetHeight + 2) return true;
-            if (span.scrollWidth > span.offsetWidth) return true;
-            return false;
-        }
-
-        function showPreview(td, e) {
-            var span = td.querySelector('.sqr-display') || td;
-            // Use data-sqr-value for editable cells (preserves newlines), else textContent
-            var fullText = td.dataset.sqrValue !== undefined
-                ? td.dataset.sqrValue
-                : span.textContent.trim();
-            if (!fullText || fullText === '\u2013' || fullText === 'NA') return;
-            preview.textContent = fullText;
-            positionPreview(e);
-            preview.classList.add('visible');
-            activeCell = td;
-        }
-
-        function positionPreview(e) {
-            var vw = window.innerWidth, vh = window.innerHeight;
-            var pw = 340, ph = 120; // approx max size
-            var x = e.clientX + 14;
-            var y = e.clientY + 14;
-            if (x + pw > vw - 10) x = e.clientX - pw - 10;
-            if (y + ph > vh - 10) y = e.clientY - ph - 10;
-            preview.style.left = x + 'px';
-            preview.style.top = y + 'px';
-        }
-
-        function hidePreview() {
-            preview.classList.remove('visible');
-            activeCell = null;
-        }
-
-        document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
-            td.addEventListener('mouseenter', function(e) {
-                if (td.classList.contains('sqr-editing')) return;
-                if (!isClipped(td)) return;
-                hoverTimer = setTimeout(function() { showPreview(td, e); }, 350);
-            });
-            td.addEventListener('mousemove', function(e) {
-                if (activeCell === td) positionPreview(e);
-            });
-            td.addEventListener('mouseleave', function() {
-                clearTimeout(hoverTimer);
-                hidePreview();
-            });
-            td.addEventListener('click', function() {
-                clearTimeout(hoverTimer);
-                hidePreview();
-            });
-        });
-    })();
 })();
 </script>
 {% endif %}
+
+{# ── Hover preview popover — all users ───────────────────────────────── #}
+<script>
+(function() {
+    var preview = document.getElementById('sqr-cell-preview');
+    if (!preview) {
+        preview = document.createElement('div');
+        preview.id = 'sqr-cell-preview';
+        document.body.appendChild(preview);
+    }
+
+    var hoverTimer = null;
+    var activeCell = null;
+
+    function isClipped(td) {
+        if (td.scrollWidth > td.offsetWidth) return true;
+        var span = td.querySelector('.sqr-display') || td;
+        if (span.scrollHeight > span.offsetHeight + 2) return true;
+        if (span.scrollWidth > span.offsetWidth) return true;
+        return false;
+    }
+
+    function showPreview(td, e) {
+        var span = td.querySelector('.sqr-display') || td;
+        var fullText = td.dataset.sqrValue !== undefined
+            ? td.dataset.sqrValue
+            : span.textContent.trim();
+        if (!fullText || fullText === '\u2013' || fullText === 'NA') return;
+        preview.textContent = fullText;
+        positionPreview(e);
+        preview.classList.add('visible');
+        activeCell = td;
+    }
+
+    function positionPreview(e) {
+        var vw = window.innerWidth, vh = window.innerHeight;
+        var pw = 340, ph = 120;
+        var x = e.clientX + 14;
+        var y = e.clientY + 14;
+        if (x + pw > vw - 10) x = e.clientX - pw - 10;
+        if (y + ph > vh - 10) y = e.clientY - ph - 10;
+        preview.style.left = x + 'px';
+        preview.style.top = y + 'px';
+    }
+
+    function hidePreview() {
+        preview.classList.remove('visible');
+        activeCell = null;
+    }
+
+    document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
+        td.addEventListener('mouseenter', function(e) {
+            if (td.classList.contains('sqr-editing')) return;
+            if (!isClipped(td)) return;
+            hoverTimer = setTimeout(function() { showPreview(td, e); }, 350);
+        });
+        td.addEventListener('mousemove', function(e) {
+            if (activeCell === td) positionPreview(e);
+        });
+        td.addEventListener('mouseleave', function() {
+            clearTimeout(hoverTimer);
+            hidePreview();
+        });
+        td.addEventListener('click', function() {
+            clearTimeout(hoverTimer);
+            hidePreview();
+        });
+    });
+})();
+</script>
 
 {# ── For Revision Comments Modal (PM/Admin inline edit) ───────────────── #}
 {% if is_pm %}

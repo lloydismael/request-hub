@@ -2382,6 +2382,8 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 coerced = date.fromisoformat(value) if value else None
             elif field in self._INT_FIELDS:
                 coerced = int(value) if value not in ("", None) else None
+                if field == "delivery_progress" and coerced is not None:
+                    coerced = max(0, min(100, coerced))
             elif field in self._DECIMAL_FIELDS:
                 coerced = Decimal(str(value)) if value not in ("", None) else None
             elif field in self._FK_FIELDS:

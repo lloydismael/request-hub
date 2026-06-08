@@ -657,7 +657,6 @@ class SqrSubmissionForm(forms.ModelForm):
             "project_details",
             "sse_manhrs",
             "sqr_folder_link",
-            "remarks",
         ]
         labels = {
             "customer_name": "Account Name",
@@ -667,7 +666,6 @@ class SqrSubmissionForm(forms.ModelForm):
             "project_details": "Scope of Services",
             "sse_manhrs": "SSE Manhrs",
             "sqr_folder_link": "SQR Folder Link",
-            "remarks": "Remarks",
         }
         widgets = {
             "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
@@ -683,7 +681,6 @@ class SqrSubmissionForm(forms.ModelForm):
                 "class": "form-control",
                 "placeholder": "https://example.com/sqr-folder",
             }),
-            "remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Additional notes"}),
         }
 
     def __init__(self, *args, **kwargs):
