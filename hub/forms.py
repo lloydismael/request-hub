@@ -186,7 +186,10 @@ class RequestForm(forms.ModelForm):
         self.order_fields(desired_order)
         current_engineer = getattr(self.instance, "engineer", None)
         current_backup_engineer = getattr(self.instance, "backup_engineer", None)
-        engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
+        if actor_role == User.Roles.ADMIN:
+            engineer_qs = _admin_engineer_queryset(current_engineer, current_backup_engineer)
+        else:
+            engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
         project_manager_qs = User.objects.filter(role=User.Roles.PM_ESG, is_active=True)
         if actor_user and actor_user.pk:
             project_manager_qs = project_manager_qs.exclude(pk=actor_user.pk)

@@ -2011,10 +2011,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
 
 def _make_sqr_edit_form(user):
-    """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests."""
+    """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests.
+
+    Excludes requests already linked to ANY SQR; the current submission's linked
+    request is injected dynamically by the modal JS so the engineer can keep it.
+    """
+    used_req_ids = SqrSubmission.objects.exclude(linked_request_id=None).values_list("linked_request_id", flat=True)
     form = SqrSubmissionForm(auto_id="edit_%s")
     form.fields["linked_request"].queryset = (
-        Request.objects.filter(engineer=user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+        Request.objects.filter(engineer=user)
+        .exclude(id__in=used_req_ids)
+        .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
     )
     return form
 
@@ -2064,9 +2071,13 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
-            # Scope RQ ID dropdown to requests assigned to this engineer only
+            # Scope RQ ID dropdown to requests assigned to this engineer only,
+            # excluding requests that already have an SQR submission.
+            _used_req_ids = SqrSubmission.objects.exclude(linked_request_id=None).values_list("linked_request_id", flat=True)
             form.fields["linked_request"].queryset = (
-                Request.objects.filter(engineer=user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+                Request.objects.filter(engineer=user)
+                .exclude(id__in=_used_req_ids)
+                .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
             )
 
         all_submissions = list(self.get_queryset())
@@ -2252,6 +2263,32 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
         except Http404:
             messages.error(request, "That SQR submission no longer exists.")
             return redirect("hub:sqr")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        obj = self.object
+        # Exclude requests already linked to OTHER SQR submissions;
+        # this keeps the current linked_request in the queryset so it stays valid.
+        others_used_ids = (
+            SqrSubmission.objects.exclude(pk=obj.pk)
+            .exclude(linked_request_id=None)
+            .values_list("linked_request_id", flat=True)
+        )
+        if self.request.user.role == User.Roles.ADMIN:
+            qs = (
+                Request.objects
+                .exclude(id__in=others_used_ids)
+                .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+            )
+        else:
+            qs = (
+                Request.objects
+                .filter(engineer=self.request.user)
+                .exclude(id__in=others_used_ids)
+                .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+            )
+        form.fields["linked_request"].queryset = qs
+        return form
 
     def get_queryset(self):
         if self.request.user.role == User.Roles.ADMIN:
@@ -3240,6 +3277,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         else:
             back_url = referer
 
+        linked_sqr = SqrSubmission.objects.filter(linked_request=request_obj).first()
+
         return {
             "object": request_obj,
             "form": form,
@@ -3249,6 +3288,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "account_name_choices": getattr(form, "account_name_suggestions", ()),
             "back_url": back_url,
             "status_allowed": status_allowed,
+            "linked_sqr": linked_sqr,
         }
 
     def _handle_details_update(self, request, request_obj):

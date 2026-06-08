@@ -19,6 +19,12 @@
                     {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y" }}
                 </span>
                 <span class="rmf-status-dot rmf-status-dot--{{ object.status }}">{{ object.get_status_display }}</span>
+                {% if linked_sqr %}
+                <a href="{% url 'hub:sqr' %}" class="rmf-meta-chip rmf-meta-chip--sqr text-decoration-none" title="Linked SQR: {{ linked_sqr.reference_code }}">
+                    <i class="bi bi-file-earmark-text"></i>
+                    SQR: {{ linked_sqr.reference_code }}
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>

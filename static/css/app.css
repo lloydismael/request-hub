@@ -3438,6 +3438,7 @@ body.theme-switching *::after {
 }
 .rmf-meta-chip--account { color: #1e40af; background: #eff6ff; border-color: rgba(37,99,235,0.15); }
 .rmf-meta-chip--date    { color: #065f46; background: #f0fdf4; border-color: rgba(16,185,129,0.15); }
+.rmf-meta-chip--sqr     { color: #6d28d9; background: #f5f3ff; border-color: rgba(109,40,217,0.15); }
 
 /* Status dot in header */
 .rmf-status-dot {
@@ -3664,6 +3665,7 @@ body.dark-mode .rmf-back-link:hover     { color: #93c5fd; }
 body.dark-mode .rmf-meta-chip           { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.1); color: #94a3b8; }
 body.dark-mode .rmf-meta-chip--account  { background: rgba(37,99,235,0.12); border-color: rgba(59,130,246,0.22); color: #93c5fd; }
 body.dark-mode .rmf-meta-chip--date     { background: rgba(16,185,129,0.1);  border-color: rgba(16,185,129,0.2);  color: #6ee7b7; }
+body.dark-mode .rmf-meta-chip--sqr      { background: rgba(109,40,217,0.12); border-color: rgba(139,92,246,0.22); color: #c4b5fd; }
 body.dark-mode .rmf-status-dot--ongoing   { background: rgba(234,179,8,0.12);   color: #fde047; }
 body.dark-mode .rmf-status-dot--completed { background: rgba(34,197,94,0.12);   color: #86efac; }
 body.dark-mode .rmf-status-dot--on_hold   { background: rgba(168,85,247,0.12);  color: #d8b4fe; }
