@@ -57,6 +57,11 @@
         <button class="profile-tab" data-profile-tab="settings">
             <i class="bi bi-sliders me-1"></i>Settings
         </button>
+        {% if request.user.role == 'admin' %}
+        <button class="profile-tab" data-profile-tab="backup">
+            <i class="bi bi-archive-fill me-1"></i>Backup &amp; Restore
+        </button>
+        {% endif %}
         {# ── View mode toggle — inline in tab bar ── #}
         <div class="profile-tabs__vmt ms-auto" id="profile-vmt-clone" role="group" aria-label="View mode">
             <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
@@ -308,6 +313,64 @@
             </form>
         </div>
     </div>
+
+    {# ── Backup & Restore panel (admin only) ─────────────────────────── #}
+    {% if request.user.role == 'admin' %}
+    <div class="profile-panel" id="profile-panel-backup">
+        <div class="glass-card profile-card">
+            <h2 class="profile-card__title"><i class="bi bi-archive-fill me-2"></i>Backup &amp; Restore</h2>
+            <p class="text-muted small mb-4">
+                Download a complete snapshot of all requests, SQR submissions, and related records.
+                Use the restore feature to recover data from a previous backup.
+                <strong class="text-warning">Restoring will permanently overwrite all current hub data.</strong>
+            </p>
+
+            {# ── Download Backup ── #}
+            <div class="list-group list-group-flush mb-4">
+                <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3"
+                     style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                    <div>
+                        <div class="fw-semibold"><i class="bi bi-download me-2 text-info"></i>Download Backup</div>
+                        <div class="text-muted small mt-1">
+                            Exports all Requests, SQR Submissions, Activity Logs, and Communications as a single JSON file.
+                            User accounts are <em>not</em> included.
+                        </div>
+                    </div>
+                    <a href="{% url 'accounts:backup' %}" class="btn btn-sm btn-outline-info text-nowrap">
+                        <i class="bi bi-cloud-download me-1"></i>Download
+                    </a>
+                </div>
+            </div>
+
+            {# ── Restore ── #}
+            <div class="rounded border border-danger p-3" style="border-color:rgba(239,68,68,0.4)!important;background:rgba(239,68,68,0.05);">
+                <div class="fw-semibold text-danger mb-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>Restore from Backup</div>
+                <p class="text-muted small mb-3">
+                    Select a <code>.json</code> file previously downloaded from this page.
+                    All existing hub data will be <strong>deleted</strong> and replaced with the backup contents.
+                    This action <strong>cannot be undone</strong>.
+                </p>
+                <form method="post" enctype="multipart/form-data" action="{% url 'accounts:restore' %}" id="restore-form">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="backup_file" class="form-label small fw-semibold">Backup File (.json)</label>
+                        <input type="file" class="form-control form-control-sm" id="backup_file" name="backup_file" accept=".json" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="confirm_restore" name="confirm_restore" value="1" required>
+                        <label class="form-check-label small text-danger fw-semibold" for="confirm_restore">
+                            I understand this will permanently overwrite all current data and cannot be undone.
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-danger" id="restore-submit-btn" disabled>
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Restore Data
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
         App Version {{ app_version }}
     </div>
 
@@ -332,6 +395,16 @@
     if (window.location.hash === '#avatar') activate('avatar');
     if (window.location.hash === '#banner') activate('banner');
     if (window.location.hash === '#settings') activate('settings');
+    if (window.location.hash === '#backup') activate('backup');
+
+    // Restore form: enable submit only when checkbox is ticked
+    const confirmChk = document.getElementById('confirm_restore');
+    const restoreBtn = document.getElementById('restore-submit-btn');
+    if (confirmChk && restoreBtn) {
+        confirmChk.addEventListener('change', () => {
+            restoreBtn.disabled = !confirmChk.checked;
+        });
+    }
 
     // "Edit Banner" button on hero banner → jump to banner tab
     const bannerEditBtn = document.getElementById('banner-edit-btn');
