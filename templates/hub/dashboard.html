@@ -744,7 +744,7 @@
                                 </td>
                                 {% if not is_requestor_ui %}
                                     <td>
-                                        {% if item.engagement_type == 'deployment' %}
+                                        {% if item.engagement_type == 'deployment' or item.engagement_type == 'certification' %}
                                             <span class="text-muted">&mdash;</span>
                                         {% elif is_pm_ess %}
                                             {% if item.due_date %}
@@ -908,7 +908,7 @@
                                 {% endif %}
                             </div>
                         {% elif field.name == 'needed_by' %}
-                            <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
+                            <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' or form.engagement_type.value == 'certification' %} style="display:none;"{% endif %}>
                                 <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
@@ -917,7 +917,7 @@
                                 {% endif %}
                             </div>
                         {% elif field.name == 'deployment_start' %}
-                            <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' %} style="display:none;"{% endif %}>
+                            <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' and form.engagement_type.value != 'certification' %} style="display:none;"{% endif %}>
                                 <label class="form-label" for="id_{{ field.name }}">Deployment Calendar</label>
                                 <div class="deployment-calendar" data-deployment-calendar>
                                     <div class="row g-3 align-items-end">
@@ -1210,7 +1210,7 @@
                 if (!engagementSelect) {
                     return;
                 }
-                const isDeployment = engagementSelect.value === "deployment";
+                const isDeployment = engagementSelect.value === "deployment" || engagementSelect.value === "certification";
                 if (requestDateGroup) {
                     requestDateGroup.style.display = isDeployment ? "none" : "";
                 }

@@ -271,6 +271,7 @@ class RequestForm(forms.ModelForm):
         due_field.widget.attrs.pop("min", None)
 
         engagement_field = self.fields["engagement_type"]
+        # PM-ESS and REQUESTOR_ESS cannot see Support
         if actor_role in {User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}:
             filtered_choices = [
                 choice
@@ -280,10 +281,22 @@ class RequestForm(forms.ModelForm):
             if self.instance.pk and self.instance.engagement_type == Request.Engagement.SUPPORT:
                 filtered_choices.append((Request.Engagement.SUPPORT, Request.Engagement.SUPPORT.label))
             engagement_field.choices = filtered_choices
+        # Non-PM roles (Requestor, Engineers, PM-ESS) cannot see Certification — only PM-ESS and PM-ESG can
+        _PM_ROLES = {User.Roles.PM_ESS, User.Roles.PM_ESG, User.Roles.ADMIN}
+        if actor_role not in _PM_ROLES:
+            filtered_choices = [
+                choice
+                for choice in engagement_field.choices
+                if choice[0] != Request.Engagement.CERTIFICATION
+            ]
+            if self.instance.pk and self.instance.engagement_type == Request.Engagement.CERTIFICATION:
+                filtered_choices.append((Request.Engagement.CERTIFICATION, Request.Engagement.CERTIFICATION.label))
+            engagement_field.choices = filtered_choices
 
+        _DEPLOYMENT_LIKE = {Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION}
         deployment_start_field = self.fields["deployment_start"]
         deployment_end_field = self.fields["deployment_end"]
-        if self.instance.pk and self.instance.engagement_type == Request.Engagement.DEPLOYMENT:
+        if self.instance.pk and self.instance.engagement_type in _DEPLOYMENT_LIKE:
             deployment_start_field.initial = self.instance.start_date
             deployment_end_field.initial = self.instance.due_date or self.instance.start_date
         elif not self.is_bound:
@@ -321,7 +334,9 @@ class RequestForm(forms.ModelForm):
                 if self.instance.pk:
                     ongoing_qs = ongoing_qs.exclude(pk=self.instance.pk)
 
-                has_deployment = ongoing_qs.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
+                has_deployment = ongoing_qs.filter(engagement_type__in=[
+                    Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                ]).exists()
                 capacity = 3 if has_deployment else 5
                 current_load = ongoing_qs.count()
 

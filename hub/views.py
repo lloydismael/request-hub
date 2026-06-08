@@ -50,7 +50,6 @@ from .forms import (
     RequestStatusForm,
     SqrReviewForm,
     SqrSubmissionForm,
-    SqrTrackerEditForm,
     StatusLogForm,
 )
 from .constants import ACCOUNT_NAME_RAW
@@ -1482,7 +1481,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     1
                     for req in requests
                     if req.status == Request.Status.ONGOING
-                    and req.engagement_type != Request.Engagement.DEPLOYMENT
+                and req.engagement_type not in {
+                    Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                }
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ),
@@ -1502,7 +1503,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     req
                     for req in requests
                     if req.status == Request.Status.ONGOING
-                    and req.engagement_type != Request.Engagement.DEPLOYMENT
+                    and req.engagement_type not in {
+                        Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                    }
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ]
@@ -1714,7 +1717,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 req
                 for req in requests
                 if req.status == Request.Status.ONGOING
-                and req.engagement_type != Request.Engagement.DEPLOYMENT
+                and req.engagement_type not in {
+                    Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                }
                 and req.due_date
                 and 0 <= (req.due_date - today).days <= 3
             ]
@@ -2144,7 +2149,6 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "is_admin": is_admin,
                 "sqr_form": form,
                 "sqr_edit_form": _make_sqr_edit_form(user) if can_create else None,
-                "sqr_pm_edit_form": None,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "active_sqr_tab": active_tab,
                 "proposal_submissions": all_submissions,
@@ -2289,36 +2293,6 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
         reference_code = self.object.reference_code
         response = super().form_valid(form)
         messages.success(self.request, f"SQR {reference_code} deleted.")
-        return response
-
-
-class SqrPmAdminUpdateView(LoginRequiredMixin, UpdateView):
-    """Update view for PM / Admin to edit tracker columns (N, Q, T, W, X, AA–AP)."""
-
-    model = SqrSubmission
-    form_class = SqrTrackerEditForm
-    template_name = "hub/sqr_submission_form.html"
-    success_url = reverse_lazy("hub:sqr")
-
-    def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in {User.Roles.PM_ESG, User.Roles.ADMIN}:
-            messages.error(request, "Only PM or admin users can edit tracker fields.")
-            return redirect("hub:sqr")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_queryset(self):
-        return SqrSubmission.objects.all()
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["back_url"] = reverse("hub:sqr")
-        context["form_title"] = f"Edit Tracker – {self.object.reference_code}"
-        context["submit_label"] = "Save Changes"
-        return context
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, f"SQR {self.object.reference_code} tracker updated.")
         return response
 
 
@@ -3118,7 +3092,9 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
             assigned = Request.objects.filter(engineer=engineer, status=Request.Status.ONGOING)
             if self.object.pk:
                 assigned = assigned.exclude(pk=self.object.pk)
-            has_deployment = assigned.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
+            has_deployment = assigned.filter(engagement_type__in=[
+                Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+            ]).exists()
             capacity = 3 if has_deployment else 5
             data[str(engineer.pk)] = {
                 "name": engineer.get_full_name() or engineer.username or "Engineer",

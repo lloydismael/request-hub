@@ -35,6 +35,7 @@ class Request(models.Model):
         INQUIRY = "inquiry", "Inquiry"
         DEPLOYMENT = "deployment", "Deployment"
         PROJECT_MANAGEMENT = "project_management", "Project Management"
+        CERTIFICATION = "certification", "Certification"
 
     class Status(models.TextChoices):
         ONGOING = "ongoing", "Ongoing"
@@ -116,9 +117,11 @@ class Request(models.Model):
             if self.pk:
                 assigned = assigned.exclude(pk=self.pk)
 
-            # Capacity: default 5 ongoing; when an engineer already has an ongoing deployment, cap at 3.
+            # Capacity: default 5 ongoing; when an engineer already has an ongoing deployment/certification, cap at 3.
             # This still allows assigning the first deployment even if they already carry up to 4 non-deployment requests.
-            has_ongoing_deployment = assigned.filter(engagement_type=self.Engagement.DEPLOYMENT).exists()
+            has_ongoing_deployment = assigned.filter(engagement_type__in=[
+                self.Engagement.DEPLOYMENT, self.Engagement.CERTIFICATION
+            ]).exists()
             max_allowed = 3 if has_ongoing_deployment else 5
 
             current_load = assigned.count()

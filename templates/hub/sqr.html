@@ -339,7 +339,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {# B: SQR ID #}
                             <td class="col-sticky-1 fw-semibold">
                                 {% if is_pm %}
-                                    <a href="{% url 'hub:sqr-pm-edit' item.pk %}" class="fw-semibold text-decoration-none text-reset">{{ item.reference_code }}</a>
+                                    <span class="fw-semibold">{{ item.reference_code }}</span>
                                 {% elif can_create_sqr and item.engineer_id == request.user.id and item.status != 'reviewed' %}
                                     <button type="button"
                                             class="btn btn-link p-0 fw-semibold text-decoration-none text-reset sqr-open-edit-btn"
