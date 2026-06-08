@@ -785,7 +785,7 @@ def _send_sqr_new_submission_email(
 
     reviewer_name = reviewer.get_full_name() or reviewer.username
     engineer_name = submission.engineer.get_full_name() or submission.engineer.username
-    sqr_path = reverse("hub:sqr-review", args=[submission.pk])
+    sqr_path = reverse("hub:sqr")
     if http_request:
         try:
             sqr_url = http_request.build_absolute_uri(sqr_path)
@@ -829,7 +829,7 @@ def _send_sqr_new_submission_email(
         "  2. Review the submission details and quotation.",
         "  3. Approve or request revision with your comments.",
         "",
-        f"  Review here: {sqr_url}",
+        f"  View SQR Tracker:  {sqr_url}",
         "",
         divider,
         "This is an automated notification from Request Hub.",
@@ -893,7 +893,7 @@ def _send_sqr_for_revision_email(
         return
 
     engineer_name = engineer.get_full_name() or engineer.username
-    sqr_edit_path = reverse("hub:sqr-edit", args=[submission.pk])
+    sqr_edit_path = reverse("hub:sqr")
     if http_request:
         try:
             sqr_url = http_request.build_absolute_uri(sqr_edit_path)
@@ -947,7 +947,7 @@ def _send_sqr_for_revision_email(
         "  3. Update your SQR submission accordingly.",
         "  4. Resubmit for review once the changes are complete.",
         "",
-        f"  View & Edit your SQR:  {sqr_url}",
+        f"  View SQR Tracker:  {sqr_url}",
         "",
         divider,
         "If you have questions, please reach out to your reviewer directly.",
@@ -1013,7 +1013,7 @@ def _send_sqr_approved_email(
         return
 
     engineer_name = engineer.get_full_name() or engineer.username
-    sqr_path = reverse("hub:sqr-review", args=[submission.pk])
+    sqr_path = reverse("hub:sqr")
     if http_request:
         try:
             sqr_url = http_request.build_absolute_uri(sqr_path)
@@ -1083,7 +1083,7 @@ def _send_sqr_approved_email(
         "  3. Once a Purchase Order is received, update the SQR accordingly.",
         "  4. Log in to Request Hub to track proposal and delivery status.",
         "",
-        f"  View your SQR:  {sqr_url}",
+        f"  View SQR Tracker:  {sqr_url}",
         "",
         divider,
         "If you have questions, please reach out to your PM or reviewer directly.",
@@ -2026,6 +2026,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
     PM_ONLY_TABS = {"delivery", "revenue-report"}
 
     def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            return redirect_to_login(request.get_full_path())
         if request.user.role not in SQR_ACCESS_ROLES:
             messages.error(request, "You are not allowed to access SQR.")
             return redirect("hub:dashboard")

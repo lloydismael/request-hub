@@ -194,35 +194,35 @@ body:not(.dark-mode) #sqr-cell-preview {
                     </button>
                 {% endif %}
             </div>
-            {# Summary badges #}
-            <div class="d-flex flex-wrap gap-2 mt-3">
-                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Total: {{ proposal_counts.total }}</span>
-                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+            {# Summary badges — clickable filters #}
+            <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters">
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="" style="cursor:pointer;">Total: {{ proposal_counts.total }}</span>
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted" style="cursor:pointer;">
                     <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
                 </span>
-                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="status:for_revision" style="cursor:pointer;">
                     <i class="bi bi-pencil-square me-1"></i>For Revision: {{ proposal_counts.for_revision }}
                 </span>
-                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="status:reviewed" style="cursor:pointer;">
                     <i class="bi bi-check2-circle me-1"></i>Reviewed: {{ proposal_counts.approved }}
                 </span>
                 {% if proposal_counts.submitted_pending %}
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:submitted_pending" style="cursor:pointer;">
                     <i class="bi bi-send me-1"></i>Submitted&ndash;Pending: {{ proposal_counts.submitted_pending }}
                 </span>
                 {% endif %}
                 {% if proposal_counts.negotiation %}
-                <span class="badge bg-info-subtle text-info border border-info-subtle">
+                <span class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sqr-filter="proposal_status:negotiation_review" style="cursor:pointer;">
                     <i class="bi bi-chat-dots me-1"></i>Negotiation: {{ proposal_counts.negotiation }}
                 </span>
                 {% endif %}
                 {% if proposal_counts.closed_won %}
-                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_won" style="cursor:pointer;">
                     <i class="bi bi-trophy me-1"></i>Closed Won: {{ proposal_counts.closed_won }}
                 </span>
                 {% endif %}
                 {% if proposal_counts.closed_lost %}
-                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_lost" style="cursor:pointer;">
                     <i class="bi bi-x-circle me-1"></i>Closed Lost: {{ proposal_counts.closed_lost }}
                 </span>
                 {% endif %}
@@ -324,7 +324,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr{% if item.status == 'for_revision' %} class="sqr-row--revision"{% endif %}>
+                        <tr{% if item.status == 'for_revision' %} class="sqr-row--revision"{% endif %} data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}">
                             {# A: SQR Date #}
                             <td class="col-sticky-0 small">
                                 {% if item.status == 'for_revision' %}
@@ -1335,12 +1335,24 @@ body:not(.dark-mode) #sqr-cell-preview {
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
                 var row = cell.closest('tr');
-                // Sync revision row highlighting after status change
+                // Sync revision row highlighting and date-cell icon after status change
                 if (field === 'status' && row) {
                     if (value === 'for_revision') {
                         row.classList.add('sqr-row--revision');
                     } else {
                         row.classList.remove('sqr-row--revision');
+                    }
+                    // Update the date cell (col A) to show/hide the action-required icon
+                    var dateCell = row.querySelector('td.col-sticky-0');
+                    if (dateCell) {
+                        var dateText = dateCell.textContent.trim();
+                        if (value === 'for_revision') {
+                            dateCell.innerHTML = '<span class="d-flex align-items-center gap-1">'
+                                + '<i class="bi bi-exclamation-triangle-fill text-danger" title="Action required: For Revision"></i>'
+                                + dateText + '</span>';
+                        } else {
+                            dateCell.textContent = dateText;
+                        }
                     }
                 }
                 // Helper: format a number as ₱X,XXX.XX
@@ -1643,6 +1655,53 @@ body:not(.dark-mode) #sqr-cell-preview {
         td.addEventListener('click', function() {
             clearTimeout(hoverTimer);
             hidePreview();
+        });
+    });
+})();
+</script>
+
+<script>
+// ── Badge filter ──────────────────────────────────────────────────────────
+(function () {
+    var activeFilter = '';   // '' = show all
+
+    function applyFilter(filter) {
+        var rows = document.querySelectorAll('.sqr-tracker tbody tr');
+        rows.forEach(function (row) {
+            if (!filter) {
+                row.style.display = '';
+                return;
+            }
+            var parts  = filter.split(':');
+            var col    = parts[0];   // 'status' or 'proposal_status'
+            var val    = parts[1];
+            var rowVal = col === 'status'
+                ? (row.dataset.sqrStatus || '')
+                : (row.dataset.sqrProposalStatus || '');
+            row.style.display = (rowVal === val) ? '' : 'none';
+        });
+    }
+
+    document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
+        badge.addEventListener('click', function () {
+            var filter = badge.dataset.sqrFilter;
+            if (activeFilter === filter) {
+                // clicking the same badge again clears the filter
+                activeFilter = '';
+            } else {
+                activeFilter = filter;
+            }
+            // update active visual state
+            document.querySelectorAll('.sqr-badge-filter').forEach(function (b) {
+                if (b.dataset.sqrFilter === activeFilter) {
+                    b.style.outline = '2px solid currentColor';
+                    b.style.outlineOffset = '2px';
+                } else {
+                    b.style.outline = '';
+                    b.style.outlineOffset = '';
+                }
+            });
+            applyFilter(activeFilter);
         });
     });
 })();
