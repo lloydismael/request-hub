@@ -1148,7 +1148,11 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             }
             return '<span class="text-success">' + formatted + '</span>';
         }
-        if (field === 'managed_support_amount' || field === 'pm_manhrs' || field === 'sse_manhrs') {
+        if (field === 'pm_manhrs') {
+            var n = parseFloat(value);
+            return isNaN(n) ? value : n.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) + ' hrs';
+        }
+        if (field === 'managed_support_amount' || field === 'sse_manhrs') {
             var n = parseFloat(value);
             return isNaN(n) ? value : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
@@ -1182,7 +1186,45 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             w.type = 'number'; w.min = '0'; w.step = '0.01';
             w.style.width = '110px';
             w.value = currentValue || '';
-        } else if (field === 'delivery_progress' || field === 'pm_manhrs' || field === 'sse_manhrs' || field === 'discount_rate') {
+        } else if (field === 'pm_manhrs') {
+            var presets = ['16', '24', '48'];
+            var isCustomVal = currentValue !== '' && presets.indexOf(currentValue) === -1;
+            var wrapper = document.createElement('div');
+            wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
+            var sel = document.createElement('select');
+            sel.className = 'sqr-inline-input form-select form-select-sm';
+            sel.style.width = '85px';
+            var emptyOpt = document.createElement('option');
+            emptyOpt.value = ''; emptyOpt.textContent = '\u2014';
+            sel.appendChild(emptyOpt);
+            presets.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v; o.textContent = v;
+                if (!isCustomVal && currentValue === v) o.selected = true;
+                sel.appendChild(o);
+            });
+            var customOpt = document.createElement('option');
+            customOpt.value = '__custom__'; customOpt.textContent = 'Custom\u2026';
+            if (isCustomVal) customOpt.selected = true;
+            sel.appendChild(customOpt);
+            var inp = document.createElement('input');
+            inp.type = 'number'; inp.min = '0'; inp.step = '1';
+            inp.className = 'sqr-inline-input';
+            inp.style.width = '65px';
+            inp.style.display = isCustomVal ? '' : 'none';
+            inp.value = isCustomVal ? currentValue : '';
+            inp.placeholder = 'hrs';
+            sel.addEventListener('change', function() {
+                inp.style.display = sel.value === '__custom__' ? '' : 'none';
+                if (sel.value === '__custom__') { inp.focus(); if (inp.select) inp.select(); }
+            });
+            Object.defineProperty(wrapper, 'value', {
+                get: function() { return sel.value === '__custom__' ? inp.value : sel.value; }
+            });
+            wrapper.appendChild(sel);
+            wrapper.appendChild(inp);
+            w = wrapper;
+        } else if (field === 'delivery_progress' || field === 'sse_manhrs' || field === 'discount_rate') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.step = '1';
@@ -1363,7 +1405,30 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             }
         }
 
-        if (widget.tagName === 'SELECT') {
+        if (widget.classList && widget.classList.contains('sqr-composite-widget')) {
+            var cmpSel = widget.querySelector('select');
+            var cmpInp = widget.querySelector('input[type="number"]');
+            if (cmpSel) cmpSel.focus();
+            widget.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    if (!widget.contains(document.activeElement) && cell.contains(widget)) commit();
+                }, 150);
+            });
+            if (cmpSel) {
+                cmpSel.addEventListener('change', function() {
+                    if (cmpSel.value !== '__custom__') setTimeout(function() { commit(); }, 50);
+                });
+                cmpSel.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') { cell.classList.remove('sqr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
+                });
+            }
+            if (cmpInp) {
+                cmpInp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                    if (e.key === 'Escape') { cell.classList.remove('sqr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
+                });
+            }
+        } else if (widget.tagName === 'SELECT') {
             widget.focus();
             widget.addEventListener('change', function() { commit(); });
             widget.addEventListener('blur', function() {

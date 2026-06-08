@@ -619,8 +619,8 @@ class SqrSubmissionForm(forms.ModelForm):
 
     linked_request = forms.ModelChoiceField(
         queryset=Request.objects.select_related("account").only("id", "reference_code", "account__name").order_by("-id"),
-        required=False,
-        empty_label="— Link to Request ID (optional) —",
+        required=True,
+        empty_label="— Select Request ID —",
         widget=forms.Select(attrs={"class": "form-select"}),
         label="Request ID",
     )
