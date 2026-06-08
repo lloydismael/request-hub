@@ -1359,6 +1359,17 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
             if (!cell.classList.contains('sqr-editing')) activateCell(cell);
         });
     });
+
+    // Auto-tooltip for any td whose text is clipped (scrollWidth > offsetWidth)
+    document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
+        if (td.title) return; // already has a title (e.g. inline-edit cells)
+        var span = td.querySelector('.sqr-display') || td;
+        var fullText = span.textContent.trim();
+        if (!fullText || fullText === '–' || fullText === 'NA') return;
+        if (span.scrollWidth > span.offsetWidth || td.scrollWidth > td.offsetWidth) {
+            td.title = fullText;
+        }
+    });
 })();
 </script>
 {% endif %}
