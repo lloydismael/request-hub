@@ -27,7 +27,7 @@ main.container {
     border-spacing: 0;
     font-size: 0.78rem;
     min-width: max-content;
-    table-layout: fixed; /* Honour explicit widths */
+    table-layout: auto; /* Columns size to header text; data capped by max-width */
 }
 .sqr-tracker th,
 .sqr-tracker td {
@@ -92,11 +92,14 @@ main.container {
 
 /* Non-fixed-width cells that may wrap (used outside frozen area) */
 .sqr-tracker .cell-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-/* Scrollable columns — reasonable default min widths */
-.sqr-tracker th:not([class*="col-sticky"]),
-.sqr-tracker td:not([class*="col-sticky"]) { min-width: 90px; }
-.sqr-tracker th.sqr-col-wide,
-.sqr-tracker td.sqr-col-wide { min-width: 160px; }
+/* Scrollable columns — auto-size to header text; cap data cells so they don't blow up columns */
+.sqr-tracker th:not([class*="col-sticky"]) { min-width: 70px; max-width: 220px; white-space: nowrap; }
+.sqr-tracker td:not([class*="col-sticky"]) { min-width: 70px; max-width: 220px; }
+/* sqr-col-wide no longer used on th — kept for any legacy td references */
+.sqr-tracker td.sqr-col-wide { min-width: 140px; max-width: 220px; }
+/* AN (col 40 = Reference No.) and AP (col 42 = Remarks): pin to header text width */
+.sqr-tracker tr > :nth-child(40) { max-width: 130px; min-width: 0; }
+.sqr-tracker tr > :nth-child(42) { max-width: 100px; min-width: 0; }
 
 /* ── Light-mode overrides: sticky body cells must be light so dark text is readable ── */
 body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-0,
@@ -120,6 +123,19 @@ body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-co
     box-shadow: 0 0 0 2px rgba(99,102,241,.3);
 }
 .sqr-inline-cell .sqr-inline-input:focus { outline: none; }
+body:not(.dark-mode) .sqr-inline-cell .sqr-inline-input {
+    background: #fff;
+    color: #1e293b;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99,102,241,.25);
+}
+/* Light-mode: text-info links (cols F & K) need darker colour for readability */
+body:not(.dark-mode) .sqr-tracker a.text-info {
+    color: #0c63b4 !important;
+}
+body:not(.dark-mode) .sqr-tracker a.text-info:hover {
+    color: #084a8a !important;
+}
 .sqr-inline-cell.sqr-saving .sqr-display { opacity: .4; }
 @keyframes sqr-saved-flash { 0%,100%{box-shadow:inset 0 0 0 2px #22c55e} 50%{box-shadow:inset 0 0 0 2px #4ade80} }
 .sqr-inline-cell.sqr-saved { animation: sqr-saved-flash .6s ease; }
@@ -191,12 +207,19 @@ body:not(.dark-mode) #sqr-cell-preview {
         {# ── Header card ──────────────────────────────────────────────────── #}
         <div class="glass-card p-3 mb-3">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Services &amp; Revenue Tracker (SQR)</h2>
-                {% if can_create_sqr %}
-                    <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">
-                        <i class="bi bi-plus-lg me-1"></i>New Submission
-                    </button>
-                {% endif %}
+                <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Service Quotation Request</h2>
+                <div class="d-flex gap-2">
+                    {% if is_pm %}
+                        <a href="{% url 'hub:sqr-export' %}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+                        </a>
+                    {% endif %}
+                    {% if can_create_sqr %}
+                        <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">
+                            <i class="bi bi-plus-lg me-1"></i>New Submission
+                        </button>
+                    {% endif %}
+                </div>
             </div>
             {# Summary badges — clickable filters #}
             <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters">
@@ -287,16 +310,16 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th class="col-sticky-3">Service Description</th>
                             <th class="col-sticky-4 col-sticky-border">Scope of Services</th>
                             <th>RQ ID</th>
-                            <th class="sqr-col-wide">Group Name</th>
-                            <th class="sqr-col-wide">Account Manager</th>
-                            <th class="sqr-col-wide">Requester Name</th>
-                            <th class="sqr-col-wide">Approver Name</th>
-                            <th class="sqr-col-wide">SQR Doc. Ref. Link</th>
+                            <th>Group Name</th>
+                            <th>Account Manager</th>
+                            <th>Requester Name</th>
+                            <th>Approver Name</th>
+                            <th>SQR Doc. Ref. Link</th>
                             <th>SSE Man-hrs</th>
                             <th>SSE Amount</th>
                             <th>PM Man-hrs</th>
                             <th>PM Amount</th>
-                            <th class="sqr-col-wide">Managed Support Svc. Amt.</th>
+                            <th>Managed Support Svc. Amt.</th>
                             <th>Discount Rate</th>
                             <th>Discount Amount</th>
                             <th>Total Price</th>
@@ -305,30 +328,30 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th>Validity Due Date</th>
                             <th>Proposal Status</th>
                             <th>PO / PNL Date</th>
-                            <th class="sqr-col-wide">Assigned PM</th>
-                            <th class="sqr-col-wide">Assigned SSE</th>
+                            <th>Assigned PM</th>
+                            <th>Assigned SSE</th>
                             <th>Start Date</th>
                             <th>Overall Status</th>
                             <th>Health Status</th>
                             <th>Overall Progress %</th>
-                            <th class="sqr-col-wide">Key Updates / Risks / Issues</th>
-                            <th>Target Finish Date</th>
+                            <th>Key Updates / Risks / Issues</th>
                             <th>Actual Finish Date</th>
+                            <th>Target Finish Date</th>
                             <th>Completion Signed Date</th>
-                            <th class="sqr-col-wide">Post-svc Warranty End Date</th>
+                            <th>Post-svc Warranty End Date</th>
                             <th>Support Start Date</th>
                             <th>Support End Date</th>
                             <th>SI / Revenue Date</th>
                             <th>Source</th>
                             <th>Reference No.</th>
                             <th>Revenue Status</th>
-                            <th class="sqr-col-wide">Remarks</th>
+                            <th>Remarks</th>
                             <th class="text-center" style="min-width:80px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr{% if item.status == 'for_revision' %} class="sqr-row--revision"{% endif %} data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}">
+                        <tr{% if item.status == 'for_revision' %} class="sqr-row--revision"{% endif %} data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}" data-sqr-ref="{{ item.reference_code|default:'' }}" data-sqr-customer="{{ item.customer_name|default:''|escapejs }}" data-engineer-email="{{ item.engineer.email|default:'' }}" data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}" data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
                             {# A: SQR Date #}
                             <td class="col-sticky-0 small">
                                 {% if item.status == 'for_revision' %}
@@ -396,7 +419,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                                 {% endif %}
                             </td>
                             {# L: SSE Man-hrs #}
-                            <td class="text-end small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{{ item.sse_manhrs|default:"&ndash;" }}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{{ item.sse_manhrs|default:"&ndash;" }}</span></td>
                             {# M: SSE Amount #}
                             <td class="text-end small" data-sqr-computed="sse_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# N: PM Man-hrs #}
@@ -449,7 +472,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {% if is_pm %}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# Y: Assigned PM — defaults to col J (pm_esg_reviewer) on Approval; editable #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# Z: Assigned SSE — inline-editable by PM/Admin #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_sse" data-sqr-type="select" data-sqr-value="{{ item.assigned_sse_id|default:'' }}"><span class="sqr-display">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# AA: Start Date #}
@@ -511,9 +534,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             </td>
                             {# AE: Key Updates/Risks/Issues #}
                             <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="key_updates_risks" data-sqr-type="text" data-sqr-value="{{ item.key_updates_risks|default:''|escapejs }}"><span class="sqr-display">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</span></td>
-                            {# AF: Target Finish Date #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {# AG: Actual Finish Date #}
+                            {# AF: Actual Finish Date #}
                             <td class="small sqr-inline-cell"
                                 data-sqr-pk="{{ item.pk }}"
                                 data-sqr-field="delivery_actual_finish_date"
@@ -532,10 +553,12 @@ body:not(.dark-mode) #sqr-cell-preview {
                                 {% endif %}
                                 </span>
                             </td>
+                            {# AG: Target Finish Date #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AH: Completion Signed Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AI: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Implementation / Impl+PM only) #}
-                            <td class="small">
+                            <td class="small" data-sqr-computed="post_svc_warranty_end_date">
                                 {% if item.computed_post_svc_warranty_end_date %}
                                     {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
                                 {% else %}
@@ -543,7 +566,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                                 {% endif %}
                             </td>
                             {# AJ: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Impl / Impl+PM / Managed Support) #}
-                            <td class="small">
+                            <td class="small" data-sqr-computed="warranty_end_date">
                                 {% if item.computed_warranty_end_date %}
                                     {{ item.computed_warranty_end_date|date:"M d, Y" }}
                                 {% else %}
@@ -551,7 +574,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                                 {% endif %}
                             </td>
                             {# AK: Managed Support End Date — computed: Col AJ + 365 days #}
-                            <td class="small">
+                            <td class="small" data-sqr-computed="managed_support_end_date">
                                 {% if item.computed_managed_support_end_date %}
                                     {{ item.computed_managed_support_end_date|date:"M d, Y" }}
                                 {% else %}
@@ -563,7 +586,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {# AM: Source — dropdown: Internal / Invoiced #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="select" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</span></td>
                             {# AN: Reference No. — alphanumeric uppercase #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="{{ item.revenue_reference_no|upper|default:'' }}"><span class="sqr-display">{{ item.revenue_reference_no|upper|truncatechars:30|default:"&ndash;" }}</span></td>
                             {# AO: Revenue Status — computed: "Billed" if revenue_date set, else "For Billing" #}
                             <td class="small">
                                 {% if item.revenue_date %}
@@ -579,7 +602,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {# X: PO/PNL Date #}
                             <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# Y: Assigned PM #}
-                            <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% else %}&ndash;{% endif %}</td>
+                            <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
                             {# Z: Assigned SSE #}
                             <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
                             {# AA: Start Date #}
@@ -617,9 +640,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             </td>
                             {# AE: Key Updates #}
                             <td class="cell-wrap small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
-                            {# AF: Target Finish Date #}
-                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            {# AG: Actual Finish Date #}
+                            {# AF: Actual Finish Date #}
                             <td class="small">
                                 {% if item.delivery_actual_finish_date %}
                                     {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
@@ -629,6 +650,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                                     {% endif %}
                                 {% else %}<span class="text-muted">&ndash;</span>{% endif %}
                             </td>
+                            {# AG: Target Finish Date #}
+                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AH: Completion Signed Date #}
                             <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AI: Post-svc Warranty End Date #}
@@ -642,7 +665,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {# AM: Source #}
                             <td class="small">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</td>
                             {# AN: Reference No. #}
-                            <td class="small">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
+                            <td class="small" title="{{ item.revenue_reference_no|upper|default:'' }}">{{ item.revenue_reference_no|upper|truncatechars:30|default:"&ndash;" }}</td>
                             {# AO: Revenue Status #}
                             <td class="small">
                                 {% if item.revenue_date %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
@@ -1227,6 +1250,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'text'; w.value = (currentValue || '').toUpperCase();
+            w.maxLength = 50;
             w.style.minWidth = '120px'; w.style.textTransform = 'uppercase';
             w.addEventListener('input', function() { this.value = this.value.toUpperCase(); });
         } else if (field === 'managed_support_amount') {
@@ -1476,6 +1500,20 @@ body:not(.dark-mode) #sqr-cell-preview {
                         }
                     }
                 }
+                // Open email application with pre-filled approval draft when status → Approved
+                if (field === 'status' && value === 'reviewed' && data.mailto_url) {
+                    window.location.href = data.mailto_url;
+                }
+                // Refresh computed cols AI/AJ/AK when delivery_completion_signed_date changes
+                if (field === 'delivery_completion_signed_date' && row) {
+                    var _naHtml = '<span class="text-muted fst-italic">NA</span>';
+                    var aiCell = row.querySelector('[data-sqr-computed="post_svc_warranty_end_date"]');
+                    if (aiCell) aiCell.innerHTML = data.post_svc_warranty_end_date || _naHtml;
+                    var ajCell = row.querySelector('[data-sqr-computed="warranty_end_date"]');
+                    if (ajCell) ajCell.innerHTML = data.warranty_end_date || _naHtml;
+                    var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+                    if (akCell) akCell.innerHTML = data.managed_support_end_date || _naHtml;
+                }
             } else {
                 cell.classList.add('sqr-error');
                 setTimeout(function() { cell.classList.remove('sqr-error'); }, 2500);
@@ -1510,7 +1548,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             if (displayEl) displayEl.style.display = '';
             if (newVal !== currentValue) {
                 if (field === 'status' && newVal === 'for_revision') {
-                    openRevisionModal(pk, newVal, cell, displayEl || cell);
+                    openRevisionModal(pk, newVal, cell, displayEl || cell, cell);
                 } else {
                     saveField(pk, field, newVal, cell, displayEl || cell);
                 }
@@ -1550,6 +1588,10 @@ body:not(.dark-mode) #sqr-cell-preview {
             });
         } else {
             widget.focus();
+            // Auto-open calendar picker for date inputs
+            if (widget.type === 'date' && typeof widget.showPicker === 'function') {
+                try { widget.showPicker(); } catch(e) {}
+            }
             if (widget.select) widget.select();
             widget.addEventListener('blur', commit);
             widget.addEventListener('keydown', function(e) {
@@ -1563,7 +1605,7 @@ body:not(.dark-mode) #sqr-cell-preview {
         }
     }
 
-    function openRevisionModal(pk, statusVal, cell, displayEl) {
+    function openRevisionModal(pk, statusVal, cell, displayEl, triggerCell) {
         var modal     = document.getElementById('sqr-revision-modal');
         var notesArea = document.getElementById('sqr-revision-notes');
         var confirmBtn = document.getElementById('sqr-revision-confirm');
@@ -1571,6 +1613,14 @@ body:not(.dark-mode) #sqr-cell-preview {
         var closeBtn   = document.getElementById('sqr-revision-close');
         var backdrop   = document.getElementById('sqr-revision-backdrop');
         if (!modal || !notesArea) return;
+
+        // Gather row metadata for Teams GC deep-link
+        var row = (triggerCell || cell).closest('tr');
+        var sqrRef       = row ? (row.dataset.sqrRef || '') : '';
+        var customerName = row ? (row.dataset.sqrCustomer || '') : '';
+        var engineerEmail = row ? (row.dataset.engineerEmail || '') : '';
+        var pmEmail       = row ? (row.dataset.pmEmail || '') : '';
+        var engineerName  = row ? (row.dataset.engineerName || '') : '';
 
         notesArea.value = '';
         modal.classList.add('requestor-modal--visible');
@@ -1588,10 +1638,26 @@ body:not(.dark-mode) #sqr-cell-preview {
             if (backdrop)  backdrop.removeEventListener('click', onCancel);
         }
 
+        function openTeamsRevisionChat(notes) {
+            if (!engineerEmail && !pmEmail) return;
+            var participants = [engineerEmail, pmEmail].filter(Boolean).join(',');
+            var gcName = (sqrRef ? sqrRef + ' ' : '') + customerName;
+            var displayName = engineerName ? '@' + engineerName : 'Team';
+            var message = 'Hi ' + displayName + ',\n\n'
+                + 'Submitted SQR is for revision, please refer to the ff. comments below.\n\n'
+                + 'Comments:\n' + (notes || '') + '\n\nThanks';
+            var teamsUrl = 'https://teams.microsoft.com/l/chat/0/0'
+                + '?users=' + encodeURIComponent(participants)
+                + '&topicName=' + encodeURIComponent(gcName)
+                + '&message=' + encodeURIComponent(message);
+            window.open(teamsUrl, '_blank', 'noopener');
+        }
+
         function onConfirm() {
             var notes = notesArea.value.trim();
             closeModal();
             saveField(pk, 'status', statusVal, cell, displayEl, notes);
+            openTeamsRevisionChat(notes);
         }
 
         function onCancel() { closeModal(); }

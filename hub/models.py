@@ -151,7 +151,7 @@ class Request(models.Model):
                 self.due_date = computed_due
         if not self.teams_chat_topic:
             self.teams_chat_topic = self._build_teams_chat_topic(reference_code=self.reference_code)
-        self.full_clean()
+        self.full_clean(exclude=["requestor"])
         super().save(*args, **kwargs)
         if creating and not self.reference_code:
             self.reference_code = f"REQ-{self.pk:05d}"

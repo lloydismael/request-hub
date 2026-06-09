@@ -166,6 +166,11 @@ class RequestForm(forms.ModelForm):
         self.actor_role = actor_role
         self.actor_user = actor_user
         super().__init__(*args, **kwargs)
+        # Allow admins and PM-ESG to bypass engineer capacity limits at the model-validation layer.
+        # Django's ModelForm._post_clean() calls instance.full_clean() during form.is_valid(),
+        # so the flag must be set here — before that validation runs.
+        if actor_role in {User.Roles.ADMIN, User.Roles.PM_ESG}:
+            self.instance._allow_capacity_override = True
         self.project_manager_ids = set()
         include_backup = actor_role in User.ENGINEER_ACCESS_ROLES
         if not include_backup:
@@ -186,7 +191,7 @@ class RequestForm(forms.ModelForm):
         self.order_fields(desired_order)
         current_engineer = getattr(self.instance, "engineer", None)
         current_backup_engineer = getattr(self.instance, "backup_engineer", None)
-        if actor_role == User.Roles.ADMIN:
+        if actor_role in {User.Roles.ADMIN, User.Roles.PM_ESG}:
             engineer_qs = _admin_engineer_queryset(current_engineer, current_backup_engineer)
         else:
             engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
@@ -324,38 +329,6 @@ class RequestForm(forms.ModelForm):
                     if "is-invalid" not in class_list:
                         widget.attrs["class"] = (existing_classes + " is-invalid").strip()
 
-    def clean(self):
-        cleaned_data = super().clean()
-
-        # Enforce per-engineer ongoing capacity rules during turn-over by engineers.
-        # If the target engineer already carries a deployment, they are capped at 3 ongoing requests.
-        # Otherwise they can handle up to 5 ongoing requests (even when receiving the first deployment).
-        if self.actor_role in User.ENGINEER_ACCESS_ROLES:
-            new_engineer = cleaned_data.get("engineer")
-            if new_engineer and new_engineer != self.instance.engineer:
-                ongoing_qs = Request.objects.filter(engineer=new_engineer, status=Request.Status.ONGOING)
-                if self.instance.pk:
-                    ongoing_qs = ongoing_qs.exclude(pk=self.instance.pk)
-
-                has_deployment = ongoing_qs.filter(engagement_type__in=[
-                    Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
-                ]).exists()
-                capacity = 3 if has_deployment else 5
-                current_load = ongoing_qs.count()
-
-                if current_load >= capacity:
-                    name = new_engineer.get_full_name() or new_engineer.username or "Engineer"
-                    if has_deployment:
-                        msg = (
-                            f"{name} is at the deployment limit (max 3 ongoing while a deployment is active). "
-                            "Choose another engineer or wait until a deployment is completed."
-                        )
-                    else:
-                        msg = f"{name} already has {current_load} ongoing requests (limit {capacity}). Choose another engineer."
-                    self.add_error("engineer", msg)
-
-        return cleaned_data
-
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
         if not value:
@@ -404,6 +377,10 @@ class RequestForm(forms.ModelForm):
         engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
         if engagement == Request.Engagement.PROJECT_MANAGEMENT and engineer.pk not in self.project_manager_ids:
             raise forms.ValidationError("Select a preferred project manager from the approved list.")
+
+        # Admins and PM-ESG can override engineer capacity limits
+        if self.actor_role in {User.Roles.ADMIN, User.Roles.PM_ESG}:
+            return engineer
 
         ongoing_requests = Request.objects.filter(
             engineer=engineer,

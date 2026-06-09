@@ -1969,6 +1969,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req.account_manager = full_name or request.user.username
             req._actor_user = request.user
             req._actor_source = "Dashboard · New Request"
+            if request.user.role in ADMIN_PANEL_ROLES:
+                req._allow_capacity_override = True
             req.save()
             notify_engineer_assignment_notification(req, actor_user=request.user)
             assignment_email_result = notify_engineer_assignment_email(
@@ -2350,7 +2352,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
-        "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
@@ -2485,17 +2487,58 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 http_request=request,
             )
 
-        # Email engineer when status changed to Approved via inline edit
+        # When status → Approved: build a mailto: URL so the user can edit and send manually
+        _approved_mailto_url = ""
         if (
             field == "status"
             and coerced == SqrSubmission.Status.APPROVED
             and old_status != SqrSubmission.Status.APPROVED
         ):
-            reviewer_name = request.user.get_full_name() or request.user.username
-            _send_sqr_approved_email(
-                submission,
-                reviewer_name,
-                http_request=request,
+            _rev_name = request.user.get_full_name() or request.user.username
+            _eng = submission.engineer
+            _eng_email = (getattr(_eng, "email", "") or "").strip()
+            _eng_name = _eng.get_full_name() or _eng.username if _eng else ""
+            _ref = submission.reference_code or ""
+            _cust = submission.customer_name or ""
+            _title = submission.project_title or ""
+            _vd = (
+                submission.validity_due_date.strftime("%B %d, %Y")
+                if submission.validity_due_date
+                else ""
+            )
+            _tp = (
+                f"{submission.computed_total_price:,.2f}"
+                if submission.computed_total_price
+                else (
+                    f"{submission.quotation_total_price:,.2f}"
+                    if submission.quotation_total_price
+                    else ""
+                )
+            )
+            _pm = (
+                (submission.assigned_pm.get_full_name() or submission.assigned_pm.username)
+                if submission.assigned_pm
+                else ""
+            )
+            _to = _eng_email + ";ESGRequestHub@phildata.com"
+            _subj = _ref + " " + _cust
+            _body = f"Hi {_eng_name},\r\n\r\n"
+            _body += "Submitted SQR is now approved, please refer to the ff. details below.\r\n\r\n"
+            _body += f"SQR ID: {_ref}\r\n"
+            _body += f"Customer Name: {_cust}\r\n"
+            _body += f"Service Description: {_title}\r\n"
+            _body += f"Approved By: {_rev_name}\r\n"
+            if _pm:
+                _body += f"Assigned PM: {_pm}\r\n"
+            if _vd:
+                _body += f"Validity Until: {_vd}\r\n"
+            if _tp:
+                _body += f"Total Price: PHP {_tp}\r\n"
+            _body += "\r\nThanks"
+            _approved_mailto_url = (
+                f"mailto:{quote(_to)}"
+                f"?subject={quote(_subj)}"
+                f"&body={quote(_body)}"
             )
 
         response_data = {"ok": True}
@@ -2531,6 +2574,14 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             req = submission.linked_request
             response_data["rq_pk"] = req.pk if req else ""
             response_data["rq_code"] = req.reference_code if req else ""
+        # Return computed warranty/support dates when completion_signed_date changes
+        if field == "delivery_completion_signed_date":
+            def _fmt(d): return d.strftime("%b %d, %Y") if d else ""
+            response_data["post_svc_warranty_end_date"] = _fmt(submission.computed_post_svc_warranty_end_date)
+            response_data["warranty_end_date"] = _fmt(submission.computed_warranty_end_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        if _approved_mailto_url:
+            response_data["mailto_url"] = _approved_mailto_url
         return JsonResponse(response_data)
 
 
@@ -3836,6 +3887,128 @@ class RequestExportCSVView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
                 ]
             )
 
+        return response
+
+
+class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
+    """Export all SQR submissions to an Excel (.xlsx) file."""
+
+    def get(self, request, *args, **kwargs):
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        qs = SqrSubmission.objects.select_related(
+            "engineer", "pm_esg_reviewer", "reviewed_by",
+            "assigned_pm", "assigned_sse", "linked_request",
+        ).order_by("-created_at")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "SQR"
+
+        # ── Styles ──────────────────────────────────────────────
+        hdr_font  = Font(bold=True, color="FFFFFF", size=9)
+        hdr_fill  = PatternFill("solid", fgColor="1A1F2E")
+        hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell_align = Alignment(vertical="center")
+        thin = Side(style="thin", color="CCCCCC")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        # ── Column definitions: (header_label, extractor_fn) ────
+        def _date(d):   return d.strftime("%Y-%m-%d") if d else ""
+        def _name(u):   return (u.get_full_name() or u.username) if u else ""
+
+        columns = [
+            ("SQR Date",                   lambda s: _date(s.created_at.date())),
+            ("SQR ID",                     lambda s: s.reference_code or ""),
+            ("Account Name",               lambda s: s.customer_name or ""),
+            ("Service Description",        lambda s: s.project_title or ""),
+            ("Scope of Services",          lambda s: s.project_details or ""),
+            ("RQ ID",                      lambda s: s.linked_request.reference_code if s.linked_request else ""),
+            ("Group Name",                 lambda s: s.customer_company or ""),
+            ("Account Manager",            lambda s: s.customer_contact or ""),
+            ("Requester Name",             lambda s: _name(s.engineer)),
+            ("Approver Name",              lambda s: _name(s.pm_esg_reviewer)),
+            ("SQR Doc. Ref. Link",         lambda s: s.sqr_folder_link or ""),
+            ("SSE Man-hrs",                lambda s: float(s.sse_manhrs) if s.sse_manhrs is not None else ""),
+            ("SSE Amount",                 lambda s: float(s.sse_amount) if s.sse_amount is not None else ""),
+            ("PM Man-hrs",                 lambda s: float(s.pm_manhrs) if s.pm_manhrs is not None else ""),
+            ("PM Amount",                  lambda s: float(s.pm_amount) if s.pm_amount is not None else ""),
+            ("Managed Support Svc. Amt.",  lambda s: float(s.managed_support_amount) if s.managed_support_amount is not None else ""),
+            ("Discount Rate (%)",          lambda s: float(s.discount_rate) if s.discount_rate is not None else ""),
+            ("Discount Amount",            lambda s: float(s.computed_discount_amount) if s.computed_discount_amount is not None else ""),
+            ("Total Price",                lambda s: float(s.computed_total_price) if s.computed_total_price is not None else ""),
+            ("SQR Status",                 lambda s: s.get_status_display() if hasattr(s, "get_status_display") else s.status),
+            ("Approval Date",              lambda s: _date(s.reviewed_at.date()) if s.reviewed_at else ""),
+            ("Validity Due Date",          lambda s: _date(s.validity_due_date)),
+            ("Proposal Status",            lambda s: s.get_proposal_status_display() if hasattr(s, "get_proposal_status_display") else (s.proposal_status or "")),
+            ("PO / PNL Date",              lambda s: _date(s.po_pnl_date)),
+            ("Assigned PM",                lambda s: _name(s.assigned_pm) or _name(s.pm_esg_reviewer)),
+            ("Assigned SSE",               lambda s: _name(s.assigned_sse)),
+            ("Start Date",                 lambda s: _date(s.delivery_start_date)),
+            ("Overall Status",             lambda s: s.overall_status or ""),
+            ("Health Status",              lambda s: s.delivery_health or ""),
+            ("Overall Progress %",         lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
+            ("Key Updates / Risks",        lambda s: s.key_updates_risks or ""),
+            ("Actual Finish Date",         lambda s: _date(s.delivery_actual_finish_date)),
+            ("Target Finish Date",         lambda s: _date(s.delivery_target_finish_date)),
+            ("Completion Signed Date",     lambda s: _date(s.delivery_completion_signed_date)),
+            ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
+            ("Support Start Date",         lambda s: _date(s.computed_warranty_end_date)),
+            ("Support End Date",           lambda s: _date(s.computed_managed_support_end_date)),
+            ("SI / Revenue Date",          lambda s: _date(s.revenue_date)),
+            ("Source",                     lambda s: s.revenue_source or ""),
+            ("Reference No.",              lambda s: (s.revenue_reference_no or "").upper()),
+            ("Revenue Status",             lambda s: "Billed" if s.revenue_date else "For Billing"),
+            ("Remarks",                    lambda s: s.revenue_remarks or ""),
+        ]
+
+        # ── Header row ──────────────────────────────────────────
+        ws.row_dimensions[1].height = 36
+        for col_idx, (label, _) in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=label)
+            cell.font  = hdr_font
+            cell.fill  = hdr_fill
+            cell.alignment = hdr_align
+            cell.border = border
+
+        # ── Data rows ───────────────────────────────────────────
+        for row_idx, submission in enumerate(qs, start=2):
+            ws.row_dimensions[row_idx].height = 18
+            for col_idx, (_, extractor) in enumerate(columns, start=1):
+                try:
+                    val = extractor(submission)
+                except Exception:
+                    val = ""
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.alignment = cell_align
+                cell.border = border
+
+        # ── Auto-fit column widths (header text drives minimum) ─
+        for col_idx, (label, _) in enumerate(columns, start=1):
+            col_letter = get_column_letter(col_idx)
+            max_len = len(label)
+            for row_idx in range(2, ws.max_row + 1):
+                v = ws.cell(row=row_idx, column=col_idx).value
+                if v:
+                    max_len = max(max_len, min(len(str(v)), 40))
+            ws.column_dimensions[col_letter].width = max_len + 2
+
+        # ── Freeze top row ──────────────────────────────────────
+        ws.freeze_panes = "A2"
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        timestamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        response = HttpResponse(
+            buf.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="sqr-export-{timestamp}.xlsx"'
         return response
 
 
