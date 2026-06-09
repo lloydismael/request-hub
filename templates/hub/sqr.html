@@ -17,7 +17,11 @@ main.container {
     border-radius: 0.5rem;
     /* Ensure scroll container doesn't clip sticky shadows */
     padding-bottom: 2px;
+    /* Hide scrollbar visually while keeping scroll functionality */
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* IE / Edge */
 }
+.sqr-tracker-wrap::-webkit-scrollbar { display: none; } /* Chrome / Safari / Opera */
 .sqr-tracker {
     border-collapse: separate;
     border-spacing: 0;
