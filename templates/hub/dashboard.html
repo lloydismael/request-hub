@@ -499,7 +499,7 @@
                     </thead>
                     <tbody>
                         {% for item in requests %}
-                            <tr class="{% if not is_requestor_ui and item.is_overdue or not is_requestor_ui and item.sla_overrun or not is_requestor_ui and item.missed_sla %}table-danger{% endif %}">
+                            <tr class="{% if not is_requestor_ui and item.engagement_type != 'deployment' and item.is_overdue or not is_requestor_ui and item.engagement_type != 'deployment' and item.sla_overrun or not is_requestor_ui and item.engagement_type != 'deployment' and item.missed_sla %}table-danger{% endif %}" data-engineer-id="{{ item.engineer.pk|default:'' }}">
                                 {% if role == 'admin' %}
                                     <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
                                         <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
@@ -573,13 +573,13 @@
                                         {% if item.engineer %}
                                             {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
                                                 {% with first=item.engineer.first_name last=item.engineer.last_name %}
-                                                <div class="table-cell-nowrap">
+                                                <div class="table-cell-nowrap engineer-filter-cell" data-engineer-id="{{ item.engineer.pk }}" title="Click to highlight all requests for this engineer" style="cursor:pointer;">
                                                     {% if item.engineer.profile_photo %}
                                                         <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
                                                     {% else %}
                                                         <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
                                                     {% endif %}
-                                                        <span>
+                                                        <span class="engineer-filter-name">
                                                             {% if first or last %}
                                                                 {{ first|default_if_none:"" }}{% if last %} {{ last|default_if_none:"" }}{% endif %}
                                                             {% else %}
@@ -1735,4 +1735,68 @@
         })();
     </script>
 {% endif %}
+
+<style>
+/* Engineer filter highlight */
+.engineer-filter-name { text-decoration: none !important; }
+.engineer-filter-cell:hover .engineer-filter-name { text-decoration: none !important; color: inherit; }
+.engineer-filter-cell:hover .table-avatar--placeholder {
+    background: #6366f1;
+    color: #fff;
+}
+/* Rows dimmed when a filter is active and they don't match */
+tbody.engineer-filter-active tr { opacity: 0.25; transition: opacity 0.15s ease; }
+tbody.engineer-filter-active tr.engineer-row--highlighted { opacity: 1; }
+tbody.engineer-filter-active tr.engineer-row--highlighted { box-shadow: inset 3px 0 0 #6366f1; background-color: rgba(99,102,241,0.10) !important; }
+body.dark-mode tbody.engineer-filter-active tr.engineer-row--highlighted { background-color: rgba(99,102,241,0.18) !important; box-shadow: inset 3px 0 0 #818cf8; }
+</style>
+
+<script>
+(function() {
+    var activeEngineerId = null;
+
+    document.addEventListener('click', function(e) {
+        var cell = e.target.closest('.engineer-filter-cell');
+        if (!cell) {
+            // Clicking outside the engineer cell clears the filter
+            if (activeEngineerId !== null) {
+                clearFilter();
+            }
+            return;
+        }
+        e.stopPropagation();
+        var eid = cell.dataset.engineerId;
+        if (activeEngineerId === eid) {
+            clearFilter();
+        } else {
+            applyFilter(eid);
+        }
+    });
+
+    function applyFilter(eid) {
+        activeEngineerId = eid;
+        var tbodies = document.querySelectorAll('tbody');
+        tbodies.forEach(function(tbody) {
+            tbody.classList.add('engineer-filter-active');
+            tbody.querySelectorAll('tr[data-engineer-id]').forEach(function(row) {
+                if (row.dataset.engineerId === eid) {
+                    row.classList.add('engineer-row--highlighted');
+                } else {
+                    row.classList.remove('engineer-row--highlighted');
+                }
+            });
+        });
+    }
+
+    function clearFilter() {
+        activeEngineerId = null;
+        document.querySelectorAll('tbody').forEach(function(tbody) {
+            tbody.classList.remove('engineer-filter-active');
+            tbody.querySelectorAll('tr').forEach(function(row) {
+                row.classList.remove('engineer-row--highlighted');
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}

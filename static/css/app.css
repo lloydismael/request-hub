@@ -660,15 +660,12 @@ body.dark-mode .bg-primary-subtle.text-primary {
 .glass-card,
 .activity-summary-card {
     transition:
-        transform         var(--spring-dur) var(--spring),
         box-shadow        var(--spring-dur) var(--spring),
-        z-index           0s,
         background-color  0.25s ease,
         border-color      0.25s ease;
 }
 .glass-card:hover,
 .activity-summary-card:hover {
-    transform: translateY(-4px) scale(1.005);
     box-shadow: 0 20px 48px rgba(15, 23, 42, 0.28);
     position: relative;
     z-index: 10;
@@ -3872,6 +3869,26 @@ body.dark-mode .table tbody tr {
 body.dark-mode .table-hover tbody tr:hover {
     color: #fff;
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Dashboard table row highlighter ── */
+.table tbody tr {
+    transition: background-color 0.12s ease, box-shadow 0.12s ease;
+    position: relative;
+}
+.table tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.07) !important;
+    box-shadow: inset 3px 0 0 #6366f1;
+    cursor: pointer;
+}
+body.dark-mode .table tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.13) !important;
+    box-shadow: inset 3px 0 0 #818cf8;
+}
+/* Keep table-danger rows clearly red even on hover */
+.table tbody tr.table-danger:hover {
+    background-color: rgba(220, 38, 38, 0.14) !important;
+    box-shadow: inset 3px 0 0 #ef4444;
 }
 
 body.dark-mode .table thead th {
