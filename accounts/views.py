@@ -41,6 +41,17 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         kwargs["is_admin"] = self.request.user.role == "admin"
         return kwargs
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if self.request.user.role == User.Roles.ADMIN:
+            from hub.models import Request as HubRequest
+            ctx["deleted_requests"] = (
+                HubRequest.all_objects.filter(is_deleted=True)
+                .select_related("requestor", "engineer", "account")
+                .order_by("-deleted_at")
+            )
+        return ctx
+
     def post(self, request, *args, **kwargs):
         # Settings tab has its own lightweight POST — handle before the main form
         if request.POST.get("save_settings"):

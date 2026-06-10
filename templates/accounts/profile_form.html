@@ -367,6 +367,54 @@
                     </button>
                 </form>
             </div>
+
+            {# ── Restore Deleted Requests ── #}
+            <hr class="my-4" style="border-color:rgba(255,255,255,0.08);">
+            <div class="fw-semibold mb-1"><i class="bi bi-recycle me-2 text-success"></i>Restore Deleted Requests</div>
+            <p class="text-muted small mb-3">
+                Requests soft-deleted from the dashboard are listed below and can be recovered at any time.
+            </p>
+            {% if deleted_requests %}
+            <div class="table-responsive rounded border" style="border-color:rgba(255,255,255,0.1)!important;">
+                <table class="table table-sm table-hover mb-0" style="font-size:0.82rem;">
+                    <thead style="background:rgba(99,102,241,0.10);">
+                        <tr>
+                            <th class="ps-3">Ref #</th>
+                            <th>Customer</th>
+                            <th>Engagement</th>
+                            <th>Engineer</th>
+                            <th>Status</th>
+                            <th>Deleted</th>
+                            <th class="pe-3"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in deleted_requests %}
+                        <tr>
+                            <td class="ps-3 fw-semibold">{{ req.reference_code }}</td>
+                            <td>{{ req.account }}</td>
+                            <td>{{ req.get_engagement_type_display }}</td>
+                            <td>{{ req.engineer.get_full_name|default:req.engineer.username|default:"—" }}</td>
+                            <td><span class="badge bg-secondary">{{ req.get_status_display }}</span></td>
+                            <td class="text-muted">{{ req.deleted_at|date:"M d, Y H:i"|default:"—" }}</td>
+                            <td class="pe-3">
+                                <form method="post" action="{% url 'hub:request-restore' req.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2"
+                                            style="font-size:0.78rem;"
+                                            onclick="return confirm('Restore {{ req.reference_code }}?')">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted small fst-italic mb-0">No deleted requests to restore.</p>
+            {% endif %}
         </div>
     </div>
     {% endif %}

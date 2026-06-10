@@ -96,6 +96,15 @@ class Request(models.Model):
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class _ActiveManager(models.Manager):
+        def get_queryset(self):
+            return super().get_queryset().filter(is_deleted=False)
+
+    objects = _ActiveManager()
+    all_objects = models.Manager()
 
     class Meta:
         ordering = ["-created_at"]

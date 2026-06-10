@@ -3500,9 +3500,28 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         return qs.none()
 
     def delete(self, request, *args, **kwargs):
-        response = super().delete(request, *args, **kwargs)
-        messages.success(request, "Request deleted successfully.")
-        return response
+        obj = self.get_object()
+        Request.objects.filter(pk=obj.pk).update(is_deleted=True, deleted_at=timezone.now())
+        messages.success(request, f"Request {obj.reference_code} deleted. You can restore it from Profile → Backup &amp; Restore.")
+        return redirect(self.success_url)
+
+
+class RequestRestoreView(LoginRequiredMixin, View):
+    """POST → restore a soft-deleted request (admin only)."""
+
+    def post(self, request, pk):
+        if request.user.role != User.Roles.ADMIN:
+            messages.error(request, "Access denied.")
+            return redirect("accounts:update")
+        updated = Request.all_objects.filter(pk=pk, is_deleted=True).update(
+            is_deleted=False, deleted_at=None
+        )
+        if updated:
+            ref = Request.all_objects.filter(pk=pk).values_list("reference_code", flat=True).first()
+            messages.success(request, f"Request {ref} has been restored.")
+        else:
+            messages.error(request, "Request not found or already active.")
+        return redirect(str(reverse_lazy("accounts:update")) + "#backup")
 
 
 class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
