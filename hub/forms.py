@@ -528,6 +528,7 @@ class SqrSubmissionForm(forms.ModelForm):
         ("HP", "HP"),
         ("Dell", "Dell"),
         ("ENS", "ENS"),
+        ("ESG", "ESG"),
         ("Other", "Other"),
     )
 
@@ -574,6 +575,7 @@ class SqrSubmissionForm(forms.ModelForm):
             "Christian F. Lamando",
             "Jhoanna Marie Quijano",
         ],
+        "ESG": [],
         "Other": [],
     }
 
@@ -582,6 +584,7 @@ class SqrSubmissionForm(forms.ModelForm):
         "HP": "Princess Nicole Nacianceno",
         "Dell": "Jeram Zamora",
         "ENS": "Jeram Zamora",
+        "ESG": "Jeram Zamora",
         "Other": "Jeram Zamora",
     }
 

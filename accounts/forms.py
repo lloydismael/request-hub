@@ -72,6 +72,7 @@ class ProfileForm(forms.ModelForm):
                 ("HP", "HP"),
                 ("Dell", "Dell"),
                 ("ENS", "ENS"),
+                ("ESG", "ESG"),
                 ("Other", "Other"),
             ], attrs={"class": "form-select"}),
             "profile_photo": forms.FileInput(attrs={"class": "form-control"}),
@@ -228,6 +229,7 @@ class UserManagementForm(forms.ModelForm):
                 ("HP", "HP"),
                 ("Dell", "Dell"),
                 ("ENS", "ENS"),
+                ("ESG", "ESG"),
                 ("Other", "Other"),
             ], attrs={"class": "form-select"}),
         }
