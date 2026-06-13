@@ -681,10 +681,12 @@ class SqrSubmission(models.Model):
 
     @property
     def computed_managed_support_end_date(self):
-        """Support Start Date (Col AJ) + 365 days — only when AJ has a value."""
-        aj = self.computed_warranty_end_date
-        if aj:
-            return aj + timedelta(days=365)
+        """Support Start Date (Col AJ) + 365 days.
+        Only computed when managed_support_start_date is explicitly set;
+        otherwise returns None (displayed as NA).
+        """
+        if self.managed_support_start_date:
+            return self.managed_support_start_date + timedelta(days=365)
         return None
 
     @property

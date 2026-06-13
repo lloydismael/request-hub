@@ -78,6 +78,13 @@ main.container {
 .sqr-stage-delivery { background-color: #162616; color: #86efac; }
 .sqr-stage-revenue  { background-color: #27162b; color: #d8b4fe; }
 .sqr-stage-action   { background-color: #111827; color: #94a3b8; }
+/* White text on column-letter and column-name rows for all stage-coloured headers */
+.sqr-col-letter th.sqr-stage-proposal,
+.sqr-col-letter th.sqr-stage-delivery,
+.sqr-col-letter th.sqr-stage-revenue,
+.sqr-col-name   th.sqr-stage-proposal,
+.sqr-col-name   th.sqr-stage-delivery,
+.sqr-col-name   th.sqr-stage-revenue { color: #ffffff !important; }
 
 /* Column letter row */
 .sqr-col-letter { background-color: #0d1117; color: #4b5563; font-size: 0.67rem; text-align: center; }
@@ -173,6 +180,33 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #fbd5d5 !important; }
 @keyframes sqr-revision-pulse { 0%,100%{ box-shadow: inset 3px 0 0 #ef4444; } 50%{ box-shadow: inset 3px 0 0 #fca5a5; } }
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 { animation: sqr-revision-pulse 1.8s ease-in-out infinite; }
+/* ── Closed Lost: overlay NA on Service Delivery (cols 24-37) + Revenue (38-42) ── */
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42) {
+    position: relative;
+    overflow: visible;
+    pointer-events: none;  /* disable inline editing clicks */
+    cursor: default;
+}
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42) > * {
+    opacity: 0;
+    pointer-events: none;
+}
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42)::after {
+    content: "NA";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 0.72rem;
+    pointer-events: none;
+}
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42):hover {
+    outline: none !important;
+}
+
 /* Hover preview popover */
 #sqr-cell-preview {
     position: fixed;
@@ -291,15 +325,15 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th class="col-sticky-2">C</th>
                             <th class="col-sticky-3">D</th>
                             <th class="col-sticky-4 col-sticky-border">E</th>
-                            <th>F</th>
-                            <th>G</th><th>H</th><th>I</th><th>J</th><th>K</th>
-                            <th>L</th><th>M</th><th>N</th><th>O</th><th>P</th>
-                            <th>Q</th><th>R</th><th>S</th><th>T</th><th>U</th>
-                            <th>V</th><th>W</th>
-                            <th>X</th><th>Y</th><th>Z</th><th>AA</th><th>AB</th>
-                            <th>AC</th><th>AD</th><th>AE</th><th>AF</th><th>AG</th>
-                            <th>AH</th><th>AI</th><th>AJ</th><th>AK</th>
-                            <th>AL</th><th>AM</th><th>AN</th><th>AO</th><th>AP</th>
+                            <th class="sqr-stage-proposal">F</th>
+                            <th class="sqr-stage-proposal">G</th><th class="sqr-stage-proposal">H</th><th class="sqr-stage-proposal">I</th><th class="sqr-stage-proposal">J</th><th class="sqr-stage-proposal">K</th>
+                            <th class="sqr-stage-proposal">L</th><th class="sqr-stage-proposal">M</th><th class="sqr-stage-proposal">N</th><th class="sqr-stage-proposal">O</th><th class="sqr-stage-proposal">P</th>
+                            <th class="sqr-stage-proposal">Q</th><th class="sqr-stage-proposal">R</th><th class="sqr-stage-proposal">S</th><th class="sqr-stage-proposal">T</th><th class="sqr-stage-proposal">U</th>
+                            <th class="sqr-stage-proposal">V</th><th class="sqr-stage-proposal">W</th>
+                            <th class="sqr-stage-delivery">X</th><th class="sqr-stage-delivery">Y</th><th class="sqr-stage-delivery">Z</th><th class="sqr-stage-delivery">AA</th><th class="sqr-stage-delivery">AB</th>
+                            <th class="sqr-stage-delivery">AC</th><th class="sqr-stage-delivery">AD</th><th class="sqr-stage-delivery">AE</th><th class="sqr-stage-delivery">AF</th><th class="sqr-stage-delivery">AG</th>
+                            <th class="sqr-stage-delivery">AH</th><th class="sqr-stage-delivery">AI</th><th class="sqr-stage-delivery">AJ</th><th class="sqr-stage-delivery">AK</th>
+                            <th class="sqr-stage-revenue">AL</th><th class="sqr-stage-revenue">AM</th><th class="sqr-stage-revenue">AN</th><th class="sqr-stage-revenue">AO</th><th class="sqr-stage-revenue">AP</th>
                             <th>&mdash;</th>
                         </tr>
                         {# Row 3: Column names #}
@@ -309,49 +343,49 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th class="col-sticky-2">Account Name</th>
                             <th class="col-sticky-3">Service Description</th>
                             <th class="col-sticky-4 col-sticky-border">Scope of Services</th>
-                            <th>RQ ID</th>
-                            <th>Group Name</th>
-                            <th>Account Manager</th>
-                            <th>Requester Name</th>
-                            <th>Approver Name</th>
-                            <th>SQR Doc. Ref. Link</th>
-                            <th>SSE Man-hrs</th>
-                            <th>SSE Amount</th>
-                            <th>PM Man-hrs</th>
-                            <th>PM Amount</th>
-                            <th>Managed Support Svc. Amt.</th>
-                            <th>Discount Rate</th>
-                            <th>Discount Amount</th>
-                            <th>Total Price</th>
-                            <th>SQR Status</th>
-                            <th>Approval Date</th>
-                            <th>Validity Due Date</th>
-                            <th>Proposal Status</th>
-                            <th>PO / PNL Date</th>
-                            <th>Assigned PM</th>
-                            <th>Assigned SSE</th>
-                            <th>Start Date</th>
-                            <th>Overall Status</th>
-                            <th>Health Status</th>
-                            <th>Overall Progress %</th>
-                            <th>Key Updates / Risks / Issues</th>
-                            <th>Actual Finish Date</th>
-                            <th>Target Finish Date</th>
-                            <th>Completion Signed Date</th>
-                            <th>Post-svc Warranty End Date</th>
-                            <th>Support Start Date</th>
-                            <th>Support End Date</th>
-                            <th>SI / Revenue Date</th>
-                            <th>Source</th>
-                            <th>Reference No.</th>
-                            <th>Revenue Status</th>
-                            <th>Remarks</th>
+                            <th class="sqr-stage-proposal">RQ ID</th>
+                            <th class="sqr-stage-proposal">Group Name</th>
+                            <th class="sqr-stage-proposal">Account Manager</th>
+                            <th class="sqr-stage-proposal">Requester Name</th>
+                            <th class="sqr-stage-proposal">Approver Name</th>
+                            <th class="sqr-stage-proposal">SQR Doc. Ref. Link</th>
+                            <th class="sqr-stage-proposal">SSE Man-hrs</th>
+                            <th class="sqr-stage-proposal">SSE Amount</th>
+                            <th class="sqr-stage-proposal">PM Man-hrs</th>
+                            <th class="sqr-stage-proposal">PM Amount</th>
+                            <th class="sqr-stage-proposal">Managed Support Svc. Amt.</th>
+                            <th class="sqr-stage-proposal">Discount Rate</th>
+                            <th class="sqr-stage-proposal">Discount Amount</th>
+                            <th class="sqr-stage-proposal">Total Price</th>
+                            <th class="sqr-stage-proposal">SQR Status</th>
+                            <th class="sqr-stage-proposal">Approval Date</th>
+                            <th class="sqr-stage-proposal">Validity Due Date</th>
+                            <th class="sqr-stage-proposal">Proposal Status</th>
+                            <th class="sqr-stage-delivery">PO / PNL Date</th>
+                            <th class="sqr-stage-delivery">Assigned PM</th>
+                            <th class="sqr-stage-delivery">Assigned SSE</th>
+                            <th class="sqr-stage-delivery">Start Date</th>
+                            <th class="sqr-stage-delivery">Target Finish Date</th>
+                            <th class="sqr-stage-delivery">Overall Status</th>
+                            <th class="sqr-stage-delivery">Health Status</th>
+                            <th class="sqr-stage-delivery">Overall Progress %</th>
+                            <th class="sqr-stage-delivery">Key Updates / Risks / Issues</th>
+                            <th class="sqr-stage-delivery">Actual Finish Date</th>
+                            <th class="sqr-stage-delivery">Completion Signed Date</th>
+                            <th class="sqr-stage-delivery">Post-svc Warranty End Date</th>
+                            <th class="sqr-stage-delivery">Support Start Date</th>
+                            <th class="sqr-stage-delivery">Support End Date</th>
+                            <th class="sqr-stage-revenue">SI / Revenue Date</th>
+                            <th class="sqr-stage-revenue">Source</th>
+                            <th class="sqr-stage-revenue">Reference No.</th>
+                            <th class="sqr-stage-revenue">Revenue Status</th>
+                            <th class="sqr-stage-revenue">Remarks</th>
                             <th class="text-center" style="min-width:80px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr{% if item.status == 'for_revision' %} class="sqr-row--revision"{% endif %} data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}" data-sqr-ref="{{ item.reference_code|default:'' }}" data-sqr-customer="{{ item.customer_name|default:''|escapejs }}" data-engineer-email="{{ item.engineer.email|default:'' }}" data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}" data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}" data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}" data-sqr-ref="{{ item.reference_code|default:'' }}" data-sqr-customer="{{ item.customer_name|default:''|escapejs }}" data-engineer-email="{{ item.engineer.email|default:'' }}" data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}" data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
                             {# A: SQR Date #}
                             <td class="col-sticky-0 small">
                                 {% if item.status == 'for_revision' %}
@@ -477,6 +511,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_sse" data-sqr-type="select" data-sqr-value="{{ item.assigned_sse_id|default:'' }}"><span class="sqr-display">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# AA: Start Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_start_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# AG: Target Finish Date #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AB: Overall Status #}
                             <td class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="overall_status" data-sqr-type="select" data-sqr-value="{{ item.overall_status|default:'' }}">
                                 <span class="sqr-display">
@@ -553,8 +589,6 @@ body:not(.dark-mode) #sqr-cell-preview {
                                 {% endif %}
                                 </span>
                             </td>
-                            {# AG: Target Finish Date #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AH: Completion Signed Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AI: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Implementation / Impl+PM only) #}
@@ -565,14 +599,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                                     <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
-                            {# AJ: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Impl / Impl+PM / Managed Support) #}
-                            <td class="small" data-sqr-computed="warranty_end_date">
-                                {% if item.computed_warranty_end_date %}
-                                    {{ item.computed_warranty_end_date|date:"M d, Y" }}
-                                {% else %}
-                                    <span class="text-muted fst-italic">NA</span>
-                                {% endif %}
-                            </td>
+                            {# AJ: Support Start Date — manually editable; falls back to computed_warranty_end_date #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_start_date" data-sqr-type="date" data-sqr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{% if item.managed_support_start_date %}{{ item.managed_support_start_date|date:"M d, Y" }}{% elif item.computed_warranty_end_date %}{{ item.computed_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
                             {# AK: Managed Support End Date — computed: Col AJ + 365 days #}
                             <td class="small" data-sqr-computed="managed_support_end_date">
                                 {% if item.computed_managed_support_end_date %}
@@ -607,6 +635,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
                             {# AA: Start Date #}
                             <td class="small">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AG: Target Finish Date #}
+                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AB: Overall Status #}
                             <td>
                                 {% if item.overall_status == 'on_hold' %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
@@ -650,14 +680,12 @@ body:not(.dark-mode) #sqr-cell-preview {
                                     {% endif %}
                                 {% else %}<span class="text-muted">&ndash;</span>{% endif %}
                             </td>
-                            {# AG: Target Finish Date #}
-                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AH: Completion Signed Date #}
                             <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AI: Post-svc Warranty End Date #}
                             <td class="small">{% if item.computed_post_svc_warranty_end_date %}{{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AJ: Support Start Date #}
-                            <td class="small">{% if item.computed_warranty_end_date %}{{ item.computed_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            <td class="small">{% if item.managed_support_start_date %}{{ item.managed_support_start_date|date:"M d, Y" }}{% elif item.computed_warranty_end_date %}{{ item.computed_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AK: Managed Support End Date #}
                             <td class="small">{% if item.computed_managed_support_end_date %}{{ item.computed_managed_support_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AL: SI/Revenue Date #}
@@ -1382,6 +1410,15 @@ body:not(.dark-mode) #sqr-cell-preview {
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
                 var row = cell.closest('tr');
+                // Sync Closed Lost NA on delivery/revenue cells after proposal_status change
+                if (field === 'proposal_status' && row) {
+                    if (value === 'closed_lost') {
+                        row.classList.add('sqr-row--closed-lost');
+                    } else {
+                        row.classList.remove('sqr-row--closed-lost');
+                    }
+                    row.dataset.sqrProposalStatus = value;
+                }
                 // Sync revision row highlighting and date-cell icon after status change
                 if (field === 'status' && row) {
                     if (value === 'for_revision') {
@@ -1513,6 +1550,12 @@ body:not(.dark-mode) #sqr-cell-preview {
                     if (ajCell) ajCell.innerHTML = data.warranty_end_date || _naHtml;
                     var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
                     if (akCell) akCell.innerHTML = data.managed_support_end_date || _naHtml;
+                }
+                // Refresh AK when AJ (managed_support_start_date) is manually changed
+                if (field === 'managed_support_start_date' && row) {
+                    var _naHtml2 = '<span class="text-muted fst-italic">NA</span>';
+                    var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+                    if (akCell2) akCell2.innerHTML = data.managed_support_end_date || _naHtml2;
                 }
             } else {
                 cell.classList.add('sqr-error');

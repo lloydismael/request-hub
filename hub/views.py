@@ -2356,13 +2356,13 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
         "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _DATE_FIELDS = frozenset([
         "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date", "warranty_end_date",
-        "revenue_date",
+        "managed_support_start_date", "revenue_date",
     ])
     _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
     _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs", "managed_support_amount"])
@@ -2579,6 +2579,10 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             def _fmt(d): return d.strftime("%b %d, %Y") if d else ""
             response_data["post_svc_warranty_end_date"] = _fmt(submission.computed_post_svc_warranty_end_date)
             response_data["warranty_end_date"] = _fmt(submission.computed_warranty_end_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        # Return updated AK when AJ (managed_support_start_date) changes
+        if field == "managed_support_start_date":
+            def _fmt(d): return d.strftime("%b %d, %Y") if d else ""
             response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
         if _approved_mailto_url:
             response_data["mailto_url"] = _approved_mailto_url
@@ -3967,12 +3971,12 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             ("Assigned PM",                lambda s: _name(s.assigned_pm) or _name(s.pm_esg_reviewer)),
             ("Assigned SSE",               lambda s: _name(s.assigned_sse)),
             ("Start Date",                 lambda s: _date(s.delivery_start_date)),
+            ("Target Finish Date",         lambda s: _date(s.delivery_target_finish_date)),
             ("Overall Status",             lambda s: s.overall_status or ""),
             ("Health Status",              lambda s: s.delivery_health or ""),
             ("Overall Progress %",         lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
             ("Key Updates / Risks",        lambda s: s.key_updates_risks or ""),
             ("Actual Finish Date",         lambda s: _date(s.delivery_actual_finish_date)),
-            ("Target Finish Date",         lambda s: _date(s.delivery_target_finish_date)),
             ("Completion Signed Date",     lambda s: _date(s.delivery_completion_signed_date)),
             ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
             ("Support Start Date",         lambda s: _date(s.computed_warranty_end_date)),
