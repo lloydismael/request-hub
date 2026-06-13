@@ -280,10 +280,13 @@
                            class="btn btn-outline-success"
                            href="#"
                            data-sqr="{{ object.reference_code }}"
+                           data-rq-id="{{ object.linked_request.reference_code|default:'' }}"
                            data-customer="{{ object.customer_name }}"
                            data-service="{{ object.project_title }}"
-                           data-am="{{ object.customer_contact }}"
-                           data-total="{% if object.computed_total_price %}{{ object.computed_total_price|floatformat:0 }}{% endif %}"
+                           data-am="{{ object.customer_contact|default:'' }}"
+                           data-scope="{{ object.project_details|default:'' }}"
+                           data-total="{% if object.computed_total_price %}{{ object.computed_total_price }}{% elif object.quotation_total_price %}{{ object.quotation_total_price }}{% endif %}"
+                           data-validity="{{ object.validity_due_date|date:'F d, Y'|default:'—' }}"
                            data-discount="{{ object.discount_rate }}"
                            data-requestor-name="{{ object.engineer.get_full_name|default:object.engineer.username }}"
                            data-requestor-email="{{ object.engineer.email }}">
@@ -754,30 +757,54 @@
             approvalEmailBtn.addEventListener("click", function (e) {
                 e.preventDefault();
                 var sqr           = this.dataset.sqr        || "";
+                var rqId          = this.dataset.rqId       || "";
                 var customer      = this.dataset.customer   || "";
                 var service       = this.dataset.service    || "";
                 var am            = this.dataset.am         || "";
-                var totalPrice    = this.dataset.total      || "";
-                var discount      = parseInt(this.dataset.discount, 10) || 0;
+                var scope         = this.dataset.scope      || "";
+                var totalPriceRaw = this.dataset.total      || "";
+                var validity      = this.dataset.validity   || "—";
                 var requestorName = this.dataset.requestorName  || "";
                 var requestorEmail= this.dataset.requestorEmail || "";
 
-                var subject = sqr + " " + customer;
+                var subject = sqr + (rqId ? " + " + rqId : "") + " + " + customer;
                 var to      = requestorEmail + ";ESGRequestHub@phildata.com";
 
-                var body  = "Hi " + requestorName + ",\r\n\r\n";
-                body += "Submitted SQR is now approved, please refer to the ff. details below.\r\n\r\n";
-                body += "SQR ID: "              + sqr      + "\r\n";
-                body += "Customer Name: "       + customer + "\r\n";
-                body += "Service Description: " + service  + "\r\n";
-                body += "Account Manager: "     + am       + "\r\n";
-                body += "Scope of Services:\r\n";
-                body += "Managed Support and Maintenance Service (1\u2011Year Coverage)\r\n";
-                body += "Quantity: 1 Lot\r\n";
-                body += "Total Price: PHP "     + totalPrice + "\r\n";
-                if (discount > 0) {
-                    body += "Remarks: Discounted Price\r\n";
+                var totalPrice = "—";
+                if (totalPriceRaw) {
+                    var parsed = parseFloat(totalPriceRaw);
+                    if (!isNaN(parsed)) {
+                        totalPrice = "PHP " + parsed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
                 }
+
+                var body  = "Hi @" + requestorName + "\r\n\r\n";
+                body += "Submitted SQR is now approved, please refer to the ff. details below.\r\n\r\n";
+                body += "SQR ID: " + sqr + "\r\n";
+                body += "Customer Name: " + customer + "\r\n";
+                body += "Service Description: " + service + "\r\n";
+                body += "Account Manager: " + am + "\r\n";
+                body += "Scope of Services: " + scope + "\r\n";
+                body += "Add-On Service: \r\n";
+                body += '"Included Services:\r\n';
+                body += '*Proactive System Health Checks\r\n';
+                body += '*System/Platform Patching (scheduled)\r\n';
+                body += '*Incident Support \r\n';
+                body += '*Basic Troubleshooting and Issue Isolation\r\n';
+                body += '*Monthly System Status Report\r\n';
+                body += '*Advisory Support "\r\n';
+                body += "Quantity: 1 Lot\r\n";
+                body += "Total Price: " + totalPrice + "\r\n";
+                body += "Quotation Validity Until: " + validity + "\r\n\r\n";
+                body += "Terms and Conditions \r\n";
+                body += "VAT: This quote excludes Value Added Tax (VAT).\r\n";
+                body += "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.\r\n";
+                body += "This is a budgetary quote.\r\n";
+                body += "This quote is issued for internal billing purposes only.\r\n";
+                body += "Travel costs within Metro Manila are included.\r\n";
+                body += "This quote does not include hardware, software licenses, or subscriptions unless  stated.\r\n\r\n";
+                body += "For any questions or to discuss this quote further, please don't hesitate to contact us:\r\n";
+                body += "EnterpriseServices@phildata.com";
 
                 window.location.href = "mailto:" + to
                     + "?subject=" + encodeURIComponent(subject)

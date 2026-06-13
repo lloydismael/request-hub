@@ -1012,87 +1012,58 @@ def _send_sqr_approved_email(
         )
         return
 
-    engineer_name = engineer.get_full_name() or engineer.username
-    sqr_path = reverse("hub:sqr")
-    if http_request:
-        try:
-            sqr_url = http_request.build_absolute_uri(sqr_path)
-        except Exception:
-            sqr_url = sqr_path
-    else:
-        sqr_url = sqr_path
+    engineer_name = (engineer.get_full_name() or engineer.username or "").strip()
+    rq_id = submission.linked_request.reference_code if submission.linked_request else ""
+    subject = f"{submission.reference_code} + {rq_id} + {submission.customer_name}" if rq_id else f"{submission.reference_code} + {submission.customer_name}"
 
-    customer_company = (submission.customer_company or "").strip()
-    approved_date = (
-        submission.reviewed_at.astimezone(MANILA_TZ).strftime("%B %d, %Y  %I:%M %p")
-        if submission.reviewed_at
-        else "—"
-    )
     validity_due = (
         submission.validity_due_date.strftime("%B %d, %Y")
         if submission.validity_due_date
         else "—"
     )
     total_price = (
-        f"₱{submission.computed_total_price:,.2f}"
-        if submission.computed_total_price
+        f"PHP {submission.computed_total_price:,.2f}"
+        if submission.computed_total_price is not None
         else (
-            f"₱{submission.quotation_total_price:,.2f}"
-            if submission.quotation_total_price
+            f"PHP {submission.quotation_total_price:,.2f}"
+            if submission.quotation_total_price is not None
             else "—"
         )
     )
-    assigned_pm = (
-        (submission.assigned_pm.get_full_name() or submission.assigned_pm.username)
-        if submission.assigned_pm
-        else "—"
-    )
-    divider = "─" * 56
 
     body_lines = [
-        f"Hi {engineer_name},",
+        f"Hi @{engineer_name}",
         "",
-        "Great news! Your SQR submission has been reviewed and officially Approved.",
-        "Please see the approval details below.",
+        "Submitted SQR is now approved, please refer to the ff. details below.",
         "",
-        divider,
-        "  APPROVAL DETAILS",
-        divider,
-        f"  Reference:        {submission.reference_code}",
-        f"  Customer:         {submission.customer_name}",
+        f"SQR ID: {submission.reference_code}",
+        f"Customer Name: {submission.customer_name}",
+        f"Service Description: {submission.project_title}",
+        f"Account Manager: {(submission.customer_contact or '').strip()}",
+        f"Scope of Services: {(submission.project_details or '').strip()}",
+        "Add-On Service: ",
+        '"Included Services:',
+        "*Proactive System Health Checks",
+        "*System/Platform Patching (scheduled)",
+        "*Incident Support ",
+        "*Basic Troubleshooting and Issue Isolation",
+        "*Monthly System Status Report",
+        '*Advisory Support "',
+        "Quantity: 1 Lot",
+        f"Total Price: {total_price}",
+        f"Quotation Validity Until: {validity_due}",
+        "",
+        "Terms and Conditions ",
+        "VAT: This quote excludes Value Added Tax (VAT).",
+        "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
+        "This is a budgetary quote.",
+        "This quote is issued for internal billing purposes only.",
+        "Travel costs within Metro Manila are included.",
+        "This quote does not include hardware, software licenses, or subscriptions unless  stated.",
+        "",
+        "For any questions or to discuss this quote further, please don't hesitate to contact us:",
+        "EnterpriseServices@phildata.com",
     ]
-    if customer_company:
-        body_lines.append(f"  Company/Group:    {customer_company}")
-    body_lines += [
-        f"  Project Title:    {submission.project_title}",
-        f"  Approved By:      {reviewer_name}",
-        f"  Date Approved:    {approved_date}",
-        f"  Validity Until:   {validity_due}",
-        "",
-        divider,
-        "  QUOTATION SUMMARY",
-        divider,
-        f"  Total Price:      {total_price}",
-        f"  Assigned PM:      {assigned_pm}",
-        "",
-        divider,
-        "  NEXT STEPS",
-        divider,
-        "  1. Share the approved quotation with the customer.",
-        "  2. Coordinate with your assigned PM for project scheduling.",
-        "  3. Once a Purchase Order is received, update the SQR accordingly.",
-        "  4. Log in to Request Hub to track proposal and delivery status.",
-        "",
-        f"  View SQR Tracker:  {sqr_url}",
-        "",
-        divider,
-        "If you have questions, please reach out to your PM or reviewer directly.",
-        "",
-        "This is an automated notification from Request Hub.",
-        "ESG Request Hub  |  ESGRequestHub@phildata.com",
-    ]
-
-    subject = f"[Request Hub] {submission.reference_code} — Approved"
     plain_text = "\n".join(body_lines)
 
     try:
@@ -1101,7 +1072,12 @@ def _send_sqr_approved_email(
         client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
         message = {
             "senderAddress": settings.ACS_EMAIL_SENDER,
-            "recipients": {"to": [{"address": engineer_email}]},
+            "recipients": {
+                "to": [
+                    {"address": engineer_email},
+                    {"address": "ESGRequestHub@phildata.com"},
+                ]
+            },
             "content": {
                 "subject": subject,
                 "plainText": plain_text,
@@ -2497,44 +2473,64 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             _rev_name = request.user.get_full_name() or request.user.username
             _eng = submission.engineer
             _eng_email = (getattr(_eng, "email", "") or "").strip()
-            _eng_name = _eng.get_full_name() or _eng.username if _eng else ""
+            _eng_name = (_eng.get_full_name() or _eng.username if _eng else "").strip()
             _ref = submission.reference_code or ""
             _cust = submission.customer_name or ""
             _title = submission.project_title or ""
             _vd = (
                 submission.validity_due_date.strftime("%B %d, %Y")
                 if submission.validity_due_date
-                else ""
+                else "—"
             )
             _tp = (
-                f"{submission.computed_total_price:,.2f}"
-                if submission.computed_total_price
+                f"PHP {submission.computed_total_price:,.2f}"
+                if submission.computed_total_price is not None
                 else (
-                    f"{submission.quotation_total_price:,.2f}"
-                    if submission.quotation_total_price
-                    else ""
+                    f"PHP {submission.quotation_total_price:,.2f}"
+                    if submission.quotation_total_price is not None
+                    else "—"
                 )
             )
-            _pm = (
-                (submission.assigned_pm.get_full_name() or submission.assigned_pm.username)
-                if submission.assigned_pm
-                else ""
-            )
+            _am = (submission.customer_contact or "").strip()
+            _scope = (submission.project_details or "").strip()
+            _rq_id = submission.linked_request.reference_code if submission.linked_request else ""
             _to = _eng_email + ";ESGRequestHub@phildata.com"
-            _subj = _ref + " " + _cust
-            _body = f"Hi {_eng_name},\r\n\r\n"
-            _body += "Submitted SQR is now approved, please refer to the ff. details below.\r\n\r\n"
-            _body += f"SQR ID: {_ref}\r\n"
-            _body += f"Customer Name: {_cust}\r\n"
-            _body += f"Service Description: {_title}\r\n"
-            _body += f"Approved By: {_rev_name}\r\n"
-            if _pm:
-                _body += f"Assigned PM: {_pm}\r\n"
-            if _vd:
-                _body += f"Validity Until: {_vd}\r\n"
-            if _tp:
-                _body += f"Total Price: PHP {_tp}\r\n"
-            _body += "\r\nThanks"
+            _subj = f"{_ref} + {_rq_id} + {_cust}" if _rq_id else f"{_ref} + {_cust}"
+
+            _body_lines = [
+                f"Hi @{_eng_name}",
+                "",
+                "Submitted SQR is now approved, please refer to the ff. details below.",
+                "",
+                f"SQR ID: {_ref}",
+                f"Customer Name: {_cust}",
+                f"Service Description: {_title}",
+                f"Account Manager: {_am}",
+                f"Scope of Services: {_scope}",
+                "Add-On Service: ",
+                '"Included Services:',
+                "*Proactive System Health Checks",
+                "*System/Platform Patching (scheduled)",
+                "*Incident Support ",
+                "*Basic Troubleshooting and Issue Isolation",
+                "*Monthly System Status Report",
+                '*Advisory Support "',
+                "Quantity: 1 Lot",
+                f"Total Price: {_tp}",
+                f"Quotation Validity Until: {_vd}",
+                "",
+                "Terms and Conditions ",
+                "VAT: This quote excludes Value Added Tax (VAT).",
+                "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
+                "This is a budgetary quote.",
+                "This quote is issued for internal billing purposes only.",
+                "Travel costs within Metro Manila are included.",
+                "This quote does not include hardware, software licenses, or subscriptions unless  stated.",
+                "",
+                "For any questions or to discuss this quote further, please don't hesitate to contact us:",
+                "EnterpriseServices@phildata.com",
+            ]
+            _body = "\r\n".join(_body_lines)
             _approved_mailto_url = (
                 f"mailto:{quote(_to)}"
                 f"?subject={quote(_subj)}"
@@ -2934,55 +2930,68 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
 
         requestor_name = submission.engineer.get_full_name() or submission.engineer.username
         recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
-        subject = quote(f"{submission.reference_code}+{submission.customer_name}")
-        total_price_text = f"{submission.quotation_total_price:,.2f}" if submission.quotation_total_price is not None else "TBD"
-        discounted_price_text = f"{submission.discounted_price:,.2f}" if submission.discounted_price is not None else "TBD"
-        discount_rate_text = f"{submission.discount_rate}%"
-        sse_manhrs_text = f"{submission.sse_manhrs:,.2f}" if submission.sse_manhrs is not None else "TBD"
-        pm_manhrs_text = f"{submission.pm_manhrs:,.2f}" if submission.pm_manhrs is not None else "TBD"
-        hourly_rate_text = f"{submission.hourly_rate:,.2f}" if submission.hourly_rate is not None else "TBD"
-        base_cost_text = f"{submission.base_cost:,.2f}" if submission.base_cost is not None else "TBD"
+        rq_id = submission.linked_request.reference_code if submission.linked_request else ""
+        subject_text = f"{submission.reference_code} + {rq_id} + {submission.customer_name}" if rq_id else f"{submission.reference_code} + {submission.customer_name}"
+        subject = quote(subject_text)
+
+        validity_due = (
+            submission.validity_due_date.strftime("%B %d, %Y")
+            if submission.validity_due_date
+            else "—"
+        )
+        total_price = (
+            f"PHP {submission.computed_total_price:,.2f}"
+            if submission.computed_total_price is not None
+            else (
+                f"PHP {submission.quotation_total_price:,.2f}"
+                if submission.quotation_total_price is not None
+                else "—"
+            )
+        )
 
         body_template = (
             "Hi @{requestor_name}\n"
+            "\n"
             "Submitted SQR is now approved, please refer to the ff. details below.\n"
             "\n"
             "SQR ID: {reference_code}\n"
             "Customer Name: {customer_name}\n"
-            "Group Name: {group_name}\n"
-            "Account Manager: {account_manager}\n"
             "Service Description: {service_description}\n"
+            "Account Manager: {account_manager}\n"
             "Scope of Services: {scope_of_services}\n"
-            "\n"
-            "SSE Manhours: {sse_manhrs}\n"
-            "PM Manhours: {pm_manhrs}\n"
-            "Hourly Rate: PHP {hourly_rate}\n"
-            "Computed Base Cost: PHP {base_cost}\n"
-            "\n"
+            "Add-On Service: \n"
+            '"Included Services:\n'
+            "*Proactive System Health Checks\n"
+            "*System/Platform Patching (scheduled)\n"
+            "*Incident Support \n"
+            "*Basic Troubleshooting and Issue Isolation\n"
+            "*Monthly System Status Report\n"
+            '*Advisory Support "\n'
             "Quantity: 1 Lot\n"
-            "Quoted Total Price: PHP {total_price}\n"
-            "Discount Rate: {discount_rate}\n"
-            "Discounted Price: PHP {discounted_price}\n"
+            "Total Price: {total_price}\n"
+            "Quotation Validity Until: {validity_due}\n"
             "\n"
-            "Remarks: {remarks}"
+            "Terms and Conditions \n"
+            "VAT: This quote excludes Value Added Tax (VAT).\n"
+            "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.\n"
+            "This is a budgetary quote.\n"
+            "This quote is issued for internal billing purposes only.\n"
+            "Travel costs within Metro Manila are included.\n"
+            "This quote does not include hardware, software licenses, or subscriptions unless  stated.\n"
+            "\n"
+            "For any questions or to discuss this quote further, please don't hesitate to contact us:\n"
+            "EnterpriseServices@phildata.com"
         )
         body = quote(
             body_template.format(
                 requestor_name=requestor_name,
                 reference_code=submission.reference_code,
                 customer_name=submission.customer_name,
-                group_name=(submission.customer_company or "").strip(),
                 account_manager=(submission.customer_contact or "").strip(),
                 service_description=(submission.project_title or "").strip(),
                 scope_of_services=(submission.project_details or "").strip(),
-                sse_manhrs=sse_manhrs_text,
-                pm_manhrs=pm_manhrs_text,
-                hourly_rate=hourly_rate_text,
-                base_cost=base_cost_text,
-                total_price=total_price_text,
-                discount_rate=discount_rate_text,
-                discounted_price=discounted_price_text,
-                remarks=(submission.remarks or "").strip(),
+                total_price=total_price,
+                validity_due=validity_due,
             )
         )
 
