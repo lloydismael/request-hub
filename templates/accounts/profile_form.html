@@ -57,11 +57,6 @@
         <button class="profile-tab" data-profile-tab="settings">
             <i class="bi bi-sliders me-1"></i>Settings
         </button>
-        {% if request.user.role == 'admin' %}
-        <button class="profile-tab" data-profile-tab="backup">
-            <i class="bi bi-archive-fill me-1"></i>Backup &amp; Restore
-        </button>
-        {% endif %}
         {# ── View mode toggle — inline in tab bar ── #}
         <div class="profile-tabs__vmt ms-auto" id="profile-vmt-clone" role="group" aria-label="View mode">
             <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
@@ -311,13 +306,11 @@
                     </button>
                 </div>
             </form>
-        </div>
-    </div>
 
-    {# ── Backup & Restore panel (admin only) ─────────────────────────── #}
-    {% if request.user.role == 'admin' %}
-    <div class="profile-panel" id="profile-panel-backup">
-        <div class="glass-card profile-card">
+            {# ── Backup & Restore settings (admin only) ─────────────────────────── #}
+            {% if request.user.role == 'admin' %}
+            <hr class="my-4" style="border-color:rgba(255,255,255,0.08);">
+            <div id="profile-panel-backup">
             <h2 class="profile-card__title"><i class="bi bi-archive-fill me-2"></i>Backup &amp; Restore</h2>
             <p class="text-muted small mb-4">
                 Download a complete snapshot of all requests, SQR submissions, and related records.
@@ -415,9 +408,9 @@
             {% else %}
             <p class="text-muted small fst-italic mb-0">No deleted requests to restore.</p>
             {% endif %}
+            </div>
+            {% endif %}
         </div>
-    </div>
-    {% endif %}
 
         App Version {{ app_version }}
     </div>
@@ -443,7 +436,11 @@
     if (window.location.hash === '#avatar') activate('avatar');
     if (window.location.hash === '#banner') activate('banner');
     if (window.location.hash === '#settings') activate('settings');
-    if (window.location.hash === '#backup') activate('backup');
+    if (window.location.hash === '#backup') {
+        activate('settings');
+        const backupSection = document.getElementById('profile-panel-backup');
+        if (backupSection) backupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     // Restore form: enable submit only when checkbox is ticked
     const confirmChk = document.getElementById('confirm_restore');
