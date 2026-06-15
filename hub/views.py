@@ -2406,7 +2406,12 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 (Decimal(str(coerced)) * Decimal("2000")).quantize(Decimal("0.01"))
                 if coerced is not None else None
             )
-            save_fields.append("sse_amount")
+            submission.pm_manhrs = submission.recommended_pm_manhrs_for_sse(coerced)
+            submission.pm_amount = (
+                (Decimal(str(submission.pm_manhrs)) * Decimal("3000")).quantize(Decimal("0.01"))
+                if submission.pm_manhrs is not None else None
+            )
+            save_fields.extend(["sse_amount", "pm_manhrs", "pm_amount"])
 
         # Auto-recompute Managed Support Svc. Amt. (col P) when scope or group changes
         _MANAGED_SCOPES = frozenset([
@@ -2540,6 +2545,8 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         response_data = {"ok": True}
         if "pm_amount" in save_fields:
             response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
+        if "pm_manhrs" in save_fields:
+            response_data["pm_manhrs"] = str(int(submission.pm_manhrs)) if submission.pm_manhrs is not None else ""
         if "sse_amount" in save_fields:
             response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
         # Return recomputed discount amount and total price whenever any component changes

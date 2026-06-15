@@ -198,13 +198,15 @@
                             <select class="form-select flex-grow-0" id="pm-manhrs-preset"
                                     style="width:auto;min-width:90px;" aria-label="PM manhours preset">
                                 <option value="">Custom</option>
+                                <option value="8">8</option>
                                 <option value="16">16</option>
                                 <option value="24">24</option>
+                                <option value="32">32</option>
                                 <option value="48">48</option>
                             </select>
                             {{ field }}
                         </div>
-                        <div class="form-text">Pick a preset or type directly. Whole numbers only.</div>
+                        <div class="form-text">Auto-bucketed from SSE Manhours. You can still type a custom whole number.</div>
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                         {% endwith %}
                     </div>
@@ -635,6 +637,9 @@
             sseMhrs.value = Math.floor(parseFloat(sseMhrs.value));
         }
         const pmMhrs   = document.getElementById("id_pm_manhrs");
+        if (pmMhrs && pmMhrs.value && parseFloat(pmMhrs.value) === Math.floor(parseFloat(pmMhrs.value))) {
+            pmMhrs.value = Math.floor(parseFloat(pmMhrs.value));
+        }
         const sseAmt   = document.getElementById("id_sse_amount");
         const pmAmt    = document.getElementById("id_pm_amount");
         const managed  = document.getElementById("id_managed_support_amount");
@@ -661,6 +666,16 @@
         const discountPreset = document.getElementById("discount-preset");
         const discountCustom = document.getElementById("discount-custom-input");
 
+        function suggestedPmManhrs(rawSseManhrs) {
+            const sse = parseFloat(rawSseManhrs);
+            if (isNaN(sse)) return "";
+            if (sse <= 20) return "8";
+            if (sse <= 40) return "16";
+            if (sse <= 60) return "24";
+            if (sse <= 80) return "32";
+            return "48";
+        }
+
         function recalcTotal() {
             if (!total) return;
             const sse      = parseFloat(sseAmt  && sseAmt.value  ? sseAmt.value  : 0) || 0;
@@ -679,16 +694,25 @@
         }
         function calcPmAmount() {
             if (!pmAmt || !pmMhrs) return;
-            pmAmt.value = Math.round((parseFloat(pmMhrs.value) || 0) * 2000);
+            pmAmt.value = Math.round((parseFloat(pmMhrs.value) || 0) * 3000);
             recalcTotal();
+        }
+        function syncPmFromSse() {
+            if (!pmMhrs || !sseMhrs) return;
+            const suggested = suggestedPmManhrs(sseMhrs.value);
+            if (suggested === "") return;
+            pmMhrs.value = suggested;
+            if (pmPreset) pmPreset.value = suggested;
+            calcPmAmount();
         }
 
         // On load: auto-compute SSE/PM amounts from manhours if the amount fields are empty,
         // then recalculate total = SUM(SSE, PM, Managed) - Discount Amount
         if (sseAmt && sseMhrs && !sseAmt.value) { calcSseAmount(); }
+        if (pmMhrs && !pmMhrs.value && sseMhrs && sseMhrs.value) { syncPmFromSse(); }
         if (pmAmt  && pmMhrs  && !pmAmt.value)  { calcPmAmount();  }
         recalcTotal();
-        if (sseMhrs) sseMhrs.addEventListener("input", calcSseAmount);
+        if (sseMhrs) sseMhrs.addEventListener("input", function () { calcSseAmount(); syncPmFromSse(); });
         if (pmMhrs)  pmMhrs.addEventListener("input", calcPmAmount);
         if (sseAmt)  sseAmt.addEventListener("input", recalcTotal);
         if (pmAmt)   pmAmt.addEventListener("input", recalcTotal);
@@ -734,7 +758,7 @@
         if (pmPreset && pmMhrs) {
             // Sync select to current value on load
             var curVal = String(parseInt(pmMhrs.value, 10));
-            if (["16", "24", "48"].indexOf(curVal) !== -1) {
+            if (["8", "16", "24", "32", "48"].indexOf(curVal) !== -1) {
                 pmPreset.value = curVal;
             }
             // Preset → fill input
@@ -747,7 +771,7 @@
             // Manual typing → reset select to Custom
             pmMhrs.addEventListener("input", function () {
                 var typed = String(parseInt(this.value, 10));
-                pmPreset.value = (["16", "24", "48"].indexOf(typed) !== -1) ? typed : "";
+                pmPreset.value = (["8", "16", "24", "32", "48"].indexOf(typed) !== -1) ? typed : "";
             });
         }
 

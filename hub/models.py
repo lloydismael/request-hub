@@ -704,6 +704,22 @@ class SqrSubmission(models.Model):
             return "order"
         return "quotation"
 
+    @staticmethod
+    def recommended_pm_manhrs_for_sse(sse_manhrs):
+        """Return the default PM man-hours bucket based on SSE man-hours."""
+        if sse_manhrs is None:
+            return None
+        hrs = Decimal(str(sse_manhrs))
+        if hrs <= Decimal("20"):
+            return Decimal("8")
+        if hrs <= Decimal("40"):
+            return Decimal("16")
+        if hrs <= Decimal("60"):
+            return Decimal("24")
+        if hrs <= Decimal("80"):
+            return Decimal("32")
+        return Decimal("48")
+
     def save(self, *args, **kwargs):
         creating = self.pk is None
         if creating and not self.year:

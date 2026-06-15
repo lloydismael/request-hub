@@ -745,7 +745,7 @@ class SqrTrackerEditForm(forms.ModelForm):
             "min": "0",
             "step": "1",
             "list": "pm-manhrs-datalist",
-            "placeholder": "e.g. 16, 24, 48",
+            "placeholder": "e.g. 8, 16, 24, 32, 48",
         }),
         label="PM Man-hrs (N)",
     )

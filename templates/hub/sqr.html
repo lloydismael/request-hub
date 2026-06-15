@@ -459,7 +459,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {# M: SSE Amount #}
                             <td class="text-end small" data-sqr-computed="sse_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# N: PM Man-hrs #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{{ item.pm_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{{ item.pm_manhrs|default:"&ndash;" }}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{% if item.pm_manhrs is not None %}{{ item.pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sqr-display">{% if item.pm_manhrs is not None %}{{ item.pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
                             {# O: PM Amount #}
                             <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.pm_amount %}&#8369;{{ item.pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# P: Managed Support Service Amount #}
@@ -1117,8 +1117,10 @@ body:not(.dark-mode) #sqr-cell-preview {
 
 {# ── datalists (shared) ─────────────────────────────────────────────────── #}
 <datalist id="pm-manhrs-datalist">
+    <option value="8">
     <option value="16">
     <option value="24">
+    <option value="32">
     <option value="48">
 </datalist>
 <datalist id="discount-rate-datalist">
@@ -1263,9 +1265,13 @@ body:not(.dark-mode) #sqr-cell-preview {
         }
         if (field === 'pm_manhrs') {
             var n = parseFloat(value);
-            return isNaN(n) ? value : n.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) + ' hrs';
+            return isNaN(n) ? value : n.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 0});
         }
-        if (field === 'managed_support_amount' || field === 'sse_manhrs') {
+        if (field === 'sse_manhrs') {
+            var sse = parseFloat(value);
+            return isNaN(sse) ? value : sse.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
+        }
+        if (field === 'managed_support_amount') {
             var n = parseFloat(value);
             return isNaN(n) ? value : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
@@ -1301,7 +1307,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             w.style.width = '110px';
             w.value = currentValue || '';
         } else if (field === 'pm_manhrs') {
-            var presets = ['16', '24', '48'];
+            var presets = ['8', '16', '24', '32', '48'];
             var isCustomVal = currentValue !== '' && presets.indexOf(currentValue) === -1;
             var wrapper = document.createElement('div');
             wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
@@ -1458,14 +1464,25 @@ body:not(.dark-mode) #sqr-cell-preview {
                     var n = parseFloat(raw);
                     return isNaN(n) ? String(raw) : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
                 }
+                // Refresh PM Man-hrs (col N) when sse_manhrs (col L) changes
+                if ('pm_manhrs' in data) {
+                    var pmCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : null;
+                    if (pmCell) {
+                        pmCell.dataset.sqrValue = data.pm_manhrs;
+                        var pmDisp = pmCell.querySelector('.sqr-display');
+                        if (pmDisp) pmDisp.innerHTML = getDisplay('pm_manhrs', data.pm_manhrs, pmCell);
+                    }
+                }
                 // Refresh PM Amount (col O) when pm_manhrs (col N) changes
                 if ('pm_amount' in data) {
-                    var pmAmtCell = cell.nextElementSibling;
+                    var pmSourceCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : cell;
+                    var pmAmtCell = pmSourceCell ? pmSourceCell.nextElementSibling : null;
                     if (pmAmtCell) pmAmtCell.textContent = pesoFmt(data.pm_amount);
                 }
                 // Refresh SSE Amount (col M) when sse_manhrs (col L) changes
                 if ('sse_amount' in data) {
-                    var sseAmtCell = cell.nextElementSibling;
+                    var sseSourceCell = row ? row.querySelector('[data-sqr-field="sse_manhrs"]') : cell;
+                    var sseAmtCell = sseSourceCell ? sseSourceCell.nextElementSibling : null;
                     if (sseAmtCell) sseAmtCell.textContent = pesoFmt(data.sse_amount);
                 }
                 // Refresh Discount Amount (col R) and Total Price (col S) when any component changes
