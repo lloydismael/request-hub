@@ -107,6 +107,7 @@ main.container {
 /* AN (col 40 = Reference No.) and AP (col 42 = Remarks): pin to header text width */
 .sqr-tracker tr > :nth-child(40) { max-width: 130px; min-width: 0; }
 .sqr-tracker tr > :nth-child(42) { max-width: 100px; min-width: 0; }
+.sqr-tracker tr > :nth-child(43) { max-width: 150px; min-width: 0; }
 
 /* ── Light-mode overrides: sticky body cells must be light so dark text is readable ── */
 body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-0,
@@ -180,18 +181,18 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
 body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #fbd5d5 !important; }
 @keyframes sqr-revision-pulse { 0%,100%{ box-shadow: inset 3px 0 0 #ef4444; } 50%{ box-shadow: inset 3px 0 0 #fca5a5; } }
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 { animation: sqr-revision-pulse 1.8s ease-in-out infinite; }
-/* ── Closed Lost: overlay NA on Service Delivery (cols 24-37) + Revenue (38-42) ── */
-.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42) {
+/* ── Closed Lost: overlay NA on Service Delivery (cols 24-37) + Revenue (38-43) ── */
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) {
     position: relative;
     overflow: visible;
     pointer-events: none;  /* disable inline editing clicks */
     cursor: default;
 }
-.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42) > * {
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) > * {
     opacity: 0;
     pointer-events: none;
 }
-.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42)::after {
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43)::after {
     content: "NA";
     position: absolute;
     inset: 0;
@@ -203,7 +204,7 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
     font-size: 0.72rem;
     pointer-events: none;
 }
-.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+42):hover {
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43):hover {
     outline: none !important;
 }
 
@@ -311,8 +312,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th colspan="14" class="sqr-stage-delivery text-center">
                                 <i class="bi bi-tools me-1"></i>Service Delivery Stage
                             </th>
-                            {# AL-AP = cols 38-42 = 5 cols, Revenue Stage #}
-                            <th colspan="5" class="sqr-stage-revenue text-center">
+                            {# AL-AQ = cols 38-43 = 6 cols, Revenue Stage #}
+                            <th colspan="6" class="sqr-stage-revenue text-center">
                                 <i class="bi bi-bar-chart-line-fill me-1"></i>Revenue Stage
                             </th>
                             {# Action col #}
@@ -333,7 +334,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th class="sqr-stage-delivery">X</th><th class="sqr-stage-delivery">Y</th><th class="sqr-stage-delivery">Z</th><th class="sqr-stage-delivery">AA</th><th class="sqr-stage-delivery">AB</th>
                             <th class="sqr-stage-delivery">AC</th><th class="sqr-stage-delivery">AD</th><th class="sqr-stage-delivery">AE</th><th class="sqr-stage-delivery">AF</th><th class="sqr-stage-delivery">AG</th>
                             <th class="sqr-stage-delivery">AH</th><th class="sqr-stage-delivery">AI</th><th class="sqr-stage-delivery">AJ</th><th class="sqr-stage-delivery">AK</th>
-                            <th class="sqr-stage-revenue">AL</th><th class="sqr-stage-revenue">AM</th><th class="sqr-stage-revenue">AN</th><th class="sqr-stage-revenue">AO</th><th class="sqr-stage-revenue">AP</th>
+                            <th class="sqr-stage-revenue">AL</th><th class="sqr-stage-revenue">AM</th><th class="sqr-stage-revenue">AN</th><th class="sqr-stage-revenue">AO</th><th class="sqr-stage-revenue">AP</th><th class="sqr-stage-revenue">AQ</th>
                             <th>&mdash;</th>
                         </tr>
                         {# Row 3: Column names #}
@@ -380,6 +381,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <th class="sqr-stage-revenue">Reference No.</th>
                             <th class="sqr-stage-revenue">Revenue Status</th>
                             <th class="sqr-stage-revenue">Remarks</th>
+                            <th class="sqr-stage-revenue">Revenue Declaration</th>
                             <th class="text-center" style="min-width:80px;">Action</th>
                         </tr>
                     </thead>
@@ -625,6 +627,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                             </td>
                             {# AP: Remarks — short text input #}
                             <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="text" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</span></td>
+                            {# AQ: Revenue Declaration — dropdown: Declared / Not Yet #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_declaration" data-sqr-type="select" data-sqr-value="{{ item.revenue_declaration|default:'' }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</span></td>
                             {% else %}
                             {# Non-PM/Engineer: read-only view of delivery + revenue columns #}
                             {# X: PO/PNL Date #}
@@ -701,6 +705,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                             </td>
                             {# AP: Remarks #}
                             <td class="cell-wrap small">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</td>
+                            {# AQ: Revenue Declaration #}
+                            <td class="small">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</td>
                             {% endif %}
                             {# Action col #}
                             <td class="text-center" style="min-width:80px;">
@@ -747,7 +753,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="43" class="text-center text-muted py-5">
+                            <td colspan="44" class="text-center text-muted py-5">
                                 <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
                             </td>
                         </tr>
@@ -1167,6 +1173,7 @@ body:not(.dark-mode) #sqr-cell-preview {
         project_details: {'Training':'Training','Support':'Support','Implementation':'Implementation','Project Management':'Project Management','Implementation and Project Management':'Implementation and Project Management','Demonstration':'Demonstration','Managed Support and Maintenance Service':'Managed Support and Maintenance Service','Other':'Other'},
         customer_company: {ESS:'ESS', HP:'HP', Dell:'Dell', ENS:'ENS', ESG:'ESG', Other:'Other'},
         revenue_source: {internal:'Internal', invoiced:'Invoiced'},
+        revenue_declaration: {declared:'Declared', not_yet:'Not Yet'},
     };
     var CHOICES = {
         status: [['','—'],['submitted','For Processing'],['for_revision','For Revision'],['reviewed','Approved']],
@@ -1176,6 +1183,7 @@ body:not(.dark-mode) #sqr-cell-preview {
         project_details: [['','— Select Scope —'],['Training','Training'],['Support','Support'],['Implementation','Implementation'],['Project Management','Project Management'],['Implementation and Project Management','Implementation and Project Management'],['Demonstration','Demonstration'],['Managed Support and Maintenance Service','Managed Support and Maintenance Service'],['Other','Other']],
         customer_company: [['','— Select —'],['ESS','ESS'],['HP','HP'],['Dell','Dell'],['ENS','ENS'],['ESG','ESG'],['Other','Other']],
         revenue_source: [['','— Select —'],['internal','Internal'],['invoiced','Invoiced']],
+        revenue_declaration: [['','— Select —'],['declared','Declared'],['not_yet','Not Yet']],
         assigned_pm: PM_USER_CHOICES,
         assigned_sse: SSE_USER_CHOICES,
         linked_request: RQ_CHOICES,
@@ -1217,6 +1225,11 @@ body:not(.dark-mode) #sqr-cell-preview {
             if (value === 'at_risk')   return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>';
             if (value === 'completed') return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>';
             if (value === 'cancelled') return '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'revenue_declaration') {
+            if (value === 'declared') return '<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>';
+            if (value === 'not_yet') return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>';
             return '<span class="text-muted small">\u2013</span>';
         }
         if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';

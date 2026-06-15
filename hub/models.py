@@ -455,6 +455,10 @@ class SqrSubmission(models.Model):
         PARTIAL = "partial", "Partial"
         PENDING = "pending", "Pending"
 
+    class RevenueDeclaration(models.TextChoices):
+        DECLARED = "declared", "Declared"
+        NOT_YET = "not_yet", "Not Yet"
+
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
     sequence_number = models.PositiveIntegerField(editable=False, db_index=True, blank=True, null=True)
@@ -565,7 +569,7 @@ class SqrSubmission(models.Model):
     warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Post-service Warranty End Date")
     managed_support_start_date = models.DateField(blank=True, null=True)
     managed_support_end_date = models.DateField(blank=True, null=True)
-    # Revenue Stage – columns (AL–AP in Excel)
+    # Revenue Stage – columns (AL–AQ in Excel)
     revenue_date = models.DateField(blank=True, null=True, verbose_name="SI/Revenue Date")
     revenue_source = models.CharField(max_length=100, blank=True)
     revenue_reference_no = models.CharField(max_length=100, blank=True)
@@ -573,6 +577,9 @@ class SqrSubmission(models.Model):
         max_length=20, choices=RevenueStatus.choices, blank=True, default=""
     )
     revenue_remarks = models.TextField(blank=True)
+    revenue_declaration = models.CharField(
+        max_length=20, choices=RevenueDeclaration.choices, blank=True, default=""
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(

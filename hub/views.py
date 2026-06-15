@@ -2325,7 +2325,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
         "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
-        "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
+        "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
         "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
@@ -2333,7 +2333,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
         "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
-        "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
+        "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _DATE_FIELDS = frozenset([
         "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
@@ -3995,6 +3995,7 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             ("Reference No.",              lambda s: (s.revenue_reference_no or "").upper()),
             ("Revenue Status",             lambda s: "Billed" if s.revenue_date else "For Billing"),
             ("Remarks",                    lambda s: s.revenue_remarks or ""),
+            ("Revenue Declaration",        lambda s: s.get_revenue_declaration_display() if s.revenue_declaration else ""),
         ]
 
         # ── Header row ──────────────────────────────────────────

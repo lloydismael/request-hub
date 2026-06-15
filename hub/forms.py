@@ -786,6 +786,7 @@ class SqrTrackerEditForm(forms.ModelForm):
             "revenue_source",
             "revenue_reference_no",
             "revenue_remarks",
+            "revenue_declaration",
         ]
         labels = {
             "status": "SQR Status (T)",
@@ -803,6 +804,7 @@ class SqrTrackerEditForm(forms.ModelForm):
             "revenue_source": "Source (AM)",
             "revenue_reference_no": "Reference No. (AN)",
             "revenue_remarks": "Remarks (AP)",
+            "revenue_declaration": "Revenue Declaration (AQ)",
         }
         widgets = {
             "status": forms.Select(attrs={"class": "form-select"}),
@@ -822,12 +824,13 @@ class SqrTrackerEditForm(forms.ModelForm):
             "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "Revenue source"}),
             "revenue_reference_no": forms.TextInput(attrs={"class": "form-control", "placeholder": "Reference number"}),
             "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Revenue remarks…"}),
+            "revenue_declaration": forms.Select(attrs={"class": "form-select"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Add empty leading option to optional choice fields
-        for fname in ("proposal_status", "overall_status", "delivery_health"):
+        for fname in ("proposal_status", "overall_status", "delivery_health", "revenue_declaration"):
             if fname in self.fields:
                 current = list(self.fields[fname].choices)
                 if not current or current[0][0] != "":
@@ -1097,6 +1100,7 @@ class SqrRevenueForm(forms.ModelForm):
             "revenue_reference_no",
             "revenue_status",
             "revenue_remarks",
+            "revenue_declaration",
         ]
         labels = {
             "revenue_date": "SI / Revenue Date",
@@ -1104,6 +1108,7 @@ class SqrRevenueForm(forms.ModelForm):
             "revenue_reference_no": "Reference No.",
             "revenue_status": "Revenue Status",
             "revenue_remarks": "Remarks",
+            "revenue_declaration": "Revenue Declaration",
         }
         widgets = {
             "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
@@ -1111,12 +1116,16 @@ class SqrRevenueForm(forms.ModelForm):
             "revenue_reference_no": forms.TextInput(attrs={"class": "form-control"}),
             "revenue_status": forms.Select(attrs={"class": "form-select"}),
             "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
+            "revenue_declaration": forms.Select(attrs={"class": "form-select"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["revenue_status"].choices = [("", "\u2014 Not set \u2014")] + list(
             SqrSubmission.RevenueStatus.choices
+        )
+        self.fields["revenue_declaration"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.RevenueDeclaration.choices
         )
         for f in self.fields.values():
             f.required = False
