@@ -772,7 +772,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             <button type="button" class="btn-close" id="close-import-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form method="post" action="{% url 'hub:sqr-import' %}" enctype="multipart/form-data">
+            <form method="post" action="{% url 'hub:sqr-import' %}" enctype="multipart/form-data" id="import-sqr-form">
                 {% csrf_token %}
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="{{ sqr_import_form.import_file.id_for_label }}">{{ sqr_import_form.import_file.label }}</label>
@@ -781,13 +781,37 @@ body:not(.dark-mode) #sqr-cell-preview {
                         <div class="form-text">{{ sqr_import_form.import_file.help_text }}</div>
                     {% endif %}
                 </div>
-                <div class="alert alert-info small mb-0" role="alert">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Use the current <strong>Export Excel</strong> file format. Existing rows are matched by <strong>SQR ID</strong>; blank SQR IDs create new rows.
+                <div class="alert alert-warning small" role="alert">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    This import will <strong>replace all current rows</strong> in the SQR table using the uploaded Excel file.
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" value="1" id="import-sqr-confirm" name="confirm_overwrite">
+                    <label class="form-check-label small" for="import-sqr-confirm">
+                        I confirm that I want to proceed and overwrite the current SQR table.
+                    </label>
+                </div>
+                <div class="alert alert-danger small d-none" id="import-sqr-error" role="alert"></div>
+                <div class="d-none" id="import-sqr-progress-wrap">
+                    <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
+                        <span id="import-sqr-progress-text">Preparing import…</span>
+                        <span id="import-sqr-progress-percent">0%</span>
+                    </div>
+                    <div class="progress" style="height: 18px;">
+                        <div
+                            class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                            id="import-sqr-progress-bar"
+                            role="progressbar"
+                            style="width: 0%"
+                            aria-valuenow="0"
+                            aria-valuemin="0"
+                            aria-valuemax="100"></div>
+                    </div>
+                            <div class="small text-muted mt-2" id="import-sqr-progress-count">Rows added: 0</div>
                 </div>
                 <div class="d-flex gap-2 justify-content-end mt-4">
                     <button type="button" class="btn btn-outline-secondary" id="cancel-import-sqr-btn">Cancel</button>
-                    <button class="btn btn-info" type="submit">
+                    <button class="btn btn-info" type="submit" id="submit-import-sqr-btn">
                         <i class="bi bi-cloud-arrow-up me-1"></i>Import
                     </button>
                 </div>
@@ -804,6 +828,120 @@ body:not(.dark-mode) #sqr-cell-preview {
         var closeBtn = document.getElementById('close-import-sqr-btn');
         var cancelBtn = document.getElementById('cancel-import-sqr-btn');
         var backdrop = document.getElementById('import-sqr-backdrop');
+        var form = document.getElementById('import-sqr-form');
+        var submitBtn = document.getElementById('submit-import-sqr-btn');
+        var confirmInput = document.getElementById('import-sqr-confirm');
+        var errorBox = document.getElementById('import-sqr-error');
+        var progressWrap = document.getElementById('import-sqr-progress-wrap');
+        var progressBar = document.getElementById('import-sqr-progress-bar');
+        var progressText = document.getElementById('import-sqr-progress-text');
+        var progressPercent = document.getElementById('import-sqr-progress-percent');
+        var progressCount = document.getElementById('import-sqr-progress-count');
+        var pollingTimer = null;
+
+        function getCsrfToken() {
+            var csrfInput = form ? form.querySelector('input[name="csrfmiddlewaretoken"]') : null;
+            return csrfInput ? csrfInput.value : '';
+        }
+
+        function setError(message) {
+            if (!errorBox) return;
+            if (message) {
+                errorBox.textContent = message;
+                errorBox.classList.remove('d-none');
+            } else {
+                errorBox.textContent = '';
+                errorBox.classList.add('d-none');
+            }
+        }
+
+        function setProgress(percent, message, isDone, isFailed) {
+            var normalized = Math.max(0, Math.min(100, parseInt(percent || 0, 10) || 0));
+            if (progressWrap) progressWrap.classList.remove('d-none');
+            if (progressBar) {
+                progressBar.style.width = normalized + '%';
+                progressBar.setAttribute('aria-valuenow', normalized);
+                progressBar.classList.toggle('bg-danger', !!isFailed);
+                progressBar.classList.toggle('bg-success', !!isDone && !isFailed);
+                progressBar.classList.toggle('bg-info', !isDone && !isFailed);
+                progressBar.classList.toggle('progress-bar-animated', !isDone && !isFailed);
+                progressBar.classList.toggle('progress-bar-striped', !isDone && !isFailed);
+            }
+            if (progressText && message) progressText.textContent = message;
+            if (progressPercent) progressPercent.textContent = normalized + '%';
+        }
+
+        function setImportedCount(count) {
+            var normalized = Math.max(0, parseInt(count || 0, 10) || 0);
+            if (progressCount) progressCount.textContent = 'Rows added: ' + normalized;
+        }
+
+        function setBusy(isBusy) {
+            if (submitBtn) submitBtn.disabled = !!isBusy;
+            if (confirmInput) confirmInput.disabled = !!isBusy;
+        }
+
+        function stopPolling() {
+            if (pollingTimer) {
+                window.clearTimeout(pollingTimer);
+                pollingTimer = null;
+            }
+        }
+
+        function resetImportState() {
+            stopPolling();
+            setBusy(false);
+            setError('');
+            setProgress(0, 'Preparing import…', false, false);
+            setImportedCount(0);
+            if (progressWrap) progressWrap.classList.add('d-none');
+        }
+
+        function pollStatus(jobId) {
+            fetch('{% url "hub:sqr-import-status" %}?job_id=' + encodeURIComponent(jobId), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        return { ok: response.ok, data: data };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) {
+                        throw new Error((result.data && (result.data.error || (result.data.errors && result.data.errors[0]))) || 'Unable to read import status.');
+                    }
+
+                    var status = result.data.status || {};
+                    var state = status.state || 'queued';
+                    setProgress(status.percent || 0, status.message || 'Import in progress…', state === 'completed', state === 'failed');
+                    setImportedCount((status.result && status.result.created) || status.processed || 0);
+
+                    if (state === 'completed') {
+                        setBusy(false);
+                        setTimeout(function () {
+                            window.location.reload();
+                        }, 900);
+                        return;
+                    }
+
+                    if (state === 'failed') {
+                        setBusy(false);
+                        setError((status.errors && status.errors[0]) || status.message || 'Import failed.');
+                        return;
+                    }
+
+                    pollingTimer = window.setTimeout(function () {
+                        pollStatus(jobId);
+                    }, 800);
+                })
+                .catch(function (error) {
+                    setBusy(false);
+                    setError(error && error.message ? error.message : 'Import status check failed.');
+                });
+        }
 
         function openModal() {
             modal.classList.add('requestor-modal--visible');
@@ -815,6 +953,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             modal.classList.remove('requestor-modal--visible');
             modal.setAttribute('aria-hidden', 'true');
             document.body.classList.remove('requestor-modal-open');
+            resetImportState();
         }
 
         if (openBtn) openBtn.addEventListener('click', openModal);
@@ -824,6 +963,54 @@ body:not(.dark-mode) #sqr-cell-preview {
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && modal.classList.contains('requestor-modal--visible')) closeModal();
         });
+
+        if (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                setError('');
+
+                if (!confirmInput || !confirmInput.checked) {
+                    setError('Please confirm first before importing.');
+                    return;
+                }
+
+                var fileInput = document.getElementById('{{ sqr_import_form.import_file.id_for_label }}');
+                if (!fileInput || !fileInput.files || !fileInput.files.length) {
+                    setError('Please choose an Excel file to import.');
+                    return;
+                }
+
+                var formData = new FormData(form);
+                setBusy(true);
+                setProgress(0, 'Starting import…', false, false);
+                fetch(form.getAttribute('action'), {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    credentials: 'same-origin'
+                })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            return { ok: response.ok, data: data };
+                        });
+                    })
+                    .then(function (result) {
+                        if (!result.ok || !result.data.ok) {
+                            throw new Error((result.data && (result.data.error || (result.data.errors && result.data.errors[0]))) || 'Import could not be started.');
+                        }
+                        pollStatus(result.data.job_id);
+                    })
+                    .catch(function (error) {
+                        setBusy(false);
+                        setError(error && error.message ? error.message : 'Import could not be started.');
+                    });
+            });
+        }
+
+        resetImportState();
     })();
 </script>
 {% endif %}

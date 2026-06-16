@@ -69,6 +69,7 @@ urlpatterns = [
     path("sqr/", SqrListView.as_view(), name="sqr"),
     path("sqr/export/", SqrExportView.as_view(), name="sqr-export"),
     path("sqr/import/", SqrImportView.as_view(), name="sqr-import"),
+    path("sqr/import/status/", SqrImportView.as_view(), name="sqr-import-status"),
     path("sqr/<int:pk>/edit/", SqrEngineerUpdateView.as_view(), name="sqr-edit"),
     path("sqr/<int:pk>/inline-update/", SqrInlineFieldUpdateView.as_view(), name="sqr-inline-update"),
     path("sqr/<int:pk>/delete/", SqrEngineerDeleteView.as_view(), name="sqr-delete"),
