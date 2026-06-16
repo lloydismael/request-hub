@@ -1,15 +1,27 @@
 import csv
+import base64
 import html
 import json
 import logging
+import mimetypes
 import re
 import threading
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date, datetime, timedelta
+from email.charset import Charset, QP
+from email.header import Header
+from email.mime.image import MIMEImage
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
+
+import msal
+import requests
 
 from django.conf import settings
 from django.contrib import messages
@@ -79,6 +91,108 @@ from .mixins import (
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
 
+SQR_APPROVAL_SERVICE_COMPONENT = "Systems Support & Maintenance Service - 1 Year"
+SQR_APPROVAL_LOGO_URL = "https://raw.githubusercontent.com/lloydismael/request-hub/dev/static/img/phil-data-full-logo.png"
+SQR_APPROVAL_LOGO_PATH = Path(settings.BASE_DIR) / "static" / "img" / "phil-data-full-logo.png"
+SQR_APPROVAL_LOGO_CID = "sqr-approval-logo@request-hub"
+SQR_APPROVAL_INCLUDED_SERVICES = [
+    "Proactive System Health Checks",
+    "System/Platform Patching (scheduled)",
+    "Incident Support",
+    "Basic Troubleshooting and Issue Isolation",
+    "Monthly System Status Report",
+    "Advisory Support",
+]
+
+
+def _format_sqr_approval_greeting(requestor_name: str) -> str:
+    cleaned_name = (requestor_name or "").strip()
+    return f"Hi @{cleaned_name}" if cleaned_name else "Hi"
+
+
+def _split_sqr_scope_items(scope_text: str) -> list[str]:
+    cleaned = (scope_text or "").replace("\r", "").strip()
+    if not cleaned:
+        return list(SQR_APPROVAL_INCLUDED_SERVICES)
+
+    if "•" in cleaned:
+        raw_items = cleaned.split("•")
+    elif "\n" in cleaned:
+        raw_items = cleaned.splitlines()
+    elif ";" in cleaned:
+        raw_items = cleaned.split(";")
+    else:
+        raw_items = [cleaned]
+
+    items: list[str] = []
+    for raw_item in raw_items:
+        item = re.sub(r"^[\-•\s]+", "", raw_item).strip()
+        if item:
+            items.append(item)
+    return items or list(SQR_APPROVAL_INCLUDED_SERVICES)
+
+
+def _get_sqr_scope_items(submission: "SqrSubmission") -> list[str]:
+    return _split_sqr_scope_items(submission.project_details or "")
+
+
+def _get_sqr_service_component(submission: "SqrSubmission") -> str:
+    return SQR_APPROVAL_SERVICE_COMPONENT
+
+
+def _get_sqr_logo_attachment() -> Optional[dict]:
+    try:
+        logo_bytes = SQR_APPROVAL_LOGO_PATH.read_bytes()
+    except OSError:
+        logger.warning("SQR approval logo file is unavailable at %s", SQR_APPROVAL_LOGO_PATH)
+        return None
+
+    content_type = mimetypes.guess_type(str(SQR_APPROVAL_LOGO_PATH))[0] or "image/png"
+    return {
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        "name": SQR_APPROVAL_LOGO_PATH.name,
+        "contentType": content_type,
+        "isInline": True,
+        "contentId": SQR_APPROVAL_LOGO_CID,
+        "contentBytes": base64.b64encode(logo_bytes).decode("ascii"),
+    }
+
+
+def _build_sqr_approval_mime_message(context: dict, sender_email: str, *, mark_as_unsent: bool = False) -> str:
+    windows_charset = Charset("windows-1252")
+    windows_charset.body_encoding = QP
+
+    message = MIMEMultipart("related")
+    message.set_param("type", "multipart/alternative")
+    message["Subject"] = Header(context["subject"], "windows-1252")
+    message["From"] = sender_email
+    recipients = context.get("recipients") or []
+    if recipients[:1]:
+        message["To"] = recipients[0]
+    if recipients[1:]:
+        message["Cc"] = ", ".join(recipients[1:])
+    if mark_as_unsent:
+        message["X-Unsent"] = "1"
+
+    alternative = MIMEMultipart("alternative")
+    alternative.attach(MIMEText(context["plain_text"], "plain", windows_charset))
+    alternative.attach(MIMEText(context.get("html_draft") or context["html_preview"], "html", windows_charset))
+    message.attach(alternative)
+
+    for attachment in context.get("attachments") or []:
+        raw_bytes = base64.b64decode(attachment["contentBytes"])
+        maintype, _, subtype = (attachment.get("contentType") or "application/octet-stream").partition("/")
+        if maintype == "image":
+            part = MIMEImage(raw_bytes, _subtype=subtype or "png")
+        else:
+            part = MIMEApplication(raw_bytes, _subtype=subtype or "octet-stream")
+        part.add_header("Content-Disposition", "inline", filename=attachment.get("name") or "attachment")
+        if attachment.get("contentId"):
+            part.add_header("Content-ID", f'<{attachment["contentId"]}>')
+        message.attach(part)
+
+    return base64.b64encode(message.as_bytes()).decode("ascii")
+
 
 def _format_sqr_approval_subject(submission: "SqrSubmission") -> str:
     rq_id = submission.linked_request.reference_code if submission.linked_request else ""
@@ -106,32 +220,31 @@ def _format_sqr_approval_validity_date(submission: "SqrSubmission") -> str:
 
 
 def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: str) -> list[str]:
+    scope_items = _get_sqr_scope_items(submission)
+    service_component = _get_sqr_service_component(submission)
     return [
-        f"Hi @{requestor_name}",
+        _format_sqr_approval_greeting(requestor_name),
         "",
-        "Submitted SQR is now approved, please refer to the ff. details below.",
+        "Submitted SQR is now approved. Please refer to the quotation details below.",
+        "",
+        f"Date: {_format_sqr_approval_date(submission)}",
+        "SERVICE QUOTATION",
         "",
         f"SQR ID: {submission.reference_code or ''}",
-        f"Customer Name: {submission.customer_name or ''}",
+        f"Account / Customer: {submission.customer_name or ''}",
         f"Service Description: {(submission.project_title or '').strip()}",
         f"Account Manager: {(submission.customer_contact or '').strip()}",
-        f"Scope of Services: {(submission.project_details or '').strip()}",
         "",
-        "Add-On Service: Systems Support & Maintenance Service - 1 Year",
-        "Included Services:",
-        "• Proactive System Health Checks",
-        "• System/Platform Patching (scheduled)",
-        "• Incident Support",
-        "• Basic Troubleshooting and Issue Isolation",
-        "• Monthly System Status Report",
-        "• Advisory Support",
+        "SCOPE OF SERVICES",
+        *[f"• {item}" for item in scope_items],
         "",
-        "Quantity: 1 Lot",
-        f"Total Price: {_format_sqr_approval_total_price(submission)}",
-        f"Approval Date: {_format_sqr_approval_date(submission)}",
+        "Service Component | Qty | Total Price",
+        f"{service_component} | 1 lot | {_format_sqr_approval_total_price(submission)}",
+        f"Total: {_format_sqr_approval_total_price(submission)}",
+        "",
         f"Quotation Validity Until: {_format_sqr_approval_validity_date(submission)}",
         "",
-        "𝗧𝗲𝗿𝗺𝘀 𝗮𝗻𝗱 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀",
+        "Terms and Conditions",
         "VAT: This quote excludes Value Added Tax (VAT).",
         "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
         "This is a budgetary quote.",
@@ -145,42 +258,109 @@ def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: 
 
 
 def _build_sqr_approval_html(submission: "SqrSubmission", requestor_name: str) -> str:
+    return _build_sqr_approval_html_markup(submission, requestor_name, logo_src=SQR_APPROVAL_LOGO_URL)
+
+
+def _build_sqr_approval_draft_html(submission: "SqrSubmission", requestor_name: str) -> str:
+    return _build_sqr_approval_html_markup(submission, requestor_name, logo_src=f"cid:{SQR_APPROVAL_LOGO_CID}")
+
+
+def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name: str, *, logo_src: str) -> str:
+    summary_rows = [
+        ("SQR ID", submission.reference_code or "—"),
+        ("Account / Customer", submission.customer_name or "—"),
+        ("Service Description", (submission.project_title or "").strip() or "—"),
+        ("Account Manager", (submission.customer_contact or "").strip() or "—"),
+    ]
+    scope_items = _get_sqr_scope_items(submission)
+    service_component = html.escape(_get_sqr_service_component(submission))
+    approval_date = html.escape(_format_sqr_approval_date(submission))
+    total_price = html.escape(_format_sqr_approval_total_price(submission))
+    validity_date = html.escape(_format_sqr_approval_validity_date(submission))
+    greeting = html.escape(_format_sqr_approval_greeting(requestor_name))
+    logo_url = html.escape(logo_src)
+
+    summary_headers_html = "".join(
+        f'<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">{html.escape(label)}</span></div></th>'
+        for label, _value in summary_rows
+    )
+    summary_values_html = "".join(
+        f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{html.escape(value)}</div></td>'
+        for _label, value in summary_rows
+    )
+    scope_items_html = "".join(
+        f'<li style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);direction:ltr;line-height:1.6;margin:0 0 8px;"><span style="line-height:1.6;" role="presentation">{html.escape(item)}</span></li>'
+        for item in scope_items
+    )
+
     return "".join(
         [
-            f"<p>{html.escape(f'Hi @{requestor_name}')}</p>",
-            "<p>Submitted SQR is now approved, please refer to the ff. details below.</p>",
-            "<p>",
-            f"SQR ID: {html.escape(submission.reference_code or '')}<br>",
-            f"Customer Name: {html.escape(submission.customer_name or '')}<br>",
-            f"Service Description: {html.escape((submission.project_title or '').strip())}<br>",
-            f"Account Manager: {html.escape((submission.customer_contact or '').strip())}<br>",
-            f"Scope of Services: {html.escape((submission.project_details or '').strip())}",
-            "</p>",
-            "<p>Add-On Service: Systems Support &amp; Maintenance Service - 1 Year<br>Included Services:</p>",
-            "<ul>",
-            "<li>Proactive System Health Checks</li>",
-            "<li>System/Platform Patching (scheduled)</li>",
-            "<li>Incident Support</li>",
-            "<li>Basic Troubleshooting and Issue Isolation</li>",
-            "<li>Monthly System Status Report</li>",
-            "<li>Advisory Support</li>",
-            "</ul>",
-            "<p>",
-            "Quantity: 1 Lot<br>",
-            f"Total Price: {html.escape(_format_sqr_approval_total_price(submission))}<br>",
-            f"Approval Date: {html.escape(_format_sqr_approval_date(submission))}<br>",
-            f"Quotation Validity Until: {html.escape(_format_sqr_approval_validity_date(submission))}",
-            "</p>",
-            "<p><strong>Terms and Conditions</strong><br>",
-            "VAT: This quote excludes Value Added Tax (VAT).<br>",
-            "For P&amp;L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.<br>",
-            "This is a budgetary quote.<br>",
-            "This quote is issued for internal billing purposes only.<br>",
-            "Travel costs within Metro Manila are included.<br>",
-            "This quote does not include hardware, software licenses, or subscriptions unless stated.",
-            "</p>",
-            "<p>For any questions or to discuss this quote further, please don't hesitate to contact us:<br>",
-            "EnterpriseServices@phildata.com</p>",
+            '<html><head><meta http-equiv="Content-Type" content="text/html; charset=Windows-1252"><style type="text/css" style="display:none;"> P {margin-top:0;margin-bottom:0;} </style></head><body dir="ltr">',
+            '<div class="elementToProof" style="background-color:rgb(244,247,251);padding:24px 12px;">',
+            '<div class="elementToProof" style="background-color:rgb(255,255,255);margin:0 auto;border-width:1px;border-style:solid;border-color:rgb(215,222,232);max-width:860px;">',
+            '<div class="elementToProof" style="padding:28px 30px 32px;">',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 12px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">{greeting}</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 22px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">Submitted SQR is now approved. Please refer to the quotation details below.</span></p>',
+            '<div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:rgb(16,24,40);">',
+            f'<img width="193" height="80" style="width:193.667px;height:80px;max-width:1070px;" src="{logo_url}" alt="Phil-Data">',
+            '</div>',
+            '<table role="presentation" style="direction:ltr;margin:0 0 18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<tbody><tr>',
+            '<td style="direction:ltr;vertical-align:bottom;">',
+            '<div class="elementToProof" style="direction:ltr;letter-spacing:0.08em;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgb(71,84,103);"><span style="letter-spacing:0.08em;">Date</span></div>',
+            f'<div class="elementToProof" style="direction:ltr;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);">{approval_date}</div>',
+            '</td>',
+            '<td style="direction:ltr;text-align:right;vertical-align:bottom;">',
+            '<div class="elementToProof" style="direction:ltr;text-align:right;letter-spacing:0.05em;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:700;color:rgb(17,24,39);"><span style="letter-spacing:0.05em;">SERVICE QUOTATION</span></div>',
+            '</td>',
+            '</tr></tbody></table>',
+            '<table role="presentation" style="direction:ltr;width:100%;table-layout:fixed;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<tbody>',
+            f'<tr>{summary_headers_html}</tr>',
+            f'<tr>{summary_values_html}</tr>',
+            '</tbody></table>',
+            '<div class="elementToProof" style="margin-top:18px;">',
+            '<div class="elementToProof" style="background-color:rgb(255,255,255);border-width:1px;border-style:solid;border-color:rgb(207,216,227);">',
+            '<div class="elementToProof" style="direction:ltr;background-color:rgb(255,255,255);padding-top:14px;padding-right:16px;padding-left:16px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgb(16,24,40);"><span style="letter-spacing:0.04em;font-weight:700;">SCOPE OF SERVICES</span></div>',
+            f'<ul style="direction:ltr;margin:10px 0 0;padding-right:24px;padding-bottom:16px;padding-left:34px;">{scope_items_html}</ul>',
+            '</div>',
+            '</div>',
+            '<table role="presentation" style="direction:ltr;margin-top:18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<tbody>',
+            '<tr>',
+            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Service Component</span></div></th>',
+            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:120px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Qty</span></div></th>',
+            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:180px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Total Price</span></div></th>',
+            '</tr>',
+            '<tr>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{service_component}</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">1 lot</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{total_price}</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;"></td>',
+            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">Total</span></div></td>',
+            f'<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">{total_price}</span></div></td>',
+            '</tr>',
+            '</tbody></table>',
+            f'<p class="elementToProof" style="direction:ltr;margin:14px 0 0;font-size:13px;color:rgb(71,84,103);"><span style="font-family:Arial,Helvetica,sans-serif;">Quotation Validity Until: </span><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);"><b>{validity_date}</b></span></p>',
+            '<div class="elementToProof" style="margin-top:24px;">',
+            '<div class="elementToProof" style="direction:ltr;margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:rgb(16,24,40);"><span style="font-weight:700;">Terms and Conditions</span></div>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">VAT: This quote excludes Value Added Tax (VAT).</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><i>For P&amp;L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.</i></span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">This is a budgetary quote.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">This quote is issued for internal billing purposes only.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">Travel costs within Metro Manila are included.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">This quote does not include hardware, software licenses, or subscriptions unless stated.</span></p>',
+            '</div>',
+            '<div class="elementToProof" style="margin-top:22px;padding-top:16px;border-top:1px solid rgb(228,231,236);">',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 6px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">For any questions or to discuss this quote further, please don\'t hesitate to contact us:</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0;font-size:13px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(21,96,130);font-weight:700;"><a href="mailto:EnterpriseServices@phildata.com" style="color:rgb(21,96,130);text-decoration:none;margin-top:0;margin-bottom:0;">EnterpriseServices@phildata.com</a></span></p>',
+            '</div>',
+            '</div>',
+            '</div>',
+            '</div>',
+            '</body></html>',
         ]
     )
 
@@ -1164,6 +1344,78 @@ def _send_sqr_approved_email(
             engineer_email,
             exc_info=exc,
         )
+
+
+def _get_sqr_approval_email_context(submission: SqrSubmission) -> dict:
+    engineer = submission.engineer
+    engineer_email = (getattr(engineer, "email", "") or "").strip()
+    engineer_name = (engineer.get_full_name() or engineer.username or "").strip() if engineer else ""
+    recipients = [email for email in (engineer_email, "ESGRequestHub@phildata.com") if email]
+    logo_attachment = _get_sqr_logo_attachment()
+    attachments = [logo_attachment] if logo_attachment else []
+    return {
+        "submission": submission,
+        "subject": _format_sqr_approval_subject(submission),
+        "recipients": recipients,
+        "plain_text": "\n".join(_build_sqr_approval_body_lines(submission, engineer_name)),
+        "html_preview": _build_sqr_approval_html(submission, engineer_name),
+        "html_draft": _build_sqr_approval_draft_html(submission, engineer_name),
+        "attachments": attachments,
+    }
+
+
+def _get_graph_access_token() -> tuple[str, str]:
+    if not (settings.PHILDATA_TENANT_ID and settings.PHILDATA_CLIENT_ID and settings.PHILDATA_CLIENT_SECRET):
+        return "", "Microsoft Graph draft creation is not configured. Set PHILDATA_TENANT_ID, PHILDATA_CLIENT_ID, and PHILDATA_CLIENT_SECRET."
+
+    app = msal.ConfidentialClientApplication(
+        client_id=settings.PHILDATA_CLIENT_ID,
+        client_credential=settings.PHILDATA_CLIENT_SECRET,
+        authority=f"https://login.microsoftonline.com/{settings.PHILDATA_TENANT_ID}",
+    )
+    token_result = app.acquire_token_for_client(scopes=settings.PHILDATA_GRAPH_SCOPE)
+    access_token = token_result.get("access_token")
+    if access_token:
+        return access_token, ""
+    error_description = token_result.get("error_description") or token_result.get("error") or "Unable to acquire Microsoft Graph access token."
+    return "", error_description
+
+
+def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[str, str]:
+    sender_email = (sender_email or "").strip()
+    if not sender_email:
+        return "", "The signed-in user does not have an email address configured for Outlook draft creation."
+
+    access_token, token_error = _get_graph_access_token()
+    if token_error:
+        return "", token_error
+
+    graph_url = f"https://graph.microsoft.com/v1.0/users/{quote(sender_email, safe='')}/messages"
+    mime_payload = _build_sqr_approval_mime_message(context, sender_email)
+    try:
+        response = requests.post(
+            graph_url,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "text/plain",
+            },
+            data=mime_payload,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        return "", f"Unable to contact Microsoft Graph: {exc}"
+
+    if response.status_code not in (200, 201):
+        try:
+            error_payload = response.json()
+            message = error_payload.get("error", {}).get("message") or response.text
+        except ValueError:
+            message = response.text
+        return "", f"Microsoft Graph draft creation failed ({response.status_code}): {message}"
+
+    draft = response.json()
+    web_link = draft.get("webLink") or ""
+    return web_link, ""
 
 
 def _admin_sort_engineer_key(request_obj):
@@ -2642,28 +2894,18 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 http_request=request,
             )
 
-        # When status → Approved: build a mailto: URL so the user can edit and send manually
-        _approved_mailto_url = ""
+        # When status → Approved: launch the user's default email app with the draft.
+        _approval_email_draft_url = None
         if (
             field == "status"
             and coerced == SqrSubmission.Status.APPROVED
             and old_status != SqrSubmission.Status.APPROVED
         ):
-            _rev_name = request.user.get_full_name() or request.user.username
-            _eng = submission.engineer
-            _eng_email = (getattr(_eng, "email", "") or "").strip()
-            _eng_name = (_eng.get_full_name() or _eng.username if _eng else "").strip()
-            _to = _eng_email + ";ESGRequestHub@phildata.com"
-            _subj = _format_sqr_approval_subject(submission)
-            _body_lines = _build_sqr_approval_body_lines(submission, _eng_name)
-            _body = "\r\n".join(_body_lines)
-            _approved_mailto_url = (
-                f"mailto:{quote(_to)}"
-                f"?subject={quote(_subj)}"
-                f"&body={quote(_body)}"
-            )
+            _approval_email_draft_url = reverse("hub:sqr-approval-email", args=[submission.pk])
 
         response_data = {"ok": True}
+        if _approval_email_draft_url:
+            response_data["approval_email_draft_url"] = _approval_email_draft_url
         if "pm_amount" in save_fields:
             response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
         if "pm_manhrs" in save_fields:
@@ -2708,104 +2950,19 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         if field == "managed_support_start_date":
             def _fmt(d): return d.strftime("%b %d, %Y") if d else ""
             response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        if _approved_mailto_url:
-            response_data["mailto_url"] = _approved_mailto_url
         return JsonResponse(response_data)
 
 
-class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
-    model = SqrSubmission
-    form_class = SqrReviewForm
-    template_name = "hub/sqr_review_form.html"
-    success_url = reverse_lazy("hub:sqr")
+class SqrReviewUpdateView(LoginRequiredMixin, View):
+    """Legacy SQR review page removed; status review now happens inline on the SQR tracker."""
 
-    def get_success_url(self):
-        return reverse("hub:sqr-review", args=[self.object.pk])
+    def get(self, request, *args, **kwargs):
+        messages.info(request, "The SQR review page has been removed. Update SQR status directly from the tracker.")
+        return redirect("hub:sqr")
 
-    def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in ADMIN_PANEL_ROLES:
-            messages.error(request, "Only PM-ESG or Admin can review SQR submissions.")
-            return redirect("hub:sqr")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["reviewer_role"] = self.request.user.role
-        return kwargs
-
-    def get_queryset(self):
-        queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
-        return queryset
-
-    def form_valid(self, form):
-        original = SqrSubmission.objects.get(pk=form.instance.pk)
-        form.instance.reviewed_by = self.request.user
-        if form.cleaned_data.get("status") == SqrSubmission.Status.APPROVED:
-            if not form.instance.reviewed_at:
-                form.instance.reviewed_at = timezone.now()
-            form.instance.validity_due_date = form.instance.reviewed_at.date() + timedelta(days=90)
-            if not form.instance.assigned_pm_id:
-                form.instance.assigned_pm = form.instance.pm_esg_reviewer
-        else:
-            form.instance.reviewed_at = None
-            form.instance.validity_due_date = None
-
-        response = super().form_valid(form)
-
-        review_changed = (
-            original.status != self.object.status
-            or (original.review_notes or "") != (self.object.review_notes or "")
-        )
-        if review_changed:
-            self._notify_engineer_review(self.object)
-
-        messages.success(self.request, f"SQR {self.object.reference_code} status updated.")
-        return response
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["back_url"] = reverse("hub:sqr")
-        context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
-        context["can_launch_approval_email"] = (
-            self.object.status == SqrSubmission.Status.APPROVED
-            and self.object.quotation_total_price is not None
-        )
-        context["proposal_form"] = SqrProposalStatusForm(instance=self.object)
-        context["delivery_form"] = SqrDeliveryForm(instance=self.object)
-        context["revenue_form"] = SqrRevenueForm(instance=self.object)
-        context["show_proposal_section"] = self.object.status == SqrSubmission.Status.APPROVED
-        context["show_delivery_section"] = (
-            self.object.status == SqrSubmission.Status.APPROVED
-            and self.object.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
-        )
-        context["show_revenue_section"] = (
-            self.object.status == SqrSubmission.Status.APPROVED
-            and self.object.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
-        )
-        context["revenue_unlocked"] = self.object.revenue_unlocked
-        return context
-
-    def _notify_engineer_review(self, submission: SqrSubmission) -> None:
-        reviewer_name = self.request.user.get_full_name() or self.request.user.username
-        status_label = submission.get_status_display()
-        Notification.objects.create(
-            recipient=submission.engineer,
-            message=f"{reviewer_name} marked {submission.reference_code} as {status_label}.",
-            actor=reviewer_name,
-            source="SQR · Review Update",
-        )
-        if submission.status == SqrSubmission.Status.FOR_REVISION:
-            _send_sqr_for_revision_email(
-                submission,
-                reviewer_name,
-                http_request=self.request,
-            )
-        if submission.status == SqrSubmission.Status.APPROVED:
-            _send_sqr_approved_email(
-                submission,
-                reviewer_name,
-                http_request=self.request,
-            )
+    def post(self, request, *args, **kwargs):
+        messages.info(request, "The SQR review page has been removed. Update SQR status directly from the tracker.")
+        return redirect("hub:sqr")
 
 
 class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
@@ -2879,7 +3036,7 @@ class SqrProposalUpdateView(LoginRequiredMixin, View):
     def post(self, request, pk):
         if request.user.role not in ADMIN_PANEL_ROLES:
             messages.error(request, "Only PM-ESG or Admin can update Proposal details.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         submission = get_object_or_404(
             SqrSubmission.objects.select_related("pm_esg_reviewer"),
@@ -2888,11 +3045,11 @@ class SqrProposalUpdateView(LoginRequiredMixin, View):
 
         if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
             messages.error(request, "Only the assigned PM-ESG can update this proposal.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         if submission.status != SqrSubmission.Status.APPROVED:
             messages.error(request, "Proposal details can only be updated after the SQR is Approved.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         form = SqrProposalStatusForm(request.POST, instance=submission)
         if form.is_valid():
@@ -2904,7 +3061,7 @@ class SqrProposalUpdateView(LoginRequiredMixin, View):
                 for error in errors:
                     messages.error(request, f"{label}: {error}")
 
-        return redirect("hub:sqr-review", pk=pk)
+        return redirect("hub:sqr")
 
 
 class SqrToRevenueView(LoginRequiredMixin, View):
@@ -2913,7 +3070,7 @@ class SqrToRevenueView(LoginRequiredMixin, View):
     def post(self, request, pk):
         if request.user.role not in ADMIN_PANEL_ROLES:
             messages.error(request, "Only PM-ESG or Admin can unlock the Revenue Stage.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         submission = get_object_or_404(SqrSubmission, pk=pk)
 
@@ -2921,7 +3078,7 @@ class SqrToRevenueView(LoginRequiredMixin, View):
             submission.revenue_unlocked = True
             submission.save(update_fields=["revenue_unlocked", "updated_at"])
             messages.success(request, f"Revenue Stage unlocked for {submission.reference_code}.")
-        return redirect("hub:sqr-review", pk=pk)
+        return redirect("hub:sqr")
 
 
 class SqrDeliveryUpdateView(LoginRequiredMixin, View):
@@ -2930,7 +3087,7 @@ class SqrDeliveryUpdateView(LoginRequiredMixin, View):
     def post(self, request, pk):
         if request.user.role not in ADMIN_PANEL_ROLES:
             messages.error(request, "Only PM-ESG or Admin can update Service Delivery details.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         submission = get_object_or_404(
             SqrSubmission.objects.select_related("pm_esg_reviewer"),
@@ -2947,16 +3104,16 @@ class SqrDeliveryUpdateView(LoginRequiredMixin, View):
                 for error in errors:
                     messages.error(request, f"{label}: {error}")
 
-        return redirect("hub:sqr-review", pk=pk)
+        return redirect("hub:sqr")
 
 
 class SqrRevenueUpdateView(LoginRequiredMixin, View):
-    """PM-ESG / Admin: record revenue recognition details on an Approved SQR."""
+    """PM-ESG / Admin: record revenue recognition details on an approved SQR."""
 
     def post(self, request, pk):
         if request.user.role not in ADMIN_PANEL_ROLES:
             messages.error(request, "Only PM-ESG or Admin can update Revenue details.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         submission = get_object_or_404(
             SqrSubmission.objects.select_related("pm_esg_reviewer"),
@@ -2965,11 +3122,11 @@ class SqrRevenueUpdateView(LoginRequiredMixin, View):
 
         if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
             messages.error(request, "Only the assigned PM-ESG can update this revenue record.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         if submission.status != SqrSubmission.Status.APPROVED:
             messages.error(request, "Revenue details can only be updated after the SQR is Approved.")
-            return redirect("hub:sqr-review", pk=pk)
+            return redirect("hub:sqr")
 
         form = SqrRevenueForm(request.POST, instance=submission)
         if form.is_valid():
@@ -2981,7 +3138,7 @@ class SqrRevenueUpdateView(LoginRequiredMixin, View):
                 for error in errors:
                     messages.error(request, f"{label}: {error}")
 
-        return redirect("hub:sqr-review", pk=pk)
+        return redirect("hub:sqr")
 
 
 class SqrTeamsRedirectView(LoginRequiredMixin, View):
@@ -2991,7 +3148,7 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
             pk=pk,
         )
 
-        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr")
 
         if request.user.role not in ADMIN_PANEL_ROLES:
             return JsonResponse({"error": "Only PM-ESG or Admin can create SQR revision Teams groups."}, status=403)
@@ -3031,44 +3188,113 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
 
 
 class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
-    def post(self, request, pk):
-        submission = get_object_or_404(
-            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+    """Launch Outlook compose for the approved SQR quotation draft."""
+
+    def _get_submission(self, pk):
+        return get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "linked_request"),
             pk=pk,
         )
 
-        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
-
+    def _validate_access(self, request, submission):
         if request.user.role not in ADMIN_PANEL_ROLES:
-            messages.error(request, "Only PM-ESG or Admin can generate SQR approval advisory emails.")
-            return redirect(redirect_target)
-
+            return "Only PM-ESG or Admin can draft SQR approval advisory emails."
         if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
-            messages.error(request, "Only the assigned PM-ESG approver can generate this approval advisory email.")
-            return redirect(redirect_target)
-
+            return "Only the assigned PM-ESG approver can draft this approval advisory email."
         if submission.status != SqrSubmission.Status.APPROVED:
-            messages.error(request, "Set SQR status to Approved before generating the advisory email.")
-            return redirect(redirect_target)
-
+            return "Set SQR status to Approved before drafting the advisory email."
         requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
         if not requestor_email:
-            messages.error(request, "Unable to draft an email. Ensure the requestor (engineer) has an email configured.")
+            return "Unable to draft an email. Ensure the requestor (engineer) has an email configured."
+        return ""
+
+    def get(self, request, pk):
+        submission = self._get_submission(pk)
+        redirect_target = reverse("hub:sqr")
+        validation_error = self._validate_access(request, submission)
+        if validation_error:
+            messages.error(request, validation_error)
             return redirect(redirect_target)
 
-        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
-        recipients = f"{requestor_email},ESGRequestHub@phildata.com"
-        subject_text = _format_sqr_approval_subject(submission)
-        subject = quote(subject_text)
-        body = quote("\n".join(_build_sqr_approval_body_lines(submission, requestor_name)))
+        context = _get_sqr_approval_email_context(submission)
+        recipients = context["recipients"]
+        to_recipient = recipients[0] if recipients else ""
+        cc_recipients = ";".join(recipients[1:])
+        query_bits = [
+            f"to={quote(to_recipient)}",
+            f"subject={quote(context['subject'])}",
+            f"body={quote(context['plain_text'])}",
+        ]
+        if cc_recipients:
+            query_bits.insert(1, f"cc={quote(cc_recipients)}")
 
-        mailto_url = f"mailto:{recipients}?subject={subject}&body={body}"
-        messages.info(request, "Drafting approval advisory in your default mail client…")
+        query_string = "&".join(query_bits)
+        mailto_parts = [f"mailto:{to_recipient}", f"subject={quote(context['subject'])}", f"body={quote(context['plain_text'])}"]
+        if cc_recipients:
+            mailto_parts.insert(1, f"cc={quote(cc_recipients)}")
+        mailto_url = "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
+
+        draft_url, draft_error = _create_sqr_approval_graph_draft(context, request.user.email)
+        if draft_url:
+            messages.success(request, "Approved SQR quotation draft was created in Outlook with the formatted template.")
+        else:
+            messages.error(request, draft_error)
+
         return render(
             request,
             "hub/outlook_redirect.html",
-            {"mailto_url": mailto_url},
+            {
+                "launch_url": draft_url,
+                "web_url": draft_url,
+                "mailto_url": mailto_url,
+                "eml_url": reverse("hub:sqr-approval-email-eml", args=[submission.pk]),
+                "draft_created": bool(draft_url),
+                "draft_error": draft_error,
+                "return_url": reverse("hub:sqr"),
+            },
         )
+
+    def post(self, request, pk):
+        return self.get(request, pk)
+
+
+class SqrApprovalEmlDownloadView(LoginRequiredMixin, View):
+    """Download a formatted Outlook-compatible EML fallback for approved SQR quotations."""
+
+    def _get_submission(self, pk):
+        return get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "linked_request"),
+            pk=pk,
+        )
+
+    def _validate_access(self, request, submission):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return "Only PM-ESG or Admin can draft SQR approval advisory emails."
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            return "Only the assigned PM-ESG approver can draft this approval advisory email."
+        if submission.status != SqrSubmission.Status.APPROVED:
+            return "Set SQR status to Approved before drafting the advisory email."
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            return "Unable to draft an email. Ensure the requestor (engineer) has an email configured."
+        return ""
+
+    def get(self, request, pk):
+        submission = self._get_submission(pk)
+        validation_error = self._validate_access(request, submission)
+        if validation_error:
+            messages.error(request, validation_error)
+            return redirect("hub:sqr")
+
+        sender_email = (getattr(request.user, "email", "") or "").strip() or settings.DEFAULT_FROM_EMAIL
+        context = _get_sqr_approval_email_context(submission)
+        mime_payload = _build_sqr_approval_mime_message(context, sender_email, mark_as_unsent=True)
+        eml_bytes = base64.b64decode(mime_payload)
+
+        filename_base = re.sub(r"[^A-Za-z0-9._-]+", "_", context["subject"]).strip("_") or submission.reference_code or "sqr-approval-draft"
+        response = HttpResponse(eml_bytes, content_type="message/rfc822")
+        response["Content-Disposition"] = f'attachment; filename="{filename_base}.eml"'
+        return response
 
 
 class RequestDetailView(LoginRequiredMixin, DetailView):
@@ -4198,6 +4424,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
                 state="running",
                 total=total,
                 processed=0,
+                created=0,
                 percent=5,
                 message="Replacing current SQR table…",
             )
@@ -4244,6 +4471,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
                         job_id,
                         state="running",
                         processed=index,
+                        created=created_count,
                         total=total,
                         percent=percent,
                         message=f"Imported {index} of {total} row(s)…",
@@ -4254,6 +4482,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
                 job_id,
                 state="completed",
                 processed=created_count,
+                created=created_count,
                 total=created_count,
                 percent=100,
                 message="Import completed successfully.",
@@ -4541,7 +4770,8 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
         if delivery_progress is not None:
             delivery_progress = max(0, min(100, delivery_progress))
 
-        approval_date = self._parse_date_lenient(row_data.get("Approval Date"), "Approval Date")
+        reviewed_date_value = row_data.get("Approval Date", row_data.get("Reviewed Date"))
+        approval_date = self._parse_date_lenient(reviewed_date_value, "Approval Date")
         validity_due_date = self._parse_date_lenient(row_data.get("Validity Due Date"), "Validity Due Date")
         created_date = self._parse_date_lenient(row_data.get("SQR Date"), "SQR Date")
 
