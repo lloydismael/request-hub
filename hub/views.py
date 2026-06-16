@@ -830,6 +830,28 @@ def notify_status_update(log, source_label):
         )
 
 
+def get_request_activity_log_context(request_obj: Request) -> dict:
+    related_activity_logs = (
+        request_obj.activity_logs.select_related("engineer", "account")
+        .order_by("-request_date", "-created_at")
+    )
+    activity_summary = related_activity_logs.aggregate(
+        total_hours=Sum("actual_hours"),
+        billable_hours=Sum("actual_hours", filter=Q(is_billable=True)),
+    )
+    total_hours = activity_summary.get("total_hours") or Decimal("0")
+    billable_hours = activity_summary.get("billable_hours") or Decimal("0")
+    return {
+        "related_activity_logs": related_activity_logs,
+        "related_activity_summary": {
+            "count": related_activity_logs.count(),
+            "total_hours": total_hours,
+            "billable_hours": billable_hours,
+            "non_billable_hours": total_hours - billable_hours,
+        },
+    }
+
+
 def create_change_status_log(request_obj: Request, actor_user: User, source_label: str, summary_text: str) -> None:
     """Persist a status log entry describing automatic updates."""
     if not summary_text:
@@ -3317,6 +3339,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         request_obj = context["request_obj"]
         context["status_logs"] = request_obj.status_logs.select_related("author")
+        context.update(get_request_activity_log_context(request_obj))
         can_comment = self._user_can_comment(self.request.user, request_obj)
         context["can_comment"] = can_comment
         if can_comment:
@@ -3434,6 +3457,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         context["status_allowed"] = False
         context["account_name_choices"] = []
         context["is_admin_form"] = True
+        context.update(get_request_activity_log_context(self.object))
         return context
 
     def _handle_status_log_post(self, request):
@@ -3646,6 +3670,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "back_url": back_url,
             "status_allowed": status_allowed,
             "linked_sqr": linked_sqr,
+            **get_request_activity_log_context(request_obj),
         }
 
     def _handle_details_update(self, request, request_obj):
