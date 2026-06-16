@@ -671,6 +671,13 @@ class SqrSubmission(models.Model):
         "Implementation and Project Management",
         "Managed Support and Maintenance Service",
     ])
+    _PM_MANHOUR_BUCKETS = frozenset([
+        Decimal("8"),
+        Decimal("16"),
+        Decimal("24"),
+        Decimal("32"),
+        Decimal("48"),
+    ])
 
     @property
     def computed_post_svc_warranty_end_date(self):
@@ -688,12 +695,15 @@ class SqrSubmission(models.Model):
 
     @property
     def computed_managed_support_end_date(self):
-        """Support Start Date (Col AJ) + 365 days.
-        Only computed when managed_support_start_date is explicitly set;
-        otherwise returns None (displayed as NA).
+        """Support End Date (Col AK) = effective AJ date + 365 days.
+
+        AJ shows the manually entered managed_support_start_date when present,
+        otherwise it falls back to computed_warranty_end_date. AK should mirror
+        that displayed AJ value and add 365 days.
         """
-        if self.managed_support_start_date:
-            return self.managed_support_start_date + timedelta(days=365)
+        support_start_date = self.managed_support_start_date or self.computed_warranty_end_date
+        if support_start_date:
+            return support_start_date + timedelta(days=365)
         return None
 
     @property
@@ -720,10 +730,39 @@ class SqrSubmission(models.Model):
             return Decimal("32")
         return Decimal("48")
 
+    @classmethod
+    def _should_use_bucketed_pm_manhrs(cls, pm_manhrs):
+        if pm_manhrs is None:
+            return True
+        try:
+            return Decimal(str(pm_manhrs)) in cls._PM_MANHOUR_BUCKETS
+        except (ArithmeticError, ValueError, TypeError):
+            return False
+
+    @property
+    def effective_pm_manhrs(self):
+        recommended = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
+        if recommended is None:
+            return self.pm_manhrs
+        if self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
+            return recommended
+        return self.pm_manhrs
+
+    @property
+    def effective_pm_amount(self):
+        pm_manhrs = self.effective_pm_manhrs
+        if pm_manhrs is None:
+            return None
+        return (Decimal(str(pm_manhrs)) * Decimal("3000")).quantize(Decimal("0.01"))
+
     def save(self, *args, **kwargs):
         creating = self.pk is None
         if creating and not self.year:
             self.year = timezone.now().astimezone(MANILA_TZ).year
+
+        # Keep PM man-hours aligned to the SSE bucket for blank or bucket-based values.
+        if self.sse_manhrs is not None and self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
+            self.pm_manhrs = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
 
         # Auto-compute SSE Amount (col M = col L × 2000) and PM Amount (col O = col N × 3000)
         if self.sse_manhrs is not None:

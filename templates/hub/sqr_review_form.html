@@ -44,7 +44,7 @@
                 </div>
                 <div class="col-md-4">
                     <div class="small text-uppercase text-muted fw-semibold mb-1">SSE Manhours</div>
-                    <div class="fw-semibold">{{ object.sse_manhrs|default:"&ndash;" }} hrs</div>
+                    <div class="fw-semibold">{% if object.sse_manhrs != None %}{{ object.sse_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %} hrs</div>
                 </div>
             </div>
 
@@ -288,6 +288,7 @@
                            data-am="{{ object.customer_contact|default:'' }}"
                            data-scope="{{ object.project_details|default:'' }}"
                            data-total="{% if object.computed_total_price %}{{ object.computed_total_price }}{% elif object.quotation_total_price %}{{ object.quotation_total_price }}{% endif %}"
+                           data-approval-date="{{ object.reviewed_at|date:'F d, Y'|default:'—' }}"
                            data-validity="{{ object.validity_due_date|date:'F d, Y'|default:'—' }}"
                            data-discount="{{ object.discount_rate }}"
                            data-requestor-name="{{ object.engineer.get_full_name|default:object.engineer.username }}"
@@ -787,11 +788,12 @@
                 var am            = this.dataset.am         || "";
                 var scope         = this.dataset.scope      || "";
                 var totalPriceRaw = this.dataset.total      || "";
+                var approvalDate  = this.dataset.approvalDate || "—";
                 var validity      = this.dataset.validity   || "—";
                 var requestorName = this.dataset.requestorName  || "";
                 var requestorEmail= this.dataset.requestorEmail || "";
 
-                var subject = sqr + (rqId ? " + " + rqId : "") + " + " + customer;
+                var subject = sqr + (rqId ? " • " + rqId : "") + " • " + customer;
                 var to      = requestorEmail + ";ESGRequestHub@phildata.com";
 
                 var totalPrice = "—";
@@ -809,24 +811,27 @@
                 body += "Service Description: " + service + "\r\n";
                 body += "Account Manager: " + am + "\r\n";
                 body += "Scope of Services: " + scope + "\r\n";
-                body += "Add-On Service: \r\n";
-                body += '"Included Services:\r\n';
-                body += '*Proactive System Health Checks\r\n';
-                body += '*System/Platform Patching (scheduled)\r\n';
-                body += '*Incident Support \r\n';
-                body += '*Basic Troubleshooting and Issue Isolation\r\n';
-                body += '*Monthly System Status Report\r\n';
-                body += '*Advisory Support "\r\n';
+                body += "\r\n";
+                body += "Add-On Service: Systems Support & Maintenance Service - 1 Year\r\n";
+                body += "Included Services:\r\n";
+                body += '• Proactive System Health Checks\r\n';
+                body += '• System/Platform Patching (scheduled)\r\n';
+                body += '• Incident Support\r\n';
+                body += '• Basic Troubleshooting and Issue Isolation\r\n';
+                body += '• Monthly System Status Report\r\n';
+                body += '• Advisory Support\r\n';
+                body += "\r\n";
                 body += "Quantity: 1 Lot\r\n";
                 body += "Total Price: " + totalPrice + "\r\n";
+                body += "Approval Date: " + approvalDate + "\r\n";
                 body += "Quotation Validity Until: " + validity + "\r\n\r\n";
-                body += "Terms and Conditions \r\n";
+                body += "𝗧𝗲𝗿𝗺𝘀 𝗮𝗻𝗱 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀\r\n";
                 body += "VAT: This quote excludes Value Added Tax (VAT).\r\n";
                 body += "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.\r\n";
                 body += "This is a budgetary quote.\r\n";
                 body += "This quote is issued for internal billing purposes only.\r\n";
                 body += "Travel costs within Metro Manila are included.\r\n";
-                body += "This quote does not include hardware, software licenses, or subscriptions unless  stated.\r\n\r\n";
+                body += "This quote does not include hardware, software licenses, or subscriptions unless stated.\r\n\r\n";
                 body += "For any questions or to discuss this quote further, please don't hesitate to contact us:\r\n";
                 body += "EnterpriseServices@phildata.com";
 

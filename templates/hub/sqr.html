@@ -183,29 +183,23 @@ body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky
 .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 { animation: sqr-revision-pulse 1.8s ease-in-out infinite; }
 /* ── Closed Lost: overlay NA on Service Delivery (cols 24-37) + Revenue (38-43) ── */
 .sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) {
-    position: relative;
-    overflow: visible;
-    pointer-events: none;  /* disable inline editing clicks */
-    cursor: default;
+    background-color: rgba(148, 163, 184, 0.10) !important;
+    color: #94a3b8;
+    cursor: not-allowed;
 }
 .sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) > * {
-    opacity: 0;
-    pointer-events: none;
-}
-.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43)::after {
-    content: "NA";
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #9ca3af;
-    font-style: italic;
-    font-size: 0.72rem;
-    pointer-events: none;
+    opacity: 0.55;
+    filter: grayscale(0.35);
 }
 .sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43):hover {
     outline: none !important;
+}
+body:not(.dark-mode) .sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) {
+    background-color: #eef2f7 !important;
+    color: #64748b;
+}
+body:not(.dark-mode) .sqr-row--closed-lost:hover td:nth-child(n+24):nth-child(-n+43) {
+    background-color: #e2e8f0 !important;
 }
 
 /* Hover preview popover */
@@ -248,6 +242,11 @@ body:not(.dark-mode) #sqr-cell-preview {
                         <a href="{% url 'hub:sqr-export' %}" class="btn btn-sm btn-outline-success">
                             <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
                         </a>
+                    {% endif %}
+                    {% if is_admin and sqr_import_form %}
+                        <button type="button" class="btn btn-sm btn-outline-info" id="import-sqr-btn">
+                            <i class="bi bi-upload me-1"></i>Import Data
+                        </button>
                     {% endif %}
                     {% if can_create_sqr %}
                         <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">
@@ -403,7 +402,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             <td class="col-sticky-1 fw-semibold">
                                 {% if is_pm %}
                                     <span class="fw-semibold">{{ item.reference_code }}</span>
-                                {% elif can_create_sqr and item.engineer_id == request.user.id and item.status != 'reviewed' %}
+                                {% elif can_create_sqr and item.engineer_id == request.user.id %}
                                     <button type="button"
                                             class="btn btn-link p-0 fw-semibold text-decoration-none text-reset sqr-open-edit-btn"
                                             style="font-size:inherit;line-height:inherit;"
@@ -455,13 +454,13 @@ body:not(.dark-mode) #sqr-cell-preview {
                                 {% endif %}
                             </td>
                             {# L: SSE Man-hrs #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{{ item.sse_manhrs|default:"&ndash;" }}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{% if item.sse_manhrs != None %}{{ item.sse_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
                             {# M: SSE Amount #}
                             <td class="text-end small" data-sqr-computed="sse_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# N: PM Man-hrs #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{% if item.pm_manhrs is not None %}{{ item.pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sqr-display">{% if item.pm_manhrs is not None %}{{ item.pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sqr-display">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
                             {# O: PM Amount #}
-                            <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.pm_amount %}&#8369;{{ item.pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# P: Managed Support Service Amount #}
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</span></td>
                             {# Q: Discount Rate #}
@@ -720,32 +719,30 @@ body:not(.dark-mode) #sqr-cell-preview {
                                     {# PM-ESG: inline editing active — no action buttons #}
                                     <span class="text-muted small">&ndash;</span>
                                 {% elif can_create_sqr and item.engineer_id == request.user.id %}
-                                    {% if item.status != 'reviewed' %}
-                                        <div class="d-flex gap-1 justify-content-center flex-nowrap">
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-primary py-0 px-2 sqr-open-edit-btn"
-                                                    title="Edit"
-                                                    data-pk="{{ item.pk }}"
-                                                    data-url="{% url 'hub:sqr-edit' item.pk %}"
-                                                    data-customer-name="{{ item.customer_name }}"
-                                                    data-customer-company="{{ item.customer_company|default:'' }}"
-                                                    data-customer-contact="{{ item.customer_contact|default:'' }}"
-                                                    data-project-title="{{ item.project_title }}"
-                                                    data-project-details="{{ item.project_details|default:'' }}"
-                                                    data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
-                                                    data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
-                                                    data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
-                                                    data-remarks="{{ item.remarks|default:'' }}">
-                                                <i class="bi bi-pencil"></i>
-                                            </button>
-                                            <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
-                                               href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
-                                                <i class="bi bi-trash"></i>
-                                            </a>
-                                        </div>
-                                    {% else %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem;">Approved</span>
-                                    {% endif %}
+                                    <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary py-0 px-2 sqr-open-edit-btn"
+                                                title="Edit"
+                                                data-pk="{{ item.pk }}"
+                                                data-url="{% url 'hub:sqr-edit' item.pk %}"
+                                                data-customer-name="{{ item.customer_name }}"
+                                                data-customer-company="{{ item.customer_company|default:'' }}"
+                                                data-customer-contact="{{ item.customer_contact|default:'' }}"
+                                                data-project-title="{{ item.project_title }}"
+                                                data-project-details="{{ item.project_details|default:'' }}"
+                                                data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
+                                                data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                                data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
+                                                data-remarks="{{ item.remarks|default:'' }}"
+                                                data-linked-request="{{ item.linked_request_id|default:'' }}"
+                                                data-linked-request-text="{{ item.linked_request.reference_code|default:'' }}{% if item.linked_request and item.linked_request.account %} – {{ item.linked_request.account.name }}{% endif %}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                           href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
                                 {% else %}
                                     <span class="text-muted">&ndash;</span>
                                 {% endif %}
@@ -766,6 +763,71 @@ body:not(.dark-mode) #sqr-cell-preview {
     </div>
 </div>
 
+{% if is_admin and sqr_import_form %}
+<div class="requestor-modal" id="import-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="import-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="import-sqr-title" style="max-width: 560px;">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="import-sqr-title"><i class="bi bi-upload me-2"></i>Import SQR Data</h2>
+            <button type="button" class="btn-close" id="close-import-sqr-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <form method="post" action="{% url 'hub:sqr-import' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="{{ sqr_import_form.import_file.id_for_label }}">{{ sqr_import_form.import_file.label }}</label>
+                    {{ sqr_import_form.import_file }}
+                    {% if sqr_import_form.import_file.help_text %}
+                        <div class="form-text">{{ sqr_import_form.import_file.help_text }}</div>
+                    {% endif %}
+                </div>
+                <div class="alert alert-info small mb-0" role="alert">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Use the current <strong>Export Excel</strong> file format. Existing rows are matched by <strong>SQR ID</strong>; blank SQR IDs create new rows.
+                </div>
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-import-sqr-btn">Cancel</button>
+                    <button class="btn btn-info" type="submit">
+                        <i class="bi bi-cloud-arrow-up me-1"></i>Import
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var modal = document.getElementById('import-sqr-modal');
+        if (!modal) return;
+        var openBtn = document.getElementById('import-sqr-btn');
+        var closeBtn = document.getElementById('close-import-sqr-btn');
+        var cancelBtn = document.getElementById('cancel-import-sqr-btn');
+        var backdrop = document.getElementById('import-sqr-backdrop');
+
+        function openModal() {
+            modal.classList.add('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('requestor-modal-open');
+        }
+
+        function closeModal() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+        }
+
+        if (openBtn) openBtn.addEventListener('click', openModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (backdrop) backdrop.addEventListener('click', closeModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('requestor-modal--visible')) closeModal();
+        });
+    })();
+</script>
+{% endif %}
+
 {# ── New SQR Submission Modal ──────────────────────────────────────────── #}
 {% if can_create_sqr %}
 <div class="requestor-modal" id="create-sqr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
@@ -776,7 +838,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             <button type="button" class="btn-close" id="close-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form method="post" novalidate>
+            <form method="post">
                 {% csrf_token %}
                 {% if sqr_form.errors %}
                     <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-2"></i>Please resolve the highlighted fields before submitting.</div>
@@ -785,6 +847,13 @@ body:not(.dark-mode) #sqr-cell-preview {
                     <div class="mb-3">
                         <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
+                        {% if field.name == 'customer_name' %}
+                            <datalist id="sqr-account-name-options">
+                                {% for account_name in sqr_form.account_name_options %}
+                                    <option value="{{ account_name }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        {% endif %}
                         {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                         {% if field.errors %}
                             <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
@@ -832,11 +901,13 @@ body:not(.dark-mode) #sqr-cell-preview {
 
     // Department → Account Manager filtering
     (function () {
+        var linkedRequestSel = document.getElementById('id_linked_request');
+        var customerNameInput = document.getElementById('id_customer_name');
         var deptSel = document.getElementById('id_customer_company');
         var memberSel = document.getElementById('id_customer_contact');
         var approverSel = document.getElementById('id_pm_esg_reviewer');
         var scopeSel = document.getElementById('id_project_details');
-        var sseManhrsInput = document.querySelector('[data-sse-manhrs]');
+        var sseManhrsInput = document.getElementById('id_sse_manhrs');
 
         if (!deptSel) return;
 
@@ -855,10 +926,24 @@ body:not(.dark-mode) #sqr-cell-preview {
             }
         }
 
-        var memberMap = {}, approverMap = {}, sseScopes = [];
+        var memberMap = {}, approverMap = {}, sseScopes = [], requestAccountMap = {};
         try { memberMap = JSON.parse(deptSel.dataset.memberMap || '{}'); } catch (e) {}
         try { approverMap = JSON.parse(deptSel.dataset.approverMap || '{}'); } catch (e) {}
         try { sseScopes = JSON.parse(deptSel.dataset.sseScopes || '[]'); } catch (e) {}
+        try { requestAccountMap = JSON.parse((linkedRequestSel && linkedRequestSel.dataset.accountMap) || '{}'); } catch (e) {}
+
+        var hiddenSseManhrsScopes = [
+            'Project Management',
+            'Managed Support and Maintenance Service',
+            'Managed Support and Service'
+        ];
+
+        function normalizeScope(scope) {
+            return (scope || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+        }
+
+        var normalizedSseScopes = sseScopes.map(normalizeScope);
+        var normalizedHiddenSseManhrsScopes = hiddenSseManhrsScopes.map(normalizeScope);
 
         function updateMembers(dept) {
             if (!memberSel) return;
@@ -883,28 +968,67 @@ body:not(.dark-mode) #sqr-cell-preview {
             approverSel.value = approverMap[dept];
         }
 
+        function updateAccountNameFromRequest() {
+            if (!linkedRequestSel || !customerNameInput) return;
+            var accountName = requestAccountMap[linkedRequestSel.value] || '';
+            if (accountName) customerNameInput.value = accountName;
+        }
+
+        function shouldShowSseManhrs(scope) {
+            var normalizedScope = normalizeScope(scope);
+            if (!normalizedScope) return false;
+            if (normalizedHiddenSseManhrsScopes.indexOf(normalizedScope) !== -1) return false;
+            return normalizedSseScopes.indexOf(normalizedScope) !== -1;
+        }
+
         function updateSseManhrs() {
-            if (!sseManhrsInput) return;
-            var row = sseManhrsInput.closest('.mb-3');
+            var input = document.getElementById('id_sse_manhrs');
+            var scopeInput = document.getElementById('id_project_details');
+            if (!input) return;
+            var row = input.closest('.mb-3');
             if (!row) return;
-            var show = scopeSel ? sseScopes.indexOf(scopeSel.value) !== -1 : false;
+            var show = scopeInput ? shouldShowSseManhrs(scopeInput.value) : false;
             row.style.display = show ? '' : 'none';
-            if (!show) sseManhrsInput.value = '';
+            input.disabled = !show;
+            if (!show) input.value = '';
         }
 
         deptSel.addEventListener('change', function () {
             updateMembers(this.value);
             updateApprover(this.value);
+            updateSseManhrs();
             updateManagedSupportPreview();
         });
 
-        if (scopeSel) {
-            scopeSel.addEventListener('change', function() { updateSseManhrs(); updateManagedSupportPreview(); });
-            updateSseManhrs();
-            updateManagedSupportPreview();
+        if (linkedRequestSel) {
+            linkedRequestSel.addEventListener('change', updateAccountNameFromRequest);
+            linkedRequestSel.addEventListener('input', updateAccountNameFromRequest);
         }
 
+        if (scopeSel) {
+            scopeSel.addEventListener('change', function() { updateSseManhrs(); updateManagedSupportPreview(); });
+            scopeSel.addEventListener('input', function() { updateSseManhrs(); updateManagedSupportPreview(); });
+        }
+
+        document.addEventListener('change', function (event) {
+            if (event.target && event.target.id === 'id_linked_request') {
+                updateAccountNameFromRequest();
+            }
+            if (event.target && event.target.id === 'id_project_details') {
+                updateSseManhrs();
+                updateManagedSupportPreview();
+            }
+        }, true);
+
+        window.addEventListener('load', updateSseManhrs);
+        window.addEventListener('pageshow', updateSseManhrs);
+        requestAnimationFrame(updateSseManhrs);
+        setTimeout(updateSseManhrs, 0);
+
         updateMembers(deptSel.value);
+        updateAccountNameFromRequest();
+        updateSseManhrs();
+        updateManagedSupportPreview();
     })();
 </script>
 {% endif %}
@@ -982,7 +1106,9 @@ body:not(.dark-mode) #sqr-cell-preview {
             setVal('edit_project_title',   btn.dataset.projectTitle);
             setVal('edit_project_details', btn.dataset.projectDetails);
             setVal('edit_pm_esg_reviewer', btn.dataset.pmEsgReviewer);
-            setVal('edit_sse_manhrs',      btn.dataset.sseManhrs);
+            var rawSseManhrs = btn.dataset.sseManhrs;
+            var normalizedSseManhrs = parseFloat(rawSseManhrs);
+            setVal('edit_sse_manhrs',      isNaN(normalizedSseManhrs) ? rawSseManhrs : String(Math.round(normalizedSseManhrs)));
             setVal('edit_sqr_folder_link', btn.dataset.sqrFolderLink);
             setVal('edit_remarks',         btn.dataset.remarks);
 
@@ -1097,6 +1223,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             if (!row) return;
             var show = scopeSel ? sseScopes.indexOf(scopeSel.value) !== -1 : false;
             row.style.display = show ? '' : 'none';
+            if (!show) sseManhrsInput.value = '';
         }
         if (scopeSel) scopeSel.addEventListener('change', updateEditSseManhrs);
 
@@ -1136,6 +1263,21 @@ body:not(.dark-mode) #sqr-cell-preview {
 (function () {
     'use strict';
     var CSRF = '{{ csrf_token }}';
+    var CLOSED_LOST_LOCKED_FIELDS = new Set([
+        'po_pnl_date', 'assigned_pm', 'assigned_sse', 'delivery_start_date',
+        'delivery_target_finish_date', 'overall_status', 'delivery_health',
+        'delivery_progress', 'key_updates_risks', 'delivery_actual_finish_date',
+        'delivery_completion_signed_date', 'managed_support_start_date',
+        'revenue_date', 'revenue_source', 'revenue_reference_no',
+        'revenue_remarks', 'revenue_declaration'
+    ]);
+
+    function isClosedLostLockedCell(cell) {
+        if (!cell) return false;
+        var row = cell.closest('tr');
+        if (!row || row.dataset.sqrProposalStatus !== 'closed_lost') return false;
+        return CLOSED_LOST_LOCKED_FIELDS.has(cell.dataset.sqrField || '');
+    }
 
     /* PM users for Assigned PM dropdown — from context */
     var SQR_PM_USERS = {{ sqr_pm_users_json|default:"[]"|safe }};
@@ -1252,7 +1394,12 @@ body:not(.dark-mode) #sqr-cell-preview {
                 + '<span class="small fw-semibold">' + pct + '%</span>'
                 + '</div>';
         }
-        if (field === 'discount_rate') return value + '%';
+        if (field === 'discount_rate') {
+            if (value === '' || value === null || value === undefined || String(value) === '0') {
+                return '\u2013';
+            }
+            return value + '%';
+        }
         if (field === 'delivery_actual_finish_date') {
             if (!value) return '<span class="text-muted">\u2013</span>';
             var actCell = arguments[2];
@@ -1269,7 +1416,7 @@ body:not(.dark-mode) #sqr-cell-preview {
         }
         if (field === 'sse_manhrs') {
             var sse = parseFloat(value);
-            return isNaN(sse) ? value : sse.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
+            return isNaN(sse) ? value : sse.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 0});
         }
         if (field === 'managed_support_amount') {
             var n = parseFloat(value);
@@ -1400,7 +1547,8 @@ body:not(.dark-mode) #sqr-cell-preview {
             w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.step = '1';
             w.style.width = '80px';
-            w.value = currentValue || '';
+            var normalizedSse = parseFloat(currentValue);
+            w.value = isNaN(normalizedSse) ? (currentValue || '') : String(Math.round(normalizedSse));
         } else {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
@@ -1424,8 +1572,12 @@ body:not(.dark-mode) #sqr-cell-preview {
         .then(function(data) {
             cell.classList.remove('sqr-saving');
             if (data.ok) {
-                cell.dataset.sqrValue = value;
-                displayEl.innerHTML = getDisplay(field, value, cell);
+                var normalizedValue = value;
+                if (field === 'discount_rate' && (value === '' || value === null || value === undefined)) {
+                    normalizedValue = '0';
+                }
+                cell.dataset.sqrValue = normalizedValue;
+                displayEl.innerHTML = getDisplay(field, normalizedValue, cell);
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
                 var row = cell.closest('tr');
@@ -1601,6 +1753,7 @@ body:not(.dark-mode) #sqr-cell-preview {
 
     function activateCell(cell) {
         if (cell.classList.contains('sqr-editing')) return;
+        if (isClosedLostLockedCell(cell)) return;
         var field = cell.dataset.sqrField;
         var pk = cell.dataset.sqrPk;
         if (!field || !pk) return;
@@ -1742,8 +1895,15 @@ body:not(.dark-mode) #sqr-cell-preview {
     }
 
     document.querySelectorAll('.sqr-inline-cell').forEach(function(cell) {
-        cell.title = 'Click to edit';
+        cell.title = isClosedLostLockedCell(cell)
+            ? 'Locked because Proposal Status is Closed Lost'
+            : 'Click to edit';
         cell.addEventListener('click', function(e) {
+            if (isClosedLostLockedCell(cell)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             if (!cell.classList.contains('sqr-editing')) activateCell(cell);
         });
     });

@@ -596,6 +596,11 @@ class SqrSubmissionForm(forms.ModelForm):
         "Demonstration",
         "Other",
     ])
+    HIDE_SSE_MANHRS_SCOPES = frozenset([
+        "Project Management",
+        "Managed Support and Maintenance Service",
+        "Managed Support and Service",
+    ])
 
     SCOPE_CHOICES = (
         ("", "— Select Scope —"),
@@ -666,7 +671,12 @@ class SqrSubmissionForm(forms.ModelForm):
             "sqr_folder_link": "SQR Folder Link",
         }
         widgets = {
-            "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
+            "customer_name": forms.TextInput(attrs={
+                "class": "form-control",
+                "placeholder": "Select or type account name",
+                "list": "sqr-account-name-options",
+                "autocomplete": "off",
+            }),
             "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter project / engagement name"}),
             "sse_manhrs": forms.NumberInput(attrs={
                 "class": "form-control",
@@ -684,6 +694,17 @@ class SqrSubmissionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         import json
         super().__init__(*args, **kwargs)
+        self.account_name_options = list(
+            Account.objects.order_by("name").values_list("name", flat=True).distinct()
+        )
+        required_fields = ("linked_request", "pm_esg_reviewer", "sqr_folder_link")
+        for field_name in required_fields:
+            self.fields[field_name].required = True
+            self.fields[field_name].widget.attrs["required"] = "required"
+            self.fields[field_name].widget.attrs["aria-required"] = "true"
+        self.fields["linked_request"].error_messages["required"] = "Request ID is required."
+        self.fields["pm_esg_reviewer"].error_messages["required"] = "Approver Name is required."
+        self.fields["sqr_folder_link"].error_messages["required"] = "SQR Folder Link is required."
         # Include account name in the Request ID dropdown label to help identify requests
         self.fields["linked_request"].label_from_instance = (
             lambda obj: (
@@ -709,10 +730,17 @@ class SqrSubmissionForm(forms.ModelForm):
                     approver_id_by_group[group] = str(user.pk)
                     break
 
+        request_account_map = {
+            str(req.pk): req.account.name
+            for req in self.fields["linked_request"].queryset
+            if getattr(req, "account", None) and req.account.name
+        }
+
         # Attach JSON maps to the department widget for JS consumption
         self.fields["customer_company"].widget.attrs["data-member-map"] = json.dumps(self.MEMBERS_BY_GROUP)
         self.fields["customer_company"].widget.attrs["data-approver-map"] = json.dumps(approver_id_by_group)
         self.fields["customer_company"].widget.attrs["data-sse-scopes"] = json.dumps(sorted(self.SSE_MANHRS_SCOPES))
+        self.fields["linked_request"].widget.attrs["data-account-map"] = json.dumps(request_account_map)
 
         # Populate member choices: all members + preserve any historical free-text value
         all_contacts = [("", "— Select Member —")]
@@ -732,6 +760,59 @@ class SqrSubmissionForm(forms.ModelForm):
             current_value = getattr(self.instance, field_name, "") if self.instance else ""
             if current_value and current_value not in dict(self.fields[field_name].choices):
                 self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
+
+    def clean_linked_request(self):
+        value = self.cleaned_data.get("linked_request")
+        if not value:
+            raise forms.ValidationError("Request ID is required.")
+        return value
+
+    def clean_pm_esg_reviewer(self):
+        value = self.cleaned_data.get("pm_esg_reviewer")
+        if not value:
+            raise forms.ValidationError("Approver Name is required.")
+        return value
+
+    def clean_sqr_folder_link(self):
+        value = (self.cleaned_data.get("sqr_folder_link") or "").strip()
+        if not value:
+            raise forms.ValidationError("SQR Folder Link is required.")
+        return value
+
+    @staticmethod
+    def _normalize_scope(scope):
+        return " ".join((scope or "").split()).casefold()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        scope = cleaned_data.get("project_details") or ""
+        normalized_scope = self._normalize_scope(scope)
+        sse_scopes = {self._normalize_scope(item) for item in self.SSE_MANHRS_SCOPES}
+        hidden_sse_scopes = {self._normalize_scope(item) for item in self.HIDE_SSE_MANHRS_SCOPES}
+        if normalized_scope in hidden_sse_scopes or normalized_scope not in sse_scopes:
+            cleaned_data["sse_manhrs"] = None
+        return cleaned_data
+
+
+class SqrImportForm(forms.Form):
+    import_file = forms.FileField(
+        label="Import File",
+        help_text="Upload an .xlsx file based on the current SQR Export Excel template.",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "class": "form-control",
+                "accept": ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }
+        ),
+    )
+
+    def clean_import_file(self):
+        uploaded_file = self.cleaned_data.get("import_file")
+        if not uploaded_file:
+            raise ValidationError("Please choose an Excel (.xlsx) file to import.")
+        if not str(uploaded_file.name or "").lower().endswith(".xlsx"):
+            raise ValidationError("Only Excel (.xlsx) files are supported.")
+        return uploaded_file
 
 
 class SqrTrackerEditForm(forms.ModelForm):
@@ -983,7 +1064,7 @@ class SqrProposalStatusForm(forms.ModelForm):
         }
         widgets = {
             "sse_manhrs": forms.NumberInput(
-                attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
             ),
             "sse_amount": forms.NumberInput(
                 attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}

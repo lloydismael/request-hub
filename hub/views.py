@@ -1,4 +1,5 @@
 import csv
+import html
 import json
 import logging
 from dataclasses import dataclass
@@ -46,6 +47,7 @@ from .forms import (
     SqrRevenueForm,
     SqrRevenueOrderForm,
     SqrRevenueQuotationForm,
+    SqrImportForm,
     RequestForm,
     RequestStatusForm,
     SqrReviewForm,
@@ -71,6 +73,111 @@ from .mixins import (
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
+
+
+def _format_sqr_approval_subject(submission: "SqrSubmission") -> str:
+    rq_id = submission.linked_request.reference_code if submission.linked_request else ""
+    if rq_id:
+        return f"{submission.reference_code} • {rq_id} • {submission.customer_name}"
+    return f"{submission.reference_code} • {submission.customer_name}"
+
+
+def _format_sqr_approval_date(submission: "SqrSubmission") -> str:
+    if not submission.reviewed_at:
+        return "—"
+    return submission.reviewed_at.astimezone(MANILA_TZ).strftime("%B %d, %Y")
+
+
+def _format_sqr_approval_total_price(submission: "SqrSubmission") -> str:
+    if submission.computed_total_price is not None:
+        return f"PHP {submission.computed_total_price:,.2f}"
+    if submission.quotation_total_price is not None:
+        return f"PHP {submission.quotation_total_price:,.2f}"
+    return "—"
+
+
+def _format_sqr_approval_validity_date(submission: "SqrSubmission") -> str:
+    return submission.validity_due_date.strftime("%B %d, %Y") if submission.validity_due_date else "—"
+
+
+def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: str) -> list[str]:
+    return [
+        f"Hi @{requestor_name}",
+        "",
+        "Submitted SQR is now approved, please refer to the ff. details below.",
+        "",
+        f"SQR ID: {submission.reference_code or ''}",
+        f"Customer Name: {submission.customer_name or ''}",
+        f"Service Description: {(submission.project_title or '').strip()}",
+        f"Account Manager: {(submission.customer_contact or '').strip()}",
+        f"Scope of Services: {(submission.project_details or '').strip()}",
+        "",
+        "Add-On Service: Systems Support & Maintenance Service - 1 Year",
+        "Included Services:",
+        "• Proactive System Health Checks",
+        "• System/Platform Patching (scheduled)",
+        "• Incident Support",
+        "• Basic Troubleshooting and Issue Isolation",
+        "• Monthly System Status Report",
+        "• Advisory Support",
+        "",
+        "Quantity: 1 Lot",
+        f"Total Price: {_format_sqr_approval_total_price(submission)}",
+        f"Approval Date: {_format_sqr_approval_date(submission)}",
+        f"Quotation Validity Until: {_format_sqr_approval_validity_date(submission)}",
+        "",
+        "𝗧𝗲𝗿𝗺𝘀 𝗮𝗻𝗱 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀",
+        "VAT: This quote excludes Value Added Tax (VAT).",
+        "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
+        "This is a budgetary quote.",
+        "This quote is issued for internal billing purposes only.",
+        "Travel costs within Metro Manila are included.",
+        "This quote does not include hardware, software licenses, or subscriptions unless stated.",
+        "",
+        "For any questions or to discuss this quote further, please don't hesitate to contact us:",
+        "EnterpriseServices@phildata.com",
+    ]
+
+
+def _build_sqr_approval_html(submission: "SqrSubmission", requestor_name: str) -> str:
+    return "".join(
+        [
+            f"<p>{html.escape(f'Hi @{requestor_name}')}</p>",
+            "<p>Submitted SQR is now approved, please refer to the ff. details below.</p>",
+            "<p>",
+            f"SQR ID: {html.escape(submission.reference_code or '')}<br>",
+            f"Customer Name: {html.escape(submission.customer_name or '')}<br>",
+            f"Service Description: {html.escape((submission.project_title or '').strip())}<br>",
+            f"Account Manager: {html.escape((submission.customer_contact or '').strip())}<br>",
+            f"Scope of Services: {html.escape((submission.project_details or '').strip())}",
+            "</p>",
+            "<p>Add-On Service: Systems Support &amp; Maintenance Service - 1 Year<br>Included Services:</p>",
+            "<ul>",
+            "<li>Proactive System Health Checks</li>",
+            "<li>System/Platform Patching (scheduled)</li>",
+            "<li>Incident Support</li>",
+            "<li>Basic Troubleshooting and Issue Isolation</li>",
+            "<li>Monthly System Status Report</li>",
+            "<li>Advisory Support</li>",
+            "</ul>",
+            "<p>",
+            "Quantity: 1 Lot<br>",
+            f"Total Price: {html.escape(_format_sqr_approval_total_price(submission))}<br>",
+            f"Approval Date: {html.escape(_format_sqr_approval_date(submission))}<br>",
+            f"Quotation Validity Until: {html.escape(_format_sqr_approval_validity_date(submission))}",
+            "</p>",
+            "<p><strong>Terms and Conditions</strong><br>",
+            "VAT: This quote excludes Value Added Tax (VAT).<br>",
+            "For P&amp;L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.<br>",
+            "This is a budgetary quote.<br>",
+            "This quote is issued for internal billing purposes only.<br>",
+            "Travel costs within Metro Manila are included.<br>",
+            "This quote does not include hardware, software licenses, or subscriptions unless stated.",
+            "</p>",
+            "<p>For any questions or to discuss this quote further, please don't hesitate to contact us:<br>",
+            "EnterpriseServices@phildata.com</p>",
+        ]
+    )
 
 
 @dataclass(frozen=True)
@@ -965,7 +1072,9 @@ def _send_sqr_for_revision_email(
         client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
         message = {
             "senderAddress": settings.ACS_EMAIL_SENDER,
-            "recipients": {"to": [{"address": engineer_email}]},
+            "recipients": {
+                "to": [{"address": engineer_email}],
+            },
             "content": {
                 "subject": subject,
                 "plainText": plain_text,
@@ -1013,58 +1122,10 @@ def _send_sqr_approved_email(
         return
 
     engineer_name = (engineer.get_full_name() or engineer.username or "").strip()
-    rq_id = submission.linked_request.reference_code if submission.linked_request else ""
-    subject = f"{submission.reference_code} + {rq_id} + {submission.customer_name}" if rq_id else f"{submission.reference_code} + {submission.customer_name}"
-
-    validity_due = (
-        submission.validity_due_date.strftime("%B %d, %Y")
-        if submission.validity_due_date
-        else "—"
-    )
-    total_price = (
-        f"PHP {submission.computed_total_price:,.2f}"
-        if submission.computed_total_price is not None
-        else (
-            f"PHP {submission.quotation_total_price:,.2f}"
-            if submission.quotation_total_price is not None
-            else "—"
-        )
-    )
-
-    body_lines = [
-        f"Hi @{engineer_name}",
-        "",
-        "Submitted SQR is now approved, please refer to the ff. details below.",
-        "",
-        f"SQR ID: {submission.reference_code}",
-        f"Customer Name: {submission.customer_name}",
-        f"Service Description: {submission.project_title}",
-        f"Account Manager: {(submission.customer_contact or '').strip()}",
-        f"Scope of Services: {(submission.project_details or '').strip()}",
-        "Add-On Service: ",
-        '"Included Services:',
-        "*Proactive System Health Checks",
-        "*System/Platform Patching (scheduled)",
-        "*Incident Support ",
-        "*Basic Troubleshooting and Issue Isolation",
-        "*Monthly System Status Report",
-        '*Advisory Support "',
-        "Quantity: 1 Lot",
-        f"Total Price: {total_price}",
-        f"Quotation Validity Until: {validity_due}",
-        "",
-        "Terms and Conditions ",
-        "VAT: This quote excludes Value Added Tax (VAT).",
-        "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
-        "This is a budgetary quote.",
-        "This quote is issued for internal billing purposes only.",
-        "Travel costs within Metro Manila are included.",
-        "This quote does not include hardware, software licenses, or subscriptions unless  stated.",
-        "",
-        "For any questions or to discuss this quote further, please don't hesitate to contact us:",
-        "EnterpriseServices@phildata.com",
-    ]
+    subject = _format_sqr_approval_subject(submission)
+    body_lines = _build_sqr_approval_body_lines(submission, engineer_name)
     plain_text = "\n".join(body_lines)
+    html_text = _build_sqr_approval_html(submission, engineer_name)
 
     try:
         from azure.communication.email import EmailClient
@@ -1081,6 +1142,7 @@ def _send_sqr_approved_email(
             "content": {
                 "subject": subject,
                 "plainText": plain_text,
+                "html": html_text,
             },
         }
         poller = client.begin_send(message)
@@ -1988,6 +2050,87 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
 
+def _refresh_sqr_request_account_map(form):
+    import json
+    form.fields["linked_request"].widget.attrs["data-account-map"] = json.dumps({
+        str(req.pk): req.account.name
+        for req in form.fields["linked_request"].queryset
+        if getattr(req, "account", None) and req.account.name
+    })
+
+
+def _get_sqr_export_columns():
+    def _date(d):
+        return d.strftime("%Y-%m-%d") if d else ""
+
+    def _name(u):
+        return (u.get_full_name() or u.username) if u else ""
+
+    return [
+        ("SQR Date", lambda s: _date(s.created_at.date())),
+        ("SQR ID", lambda s: s.reference_code or ""),
+        ("Account Name", lambda s: s.customer_name or ""),
+        ("Service Description", lambda s: s.project_title or ""),
+        ("Scope of Services", lambda s: s.project_details or ""),
+        ("RQ ID", lambda s: s.linked_request.reference_code if s.linked_request else ""),
+        ("Group Name", lambda s: s.customer_company or ""),
+        ("Account Manager", lambda s: s.customer_contact or ""),
+        ("Requester Name", lambda s: _name(s.engineer)),
+        ("Approver Name", lambda s: _name(s.pm_esg_reviewer)),
+        ("SQR Doc. Ref. Link", lambda s: s.sqr_folder_link or ""),
+        ("SSE Man-hrs", lambda s: float(s.sse_manhrs) if s.sse_manhrs is not None else ""),
+        ("SSE Amount", lambda s: float(s.sse_amount) if s.sse_amount is not None else ""),
+        ("PM Man-hrs", lambda s: float(s.pm_manhrs) if s.pm_manhrs is not None else ""),
+        ("PM Amount", lambda s: float(s.pm_amount) if s.pm_amount is not None else ""),
+        ("Managed Support Svc. Amt.", lambda s: float(s.managed_support_amount) if s.managed_support_amount is not None else ""),
+        ("Discount Rate (%)", lambda s: float(s.discount_rate) if s.discount_rate is not None else ""),
+        ("Discount Amount", lambda s: float(s.computed_discount_amount) if s.computed_discount_amount is not None else ""),
+        ("Total Price", lambda s: float(s.computed_total_price) if s.computed_total_price is not None else ""),
+        ("SQR Status", lambda s: s.get_status_display() if hasattr(s, "get_status_display") else s.status),
+        ("Approval Date", lambda s: _date(s.reviewed_at.date()) if s.reviewed_at else ""),
+        ("Validity Due Date", lambda s: _date(s.validity_due_date)),
+        ("Proposal Status", lambda s: s.get_proposal_status_display() if hasattr(s, "get_proposal_status_display") else (s.proposal_status or "")),
+        ("PO / PNL Date", lambda s: _date(s.po_pnl_date)),
+        ("Assigned PM", lambda s: _name(s.assigned_pm) or _name(s.pm_esg_reviewer)),
+        ("Assigned SSE", lambda s: _name(s.assigned_sse)),
+        ("Start Date", lambda s: _date(s.delivery_start_date)),
+        ("Target Finish Date", lambda s: _date(s.delivery_target_finish_date)),
+        ("Overall Status", lambda s: s.overall_status or ""),
+        ("Health Status", lambda s: s.delivery_health or ""),
+        ("Overall Progress %", lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
+        ("Key Updates / Risks", lambda s: s.key_updates_risks or ""),
+        ("Actual Finish Date", lambda s: _date(s.delivery_actual_finish_date)),
+        ("Completion Signed Date", lambda s: _date(s.delivery_completion_signed_date)),
+        ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
+        ("Support Start Date", lambda s: _date(s.computed_warranty_end_date)),
+        ("Support End Date", lambda s: _date(s.computed_managed_support_end_date)),
+        ("SI / Revenue Date", lambda s: _date(s.revenue_date)),
+        ("Source", lambda s: s.revenue_source or ""),
+        ("Reference No.", lambda s: (s.revenue_reference_no or "").upper()),
+        ("Revenue Status", lambda s: "Billed" if s.revenue_date else "For Billing"),
+        ("Remarks", lambda s: s.revenue_remarks or ""),
+        ("Revenue Declaration", lambda s: s.get_revenue_declaration_display() if s.revenue_declaration else ""),
+    ]
+
+
+def _normalize_import_text(value) -> str:
+    return " ".join(
+        str(value or "")
+        .replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("_", " ")
+        .split()
+    ).casefold()
+
+
+def _build_choice_import_map(choices) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for value, label in choices:
+        mapping[_normalize_import_text(value)] = value
+        mapping[_normalize_import_text(label)] = value
+    return mapping
+
+
 def _make_sqr_edit_form(user):
     """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests.
 
@@ -2001,6 +2144,7 @@ def _make_sqr_edit_form(user):
         .exclude(id__in=used_req_ids)
         .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
     )
+    _refresh_sqr_request_account_map(form)
     return form
 
 
@@ -2057,6 +2201,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 .exclude(id__in=_used_req_ids)
                 .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
             )
+            _refresh_sqr_request_account_map(form)
 
         all_submissions = list(self.get_queryset())
 
@@ -2140,6 +2285,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "is_pm": is_pm,
                 "is_admin": is_admin,
                 "sqr_form": form,
+                "sqr_import_form": SqrImportForm() if is_admin else None,
                 "sqr_edit_form": _make_sqr_edit_form(user) if can_create else None,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
                 "active_sqr_tab": active_tab,
@@ -2175,6 +2321,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         form.fields["linked_request"].queryset = (
             Request.objects.filter(engineer=request.user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
         )
+        _refresh_sqr_request_account_map(form)
         if form.is_valid():
             submission = form.save(commit=False)
             submission.engineer = request.user
@@ -2343,6 +2490,14 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
     _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
     _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs", "managed_support_amount"])
     _FK_FIELDS = frozenset(["assigned_pm", "assigned_sse", "linked_request"])
+    _CLOSED_LOST_LOCKED_FIELDS = frozenset([
+        "po_pnl_date", "assigned_pm", "assigned_sse", "delivery_start_date",
+        "delivery_target_finish_date", "overall_status", "delivery_health",
+        "delivery_progress", "key_updates_risks", "delivery_actual_finish_date",
+        "delivery_completion_signed_date", "managed_support_start_date",
+        "revenue_date", "revenue_source", "revenue_reference_no",
+        "revenue_remarks", "revenue_declaration",
+    ])
 
     def post(self, request, pk):
         if request.user.role == User.Roles.ADMIN:
@@ -2369,11 +2524,25 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         )
         old_status = submission.status
 
+        if (
+            submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+            and field in self._CLOSED_LOST_LOCKED_FIELDS
+        ):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Delivery and revenue fields are locked when Proposal Status is Closed Lost",
+                },
+                status=400,
+            )
+
         try:
             if field in self._DATE_FIELDS:
                 coerced = date.fromisoformat(value) if value else None
             elif field in self._INT_FIELDS:
                 coerced = int(value) if value not in ("", None) else None
+                if field == "discount_rate" and coerced is None:
+                    coerced = 0
                 if field == "delivery_progress" and coerced is not None:
                     coerced = max(0, min(100, coerced))
             elif field in self._DECIMAL_FIELDS:
@@ -2479,62 +2648,9 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             _eng = submission.engineer
             _eng_email = (getattr(_eng, "email", "") or "").strip()
             _eng_name = (_eng.get_full_name() or _eng.username if _eng else "").strip()
-            _ref = submission.reference_code or ""
-            _cust = submission.customer_name or ""
-            _title = submission.project_title or ""
-            _vd = (
-                submission.validity_due_date.strftime("%B %d, %Y")
-                if submission.validity_due_date
-                else "—"
-            )
-            _tp = (
-                f"PHP {submission.computed_total_price:,.2f}"
-                if submission.computed_total_price is not None
-                else (
-                    f"PHP {submission.quotation_total_price:,.2f}"
-                    if submission.quotation_total_price is not None
-                    else "—"
-                )
-            )
-            _am = (submission.customer_contact or "").strip()
-            _scope = (submission.project_details or "").strip()
-            _rq_id = submission.linked_request.reference_code if submission.linked_request else ""
             _to = _eng_email + ";ESGRequestHub@phildata.com"
-            _subj = f"{_ref} + {_rq_id} + {_cust}" if _rq_id else f"{_ref} + {_cust}"
-
-            _body_lines = [
-                f"Hi @{_eng_name}",
-                "",
-                "Submitted SQR is now approved, please refer to the ff. details below.",
-                "",
-                f"SQR ID: {_ref}",
-                f"Customer Name: {_cust}",
-                f"Service Description: {_title}",
-                f"Account Manager: {_am}",
-                f"Scope of Services: {_scope}",
-                "Add-On Service: ",
-                '"Included Services:',
-                "*Proactive System Health Checks",
-                "*System/Platform Patching (scheduled)",
-                "*Incident Support ",
-                "*Basic Troubleshooting and Issue Isolation",
-                "*Monthly System Status Report",
-                '*Advisory Support "',
-                "Quantity: 1 Lot",
-                f"Total Price: {_tp}",
-                f"Quotation Validity Until: {_vd}",
-                "",
-                "Terms and Conditions ",
-                "VAT: This quote excludes Value Added Tax (VAT).",
-                "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
-                "This is a budgetary quote.",
-                "This quote is issued for internal billing purposes only.",
-                "Travel costs within Metro Manila are included.",
-                "This quote does not include hardware, software licenses, or subscriptions unless  stated.",
-                "",
-                "For any questions or to discuss this quote further, please don't hesitate to contact us:",
-                "EnterpriseServices@phildata.com",
-            ]
+            _subj = _format_sqr_approval_subject(submission)
+            _body_lines = _build_sqr_approval_body_lines(submission, _eng_name)
             _body = "\r\n".join(_body_lines)
             _approved_mailto_url = (
                 f"mailto:{quote(_to)}"
@@ -2936,71 +3052,10 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
             return redirect(redirect_target)
 
         requestor_name = submission.engineer.get_full_name() or submission.engineer.username
-        recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
-        rq_id = submission.linked_request.reference_code if submission.linked_request else ""
-        subject_text = f"{submission.reference_code} + {rq_id} + {submission.customer_name}" if rq_id else f"{submission.reference_code} + {submission.customer_name}"
+        recipients = f"{requestor_email},ESGRequestHub@phildata.com"
+        subject_text = _format_sqr_approval_subject(submission)
         subject = quote(subject_text)
-
-        validity_due = (
-            submission.validity_due_date.strftime("%B %d, %Y")
-            if submission.validity_due_date
-            else "—"
-        )
-        total_price = (
-            f"PHP {submission.computed_total_price:,.2f}"
-            if submission.computed_total_price is not None
-            else (
-                f"PHP {submission.quotation_total_price:,.2f}"
-                if submission.quotation_total_price is not None
-                else "—"
-            )
-        )
-
-        body_template = (
-            "Hi @{requestor_name}\n"
-            "\n"
-            "Submitted SQR is now approved, please refer to the ff. details below.\n"
-            "\n"
-            "SQR ID: {reference_code}\n"
-            "Customer Name: {customer_name}\n"
-            "Service Description: {service_description}\n"
-            "Account Manager: {account_manager}\n"
-            "Scope of Services: {scope_of_services}\n"
-            "Add-On Service: \n"
-            '"Included Services:\n'
-            "*Proactive System Health Checks\n"
-            "*System/Platform Patching (scheduled)\n"
-            "*Incident Support \n"
-            "*Basic Troubleshooting and Issue Isolation\n"
-            "*Monthly System Status Report\n"
-            '*Advisory Support "\n'
-            "Quantity: 1 Lot\n"
-            "Total Price: {total_price}\n"
-            "Quotation Validity Until: {validity_due}\n"
-            "\n"
-            "Terms and Conditions \n"
-            "VAT: This quote excludes Value Added Tax (VAT).\n"
-            "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.\n"
-            "This is a budgetary quote.\n"
-            "This quote is issued for internal billing purposes only.\n"
-            "Travel costs within Metro Manila are included.\n"
-            "This quote does not include hardware, software licenses, or subscriptions unless  stated.\n"
-            "\n"
-            "For any questions or to discuss this quote further, please don't hesitate to contact us:\n"
-            "EnterpriseServices@phildata.com"
-        )
-        body = quote(
-            body_template.format(
-                requestor_name=requestor_name,
-                reference_code=submission.reference_code,
-                customer_name=submission.customer_name,
-                account_manager=(submission.customer_contact or "").strip(),
-                service_description=(submission.project_title or "").strip(),
-                scope_of_services=(submission.project_details or "").strip(),
-                total_price=total_price,
-                validity_due=validity_due,
-            )
-        )
+        body = quote("\n".join(_build_sqr_approval_body_lines(submission, requestor_name)))
 
         mailto_url = f"mailto:{recipients}?subject={subject}&body={body}"
         messages.info(request, "Drafting approval advisory in your default mail client…")
@@ -3954,56 +4009,7 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         cell_align = Alignment(vertical="center")
         thin = Side(style="thin", color="CCCCCC")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-        # ── Column definitions: (header_label, extractor_fn) ────
-        def _date(d):   return d.strftime("%Y-%m-%d") if d else ""
-        def _name(u):   return (u.get_full_name() or u.username) if u else ""
-
-        columns = [
-            ("SQR Date",                   lambda s: _date(s.created_at.date())),
-            ("SQR ID",                     lambda s: s.reference_code or ""),
-            ("Account Name",               lambda s: s.customer_name or ""),
-            ("Service Description",        lambda s: s.project_title or ""),
-            ("Scope of Services",          lambda s: s.project_details or ""),
-            ("RQ ID",                      lambda s: s.linked_request.reference_code if s.linked_request else ""),
-            ("Group Name",                 lambda s: s.customer_company or ""),
-            ("Account Manager",            lambda s: s.customer_contact or ""),
-            ("Requester Name",             lambda s: _name(s.engineer)),
-            ("Approver Name",              lambda s: _name(s.pm_esg_reviewer)),
-            ("SQR Doc. Ref. Link",         lambda s: s.sqr_folder_link or ""),
-            ("SSE Man-hrs",                lambda s: float(s.sse_manhrs) if s.sse_manhrs is not None else ""),
-            ("SSE Amount",                 lambda s: float(s.sse_amount) if s.sse_amount is not None else ""),
-            ("PM Man-hrs",                 lambda s: float(s.pm_manhrs) if s.pm_manhrs is not None else ""),
-            ("PM Amount",                  lambda s: float(s.pm_amount) if s.pm_amount is not None else ""),
-            ("Managed Support Svc. Amt.",  lambda s: float(s.managed_support_amount) if s.managed_support_amount is not None else ""),
-            ("Discount Rate (%)",          lambda s: float(s.discount_rate) if s.discount_rate is not None else ""),
-            ("Discount Amount",            lambda s: float(s.computed_discount_amount) if s.computed_discount_amount is not None else ""),
-            ("Total Price",                lambda s: float(s.computed_total_price) if s.computed_total_price is not None else ""),
-            ("SQR Status",                 lambda s: s.get_status_display() if hasattr(s, "get_status_display") else s.status),
-            ("Approval Date",              lambda s: _date(s.reviewed_at.date()) if s.reviewed_at else ""),
-            ("Validity Due Date",          lambda s: _date(s.validity_due_date)),
-            ("Proposal Status",            lambda s: s.get_proposal_status_display() if hasattr(s, "get_proposal_status_display") else (s.proposal_status or "")),
-            ("PO / PNL Date",              lambda s: _date(s.po_pnl_date)),
-            ("Assigned PM",                lambda s: _name(s.assigned_pm) or _name(s.pm_esg_reviewer)),
-            ("Assigned SSE",               lambda s: _name(s.assigned_sse)),
-            ("Start Date",                 lambda s: _date(s.delivery_start_date)),
-            ("Target Finish Date",         lambda s: _date(s.delivery_target_finish_date)),
-            ("Overall Status",             lambda s: s.overall_status or ""),
-            ("Health Status",              lambda s: s.delivery_health or ""),
-            ("Overall Progress %",         lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
-            ("Key Updates / Risks",        lambda s: s.key_updates_risks or ""),
-            ("Actual Finish Date",         lambda s: _date(s.delivery_actual_finish_date)),
-            ("Completion Signed Date",     lambda s: _date(s.delivery_completion_signed_date)),
-            ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
-            ("Support Start Date",         lambda s: _date(s.computed_warranty_end_date)),
-            ("Support End Date",           lambda s: _date(s.computed_managed_support_end_date)),
-            ("SI / Revenue Date",          lambda s: _date(s.revenue_date)),
-            ("Source",                     lambda s: s.revenue_source or ""),
-            ("Reference No.",              lambda s: (s.revenue_reference_no or "").upper()),
-            ("Revenue Status",             lambda s: "Billed" if s.revenue_date else "For Billing"),
-            ("Remarks",                    lambda s: s.revenue_remarks or ""),
-            ("Revenue Declaration",        lambda s: s.get_revenue_declaration_display() if s.revenue_declaration else ""),
-        ]
+        columns = _get_sqr_export_columns()
 
         # ── Header row ──────────────────────────────────────────
         ws.row_dimensions[1].height = 36
@@ -4050,6 +4056,325 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         )
         response["Content-Disposition"] = f'attachment; filename="sqr-export-{timestamp}.xlsx"'
         return response
+
+
+class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
+    """Import SQR data from the exported Excel template."""
+
+    EXPECTED_HEADERS = [label for label, _ in _get_sqr_export_columns()]
+    STATUS_MAP = _build_choice_import_map(SqrSubmission.Status.choices)
+    PROPOSAL_STATUS_MAP = _build_choice_import_map(SqrSubmission.ProposalStatus.choices)
+    OVERALL_STATUS_MAP = _build_choice_import_map(SqrSubmission.OverallStatus.choices)
+    DELIVERY_HEALTH_MAP = _build_choice_import_map(SqrSubmission.DeliveryHealth.choices)
+    REVENUE_DECLARATION_MAP = _build_choice_import_map(SqrSubmission.RevenueDeclaration.choices)
+    MANAGED_SCOPES = frozenset([
+        "Implementation",
+        "Implementation and Project Management",
+        "Managed Support and Maintenance Service",
+    ])
+
+    def post(self, request, *args, **kwargs):
+        form = SqrImportForm(request.POST, request.FILES)
+        if not form.is_valid():
+            for error in form.errors.get("import_file", form.non_field_errors()):
+                messages.error(request, error)
+            return redirect("hub:sqr")
+
+        try:
+            from openpyxl import load_workbook
+
+            workbook = load_workbook(form.cleaned_data["import_file"], data_only=True)
+            worksheet = workbook.active
+        except Exception:
+            messages.error(request, "The selected file could not be read. Please upload a valid SQR Export Excel file.")
+            return redirect("hub:sqr")
+
+        header_row = [self._stringify(value) for value in next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), [])]
+        if header_row[: len(self.EXPECTED_HEADERS)] != self.EXPECTED_HEADERS:
+            messages.error(request, "Import failed: the Excel columns do not match the current SQR Export Excel template.")
+            return redirect("hub:sqr")
+
+        request_map = {
+            _normalize_import_text(item.reference_code): item
+            for item in Request.objects.select_related("account", "engineer").all()
+            if item.reference_code
+        }
+        submission_map = {
+            _normalize_import_text(item.reference_code): item
+            for item in SqrSubmission.objects.select_related(
+                "engineer", "pm_esg_reviewer", "assigned_pm", "assigned_sse", "linked_request"
+            ).all()
+            if item.reference_code
+        }
+        pm_users = list(User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name", "username"))
+        engineer_users = list(User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES).order_by("first_name", "last_name", "username"))
+        pm_lookup = self._build_user_lookup(pm_users)
+        engineer_lookup = self._build_user_lookup(engineer_users)
+
+        row_payloads = []
+        row_errors = []
+        for excel_row_number, row in enumerate(
+            worksheet.iter_rows(min_row=2, max_row=worksheet.max_row, max_col=len(self.EXPECTED_HEADERS), values_only=True),
+            start=2,
+        ):
+            if self._is_blank_row(row):
+                continue
+            row_data = {
+                header: row[idx] if idx < len(row) else None
+                for idx, header in enumerate(self.EXPECTED_HEADERS)
+            }
+            try:
+                row_payloads.append(
+                    self._prepare_row_payload(
+                        row_data=row_data,
+                        submission_map=submission_map,
+                        request_map=request_map,
+                        pm_lookup=pm_lookup,
+                        engineer_lookup=engineer_lookup,
+                        actor=request.user,
+                    )
+                )
+            except ValueError as exc:
+                row_errors.append(f"Row {excel_row_number}: {exc}")
+
+        if not row_payloads and not row_errors:
+            messages.error(request, "Import failed: the file does not contain any data rows.")
+            return redirect("hub:sqr")
+
+        if row_errors:
+            messages.error(request, f"Import failed with {len(row_errors)} row error(s).")
+            for error in row_errors[:5]:
+                messages.error(request, error)
+            if len(row_errors) > 5:
+                messages.error(request, f"...and {len(row_errors) - 5} more row error(s).")
+            return redirect("hub:sqr")
+
+        created_count = 0
+        updated_count = 0
+        with transaction.atomic():
+            for payload in row_payloads:
+                submission = payload["instance"]
+                is_create = submission.pk is None
+                data = payload["data"]
+                created_at_value = data.pop("created_at", None)
+                for field_name, field_value in data.items():
+                    setattr(submission, field_name, field_value)
+                submission.full_clean()
+                submission.save()
+
+                if created_at_value:
+                    SqrSubmission.objects.filter(pk=submission.pk).update(created_at=created_at_value)
+
+                if is_create:
+                    created_count += 1
+                else:
+                    updated_count += 1
+
+        messages.success(request, f"SQR import completed: {created_count} created, {updated_count} updated.")
+        return redirect("hub:sqr")
+
+    @staticmethod
+    def _stringify(value) -> str:
+        return str(value or "").strip()
+
+    @staticmethod
+    def _is_blank_row(row) -> bool:
+        return all(str(value or "").strip() == "" for value in row)
+
+    @staticmethod
+    def _build_user_lookup(users):
+        lookup = {}
+        for user in users:
+            keys = {
+                _normalize_import_text(user.username),
+                _normalize_import_text(user.get_full_name()),
+                _normalize_import_text(f"{user.first_name} {user.last_name}"),
+            }
+            for key in {item for item in keys if item}:
+                lookup.setdefault(key, []).append(user)
+        return lookup
+
+    def _parse_user(self, raw_value, lookup, label):
+        normalized = _normalize_import_text(raw_value)
+        if not normalized:
+            return None
+        matches = lookup.get(normalized, [])
+        if not matches:
+            raise ValueError(f"{label} was not found: {raw_value}")
+        unique_matches = {user.pk: user for user in matches}
+        if len(unique_matches) > 1:
+            raise ValueError(f"{label} matches multiple users: {raw_value}")
+        return next(iter(unique_matches.values()))
+
+    @staticmethod
+    def _parse_choice(raw_value, mapping, label, default_blank=True):
+        normalized = _normalize_import_text(raw_value)
+        if not normalized:
+            return "" if default_blank else None
+        value = mapping.get(normalized)
+        if value is None:
+            raise ValueError(f"Invalid {label}: {raw_value}")
+        return value
+
+    @staticmethod
+    def _parse_decimal(raw_value, label):
+        if raw_value in (None, ""):
+            return None
+        text_value = str(raw_value).replace(",", "").strip()
+        if not text_value:
+            return None
+        try:
+            return Decimal(text_value)
+        except Exception as exc:
+            raise ValueError(f"Invalid {label}: {raw_value}") from exc
+
+    @staticmethod
+    def _parse_int(raw_value, label):
+        if raw_value in (None, ""):
+            return None
+        try:
+            return int(Decimal(str(raw_value)))
+        except Exception as exc:
+            raise ValueError(f"Invalid {label}: {raw_value}") from exc
+
+    @staticmethod
+    def _parse_date(raw_value, label):
+        if raw_value in (None, ""):
+            return None
+        if isinstance(raw_value, datetime):
+            return raw_value.date()
+        if isinstance(raw_value, date):
+            return raw_value
+        text_value = str(raw_value).strip()
+        if not text_value:
+            return None
+        try:
+            return date.fromisoformat(text_value)
+        except Exception:
+            pass
+        for fmt in ("%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(text_value, fmt).date()
+            except ValueError:
+                continue
+        raise ValueError(f"Invalid {label}: {raw_value}")
+
+    @staticmethod
+    def _to_datetime(value):
+        if not value:
+            return None
+        return timezone.make_aware(datetime.combine(value, datetime.min.time()), MANILA_TZ)
+
+    def _prepare_row_payload(self, *, row_data, submission_map, request_map, pm_lookup, engineer_lookup, actor):
+        sqr_id = self._stringify(row_data.get("SQR ID"))
+        existing = submission_map.get(_normalize_import_text(sqr_id)) if sqr_id else None
+        if sqr_id and existing is None:
+            raise ValueError(f"SQR ID not found: {sqr_id}")
+
+        request_code = self._stringify(row_data.get("RQ ID"))
+        linked_request = request_map.get(_normalize_import_text(request_code)) if request_code else None
+        if request_code and linked_request is None:
+            raise ValueError(f"RQ ID not found: {request_code}")
+
+        engineer = self._parse_user(row_data.get("Requester Name"), engineer_lookup, "Requester Name")
+        pm_reviewer = self._parse_user(row_data.get("Approver Name"), pm_lookup, "Approver Name")
+        assigned_pm = self._parse_user(row_data.get("Assigned PM"), pm_lookup, "Assigned PM")
+        assigned_sse = self._parse_user(row_data.get("Assigned SSE"), engineer_lookup, "Assigned SSE")
+
+        status = self._parse_choice(row_data.get("SQR Status"), self.STATUS_MAP, "SQR Status") or SqrSubmission.Status.FOR_PROCESSING
+        proposal_status = self._parse_choice(row_data.get("Proposal Status"), self.PROPOSAL_STATUS_MAP, "Proposal Status")
+        overall_status = self._parse_choice(row_data.get("Overall Status"), self.OVERALL_STATUS_MAP, "Overall Status")
+        delivery_health = self._parse_choice(row_data.get("Health Status"), self.DELIVERY_HEALTH_MAP, "Health Status")
+        revenue_declaration = self._parse_choice(row_data.get("Revenue Declaration"), self.REVENUE_DECLARATION_MAP, "Revenue Declaration")
+
+        customer_name = self._stringify(row_data.get("Account Name"))
+        project_title = self._stringify(row_data.get("Service Description"))
+        project_details = self._stringify(row_data.get("Scope of Services"))
+        sqr_folder_link = self._stringify(row_data.get("SQR Doc. Ref. Link"))
+
+        if not customer_name:
+            raise ValueError("Account Name is required")
+        if not project_title:
+            raise ValueError("Service Description is required")
+        if not project_details:
+            raise ValueError("Scope of Services is required")
+        if linked_request is None:
+            raise ValueError("RQ ID is required")
+        if engineer is None:
+            raise ValueError("Requester Name is required")
+        if pm_reviewer is None:
+            raise ValueError("Approver Name is required")
+        if not sqr_folder_link:
+            raise ValueError("SQR Doc. Ref. Link is required")
+
+        sse_manhrs = self._parse_decimal(row_data.get("SSE Man-hrs"), "SSE Man-hrs")
+        pm_manhrs = self._parse_decimal(row_data.get("PM Man-hrs"), "PM Man-hrs")
+        discount_rate = self._parse_int(row_data.get("Discount Rate (%)"), "Discount Rate (%)")
+        discount_rate = 0 if discount_rate is None else max(0, min(100, discount_rate))
+        delivery_progress = self._parse_int(row_data.get("Overall Progress %"), "Overall Progress %")
+        if delivery_progress is not None:
+            delivery_progress = max(0, min(100, delivery_progress))
+
+        approval_date = self._parse_date(row_data.get("Approval Date"), "Approval Date")
+        validity_due_date = self._parse_date(row_data.get("Validity Due Date"), "Validity Due Date")
+        created_date = self._parse_date(row_data.get("SQR Date"), "SQR Date")
+
+        instance = existing or SqrSubmission()
+        data = {
+            "linked_request": linked_request,
+            "engineer": engineer,
+            "pm_esg_reviewer": pm_reviewer,
+            "customer_name": customer_name,
+            "customer_company": self._stringify(row_data.get("Group Name")),
+            "customer_contact": self._stringify(row_data.get("Account Manager")),
+            "project_title": project_title,
+            "project_details": project_details,
+            "sse_manhrs": sse_manhrs,
+            "sqr_folder_link": sqr_folder_link,
+            "discount_rate": discount_rate,
+            "pm_manhrs": pm_manhrs,
+            "proposal_status": proposal_status,
+            "po_pnl_date": self._parse_date(row_data.get("PO / PNL Date"), "PO / PNL Date"),
+            "assigned_pm": assigned_pm or pm_reviewer,
+            "assigned_sse": assigned_sse,
+            "delivery_start_date": self._parse_date(row_data.get("Start Date"), "Start Date"),
+            "delivery_target_finish_date": self._parse_date(row_data.get("Target Finish Date"), "Target Finish Date"),
+            "overall_status": overall_status,
+            "delivery_health": delivery_health,
+            "delivery_progress": delivery_progress,
+            "key_updates_risks": self._stringify(row_data.get("Key Updates / Risks")),
+            "delivery_actual_finish_date": self._parse_date(row_data.get("Actual Finish Date"), "Actual Finish Date"),
+            "delivery_completion_signed_date": self._parse_date(row_data.get("Completion Signed Date"), "Completion Signed Date"),
+            "revenue_date": self._parse_date(row_data.get("SI / Revenue Date"), "SI / Revenue Date"),
+            "revenue_source": self._stringify(row_data.get("Source")),
+            "revenue_reference_no": self._stringify(row_data.get("Reference No.")),
+            "revenue_remarks": self._stringify(row_data.get("Remarks")),
+            "revenue_declaration": revenue_declaration,
+            "status": status,
+            "documentation_links": instance.documentation_links or "",
+            "remarks": instance.remarks or "",
+        }
+
+        if status == SqrSubmission.Status.APPROVED:
+            reviewed_at = self._to_datetime(approval_date) or instance.reviewed_at or timezone.now()
+            data["reviewed_at"] = reviewed_at
+            data["reviewed_by"] = instance.reviewed_by or actor
+            data["validity_due_date"] = validity_due_date or (reviewed_at.date() + timedelta(days=90))
+        else:
+            data["reviewed_at"] = None
+            data["reviewed_by"] = None
+            data["validity_due_date"] = validity_due_date
+
+        scope = data["project_details"]
+        group = data["customer_company"]
+        data["managed_support_amount"] = (
+            Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+        ) if scope in self.MANAGED_SCOPES else None
+
+        if created_date:
+            data["created_at"] = self._to_datetime(created_date)
+
+        return {"instance": instance, "data": data}
 
 
 class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
