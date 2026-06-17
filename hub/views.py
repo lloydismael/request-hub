@@ -7,6 +7,7 @@ import mimetypes
 import re
 import threading
 import uuid
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date, datetime, timedelta
@@ -36,6 +37,7 @@ from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
@@ -2495,8 +2497,8 @@ def _make_sqr_edit_form(user):
 class SqrListView(LoginRequiredMixin, TemplateView):
     template_name = "hub/sqr.html"
 
-    VALID_TABS = {"proposal", "delivery", "revenue-report"}
-    PM_ONLY_TABS = {"delivery", "revenue-report"}
+    VALID_TABS = {"proposal", "delivery", "revenue-report", "reports"}
+    PM_ONLY_TABS = {"delivery", "revenue-report", "reports"}
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -2527,6 +2529,18 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         can_review = user.role in ADMIN_PANEL_ROLES
         is_pm = user.role in ADMIN_PANEL_ROLES
         is_admin = user.role == User.Roles.ADMIN
+
+        def decimal_to_float(value):
+            return float(value or Decimal("0"))
+
+        def compact_currency(value: Decimal) -> str:
+            amount = decimal_to_float(value)
+            abs_amount = abs(amount)
+            if abs_amount >= 1_000_000:
+                return f"₱{amount / 1_000_000:.2f}M"
+            if abs_amount >= 1_000:
+                return f"₱{amount / 1_000:.1f}K"
+            return f"₱{amount:,.2f}"
 
         active_tab = (self.request.GET.get("tab") or "proposal").strip().lower()
         if active_tab not in self.VALID_TABS:
@@ -2622,6 +2636,276 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "revenue_submissions": [s for s in all_submissions if s.status == SqrSubmission.Status.APPROVED] if is_pm else [],
         }
 
+        sqr_reports_summary = None
+        sqr_reports_status_chart = {"labels": [], "totals": []}
+        sqr_reports_deal_chart = {"labels": [], "totals": []}
+        sqr_reports_delivery_chart = {"labels": [], "totals": []}
+        sqr_reports_group_chart = {"labels": [], "totals": []}
+        sqr_reports_scope_chart = {"labels": [], "totals": []}
+        sqr_reports_funnel_chart = {"labels": [], "totals": []}
+        sqr_reports_monthly_chart = {"labels": [], "totals": []}
+        sqr_reports_revenue_chart = {"labels": [], "totals": []}
+        sqr_reports_quick_overview_chart = {"labels": [], "totals": []}
+        sqr_reports_top_accounts = []
+        sqr_reports_top_won = []
+        sqr_reports_pipeline = {}
+        sqr_reports_focus_items = []
+
+        if is_pm:
+            approved_submissions = [
+                submission for submission in all_submissions
+                if submission.status == SqrSubmission.Status.APPROVED
+            ]
+            billed_submissions = [
+                submission for submission in approved_submissions if submission.revenue_date
+            ]
+            for_billing_submissions = [
+                submission for submission in approved_submissions if not submission.revenue_date
+            ]
+            at_risk_submissions = [
+                submission for submission in delivery_submissions
+                if submission.delivery_health == SqrSubmission.DeliveryHealth.AT_RISK
+            ]
+            off_track_submissions = [
+                submission for submission in delivery_submissions
+                if submission.delivery_health == SqrSubmission.DeliveryHealth.OFF_TRACK
+            ]
+            on_track_submissions = [
+                submission for submission in delivery_submissions
+                if submission.delivery_health == SqrSubmission.DeliveryHealth.ON_TRACK
+            ]
+            pending_approval_count = proposal_counts["processing"] + proposal_counts["for_revision"]
+
+            status_rows = [
+                ("For Processing", proposal_counts["processing"]),
+                ("For Revision", proposal_counts["for_revision"]),
+                ("Approved", proposal_counts["approved"]),
+            ]
+            sqr_reports_status_chart = {
+                "labels": [label for label, total in status_rows if total],
+                "totals": [total for _, total in status_rows if total],
+            }
+
+            deal_rows = [
+                ("Submitted–Pending", proposal_counts["submitted_pending"]),
+                ("Negotiation", proposal_counts["negotiation"]),
+                ("Closed Won", proposal_counts["closed_won"]),
+                ("Closed Lost", proposal_counts["closed_lost"]),
+            ]
+            sqr_reports_deal_chart = {
+                "labels": [label for label, total in deal_rows if total],
+                "totals": [total for _, total in deal_rows if total],
+            }
+
+            sqr_reports_delivery_chart = {
+                "labels": [label for value, label in SqrSubmission.DeliveryHealth.choices if delivery_health_counts.get(value)],
+                "totals": [delivery_health_counts.get(value, 0) for value, _ in SqrSubmission.DeliveryHealth.choices if delivery_health_counts.get(value)],
+            }
+
+            group_counter = Counter(
+                ((submission.customer_company or "Unspecified").strip() or "Unspecified")
+                for submission in all_submissions
+            )
+            sorted_group_rows = sorted(group_counter.items(), key=lambda item: (-item[1], item[0]))[:8]
+            sqr_reports_group_chart = {
+                "labels": [label for label, _ in sorted_group_rows],
+                "totals": [total for _, total in sorted_group_rows],
+            }
+
+            scope_counter = Counter(
+                ((submission.project_details or "Unspecified").strip() or "Unspecified")
+                for submission in all_submissions
+            )
+            sorted_scope_rows = sorted(scope_counter.items(), key=lambda item: (-item[1], item[0]))[:8]
+            sqr_reports_scope_chart = {
+                "labels": [label for label, _ in sorted_scope_rows],
+                "totals": [total for _, total in sorted_scope_rows],
+            }
+
+            sqr_reports_funnel_chart = {
+                "labels": ["Total SQR", "Approved", "Closed Won", "Billed"],
+                "totals": [
+                    proposal_counts["total"],
+                    proposal_counts["approved"],
+                    len(won_submissions),
+                    len(billed_submissions),
+                ],
+            }
+            sqr_reports_quick_overview_chart = {
+                "labels": ["Pending", "Approved", "Won", "Billed"],
+                "totals": [
+                    pending_approval_count,
+                    proposal_counts["approved"],
+                    len(won_submissions),
+                    len(billed_submissions),
+                ],
+            }
+
+            monthly_counter = Counter()
+            monthly_labels = {}
+            for submission in all_submissions:
+                localized_created = timezone.localtime(submission.created_at, MANILA_TZ)
+                month_key = localized_created.strftime("%Y-%m")
+                monthly_counter[month_key] += 1
+                monthly_labels[month_key] = localized_created.strftime("%b %Y")
+
+            sorted_month_keys = sorted(monthly_counter.keys())
+            sqr_reports_monthly_chart = {
+                "labels": [monthly_labels[key] for key in sorted_month_keys],
+                "totals": [monthly_counter[key] for key in sorted_month_keys],
+            }
+
+            total_managed_support = sum(
+                submission.managed_support_amount or Decimal("0")
+                for submission in all_submissions
+            )
+            revenue_rows = [
+                ("Won Gross", won_total_price),
+                ("Won Discounted", won_discounted_total),
+                ("Lost Value", lost_total_price),
+                ("Managed Support", total_managed_support),
+            ]
+            sqr_reports_revenue_chart = {
+                "labels": [label for label, value in revenue_rows if value and value > 0],
+                "totals": [decimal_to_float(value) for _, value in revenue_rows if value and value > 0],
+            }
+
+            account_totals = defaultdict(lambda: {"count": 0, "value": Decimal("0")})
+            for submission in won_submissions:
+                account_name = (submission.customer_name or "Unspecified Account").strip() or "Unspecified Account"
+                account_totals[account_name]["count"] += 1
+                account_totals[account_name]["value"] += submission.discounted_price or submission.quotation_total_price or Decimal("0")
+
+            sqr_reports_top_accounts = [
+                {
+                    "name": account_name,
+                    "count": metrics["count"],
+                    "value": metrics["value"],
+                }
+                for account_name, metrics in sorted(
+                    account_totals.items(),
+                    key=lambda item: (-item[1]["value"], -item[1]["count"], item[0]),
+                )[:6]
+            ]
+
+            sqr_reports_top_won = [
+                {
+                    "reference_code": submission.reference_code,
+                    "customer_name": submission.customer_name,
+                    "group_name": submission.customer_company or "—",
+                    "discounted_price": submission.discounted_price or submission.quotation_total_price or Decimal("0"),
+                    "status": submission.get_delivery_health_display() if submission.delivery_health else "Awaiting delivery setup",
+                }
+                for submission in top_won
+            ]
+
+            approval_lead_days = [
+                max(
+                    (timezone.localtime(submission.reviewed_at, MANILA_TZ).date() - timezone.localtime(submission.created_at, MANILA_TZ).date()).days,
+                    0,
+                )
+                for submission in approved_submissions
+                if submission.reviewed_at
+            ]
+            avg_approval_days = (
+                round(sum(approval_lead_days) / len(approval_lead_days), 1)
+                if approval_lead_days else 0
+            )
+            avg_won_value = (
+                won_discounted_total / len(won_submissions)
+                if won_submissions else Decimal("0")
+            )
+
+            approval_rate = (
+                round((proposal_counts["approved"] / proposal_counts["total"]) * 100, 1)
+                if proposal_counts["total"] else 0
+            )
+            billed_conversion_rate = (
+                round((len(billed_submissions) / proposal_counts["approved"]) * 100, 1)
+                if proposal_counts["approved"] else 0
+            )
+            win_from_approved_rate = (
+                round((len(won_submissions) / proposal_counts["approved"]) * 100, 1)
+                if proposal_counts["approved"] else 0
+            )
+            sqr_reports_summary = {
+                "total_submissions": proposal_counts["total"],
+                "approval_rate": approval_rate,
+                "win_rate": win_rate,
+                "active_delivery": len(
+                    [
+                        submission for submission in delivery_submissions
+                        if submission.delivery_health in {
+                            SqrSubmission.DeliveryHealth.ON_TRACK,
+                            SqrSubmission.DeliveryHealth.OFF_TRACK,
+                            SqrSubmission.DeliveryHealth.AT_RISK,
+                        }
+                    ]
+                ),
+                "won_discounted_total": won_discounted_total,
+                "won_discounted_total_label": compact_currency(won_discounted_total),
+                "lost_total_price": lost_total_price,
+                "lost_total_price_label": compact_currency(lost_total_price),
+                "managed_support_total": total_managed_support,
+                "managed_support_total_label": compact_currency(total_managed_support),
+                "billed_count": len(billed_submissions),
+                "for_billing_count": len(for_billing_submissions),
+                "at_risk_count": len(at_risk_submissions),
+                "off_track_count": len(off_track_submissions),
+                "on_track_count": len(on_track_submissions),
+                "pending_approval_count": pending_approval_count,
+                "avg_won_value_label": compact_currency(avg_won_value),
+                "avg_approval_days": avg_approval_days,
+                "billed_conversion_rate": billed_conversion_rate,
+                "win_from_approved_rate": win_from_approved_rate,
+            }
+
+            sqr_reports_pipeline = {
+                "pending_approval_count": pending_approval_count,
+                "approved_count": proposal_counts["approved"],
+                "negotiation_count": proposal_counts["negotiation"],
+                "won_count": len(won_submissions),
+                "lost_count": len(lost_submissions),
+                "billed_count": len(billed_submissions),
+                "for_billing_count": len(for_billing_submissions),
+                "at_risk_count": len(at_risk_submissions),
+                "off_track_count": len(off_track_submissions),
+                "on_track_count": len(on_track_submissions),
+                "avg_won_value_label": compact_currency(avg_won_value),
+                "avg_approval_days": avg_approval_days,
+            }
+
+            sqr_reports_focus_items = [
+                {
+                    "title": "Pending internal action",
+                    "value": pending_approval_count,
+                    "description": "SQRs still waiting for processing or revision closure.",
+                    "icon": "bi-hourglass-split",
+                    "tone": "warning",
+                },
+                {
+                    "title": "Revenue still pending",
+                    "value": len(for_billing_submissions),
+                    "description": "Approved quotations not yet billed in the revenue stage.",
+                    "icon": "bi-receipt-cutoff",
+                    "tone": "primary",
+                },
+                {
+                    "title": "Delivery watchlist",
+                    "value": len(at_risk_submissions) + len(off_track_submissions),
+                    "description": "Won projects marked at risk or off track and needing attention.",
+                    "icon": "bi-exclamation-diamond",
+                    "tone": "danger",
+                },
+                {
+                    "title": "Average won deal size",
+                    "value": compact_currency(avg_won_value),
+                    "description": "Typical discounted value of each successfully won quotation.",
+                    "icon": "bi-cash-stack",
+                    "tone": "success",
+                },
+            ]
+
         context.update(
             {
                 "can_create_sqr": can_create,
@@ -2638,6 +2922,20 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "delivery_submissions": delivery_submissions,
                 "delivery_health_counts": delivery_health_counts,
                 "revenue_data": revenue_data,
+                "sqr_reports_summary": sqr_reports_summary,
+                "sqr_reports_status_chart": sqr_reports_status_chart,
+                "sqr_reports_deal_chart": sqr_reports_deal_chart,
+                "sqr_reports_delivery_chart": sqr_reports_delivery_chart,
+                "sqr_reports_group_chart": sqr_reports_group_chart,
+                "sqr_reports_scope_chart": sqr_reports_scope_chart,
+                "sqr_reports_funnel_chart": sqr_reports_funnel_chart,
+                "sqr_reports_monthly_chart": sqr_reports_monthly_chart,
+                "sqr_reports_revenue_chart": sqr_reports_revenue_chart,
+                "sqr_reports_quick_overview_chart": sqr_reports_quick_overview_chart,
+                "sqr_reports_top_accounts": sqr_reports_top_accounts,
+                "sqr_reports_top_won": sqr_reports_top_won,
+                "sqr_reports_pipeline": sqr_reports_pipeline,
+                "sqr_reports_focus_items": sqr_reports_focus_items,
                 "sqr_pm_users_json": json.dumps(list(
                     User.objects.filter(role=User.Roles.PM_ESG)
                     .values("pk", "first_name", "last_name", "username")
@@ -2697,6 +2995,22 @@ class SqrListView(LoginRequiredMixin, TemplateView):
 
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
+
+
+class SqrReportsDataView(LoginRequiredMixin, View):
+    """AJAX endpoint that returns the latest SQR reports fragment for live refresh."""
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        report_view = SqrListView()
+        report_view.request = request
+        report_view.args = args
+        report_view.kwargs = kwargs
+        context = report_view.get_context_data()
+        html = render_to_string("hub/partials/sqr_reports.html", context, request=request)
+        return JsonResponse({"ok": True, "html": html})
 
     @staticmethod
     def _notify_sqr_submission(submission: SqrSubmission) -> None:

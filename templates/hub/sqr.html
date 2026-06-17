@@ -299,6 +299,620 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     padding: 0.1rem 0.35rem;
     border-radius: 0.35rem;
 }
+
+.sqr-report-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.sqr-report-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.4rem;
+    padding: 1.5rem;
+    background:
+        radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 36%),
+        radial-gradient(circle at 85% 20%, rgba(168,85,247,0.22), transparent 30%),
+        linear-gradient(135deg, rgba(15,23,42,0.97), rgba(30,41,59,0.96));
+    border: 1px solid rgba(148,163,184,0.2);
+    box-shadow: 0 24px 48px rgba(2,6,23,0.24);
+}
+
+.sqr-report-hero::before,
+.sqr-report-hero::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(10px);
+    pointer-events: none;
+}
+
+.sqr-report-hero::before {
+    width: 220px;
+    height: 220px;
+    inset: auto auto -90px -70px;
+    background: rgba(6,182,212,0.14);
+}
+
+.sqr-report-hero::after {
+    width: 190px;
+    height: 190px;
+    inset: -60px -45px auto auto;
+    background: rgba(59,130,246,0.16);
+}
+
+.sqr-report-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #dbeafe;
+    background: rgba(59,130,246,0.18);
+    border: 1px solid rgba(96,165,250,0.22);
+}
+
+.sqr-report-hero__title {
+    color: #f8fafc;
+    font-size: clamp(1.55rem, 2vw, 2rem);
+}
+
+.sqr-report-hero__text {
+    color: rgba(226,232,240,0.84);
+    max-width: 68ch;
+    font-size: 0.96rem;
+}
+
+.sqr-report-hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(290px, 1fr);
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.sqr-report-story-panel {
+    border-radius: 1.1rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(148,163,184,0.16);
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+}
+
+.sqr-report-story-panel__label {
+    display: block;
+    margin-bottom: 0.55rem;
+    color: rgba(191,219,254,0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.73rem;
+    font-weight: 700;
+}
+
+.sqr-report-story-panel__lead {
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.sqr-report-story-panel__meta {
+    color: rgba(226,232,240,0.72);
+    font-size: 0.84rem;
+}
+
+.sqr-report-quickstats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.95rem;
+}
+
+.sqr-toggle-btn {
+    border-radius: 999px;
+    font-weight: 600;
+    transition: background-color var(--spring-dur-fast) ease,
+                border-color var(--spring-dur-fast) ease,
+                color var(--spring-dur-fast) ease,
+                box-shadow var(--spring-dur) var(--spring),
+                transform var(--spring-dur) var(--spring);
+}
+
+.sqr-toggle-btn.btn-outline-primary {
+    border-width: 1px;
+}
+
+.sqr-report-hero .sqr-toggle-btn {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.85);
+    color: #ffffff;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+}
+
+.sqr-report-hero .sqr-toggle-btn:hover,
+.sqr-report-hero .sqr-toggle-btn:focus-visible {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #0f172a;
+}
+
+body:not(.dark-mode) .sqr-report-hero .sqr-toggle-btn {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(148, 163, 184, 0.5);
+    color: #0f172a;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+body:not(.dark-mode) .sqr-report-hero .sqr-toggle-btn:hover,
+body:not(.dark-mode) .sqr-report-hero .sqr-toggle-btn:focus-visible {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+}
+
+.sqr-report-overview-card {
+    margin-top: 1rem;
+    border-radius: 1rem;
+    padding: 0.95rem 1rem 0.85rem;
+    border: 1px solid rgba(148,163,184,0.16);
+    background: rgba(15,23,42,0.3);
+    backdrop-filter: blur(10px);
+}
+
+.sqr-report-overview-card__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.73rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(191,219,254,0.92);
+}
+
+.sqr-report-overview-card__title {
+    margin: 0.45rem 0 0;
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.sqr-report-overview-card__sub {
+    margin: 0.25rem 0 0;
+    color: rgba(226,232,240,0.72);
+    font-size: 0.82rem;
+}
+
+.sqr-report-overview-card__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+}
+
+.sqr-report-overview-pill {
+    border-radius: 999px;
+    padding: 0.38rem 0.72rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(148,163,184,0.12);
+}
+
+.sqr-report-overview-chart {
+    position: relative;
+    margin-top: 0.9rem;
+    height: 185px;
+}
+
+.sqr-report-mini-stat {
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+    background: rgba(15,23,42,0.48);
+    border: 1px solid rgba(148,163,184,0.14);
+}
+
+.sqr-report-mini-stat__label {
+    display: block;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(226,232,240,0.72);
+}
+
+.sqr-report-mini-stat__value {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.sqr-report-mini-stat__hint {
+    display: block;
+    margin-top: 0.25rem;
+    color: rgba(226,232,240,0.68);
+    font-size: 0.78rem;
+}
+
+.sqr-report-kpi {
+    height: 100%;
+    border-radius: 1rem;
+    padding: 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+    border: 1px solid rgba(148,163,184,0.14);
+    backdrop-filter: blur(8px);
+}
+
+.sqr-report-kpi__label {
+    display: block;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: rgba(226,232,240,0.76);
+}
+
+.sqr-report-kpi__value {
+    display: block;
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-top: 0.35rem;
+}
+
+.sqr-report-kpi__hint {
+    display: block;
+    margin-top: 0.4rem;
+    color: rgba(226,232,240,0.72);
+    font-size: 0.82rem;
+}
+
+.sqr-report-focus {
+    height: 100%;
+    border-radius: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(148,163,184,0.16);
+    background: rgba(15,23,42,0.78);
+    box-shadow: 0 12px 28px rgba(15,23,42,0.14);
+}
+
+.sqr-report-focus__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.sqr-report-focus__icon {
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: #fff;
+    background: linear-gradient(135deg, rgba(59,130,246,0.92), rgba(99,102,241,0.92));
+    box-shadow: 0 10px 24px rgba(59,130,246,0.22);
+}
+
+.sqr-report-focus__title {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 0.98rem;
+    font-weight: 700;
+}
+
+.sqr-report-focus__value {
+    margin-top: 0.85rem;
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.sqr-report-focus__desc {
+    margin: 0.35rem 0 0;
+    color: rgba(226,232,240,0.72);
+    font-size: 0.83rem;
+}
+
+.sqr-report-focus--warning .sqr-report-focus__icon {
+    background: linear-gradient(135deg, rgba(245,158,11,0.95), rgba(249,115,22,0.95));
+    box-shadow: 0 10px 24px rgba(245,158,11,0.2);
+}
+
+.sqr-report-focus--danger .sqr-report-focus__icon {
+    background: linear-gradient(135deg, rgba(244,63,94,0.95), rgba(239,68,68,0.95));
+    box-shadow: 0 10px 24px rgba(239,68,68,0.22);
+}
+
+.sqr-report-focus--success .sqr-report-focus__icon {
+    background: linear-gradient(135deg, rgba(16,185,129,0.95), rgba(34,197,94,0.95));
+    box-shadow: 0 10px 24px rgba(16,185,129,0.22);
+}
+
+.sqr-report-focus--primary .sqr-report-focus__icon {
+    background: linear-gradient(135deg, rgba(59,130,246,0.95), rgba(14,165,233,0.95));
+}
+
+.sqr-report-card {
+    border-radius: 1.15rem;
+    border: 1px solid rgba(148,163,184,0.16);
+    background: rgba(15,23,42,0.78);
+    box-shadow: 0 18px 40px rgba(15,23,42,0.16);
+}
+
+.sqr-report-card__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 1rem 1rem 0;
+}
+
+.sqr-report-card__icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    color: #fff;
+    background: linear-gradient(135deg, rgba(59,130,246,0.95), rgba(99,102,241,0.95));
+    box-shadow: 0 10px 24px rgba(59,130,246,0.24);
+    flex-shrink: 0;
+}
+
+.sqr-report-card__title {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.sqr-report-card__sub {
+    margin: 0.2rem 0 0;
+    color: rgba(226,232,240,0.72);
+    font-size: 0.84rem;
+}
+
+.sqr-report-card__body {
+    padding: 1rem;
+}
+
+.sqr-report-section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #93c5fd;
+    background: rgba(59,130,246,0.12);
+    border: 1px solid rgba(96,165,250,0.16);
+}
+
+.sqr-report-insight-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.sqr-report-insight-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 0.95rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(148,163,184,0.12);
+    background: rgba(255,255,255,0.03);
+}
+
+.sqr-report-insight-list i {
+    color: #38bdf8;
+    font-size: 1rem;
+    margin-top: 0.1rem;
+}
+
+.sqr-report-insight-list strong {
+    display: block;
+    color: #f8fafc;
+    margin-bottom: 0.15rem;
+}
+
+.sqr-report-insight-list span {
+    color: rgba(226,232,240,0.72);
+    font-size: 0.84rem;
+}
+
+.sqr-report-pipeline {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.sqr-report-pipeline__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(148,163,184,0.12);
+    background: rgba(255,255,255,0.03);
+}
+
+.sqr-report-pipeline__label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #e2e8f0;
+    font-weight: 600;
+}
+
+.sqr-report-pipeline__label i {
+    color: #60a5fa;
+}
+
+.sqr-report-pipeline__value {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.sqr-report-canvas {
+    position: relative;
+    height: 320px;
+    padding: 0.85rem 1rem 1rem;
+}
+
+.sqr-report-canvas--sm {
+    height: 270px;
+}
+
+.sqr-report-table {
+    --bs-table-bg: transparent;
+    --bs-table-color: inherit;
+    margin-bottom: 0;
+}
+
+.sqr-report-table thead th {
+    border-bottom-color: rgba(148,163,184,0.16);
+    color: rgba(226,232,240,0.76);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sqr-report-table tbody td {
+    border-bottom-color: rgba(148,163,184,0.1);
+    color: #e2e8f0;
+    vertical-align: middle;
+}
+
+.sqr-report-rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 999px;
+    background: rgba(59,130,246,0.16);
+    color: #93c5fd;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.sqr-report-badge {
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.76rem;
+    border: 1px solid rgba(148,163,184,0.16);
+    background: rgba(59,130,246,0.12);
+    color: #bfdbfe;
+}
+
+.sqr-report-table-note {
+    margin-top: 0.85rem;
+    color: rgba(226,232,240,0.62);
+    font-size: 0.78rem;
+}
+
+body:not(.dark-mode) .sqr-report-hero {
+    background:
+        radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 36%),
+        radial-gradient(circle at 85% 20%, rgba(168,85,247,0.12), transparent 30%),
+        linear-gradient(135deg, rgba(255,255,255,0.99), rgba(241,245,249,0.99));
+    border-color: rgba(148,163,184,0.22);
+    box-shadow: 0 20px 42px rgba(15,23,42,0.08);
+}
+
+body:not(.dark-mode) .sqr-report-hero__title,
+body:not(.dark-mode) .sqr-report-story-panel__lead,
+body:not(.dark-mode) .sqr-report-mini-stat__value,
+body:not(.dark-mode) .sqr-report-kpi__value,
+body:not(.dark-mode) .sqr-report-focus__title,
+body:not(.dark-mode) .sqr-report-focus__value,
+body:not(.dark-mode) .sqr-report-card__title,
+body:not(.dark-mode) .sqr-report-insight-list strong,
+body:not(.dark-mode) .sqr-report-pipeline__label,
+body:not(.dark-mode) .sqr-report-pipeline__value,
+body:not(.dark-mode) .sqr-report-table tbody td {
+    color: #0f172a;
+}
+
+body:not(.dark-mode) .sqr-report-hero__text,
+body:not(.dark-mode) .sqr-report-story-panel__meta,
+body:not(.dark-mode) .sqr-report-mini-stat__label,
+body:not(.dark-mode) .sqr-report-mini-stat__hint,
+body:not(.dark-mode) .sqr-report-kpi__label,
+body:not(.dark-mode) .sqr-report-kpi__hint,
+body:not(.dark-mode) .sqr-report-focus__desc,
+body:not(.dark-mode) .sqr-report-card__sub,
+body:not(.dark-mode) .sqr-report-insight-list span,
+body:not(.dark-mode) .sqr-report-table thead th,
+body:not(.dark-mode) .sqr-report-table-note,
+body:not(.dark-mode) .sqr-report-overview-card__sub {
+    color: #475569;
+}
+
+body:not(.dark-mode) .sqr-report-eyebrow,
+body:not(.dark-mode) .sqr-report-section-label {
+    color: #1d4ed8;
+    background: rgba(59,130,246,0.1);
+    border-color: rgba(59,130,246,0.16);
+}
+
+body:not(.dark-mode) .sqr-report-story-panel,
+body:not(.dark-mode) .sqr-report-kpi,
+body:not(.dark-mode) .sqr-report-mini-stat,
+body:not(.dark-mode) .sqr-report-overview-card,
+body:not(.dark-mode) .sqr-report-insight-list li,
+body:not(.dark-mode) .sqr-report-pipeline__row {
+    background: rgba(255,255,255,0.72);
+    border-color: rgba(148,163,184,0.16);
+}
+
+body:not(.dark-mode) .sqr-report-overview-pill {
+    color: #0f172a;
+    background: rgba(59,130,246,0.08);
+    border-color: rgba(59,130,246,0.16);
+}
+
+body:not(.dark-mode) .sqr-report-focus,
+body:not(.dark-mode) .sqr-report-card {
+    background: rgba(255,255,255,0.95);
+    border-color: rgba(148,163,184,0.18);
+    box-shadow: 0 16px 34px rgba(15,23,42,0.08);
+}
+
+body:not(.dark-mode) .sqr-report-badge {
+    background: rgba(59,130,246,0.1);
+    color: #1d4ed8;
+    border-color: rgba(59,130,246,0.16);
+}
+
+@media (max-width: 1199.98px) {
+    .sqr-report-hero-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .sqr-report-quickstats {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <div class="row g-4">
@@ -310,6 +924,9 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
                 <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Service Quotation Request</h2>
                 <div class="d-flex gap-2">
                     {% if is_pm %}
+                        <a href="{% if active_sqr_tab == 'reports' %}{% url 'hub:sqr' %}{% else %}{% url 'hub:sqr' %}?tab=reports{% endif %}" class="btn btn-sm sqr-toggle-btn {% if active_sqr_tab == 'reports' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi {% if active_sqr_tab == 'reports' %}bi-table{% else %}bi-bar-chart-line-fill{% endif %} me-1"></i>{% if active_sqr_tab == 'reports' %}To SQR Tracker{% else %}To Reports{% endif %}
+                        </a>
                         <a href="{% url 'hub:sqr-export' %}" class="btn btn-sm btn-outline-success">
                             <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
                         </a>
@@ -361,6 +978,310 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
             </div>
         </div>
 
+        {% if is_pm and active_sqr_tab == 'reports' %}
+            <div id="sqr-reports-root" data-refresh-url="{% url 'hub:sqr-reports-data' %}">
+                {% include 'hub/partials/sqr_reports.html' %}
+            </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+            <script>
+                (function () {
+                    if (typeof Chart === 'undefined') return;
+
+                    var chartInstances = [];
+
+                    function getTheme() {
+                        var isDark = document.body.classList.contains('dark-mode');
+                        return {
+                            text: isDark ? 'rgba(226,232,240,0.82)' : '#475569',
+                            textStrong: isDark ? '#f8fafc' : '#0f172a',
+                            grid: isDark ? 'rgba(148,163,184,0.12)' : 'rgba(148,163,184,0.18)',
+                            tooltipBg: isDark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.98)',
+                            tooltipBorder: isDark ? 'rgba(148,163,184,0.16)' : 'rgba(148,163,184,0.2)'
+                        };
+                    }
+
+                    function readPayload(id) {
+                        var node = document.getElementById(id);
+                        if (!node) return { labels: [], totals: [] };
+                        try {
+                            return JSON.parse(node.textContent || '{}');
+                        } catch (error) {
+                            return { labels: [], totals: [] };
+                        }
+                    }
+
+                    function formatCurrency(value) {
+                        var amount = Number(value || 0);
+                        return new Intl.NumberFormat('en-PH', {
+                            style: 'currency',
+                            currency: 'PHP',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0
+                        }).format(amount);
+                    }
+
+                    function registerChart(chart) {
+                        if (chart) chartInstances.push(chart);
+                    }
+
+                    function destroyCharts() {
+                        chartInstances.forEach(function (chart) { chart.destroy(); });
+                        chartInstances = [];
+                    }
+
+                    function makeDonut(canvasId, payload, currencyMode, theme, tooltipCfg, donutPalette) {
+                        var canvas = document.getElementById(canvasId);
+                        if (!canvas || !payload.labels || !payload.labels.length) return;
+                        registerChart(new Chart(canvas, {
+                            type: 'doughnut',
+                            data: {
+                                labels: payload.labels,
+                                datasets: [{
+                                    data: payload.totals,
+                                    backgroundColor: donutPalette.bg.slice(0, payload.labels.length),
+                                    borderColor: donutPalette.border.slice(0, payload.labels.length),
+                                    borderWidth: 2,
+                                    hoverOffset: 10
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '62%',
+                                plugins: {
+                                    legend: {
+                                        position: 'bottom',
+                                        labels: { color: theme.text, boxWidth: 12, boxHeight: 12, padding: 16 }
+                                    },
+                                    tooltip: {
+                                        ...tooltipCfg,
+                                        callbacks: {
+                                            label: function (ctx) {
+                                                var value = ctx.raw;
+                                                return ctx.label + ': ' + (currencyMode ? formatCurrency(value) : value);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }));
+                    }
+
+                    function buildGradient(canvas, colorA, colorB) {
+                        var ctx = canvas.getContext('2d');
+                        var gradient = ctx.createLinearGradient(0, 0, 0, canvas.height || 320);
+                        gradient.addColorStop(0, colorA);
+                        gradient.addColorStop(1, colorB);
+                        return gradient;
+                    }
+
+                    function makeBar(canvasId, payload, options, theme, tooltipCfg) {
+                        var canvas = document.getElementById(canvasId);
+                        if (!canvas || !payload.labels || !payload.labels.length) return;
+                        options = options || {};
+                        var backgroundColor = options.backgroundColor;
+                        if (typeof options.gradient === 'function') {
+                            backgroundColor = options.gradient(canvas);
+                        }
+                        registerChart(new Chart(canvas, {
+                            type: options.type || 'bar',
+                            data: {
+                                labels: payload.labels,
+                                datasets: [{
+                                    label: options.label || 'Total',
+                                    data: payload.totals,
+                                    backgroundColor: backgroundColor || 'rgba(59,130,246,0.65)',
+                                    borderColor: options.borderColor || 'rgba(59,130,246,1)',
+                                    borderWidth: 1.5,
+                                    borderRadius: 8,
+                                    borderSkipped: false,
+                                    fill: options.fill || false,
+                                    tension: options.tension || 0.35,
+                                    maxBarThickness: options.maxBarThickness || 42
+                                }]
+                            },
+                            options: {
+                                indexAxis: options.indexAxis || 'x',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    x: {
+                                        grid: { color: theme.grid, display: options.hideXGrid ? false : true },
+                                        ticks: { color: theme.text }
+                                    },
+                                    y: {
+                                        beginAtZero: true,
+                                        grid: { color: theme.grid },
+                                        ticks: {
+                                            color: theme.text,
+                                            callback: function (value) {
+                                                return options.currencyMode ? formatCurrency(value) : value;
+                                            }
+                                        }
+                                    }
+                                },
+                                plugins: {
+                                    legend: { display: !!options.showLegend, labels: { color: theme.text } },
+                                    tooltip: {
+                                        ...tooltipCfg,
+                                        callbacks: {
+                                            label: function (ctx) {
+                                                var value = ctx.parsed.y;
+                                                if (options.indexAxis === 'y') value = ctx.parsed.x;
+                                                return (options.label || 'Total') + ': ' + (options.currencyMode ? formatCurrency(value) : value);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }));
+                    }
+
+                    window.initSqrReportsCharts = function () {
+                        var root = document.getElementById('sqr-reports-root');
+                        if (!root) return;
+
+                        destroyCharts();
+
+                        var theme = getTheme();
+                        Chart.defaults.color = theme.text;
+                        Chart.defaults.borderColor = theme.grid;
+                        Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+
+                        var tooltipCfg = {
+                            backgroundColor: theme.tooltipBg,
+                            borderColor: theme.tooltipBorder,
+                            borderWidth: 1,
+                            titleColor: theme.textStrong,
+                            bodyColor: theme.text,
+                            padding: 10,
+                            cornerRadius: 10,
+                        };
+
+                        var donutPalette = {
+                            bg: [
+                                'rgba(59,130,246,0.72)',
+                                'rgba(16,185,129,0.72)',
+                                'rgba(245,158,11,0.72)',
+                                'rgba(244,63,94,0.72)',
+                                'rgba(99,102,241,0.72)',
+                                'rgba(6,182,212,0.72)',
+                                'rgba(148,163,184,0.72)'
+                            ],
+                            border: [
+                                'rgba(59,130,246,1)',
+                                'rgba(16,185,129,1)',
+                                'rgba(245,158,11,1)',
+                                'rgba(244,63,94,1)',
+                                'rgba(99,102,241,1)',
+                                'rgba(6,182,212,1)',
+                                'rgba(148,163,184,1)'
+                            ]
+                        };
+
+                        makeBar('sqrMonthlyTrendChart', readPayload('sqr-reports-monthly-chart-data'), {
+                            type: 'line',
+                            label: 'Submissions',
+                            gradient: function (canvas) {
+                                return buildGradient(canvas, 'rgba(59,130,246,0.28)', 'rgba(59,130,246,0.02)');
+                            },
+                            borderColor: 'rgba(59,130,246,1)',
+                            fill: true,
+                            tension: 0.38,
+                            maxBarThickness: 32,
+                            hideXGrid: true
+                        }, theme, tooltipCfg);
+                        makeBar('sqrQuickOverviewChart', readPayload('sqr-reports-quick-overview-chart-data'), {
+                            label: 'Count',
+                            gradient: function (canvas) {
+                                return buildGradient(canvas, 'rgba(14,165,233,0.82)', 'rgba(99,102,241,0.32)');
+                            },
+                            borderColor: 'rgba(14,165,233,1)',
+                            maxBarThickness: 30,
+                            hideXGrid: true
+                        }, theme, tooltipCfg);
+                        makeBar('sqrRevenueOverviewChart', readPayload('sqr-reports-revenue-chart-data'), {
+                            label: 'Value',
+                            gradient: function (canvas) {
+                                return buildGradient(canvas, 'rgba(16,185,129,0.82)', 'rgba(6,182,212,0.4)');
+                            },
+                            borderColor: 'rgba(16,185,129,1)',
+                            currencyMode: true
+                        }, theme, tooltipCfg);
+                        makeDonut('sqrStatusChart', readPayload('sqr-reports-status-chart-data'), false, theme, tooltipCfg, donutPalette);
+                        makeDonut('sqrDealStageChart', readPayload('sqr-reports-deal-chart-data'), false, theme, tooltipCfg, donutPalette);
+                        makeDonut('sqrDeliveryHealthChart', readPayload('sqr-reports-delivery-chart-data'), false, theme, tooltipCfg, donutPalette);
+                        makeBar('sqrGroupDistributionChart', readPayload('sqr-reports-group-chart-data'), {
+                            label: 'Submissions',
+                            indexAxis: 'y',
+                            gradient: function (canvas) {
+                                return buildGradient(canvas, 'rgba(99,102,241,0.86)', 'rgba(59,130,246,0.3)');
+                            },
+                            borderColor: 'rgba(99,102,241,1)',
+                            maxBarThickness: 28
+                        }, theme, tooltipCfg);
+                        makeBar('sqrScopeDistributionChart', readPayload('sqr-reports-scope-chart-data'), {
+                            label: 'Requests',
+                            indexAxis: 'y',
+                            gradient: function (canvas) {
+                                return buildGradient(canvas, 'rgba(245,158,11,0.88)', 'rgba(249,115,22,0.3)');
+                            },
+                            borderColor: 'rgba(245,158,11,1)',
+                            maxBarThickness: 28
+                        }, theme, tooltipCfg);
+                        makeBar('sqrFunnelChart', readPayload('sqr-reports-funnel-chart-data'), {
+                            label: 'Count',
+                            gradient: function (canvas) {
+                                return buildGradient(canvas, 'rgba(168,85,247,0.86)', 'rgba(59,130,246,0.35)');
+                            },
+                            borderColor: 'rgba(168,85,247,1)',
+                            maxBarThickness: 42,
+                            hideXGrid: true
+                        }, theme, tooltipCfg);
+                    };
+
+                    window.initSqrReportsCharts();
+                })();
+            </script>
+            <script>
+                (function () {
+                    var root = document.getElementById('sqr-reports-root');
+                    if (!root) return;
+
+                    var refreshUrl = root.dataset.refreshUrl;
+                    var refreshInFlight = false;
+
+                    function refreshReports() {
+                        if (!refreshUrl || refreshInFlight) return;
+                        refreshInFlight = true;
+                        fetch(refreshUrl, {
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(function (response) { return response.json(); })
+                        .then(function (data) {
+                            if (!data.ok || !data.html) return;
+                            root.innerHTML = data.html;
+                            if (typeof window.initSqrReportsCharts === 'function') {
+                                window.initSqrReportsCharts();
+                            }
+                        })
+                        .catch(function () {})
+                        .finally(function () {
+                            refreshInFlight = false;
+                        });
+                    }
+
+                    window.refreshSqrReports = refreshReports;
+                    window.setInterval(refreshReports, 15000);
+                    document.addEventListener('visibilitychange', function () {
+                        if (!document.hidden) refreshReports();
+                    });
+                })();
+            </script>
+        {% else %}
         {# ── Main Tracker Table ────────────────────────────────────────────── #}
         <div class="glass-card p-2">
             <div class="sqr-tracker-wrap">
@@ -830,6 +1751,7 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
                 </table>
             </div>
         </div>
+        {% endif %}
 
     </div>
 </div>
@@ -918,6 +1840,7 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
     var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
     var approvalChoiceState = { draftUrl: '', emlUrl: '' };
+    var pendingApprovalChange = null;
 
     function setApprovalChoiceVisibility(isVisible) {
         if (!approvalChoiceModal) return;
@@ -934,7 +1857,19 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     function closeApprovalChoiceModal() {
         approvalChoiceState.draftUrl = '';
         approvalChoiceState.emlUrl = '';
+        pendingApprovalChange = null;
         setApprovalChoiceVisibility(false);
+    }
+
+    function queueApprovalChoice(pk, value, cell, displayEl, previousValue) {
+        pendingApprovalChange = {
+            pk: pk,
+            value: value,
+            cell: cell,
+            displayEl: displayEl,
+            previousValue: previousValue
+        };
+        openApprovalChoiceModal('', '');
     }
 
     if (approvalChoiceModal) {
@@ -951,6 +1886,20 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
 
     if (approvalDraftBtn) {
         approvalDraftBtn.addEventListener('click', function () {
+            if (pendingApprovalChange) {
+                var pendingDraft = pendingApprovalChange;
+                closeApprovalChoiceModal();
+                saveField(
+                    pendingDraft.pk,
+                    'status',
+                    pendingDraft.value,
+                    pendingDraft.cell,
+                    pendingDraft.displayEl,
+                    undefined,
+                    { approvalEmailAction: 'draft' }
+                );
+                return;
+            }
             var draftUrl = approvalChoiceState.draftUrl;
             closeApprovalChoiceModal();
             if (draftUrl) {
@@ -961,6 +1910,20 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
 
     if (approvalEmlBtn) {
         approvalEmlBtn.addEventListener('click', function () {
+            if (pendingApprovalChange) {
+                var pendingEml = pendingApprovalChange;
+                closeApprovalChoiceModal();
+                saveField(
+                    pendingEml.pk,
+                    'status',
+                    pendingEml.value,
+                    pendingEml.cell,
+                    pendingEml.displayEl,
+                    undefined,
+                    { approvalEmailAction: 'eml' }
+                );
+                return;
+            }
             var emlUrl = approvalChoiceState.emlUrl;
             closeApprovalChoiceModal();
             if (emlUrl) {
@@ -1608,6 +2571,7 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
     var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
     var approvalChoiceState = { draftUrl: '', emlUrl: '' };
+    var pendingApprovalChange = null;
     var CLOSED_LOST_LOCKED_FIELDS = new Set([
         'po_pnl_date', 'assigned_pm', 'assigned_sse', 'delivery_start_date',
         'delivery_target_finish_date', 'overall_status', 'delivery_health',
@@ -1632,7 +2596,18 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     function closeApprovalChoiceModal() {
         approvalChoiceState.draftUrl = '';
         approvalChoiceState.emlUrl = '';
+        pendingApprovalChange = null;
         setApprovalChoiceVisibility(false);
+    }
+
+    function queueApprovalChoice(pk, value, cell, displayEl) {
+        pendingApprovalChange = {
+            pk: pk,
+            value: value,
+            cell: cell,
+            displayEl: displayEl
+        };
+        openApprovalChoiceModal('', '');
     }
 
     if (approvalChoiceModal) {
@@ -1649,6 +2624,20 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
 
     if (approvalDraftBtn) {
         approvalDraftBtn.addEventListener('click', function () {
+            if (pendingApprovalChange) {
+                var pendingDraft = pendingApprovalChange;
+                closeApprovalChoiceModal();
+                saveField(
+                    pendingDraft.pk,
+                    'status',
+                    pendingDraft.value,
+                    pendingDraft.cell,
+                    pendingDraft.displayEl,
+                    undefined,
+                    { approvalEmailAction: 'draft' }
+                );
+                return;
+            }
             var draftUrl = approvalChoiceState.draftUrl;
             closeApprovalChoiceModal();
             if (draftUrl) {
@@ -1659,6 +2648,20 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
 
     if (approvalEmlBtn) {
         approvalEmlBtn.addEventListener('click', function () {
+            if (pendingApprovalChange) {
+                var pendingEml = pendingApprovalChange;
+                closeApprovalChoiceModal();
+                saveField(
+                    pendingEml.pk,
+                    'status',
+                    pendingEml.value,
+                    pendingEml.cell,
+                    pendingEml.displayEl,
+                    undefined,
+                    { approvalEmailAction: 'eml' }
+                );
+                return;
+            }
             var emlUrl = approvalChoiceState.emlUrl;
             closeApprovalChoiceModal();
             if (emlUrl) {
@@ -1960,11 +2963,12 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
         return w;
     }
 
-    function saveField(pk, field, value, cell, displayEl, reviewNotes) {
+    function saveField(pk, field, value, cell, displayEl, reviewNotes, options) {
         var url = '/sqr/' + pk + '/inline-update/';
         cell.classList.add('sqr-saving');
         var payload = {field: field, value: value};
         if (reviewNotes !== undefined && reviewNotes !== null) payload.review_notes = reviewNotes;
+        options = options || {};
         fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
@@ -2135,8 +3139,15 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
                 }
                 // Prompt the user to choose the approval email output after Approval.
                 if (field === 'status' && value === 'reviewed' && (data.approval_email_draft_url || data.approval_email_eml_url)) {
-                    cell.title = 'Choose how to open the approved SQR quotation email.';
-                    openApprovalChoiceModal(data.approval_email_draft_url, data.approval_email_eml_url);
+                    var chosenApprovalUrl = options.approvalEmailAction === 'eml'
+                        ? data.approval_email_eml_url
+                        : data.approval_email_draft_url;
+                    if (options.approvalEmailAction && chosenApprovalUrl) {
+                        window.location.href = chosenApprovalUrl;
+                    } else {
+                        cell.title = 'Choose how to open the approved SQR quotation email.';
+                        openApprovalChoiceModal(data.approval_email_draft_url, data.approval_email_eml_url);
+                    }
                 }
                 // Refresh computed cols AI/AJ/AK when delivery_completion_signed_date changes
                 if (field === 'delivery_completion_signed_date' && row) {
@@ -2155,6 +3166,9 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
                     if (ajCell2) ajCell2.innerHTML = data.support_start_date || _naHtml2;
                     var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
                     if (akCell2) akCell2.innerHTML = data.managed_support_end_date || _naHtml2;
+                }
+                if (typeof window.refreshSqrReports === 'function') {
+                    window.refreshSqrReports();
                 }
             } else {
                 cell.classList.add('sqr-error');
@@ -2192,6 +3206,8 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
             if (newVal !== currentValue) {
                 if (field === 'status' && newVal === 'for_revision') {
                     openRevisionModal(pk, newVal, cell, displayEl || cell, cell);
+                } else if (field === 'status' && newVal === 'reviewed') {
+                    queueApprovalChoice(pk, newVal, cell, displayEl || cell, currentValue);
                 } else {
                     saveField(pk, field, newVal, cell, displayEl || cell);
                 }

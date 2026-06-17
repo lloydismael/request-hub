@@ -1,0 +1,378 @@
+{% load humanize %}
+<div class="sqr-report-shell">
+    <div class="sqr-report-hero">
+        <div class="sqr-report-hero-grid">
+            <div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <span class="sqr-report-eyebrow"><i class="bi bi-stars"></i> SQR Analytics</span>
+                </div>
+                <div class="sqr-report-overview-card">
+                    <span class="sqr-report-overview-card__eyebrow"><i class="bi bi-lightning-charge-fill"></i> Quick view</span>
+                    <h3 class="sqr-report-overview-card__title">At-a-glance SQR movement</h3>
+                    <p class="sqr-report-overview-card__sub">A compact overview of active pipeline volume, approvals, wins, and billed output.</p>
+                    <div class="sqr-report-overview-card__stats">
+                        <span class="sqr-report-overview-pill">Total {{ sqr_reports_summary.total_submissions|default:0 }}</span>
+                        <span class="sqr-report-overview-pill">Approved {{ sqr_reports_pipeline.approved_count|default:0 }}</span>
+                        <span class="sqr-report-overview-pill">Won {{ sqr_reports_pipeline.won_count|default:0 }}</span>
+                        <span class="sqr-report-overview-pill">Billed {{ sqr_reports_pipeline.billed_count|default:0 }}</span>
+                    </div>
+                    <div class="sqr-report-overview-chart">
+                        <canvas id="sqrQuickOverviewChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="sqr-report-story-panel">
+                <span class="sqr-report-story-panel__label">Executive summary</span>
+                <div class="sqr-report-story-panel__lead">
+                    {{ sqr_reports_pipeline.won_count|default:0 }} won deal{{ sqr_reports_pipeline.won_count|default:0|pluralize }} out of {{ sqr_reports_summary.total_submissions|default:0 }} total SQR{{ sqr_reports_summary.total_submissions|default:0|pluralize }}, with {{ sqr_reports_pipeline.billed_count|default:0 }} already billed and {{ sqr_reports_focus_items.2.value|default:0 }} item{{ sqr_reports_focus_items.2.value|default:0|pluralize }} on the delivery watchlist.
+                </div>
+                <div class="sqr-report-story-panel__meta mt-2">Use the cards below to understand which stage is healthy, which teams or scopes dominate demand, and which approved items still need action.</div>
+                <div class="sqr-report-quickstats">
+                    <div class="sqr-report-mini-stat">
+                        <span class="sqr-report-mini-stat__label">Average Won Deal</span>
+                        <span class="sqr-report-mini-stat__value">{{ sqr_reports_summary.avg_won_value_label|default:"₱0.00" }}</span>
+                        <span class="sqr-report-mini-stat__hint">Typical discounted value per closed-won quotation.</span>
+                    </div>
+                    <div class="sqr-report-mini-stat">
+                        <span class="sqr-report-mini-stat__label">Average Approval Lead</span>
+                        <span class="sqr-report-mini-stat__value">{{ sqr_reports_summary.avg_approval_days|default:0 }} days</span>
+                        <span class="sqr-report-mini-stat__hint">Average turnaround from creation to approval.</span>
+                    </div>
+                    <div class="sqr-report-mini-stat">
+                        <span class="sqr-report-mini-stat__label">Billed Conversion</span>
+                        <span class="sqr-report-mini-stat__value">{{ sqr_reports_summary.billed_conversion_rate|default:0 }}%</span>
+                        <span class="sqr-report-mini-stat__hint">Approved quotations already billed.</span>
+                    </div>
+                    <div class="sqr-report-mini-stat">
+                        <span class="sqr-report-mini-stat__label">Won from Approved</span>
+                        <span class="sqr-report-mini-stat__value">{{ sqr_reports_summary.win_from_approved_rate|default:0 }}%</span>
+                        <span class="sqr-report-mini-stat__hint">Approved submissions that converted to wins.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-2 position-relative" style="z-index:1;">
+            <div class="col-6 col-xl-3">
+                <div class="sqr-report-kpi">
+                    <span class="sqr-report-kpi__label">Total Submissions</span>
+                    <span class="sqr-report-kpi__value">{{ sqr_reports_summary.total_submissions|default:0 }}</span>
+                    <span class="sqr-report-kpi__hint">All recorded SQR entries in the tracker.</span>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="sqr-report-kpi">
+                    <span class="sqr-report-kpi__label">Approval Rate</span>
+                    <span class="sqr-report-kpi__value">{{ sqr_reports_summary.approval_rate|default:0 }}%</span>
+                    <span class="sqr-report-kpi__hint">Portion of submissions already approved internally.</span>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="sqr-report-kpi">
+                    <span class="sqr-report-kpi__label">Win Rate</span>
+                    <span class="sqr-report-kpi__value">{{ sqr_reports_summary.win_rate|default:0 }}%</span>
+                    <span class="sqr-report-kpi__hint">Closed won versus all deal outcomes being tracked.</span>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="sqr-report-kpi">
+                    <span class="sqr-report-kpi__label">Won Discounted Value</span>
+                    <span class="sqr-report-kpi__value">{{ sqr_reports_summary.won_discounted_total_label|default:"₱0.00" }}</span>
+                    <span class="sqr-report-kpi__hint">Estimated realized value after quotation discounts.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        {% for item in sqr_reports_focus_items %}
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="sqr-report-focus sqr-report-focus--{{ item.tone|default:'primary' }}">
+                    <div class="sqr-report-focus__head">
+                        <div>
+                            <h3 class="sqr-report-focus__title">{{ item.title }}</h3>
+                            <div class="sqr-report-focus__value">{{ item.value }}</div>
+                        </div>
+                        <span class="sqr-report-focus__icon"><i class="bi {{ item.icon|default:'bi-stars' }}"></i></span>
+                    </div>
+                    <p class="sqr-report-focus__desc">{{ item.description }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-7">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-journal-richtext"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-compass"></i>Read this first</span>
+                        <h3 class="sqr-report-card__title mt-2">What the dashboard is saying right now</h3>
+                        <p class="sqr-report-card__sub">A narrative summary to help any reader quickly interpret performance and next actions.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-card__body">
+                    <ul class="sqr-report-insight-list">
+                        <li>
+                            <i class="bi bi-diagram-3"></i>
+                            <div>
+                                <strong>Pipeline throughput</strong>
+                                <span>{{ sqr_reports_pipeline.pending_approval_count|default:0 }} submission{{ sqr_reports_pipeline.pending_approval_count|default:0|pluralize }} still need internal action, while {{ sqr_reports_pipeline.approved_count|default:0 }} have already cleared approval.</span>
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-trophy"></i>
+                            <div>
+                                <strong>Commercial performance</strong>
+                                <span>{{ sqr_reports_pipeline.won_count|default:0 }} quotation{{ sqr_reports_pipeline.won_count|default:0|pluralize }} have been won, averaging {{ sqr_reports_pipeline.avg_won_value_label|default:"₱0.00" }} per successful deal.</span>
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-receipt"></i>
+                            <div>
+                                <strong>Revenue readiness</strong>
+                                <span>{{ sqr_reports_pipeline.billed_count|default:0 }} item{{ sqr_reports_pipeline.billed_count|default:0|pluralize }} are already billed, while {{ sqr_reports_pipeline.for_billing_count|default:0 }} approved item{{ sqr_reports_pipeline.for_billing_count|default:0|pluralize }} still need revenue follow-through.</span>
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-heart-pulse"></i>
+                            <div>
+                                <strong>Delivery condition</strong>
+                                <span>{{ sqr_reports_pipeline.on_track_count|default:0 }} won project{{ sqr_reports_pipeline.on_track_count|default:0|pluralize }} are on track, while {{ sqr_reports_pipeline.at_risk_count|default:0 }} at risk and {{ sqr_reports_pipeline.off_track_count|default:0 }} off track may need management attention.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-5">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-funnel-fill"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-bar-chart-steps"></i>Conversion view</span>
+                        <h3 class="sqr-report-card__title mt-2">Pipeline funnel snapshot</h3>
+                        <p class="sqr-report-card__sub">See how total SQR volume narrows from approval to wins and billed output.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-canvas"><canvas id="sqrFunnelChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-5">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-list-check"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-kanban"></i>Stage counts</span>
+                        <h3 class="sqr-report-card__title mt-2">Pipeline checkpoint summary</h3>
+                        <p class="sqr-report-card__sub">A compact count of the most important operational checkpoints in the SQR lifecycle.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-card__body">
+                    <div class="sqr-report-pipeline">
+                        <div class="sqr-report-pipeline__row">
+                            <span class="sqr-report-pipeline__label"><i class="bi bi-hourglass-split"></i>Pending internal action</span>
+                            <span class="sqr-report-pipeline__value">{{ sqr_reports_pipeline.pending_approval_count|default:0 }}</span>
+                        </div>
+                        <div class="sqr-report-pipeline__row">
+                            <span class="sqr-report-pipeline__label"><i class="bi bi-check2-circle"></i>Approved</span>
+                            <span class="sqr-report-pipeline__value">{{ sqr_reports_pipeline.approved_count|default:0 }}</span>
+                        </div>
+                        <div class="sqr-report-pipeline__row">
+                            <span class="sqr-report-pipeline__label"><i class="bi bi-chat-dots"></i>In negotiation</span>
+                            <span class="sqr-report-pipeline__value">{{ sqr_reports_pipeline.negotiation_count|default:0 }}</span>
+                        </div>
+                        <div class="sqr-report-pipeline__row">
+                            <span class="sqr-report-pipeline__label"><i class="bi bi-trophy"></i>Closed won</span>
+                            <span class="sqr-report-pipeline__value">{{ sqr_reports_pipeline.won_count|default:0 }}</span>
+                        </div>
+                        <div class="sqr-report-pipeline__row">
+                            <span class="sqr-report-pipeline__label"><i class="bi bi-receipt-cutoff"></i>Already billed</span>
+                            <span class="sqr-report-pipeline__value">{{ sqr_reports_pipeline.billed_count|default:0 }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-7">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-graph-up-arrow"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-calendar-range"></i>Volume trend</span>
+                        <h3 class="sqr-report-card__title mt-2">Submission trend over time</h3>
+                        <p class="sqr-report-card__sub">Monthly SQR creation pattern, useful for spotting surges, seasonality, and slow periods.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-canvas"><canvas id="sqrMonthlyTrendChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-6">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-currency-exchange"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-cash-stack"></i>Value mix</span>
+                        <h3 class="sqr-report-card__title mt-2">Revenue and quotation value overview</h3>
+                        <p class="sqr-report-card__sub">Compare won gross, discounted win value, lost value, and managed support contribution.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-canvas"><canvas id="sqrRevenueOverviewChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-6">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-ui-radios-grid"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-flowchart"></i>Composition</span>
+                        <h3 class="sqr-report-card__title mt-2">Workflow and delivery health mix</h3>
+                        <p class="sqr-report-card__sub">Three focused views to show where SQRs sit, how deals are progressing, and how active delivery is performing.</p>
+                    </div>
+                </div>
+                <div class="row g-3 px-3 pb-3 pt-2">
+                    <div class="col-12 col-md-4">
+                        <div class="sqr-report-canvas sqr-report-canvas--sm p-0"><canvas id="sqrStatusChart"></canvas></div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="sqr-report-canvas sqr-report-canvas--sm p-0"><canvas id="sqrDealStageChart"></canvas></div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="sqr-report-canvas sqr-report-canvas--sm p-0"><canvas id="sqrDeliveryHealthChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-6">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-buildings"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-diagram-2"></i>Demand sources</span>
+                        <h3 class="sqr-report-card__title mt-2">Group distribution</h3>
+                        <p class="sqr-report-card__sub">Highlights which customer groups generate the highest SQR volume.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-canvas"><canvas id="sqrGroupDistributionChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-6">
+            <div class="sqr-report-card h-100">
+                <div class="sqr-report-card__header">
+                    <span class="sqr-report-card__icon"><i class="bi bi-diagram-3-fill"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-list-columns"></i>Work profile</span>
+                        <h3 class="sqr-report-card__title mt-2">Most common requested scopes</h3>
+                        <p class="sqr-report-card__sub">Shows which project detail categories or scopes appear most often in current demand.</p>
+                    </div>
+                </div>
+                <div class="sqr-report-canvas"><canvas id="sqrScopeDistributionChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-6">
+            <div class="sqr-report-card h-100 p-3">
+                <div class="d-flex align-items-start gap-2 mb-3">
+                    <span class="sqr-report-card__icon"><i class="bi bi-trophy-fill"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-award"></i>Top performers</span>
+                        <h3 class="sqr-report-card__title mt-2">Top won accounts</h3>
+                        <p class="sqr-report-card__sub">Best-performing accounts ranked by discounted closed-won value.</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm sqr-report-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Account</th>
+                                <th class="text-end">Won</th>
+                                <th class="text-end">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in sqr_reports_top_accounts %}
+                                <tr>
+                                    <td><span class="sqr-report-rank">{{ forloop.counter }}</span></td>
+                                    <td>{{ row.name }}</td>
+                                    <td class="text-end">{{ row.count }}</td>
+                                    <td class="text-end fw-semibold">₱{{ row.value|floatformat:2|intcomma }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">No won accounts yet.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="sqr-report-table-note">Use this ranking to identify repeat-winning accounts and prioritize relationship follow-through.</div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-6">
+            <div class="sqr-report-card h-100 p-3">
+                <div class="d-flex align-items-start gap-2 mb-3">
+                    <span class="sqr-report-card__icon"><i class="bi bi-gem"></i></span>
+                    <div>
+                        <span class="sqr-report-section-label"><i class="bi bi-currency-dollar"></i>Largest wins</span>
+                        <h3 class="sqr-report-card__title mt-2">Highest-value won quotations</h3>
+                        <p class="sqr-report-card__sub">Your largest successful quotations with current delivery context for easier follow-up.</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm sqr-report-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>SQR</th>
+                                <th>Account</th>
+                                <th class="text-end">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in sqr_reports_top_won %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">{{ row.reference_code }}</div>
+                                        <div class="small text-muted">{{ row.group_name }}</div>
+                                    </td>
+                                    <td>
+                                        <div>{{ row.customer_name }}</div>
+                                        <span class="sqr-report-badge mt-1 d-inline-block">{{ row.status }}</span>
+                                    </td>
+                                    <td class="text-end fw-semibold">₱{{ row.discounted_price|floatformat:2|intcomma }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">No closed-won quotations to rank yet.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="sqr-report-table-note">This list is useful for executive review, delivery tracking, and customer success prioritization.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ sqr_reports_status_chart|json_script:"sqr-reports-status-chart-data" }}
+{{ sqr_reports_deal_chart|json_script:"sqr-reports-deal-chart-data" }}
+{{ sqr_reports_delivery_chart|json_script:"sqr-reports-delivery-chart-data" }}
+{{ sqr_reports_group_chart|json_script:"sqr-reports-group-chart-data" }}
+{{ sqr_reports_scope_chart|json_script:"sqr-reports-scope-chart-data" }}
+{{ sqr_reports_funnel_chart|json_script:"sqr-reports-funnel-chart-data" }}
+{{ sqr_reports_monthly_chart|json_script:"sqr-reports-monthly-chart-data" }}
+{{ sqr_reports_revenue_chart|json_script:"sqr-reports-revenue-chart-data" }}
+{{ sqr_reports_quick_overview_chart|json_script:"sqr-reports-quick-overview-chart-data" }}
