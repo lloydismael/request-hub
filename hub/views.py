@@ -2533,6 +2533,23 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         def decimal_to_float(value):
             return float(value or Decimal("0"))
 
+        def submission_discounted_value(submission):
+            return (
+                submission.computed_total_price
+                or submission.discounted_price
+                or submission.quotation_total_price
+                or Decimal("0")
+            )
+
+        def submission_gross_value(submission):
+            return (
+                submission.computed_gross_total
+                or submission.quotation_total_price
+                or submission.computed_total_price
+                or submission.discounted_price
+                or Decimal("0")
+            )
+
         def compact_currency(value: Decimal) -> str:
             amount = decimal_to_float(value)
             abs_amount = abs(amount)
@@ -2614,14 +2631,14 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         total_with_deal_status = sum(
             1 for s in all_submissions if s.proposal_status
         ) if is_pm else 0
-        won_total_price = sum(s.quotation_total_price or Decimal("0") for s in won_submissions)
-        won_discounted_total = sum(s.discounted_price or Decimal("0") for s in won_submissions)
-        lost_total_price = sum(s.quotation_total_price or Decimal("0") for s in lost_submissions)
+        won_total_price = sum(submission_gross_value(s) for s in won_submissions)
+        won_discounted_total = sum(submission_discounted_value(s) for s in won_submissions)
+        lost_total_price = sum(submission_discounted_value(s) for s in lost_submissions)
         win_rate = (
             round(len(won_submissions) / total_with_deal_status * 100, 1)
             if total_with_deal_status > 0 else 0
         )
-        top_won = sorted(won_submissions, key=lambda s: s.quotation_total_price or Decimal("0"), reverse=True)[:5]
+        top_won = sorted(won_submissions, key=submission_discounted_value, reverse=True)[:5]
 
         revenue_data = {
             "won_count": len(won_submissions),
@@ -2774,7 +2791,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             for submission in won_submissions:
                 account_name = (submission.customer_name or "Unspecified Account").strip() or "Unspecified Account"
                 account_totals[account_name]["count"] += 1
-                account_totals[account_name]["value"] += submission.discounted_price or submission.quotation_total_price or Decimal("0")
+                account_totals[account_name]["value"] += submission_discounted_value(submission)
 
             sqr_reports_top_accounts = [
                 {
@@ -2793,7 +2810,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                     "reference_code": submission.reference_code,
                     "customer_name": submission.customer_name,
                     "group_name": submission.customer_company or "—",
-                    "discounted_price": submission.discounted_price or submission.quotation_total_price or Decimal("0"),
+                    "discounted_price": submission_discounted_value(submission),
                     "status": submission.get_delivery_health_display() if submission.delivery_health else "Awaiting delivery setup",
                 }
                 for submission in top_won

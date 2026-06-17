@@ -341,6 +341,49 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     background: rgba(59,130,246,0.16);
 }
 
+.sqr-filter-toolbar {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(8px);
+}
+
+.sqr-filter-toolbar__meta {
+    font-size: 0.82rem;
+    color: rgba(226, 232, 240, 0.78);
+}
+
+.sqr-filter-toolbar .form-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #cbd5e1;
+}
+
+.sqr-filter-toolbar .form-control,
+.sqr-filter-toolbar .form-select {
+    min-height: 2.45rem;
+}
+
+body:not(.dark-mode) .sqr-filter-toolbar {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(148, 163, 184, 0.22);
+}
+
+body:not(.dark-mode) .sqr-filter-toolbar__meta,
+body:not(.dark-mode) .sqr-filter-toolbar .form-label {
+    color: #475569;
+}
+
+@media (max-width: 767.98px) {
+    .sqr-filter-toolbar {
+        padding: 0.85rem;
+    }
+}
+
 .sqr-report-eyebrow {
     display: inline-flex;
     align-items: center;
@@ -927,6 +970,11 @@ body:not(.dark-mode) .sqr-report-badge {
                         <a href="{% if active_sqr_tab == 'reports' %}{% url 'hub:sqr' %}{% else %}{% url 'hub:sqr' %}?tab=reports{% endif %}" class="btn btn-sm sqr-toggle-btn {% if active_sqr_tab == 'reports' %}btn-primary{% else %}btn-outline-primary{% endif %}">
                             <i class="bi {% if active_sqr_tab == 'reports' %}bi-table{% else %}bi-bar-chart-line-fill{% endif %} me-1"></i>{% if active_sqr_tab == 'reports' %}To SQR Tracker{% else %}To Reports{% endif %}
                         </a>
+                        {% if active_sqr_tab != 'reports' %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#sqr-table-filter-panel" aria-expanded="false" aria-controls="sqr-table-filter-panel" id="sqr-table-filter-toggle">
+                            <i class="bi bi-funnel-fill me-1"></i>Filter
+                        </button>
+                        {% endif %}
                         <a href="{% url 'hub:sqr-export' %}" class="btn btn-sm btn-outline-success">
                             <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
                         </a>
@@ -943,6 +991,125 @@ body:not(.dark-mode) .sqr-report-badge {
                     {% endif %}
                 </div>
             </div>
+            {% if active_sqr_tab != 'reports' %}
+            <div class="collapse" id="sqr-table-filter-panel">
+                <div class="sqr-filter-toolbar">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <div>
+                            <div class="fw-semibold">SQR Table Filters</div>
+                            <div class="sqr-filter-toolbar__meta">Filter by keyword, workflow stage, delivery health, revenue details, dates, and amount range.</div>
+                        </div>
+                        <div class="sqr-filter-toolbar__meta" id="sqr-filter-results-meta">Showing all rows</div>
+                    </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-lg-5">
+                            <label for="sqr-table-filter-search" class="form-label">Search table</label>
+                            <input type="search" class="form-control" id="sqr-table-filter-search" placeholder="Search SQR ID, account, project, requester, remarks...">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-status" class="form-label">SQR Status</label>
+                            <select class="form-select" id="sqr-table-filter-status">
+                                <option value="">All statuses</option>
+                                <option value="submitted">For Processing</option>
+                                <option value="for_revision">For Revision</option>
+                                <option value="reviewed">Approved</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-proposal-status" class="form-label">Proposal Status</label>
+                            <select class="form-select" id="sqr-table-filter-proposal-status">
+                                <option value="">All proposal statuses</option>
+                                <option value="submitted_pending">Submitted–Pending</option>
+                                <option value="negotiation_review">Negotiation</option>
+                                <option value="closed_won">Closed Won</option>
+                                <option value="closed_lost">Closed Lost</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-overall-status" class="form-label">Delivery Status</label>
+                            <select class="form-select" id="sqr-table-filter-overall-status">
+                                <option value="">All delivery statuses</option>
+                                <option value="planning">Planning</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="on_hold">On Hold</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-1 d-grid">
+                            <button type="button" class="btn btn-outline-light" id="sqr-table-filter-reset">Reset</button>
+                        </div>
+                    </div>
+                    <div class="row g-3 align-items-end mt-1">
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-health" class="form-label">Health Status</label>
+                            <select class="form-select" id="sqr-table-filter-health">
+                                <option value="">All health statuses</option>
+                                <option value="on_track">On Track</option>
+                                <option value="off_track">Off Track</option>
+                                <option value="at_risk">At Risk</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-revenue-declaration" class="form-label">Revenue Declaration</label>
+                            <select class="form-select" id="sqr-table-filter-revenue-declaration">
+                                <option value="">All declarations</option>
+                                <option value="declared">Declared</option>
+                                <option value="not_yet">Not Yet</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-revenue-source" class="form-label">Revenue Source</label>
+                            <select class="form-select" id="sqr-table-filter-revenue-source">
+                                <option value="">All sources</option>
+                                <option value="internal">Internal</option>
+                                <option value="invoiced">Invoiced</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-date-from" class="form-label">SQR Date From</label>
+                            <input type="date" class="form-control" id="sqr-table-filter-date-from">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-date-to" class="form-label">SQR Date To</label>
+                            <input type="date" class="form-control" id="sqr-table-filter-date-to">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-group" class="form-label">Group Name</label>
+                            <input type="search" class="form-control" id="sqr-table-filter-group" placeholder="Filter by group">
+                        </div>
+                    </div>
+                    <div class="row g-3 align-items-end mt-1">
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-amount-min" class="form-label">Min Total Price</label>
+                            <input type="number" min="0" step="0.01" class="form-control" id="sqr-table-filter-amount-min" placeholder="0.00">
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-2">
+                            <label for="sqr-table-filter-amount-max" class="form-label">Max Total Price</label>
+                            <input type="number" min="0" step="0.01" class="form-control" id="sqr-table-filter-amount-max" placeholder="0.00">
+                        </div>
+                        <div class="col-12 col-lg-8">
+                            <div class="d-flex flex-wrap gap-3 pt-lg-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-linked-request">
+                                    <label class="form-check-label" for="sqr-table-filter-linked-request">With linked request only</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-assigned-sse">
+                                    <label class="form-check-label" for="sqr-table-filter-assigned-sse">Assigned SSE only</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-billed-only">
+                                    <label class="form-check-label" for="sqr-table-filter-billed-only">Billed only</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {# Summary badges — clickable filters #}
             <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters">
                 <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="" style="cursor:pointer;">Total: {{ proposal_counts.total }}</span>
@@ -1378,7 +1545,25 @@ body:not(.dark-mode) .sqr-report-badge {
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}" data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}" data-sqr-ref="{{ item.reference_code|default:'' }}" data-sqr-customer="{{ item.customer_name|default:''|escapejs }}" data-engineer-email="{{ item.engineer.email|default:'' }}" data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}" data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}"
+                            data-sqr-status="{{ item.status }}"
+                            data-sqr-proposal-status="{{ item.proposal_status|default:'' }}"
+                            data-sqr-ref="{{ item.reference_code|default:'' }}"
+                            data-sqr-customer="{{ item.customer_name|default:''|escapejs }}"
+                            data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
+                            data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
+                            data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-overall-status="{{ item.overall_status|default:'' }}"
+                            data-sqr-health="{{ item.delivery_health|default:'' }}"
+                            data-sqr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
+                            data-sqr-revenue-source="{{ item.revenue_source|default:'' }}"
+                            data-sqr-revenue-status="{% if item.revenue_date %}billed{% else %}for_billing{% endif %}"
+                            data-sqr-created-at="{{ item.created_at|date:'Y-m-d' }}"
+                            data-sqr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
+                            data-engineer-email="{{ item.engineer.email|default:'' }}"
+                            data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}"
+                            data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
                             {# A: SQR Date #}
                             <td class="col-sticky-0 small">
                                 {% if item.status == 'for_revision' %}
@@ -3427,22 +3612,168 @@ body:not(.dark-mode) .sqr-report-badge {
 // ── Badge filter ──────────────────────────────────────────────────────────
 (function () {
     var activeFilter = '';   // '' = show all
+    var searchInput = document.getElementById('sqr-table-filter-search');
+    var statusSelect = document.getElementById('sqr-table-filter-status');
+    var proposalStatusSelect = document.getElementById('sqr-table-filter-proposal-status');
+    var overallStatusSelect = document.getElementById('sqr-table-filter-overall-status');
+    var healthSelect = document.getElementById('sqr-table-filter-health');
+    var revenueDeclarationSelect = document.getElementById('sqr-table-filter-revenue-declaration');
+    var revenueSourceSelect = document.getElementById('sqr-table-filter-revenue-source');
+    var sqrDateFromInput = document.getElementById('sqr-table-filter-date-from');
+    var sqrDateToInput = document.getElementById('sqr-table-filter-date-to');
+    var groupInput = document.getElementById('sqr-table-filter-group');
+    var amountMinInput = document.getElementById('sqr-table-filter-amount-min');
+    var amountMaxInput = document.getElementById('sqr-table-filter-amount-max');
+    var linkedRequestCheckbox = document.getElementById('sqr-table-filter-linked-request');
+    var assignedSseCheckbox = document.getElementById('sqr-table-filter-assigned-sse');
+    var billedOnlyCheckbox = document.getElementById('sqr-table-filter-billed-only');
+    var resetButton = document.getElementById('sqr-table-filter-reset');
+    var resultsMeta = document.getElementById('sqr-filter-results-meta');
 
-    function applyFilter(filter) {
-        var rows = document.querySelectorAll('.sqr-tracker tbody tr');
-        rows.forEach(function (row) {
-            if (!filter) {
-                row.style.display = '';
-                return;
+    function normalizeText(value) {
+        return (value || '').toString().trim().toLowerCase();
+    }
+
+    function parseAmount(value) {
+        if (value === null || value === undefined || value === '') return null;
+        var normalized = String(value).replace(/,/g, '').trim();
+        if (!normalized) return null;
+        var amount = Number(normalized);
+        return Number.isFinite(amount) ? amount : null;
+    }
+
+    function countActiveFilters() {
+        var filters = [
+            searchInput && searchInput.value,
+            statusSelect && statusSelect.value,
+            proposalStatusSelect && proposalStatusSelect.value,
+            overallStatusSelect && overallStatusSelect.value,
+            healthSelect && healthSelect.value,
+            revenueDeclarationSelect && revenueDeclarationSelect.value,
+            revenueSourceSelect && revenueSourceSelect.value,
+            sqrDateFromInput && sqrDateFromInput.value,
+            sqrDateToInput && sqrDateToInput.value,
+            groupInput && groupInput.value,
+            amountMinInput && amountMinInput.value,
+            amountMaxInput && amountMaxInput.value,
+            linkedRequestCheckbox && linkedRequestCheckbox.checked,
+            assignedSseCheckbox && assignedSseCheckbox.checked,
+            billedOnlyCheckbox && billedOnlyCheckbox.checked
+        ];
+
+        return filters.reduce(function (count, value) {
+            return value ? count + 1 : count;
+        }, 0);
+    }
+
+    function syncActiveBadgeFromControls() {
+        if (statusSelect && statusSelect.value && (!proposalStatusSelect || !proposalStatusSelect.value)) {
+            activeFilter = 'status:' + statusSelect.value;
+        } else if (proposalStatusSelect && proposalStatusSelect.value && (!statusSelect || !statusSelect.value)) {
+            activeFilter = 'proposal_status:' + proposalStatusSelect.value;
+        } else {
+            activeFilter = '';
+        }
+    }
+
+    function updateBadgeState() {
+        document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
+            if (badge.dataset.sqrFilter === activeFilter) {
+                badge.style.outline = '2px solid currentColor';
+                badge.style.outlineOffset = '2px';
+            } else {
+                badge.style.outline = '';
+                badge.style.outlineOffset = '';
             }
-            var parts  = filter.split(':');
-            var col    = parts[0];   // 'status' or 'proposal_status'
-            var val    = parts[1];
-            var rowVal = col === 'status'
-                ? (row.dataset.sqrStatus || '')
-                : (row.dataset.sqrProposalStatus || '');
-            row.style.display = (rowVal === val) ? '' : 'none';
         });
+    }
+
+    function syncPresetControls(filter) {
+        if (!statusSelect || !proposalStatusSelect) return;
+        statusSelect.value = '';
+        proposalStatusSelect.value = '';
+        if (!filter) return;
+        var parts = filter.split(':');
+        if (parts[0] === 'status') {
+            statusSelect.value = parts[1] || '';
+        } else if (parts[0] === 'proposal_status') {
+            proposalStatusSelect.value = parts[1] || '';
+        }
+    }
+
+    function applyFilter() {
+        var rows = document.querySelectorAll('.sqr-tracker tbody tr');
+        var query = normalizeText(searchInput && searchInput.value ? searchInput.value : '');
+        var statusValue = statusSelect ? statusSelect.value : '';
+        var proposalValue = proposalStatusSelect ? proposalStatusSelect.value : '';
+        var overallStatusValue = overallStatusSelect ? overallStatusSelect.value : '';
+        var healthValue = healthSelect ? healthSelect.value : '';
+        var revenueDeclarationValue = revenueDeclarationSelect ? revenueDeclarationSelect.value : '';
+        var revenueSourceValue = revenueSourceSelect ? revenueSourceSelect.value : '';
+        var groupValue = normalizeText(groupInput && groupInput.value ? groupInput.value : '');
+        var sqrDateFrom = sqrDateFromInput ? sqrDateFromInput.value : '';
+        var sqrDateTo = sqrDateToInput ? sqrDateToInput.value : '';
+        var amountMin = parseAmount(amountMinInput ? amountMinInput.value : '');
+        var amountMax = parseAmount(amountMaxInput ? amountMaxInput.value : '');
+        var linkedRequestOnly = !!(linkedRequestCheckbox && linkedRequestCheckbox.checked);
+        var assignedSseOnly = !!(assignedSseCheckbox && assignedSseCheckbox.checked);
+        var billedOnly = !!(billedOnlyCheckbox && billedOnlyCheckbox.checked);
+        var visibleCount = 0;
+        rows.forEach(function (row) {
+            var matchesStatus = !statusValue || (row.dataset.sqrStatus || '') === statusValue;
+            var matchesProposal = !proposalValue || (row.dataset.sqrProposalStatus || '') === proposalValue;
+            var matchesOverallStatus = !overallStatusValue || (row.dataset.sqrOverallStatus || '') === overallStatusValue;
+            var matchesHealth = !healthValue || (row.dataset.sqrHealth || '') === healthValue;
+            var matchesRevenueDeclaration = !revenueDeclarationValue || (row.dataset.sqrRevenueDeclaration || '') === revenueDeclarationValue;
+            var matchesRevenueSource = !revenueSourceValue || (row.dataset.sqrRevenueSource || '') === revenueSourceValue;
+            var matchesGroup = !groupValue || normalizeText(row.dataset.sqrGroup || '').indexOf(groupValue) !== -1;
+            var createdAt = row.dataset.sqrCreatedAt || '';
+            var matchesDateFrom = !sqrDateFrom || (createdAt && createdAt >= sqrDateFrom);
+            var matchesDateTo = !sqrDateTo || (createdAt && createdAt <= sqrDateTo);
+            var totalPrice = parseAmount(row.dataset.sqrTotalPrice || '0');
+            var matchesAmountMin = amountMin === null || ((totalPrice || 0) >= amountMin);
+            var matchesAmountMax = amountMax === null || ((totalPrice || 0) <= amountMax);
+            var matchesLinkedRequest = !linkedRequestOnly || (row.dataset.sqrLinkedRequest || '') === 'yes';
+            var matchesAssignedSse = !assignedSseOnly || !!normalizeText(row.dataset.sqrAssignedSse || '');
+            var matchesBilled = !billedOnly || (row.dataset.sqrRevenueStatus || '') === 'billed';
+            var rowText = [
+                row.dataset.sqrRef,
+                row.dataset.sqrCustomer,
+                row.dataset.sqrGroup,
+                row.dataset.sqrAssignedPm,
+                row.dataset.sqrAssignedSse,
+                row.dataset.engineerName,
+                row.textContent || ''
+            ].join(' ').toLowerCase();
+            var matchesQuery = !query || rowText.indexOf(query) !== -1;
+            var isVisible = matchesStatus
+                && matchesProposal
+                && matchesOverallStatus
+                && matchesHealth
+                && matchesRevenueDeclaration
+                && matchesRevenueSource
+                && matchesGroup
+                && matchesDateFrom
+                && matchesDateTo
+                && matchesAmountMin
+                && matchesAmountMax
+                && matchesLinkedRequest
+                && matchesAssignedSse
+                && matchesBilled
+                && matchesQuery;
+
+            row.style.display = isVisible ? '' : 'none';
+            if (isVisible) visibleCount += 1;
+        });
+
+        if (resultsMeta) {
+            var activeFilterCount = countActiveFilters();
+            if (visibleCount === rows.length && activeFilterCount === 0) {
+                resultsMeta.textContent = 'Showing all rows';
+            } else {
+                resultsMeta.textContent = 'Showing ' + visibleCount + ' of ' + rows.length + ' rows' + (activeFilterCount ? ' • ' + activeFilterCount + ' active filter' + (activeFilterCount === 1 ? '' : 's') : '');
+            }
+        }
     }
 
     document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
@@ -3454,19 +3785,67 @@ body:not(.dark-mode) .sqr-report-badge {
             } else {
                 activeFilter = filter;
             }
-            // update active visual state
-            document.querySelectorAll('.sqr-badge-filter').forEach(function (b) {
-                if (b.dataset.sqrFilter === activeFilter) {
-                    b.style.outline = '2px solid currentColor';
-                    b.style.outlineOffset = '2px';
-                } else {
-                    b.style.outline = '';
-                    b.style.outlineOffset = '';
-                }
-            });
-            applyFilter(activeFilter);
+            syncPresetControls(activeFilter);
+            updateBadgeState();
+            applyFilter();
         });
     });
+
+    [searchInput, overallStatusSelect, healthSelect, revenueDeclarationSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
+        if (!control) return;
+        control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', function () {
+            applyFilter();
+        });
+    });
+
+    [linkedRequestCheckbox, assignedSseCheckbox, billedOnlyCheckbox].forEach(function (control) {
+        if (!control) return;
+        control.addEventListener('change', function () {
+            applyFilter();
+        });
+    });
+
+    if (statusSelect) {
+        statusSelect.addEventListener('change', function () {
+            syncActiveBadgeFromControls();
+            updateBadgeState();
+            applyFilter();
+        });
+    }
+
+    if (proposalStatusSelect) {
+        proposalStatusSelect.addEventListener('change', function () {
+            syncActiveBadgeFromControls();
+            updateBadgeState();
+            applyFilter();
+        });
+    }
+
+    if (resetButton) {
+        resetButton.addEventListener('click', function () {
+            activeFilter = '';
+            if (searchInput) searchInput.value = '';
+            if (statusSelect) statusSelect.value = '';
+            if (proposalStatusSelect) proposalStatusSelect.value = '';
+            if (overallStatusSelect) overallStatusSelect.value = '';
+            if (healthSelect) healthSelect.value = '';
+            if (revenueDeclarationSelect) revenueDeclarationSelect.value = '';
+            if (revenueSourceSelect) revenueSourceSelect.value = '';
+            if (sqrDateFromInput) sqrDateFromInput.value = '';
+            if (sqrDateToInput) sqrDateToInput.value = '';
+            if (groupInput) groupInput.value = '';
+            if (amountMinInput) amountMinInput.value = '';
+            if (amountMaxInput) amountMaxInput.value = '';
+            if (linkedRequestCheckbox) linkedRequestCheckbox.checked = false;
+            if (assignedSseCheckbox) assignedSseCheckbox.checked = false;
+            if (billedOnlyCheckbox) billedOnlyCheckbox.checked = false;
+            updateBadgeState();
+            applyFilter();
+        });
+    }
+
+    updateBadgeState();
+    applyFilter();
 })();
 </script>
 
