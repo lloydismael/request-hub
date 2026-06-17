@@ -1403,15 +1403,60 @@ def _get_graph_access_token() -> tuple[str, str]:
     return "", error_description
 
 
-def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[str, str]:
-    sender_email = (sender_email or "").strip()
-    if not sender_email:
-        return "", "The signed-in user does not have an email address configured for Outlook draft creation."
+def _extract_graph_error_message(response: requests.Response) -> str:
+    try:
+        error_payload = response.json()
+        return error_payload.get("error", {}).get("message") or response.text
+    except ValueError:
+        return response.text
 
-    access_token, token_error = _get_graph_access_token()
-    if token_error:
-        return "", token_error
 
+def _create_sqr_approval_graph_draft_json(context: dict, sender_email: str, access_token: str) -> tuple[str, str]:
+    graph_url = f"https://graph.microsoft.com/v1.0/users/{quote(sender_email, safe='')}/messages"
+    recipients = context.get("recipients") or []
+    payload = {
+        "subject": context["subject"],
+        "body": {
+            "contentType": "HTML",
+            "content": context.get("html_draft") or context["html_preview"],
+        },
+        "toRecipients": [
+            {"emailAddress": {"address": email}}
+            for email in recipients[:1]
+            if email
+        ],
+        "ccRecipients": [
+            {"emailAddress": {"address": email}}
+            for email in recipients[1:]
+            if email
+        ],
+    }
+    attachments = context.get("attachments") or []
+    if attachments:
+        payload["attachments"] = attachments
+
+    try:
+        response = requests.post(
+            graph_url,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        return "", f"Unable to contact Microsoft Graph: {exc}"
+
+    if response.status_code not in (200, 201):
+        message = _extract_graph_error_message(response)
+        return "", f"Microsoft Graph JSON draft creation failed ({response.status_code}): {message}"
+
+    draft = response.json()
+    return draft.get("webLink") or "", ""
+
+
+def _create_sqr_approval_graph_draft_mime(context: dict, sender_email: str, access_token: str) -> tuple[str, str]:
     graph_url = f"https://graph.microsoft.com/v1.0/users/{quote(sender_email, safe='')}/messages"
     mime_payload = _build_sqr_approval_mime_message(context, sender_email)
     try:
@@ -1428,16 +1473,47 @@ def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[
         return "", f"Unable to contact Microsoft Graph: {exc}"
 
     if response.status_code not in (200, 201):
-        try:
-            error_payload = response.json()
-            message = error_payload.get("error", {}).get("message") or response.text
-        except ValueError:
-            message = response.text
-        return "", f"Microsoft Graph draft creation failed ({response.status_code}): {message}"
+        message = _extract_graph_error_message(response)
+        return "", f"Microsoft Graph MIME draft creation failed ({response.status_code}): {message}"
 
     draft = response.json()
-    web_link = draft.get("webLink") or ""
-    return web_link, ""
+    return draft.get("webLink") or "", ""
+
+
+def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[str, str]:
+    sender_email = (sender_email or "").strip()
+    if not sender_email:
+        return "", "The signed-in user does not have an email address configured for Outlook draft creation."
+
+    access_token, token_error = _get_graph_access_token()
+    if token_error:
+        return "", token_error
+
+    web_link, json_error = _create_sqr_approval_graph_draft_json(context, sender_email, access_token)
+    if web_link:
+        return web_link, ""
+
+    web_link, mime_error = _create_sqr_approval_graph_draft_mime(context, sender_email, access_token)
+    if web_link:
+        return web_link, ""
+
+    if json_error and mime_error:
+        return "", f"{json_error} Fallback attempt also failed: {mime_error}"
+    return "", json_error or mime_error or "Microsoft Graph draft creation failed."
+
+
+def _build_sqr_approval_mailto_url(context: dict) -> str:
+    recipients = context.get("recipients") or []
+    to_recipient = recipients[0] if recipients else ""
+    cc_recipients = ";".join(recipients[1:])
+    mailto_parts = [
+        f"mailto:{quote(to_recipient)}",
+        f"subject={quote(context['subject'])}",
+        f"body={quote(context['plain_text'])}",
+    ]
+    if cc_recipients:
+        mailto_parts.insert(1, f"cc={quote(cc_recipients)}")
+    return "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
 
 
 def _admin_sort_engineer_key(request_obj):
@@ -2381,7 +2457,7 @@ def _get_sqr_export_columns():
         ("Actual Finish Date", lambda s: _date(s.delivery_actual_finish_date)),
         ("Completion Signed Date", lambda s: _date(s.delivery_completion_signed_date)),
         ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
-        ("Support Start Date", lambda s: _date(s.computed_warranty_end_date)),
+        ("Support Start Date", lambda s: _date(s.computed_support_start_date)),
         ("Support End Date", lambda s: _date(s.computed_managed_support_end_date)),
         ("SI / Revenue Date", lambda s: _date(s.revenue_date)),
         ("Source", lambda s: s.revenue_source or ""),
@@ -2918,16 +2994,20 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
 
         # When status → Approved: launch the user's default email app with the draft.
         _approval_email_draft_url = None
+        _approval_email_eml_url = None
         if (
             field == "status"
             and coerced == SqrSubmission.Status.APPROVED
             and old_status != SqrSubmission.Status.APPROVED
         ):
-            _approval_email_draft_url = reverse("hub:sqr-approval-email", args=[submission.pk])
+            _approval_email_draft_url = _build_sqr_approval_mailto_url(_get_sqr_approval_email_context(submission))
+            _approval_email_eml_url = reverse("hub:sqr-approval-email-eml", args=[submission.pk])
 
         response_data = {"ok": True}
         if _approval_email_draft_url:
             response_data["approval_email_draft_url"] = _approval_email_draft_url
+        if _approval_email_eml_url:
+            response_data["approval_email_eml_url"] = _approval_email_eml_url
         if "pm_amount" in save_fields:
             response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
         if "pm_manhrs" in save_fields:
@@ -2962,15 +3042,22 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             req = submission.linked_request
             response_data["rq_pk"] = req.pk if req else ""
             response_data["rq_code"] = req.reference_code if req else ""
-        # Return computed warranty/support dates when completion_signed_date changes
+        def _fmt(d):
+            return d.strftime("%b %d, %Y") if d else ""
+
         if field == "delivery_completion_signed_date":
-            def _fmt(d): return d.strftime("%b %d, %Y") if d else ""
             response_data["post_svc_warranty_end_date"] = _fmt(submission.computed_post_svc_warranty_end_date)
-            response_data["warranty_end_date"] = _fmt(submission.computed_warranty_end_date)
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        if field in ("project_details", "customer_company"):
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
             response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
         # Return updated AK when AJ (managed_support_start_date) changes
         if field == "managed_support_start_date":
-            def _fmt(d): return d.strftime("%b %d, %Y") if d else ""
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        if field == "managed_support_amount":
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
             response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
         return JsonResponse(response_data)
 
@@ -3210,7 +3297,7 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
 
 
 class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
-    """Launch Outlook compose for the approved SQR quotation draft."""
+    """Launch the default mail app compose window for the approved SQR draft."""
 
     def _get_submission(self, pk):
         return get_object_or_404(
@@ -3239,42 +3326,7 @@ class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
             return redirect(redirect_target)
 
         context = _get_sqr_approval_email_context(submission)
-        recipients = context["recipients"]
-        to_recipient = recipients[0] if recipients else ""
-        cc_recipients = ";".join(recipients[1:])
-        query_bits = [
-            f"to={quote(to_recipient)}",
-            f"subject={quote(context['subject'])}",
-            f"body={quote(context['plain_text'])}",
-        ]
-        if cc_recipients:
-            query_bits.insert(1, f"cc={quote(cc_recipients)}")
-
-        query_string = "&".join(query_bits)
-        mailto_parts = [f"mailto:{to_recipient}", f"subject={quote(context['subject'])}", f"body={quote(context['plain_text'])}"]
-        if cc_recipients:
-            mailto_parts.insert(1, f"cc={quote(cc_recipients)}")
-        mailto_url = "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
-
-        draft_url, draft_error = _create_sqr_approval_graph_draft(context, request.user.email)
-        if draft_url:
-            messages.success(request, "Approved SQR quotation draft was created in Outlook with the formatted template.")
-        else:
-            messages.error(request, draft_error)
-
-        return render(
-            request,
-            "hub/outlook_redirect.html",
-            {
-                "launch_url": draft_url,
-                "web_url": draft_url,
-                "mailto_url": mailto_url,
-                "eml_url": reverse("hub:sqr-approval-email-eml", args=[submission.pk]),
-                "draft_created": bool(draft_url),
-                "draft_error": draft_error,
-                "return_url": reverse("hub:sqr"),
-            },
-        )
+        return HttpResponseRedirect(_build_sqr_approval_mailto_url(context))
 
     def post(self, request, pk):
         return self.get(request, pk)
@@ -3317,6 +3369,38 @@ class SqrApprovalEmlDownloadView(LoginRequiredMixin, View):
         response = HttpResponse(eml_bytes, content_type="message/rfc822")
         response["Content-Disposition"] = f'attachment; filename="{filename_base}.eml"'
         return response
+
+
+class SqrApprovalFormattedDraftView(LoginRequiredMixin, View):
+    """Open the default mail app with an editable draft for the approved SQR email."""
+
+    def _get_submission(self, pk):
+        return get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "linked_request"),
+            pk=pk,
+        )
+
+    def _validate_access(self, request, submission):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return "Only PM-ESG or Admin can draft SQR approval advisory emails."
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            return "Only the assigned PM-ESG approver can draft this approval advisory email."
+        if submission.status != SqrSubmission.Status.APPROVED:
+            return "Set SQR status to Approved before drafting the advisory email."
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            return "Unable to draft an email. Ensure the requestor (engineer) has an email configured."
+        return ""
+
+    def get(self, request, pk):
+        submission = self._get_submission(pk)
+        validation_error = self._validate_access(request, submission)
+        if validation_error:
+            messages.error(request, validation_error)
+            return redirect("hub:sqr")
+
+        context = _get_sqr_approval_email_context(submission)
+        return HttpResponseRedirect(_build_sqr_approval_mailto_url(context))
 
 
 class RequestDetailView(LoginRequiredMixin, DetailView):

@@ -11,12 +11,25 @@
 Coordinate engineering work, enforce SLA timelines, and gain operational visibility — all from a single web portal.
 
 [![Docker](https://img.shields.io/badge/Docker-lloydismael12%2Frequest--hub-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/lloydismael12/request-hub)
-[![Latest Tag](https://img.shields.io/badge/Latest-v29.0-0ea5e9)](https://hub.docker.com/r/lloydismael12/request-hub/tags)
+[![Latest Tag](https://img.shields.io/badge/Latest-v43.7-0ea5e9)](https://hub.docker.com/r/lloydismael12/request-hub/tags)
 [![Django](https://img.shields.io/badge/Django-4.2-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Azure-336791?logo=postgresql&logoColor=white)](https://azure.microsoft.com/en-us/products/postgresql/)
 
 </div>
+
+---
+
+## Latest Release Snapshot
+
+- **Current image tag:** `lloydismael12/request-hub:v43.7`
+- **App version shown in profile:** `v43.7`
+- **Latest SQR updates included:**
+      - Approved SQR status now uses the user-facing label **Approved**
+      - Approval flow can open a ready-to-edit mail draft directly from the user's mail app
+      - Rich-format `.eml` download remains available as an alternate option
+      - Support Start Date (`AJ`) and Support End Date (`AK`) refresh instantly when Managed Support Amount (`P`) changes
+      - Clearing inline date fields in the SQR tracker now works correctly
 
 ---
 
@@ -79,10 +92,21 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 - Communication action log (Teams, Outlook, Phone) with channel tagging
 - Optional Teams chat topic field per request
 
-### 📝 SQR (Service Quality Report)
-- Engineers submit post-engagement SQR forms
-- Tracks resolution notes, SSE man-hours, remarks, and revenue tracker fields
-- Status workflow: Draft → Submitted → Reviewed
+### 📝 SQR (Service Quotation Request)
+- Engineers and reviewers manage SQR entries directly from the tracker
+- Tracks quotation details, SSE/PM man-hours, managed support amount, discounting, approval metadata, and revenue fields
+- Status labels in the tracker:
+      - `submitted` → **For Processing**
+      - `for_revision` → **For Revision**
+      - `reviewed` → **Approved**
+- Approved flow supports two user options:
+      - open a ready-to-edit email draft through the local mail app
+      - download a formatted `.eml` file with the branded quotation layout
+- Managed support date behavior:
+      - `AI` = Post-service warranty end date
+      - `AJ` = Support start date (manual value or computed fallback)
+      - `AK` = Support end date (`AJ + 365 days`)
+      - `AJ` and `AK` show `NA` when column `P` has no managed support value
 
 ### 👥 User & Profile Management
 - Profile photos stored in the database (no external media bucket required)
@@ -352,15 +376,16 @@ docker run --rm -p 8000:8000 --env-file .env lloydismael12/request-hub:latest
 ### Build locally
 
 ```powershell
-docker ps -q --filter "publish=8000" | ForEach-Object { docker stop $_ }
-docker build -t lloydismael12/request-hub:v29.0 -t lloydismael12/request-hub:latest .
-docker run --rm -p 8000:8000 --env-file .env lloydismael12/request-hub:v29.0
+$containers = docker ps --format "{{.ID}} {{.Ports}}" | Where-Object { $_ -match "0\.0\.0\.0:8000->8000/tcp|:::8000->8000/tcp" }
+$containers | ForEach-Object { docker rm -f (($_ -split ' ')[0]) }
+docker build -t lloydismael12/request-hub:v43.7 -t lloydismael12/request-hub:latest .
+docker run --rm -p 8000:8000 --env-file .env -e APP_VERSION=v43.7 lloydismael12/request-hub:v43.7
 ```
 
 ### Push to Docker Hub
 
 ```powershell
-docker push lloydismael12/request-hub:v29.0
+docker push lloydismael12/request-hub:v43.7
 docker push lloydismael12/request-hub:latest
 ```
 
@@ -370,6 +395,8 @@ docker push lloydismael12/request-hub:latest
 docker compose up --build
 docker compose exec web python manage.py migrate
 ```
+
+> If you are running the image on another machine, make sure the `.env` file exists on that machine and the `--env-file` path points to the correct local file.
 
 ---
 
@@ -394,6 +421,8 @@ docker compose exec web python manage.py migrate
 | `PHILDATA_GRAPH_SCOPE` | Default `https://graph.microsoft.com/.default` |
 
 > ⚠️ Never commit real secrets, tokens, passwords, or connection strings to source control.
+
+> ℹ️ The checked-in `.env.example` currently documents the Microsoft Graph variables used for Outlook draft creation. Create your own full `.env` file for local or Docker runs with database, Django, ACS, and Graph settings.
 
 ---
 
@@ -446,7 +475,7 @@ Full Azure App Service container deployment guide:
 📄 [docs/azure-app-service-deployment.md](docs/azure-app-service-deployment.md)
 
 **Key steps:**
-1. Push image to Docker Hub (`lloydismael12/request-hub:vX.X`)
+1. Push image to Docker Hub (`lloydismael12/request-hub:v43.7` or your next release tag)
 2. Set App Service container to the target tag
 3. Configure all environment variables in App Service → Configuration
 4. Ensure Azure PostgreSQL Flexible Server firewall allows the App Service outbound IPs

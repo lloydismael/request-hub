@@ -1,39 +1,27 @@
 {% extends "base.html" %}
 
-{% block title %}Launch Outlook · Request Hub{% endblock %}
+{% block title %}Launch Mail Draft · Request Hub{% endblock %}
 
 {% block content %}
 <div class="glass-card p-4 text-center">
-    {% if draft_created %}
-    <h1 class="h4 mb-3">Opening Outlook Draft…</h1>
-    <p class="text-muted">A formatted Outlook draft was created using the approved SQR quotation template.</p>
+    <h1 class="h4 mb-3">Opening Mail Draft…</h1>
+    <p class="text-muted">The default email application will open with the SQR approval draft prefilled and editable before sending.</p>
     <div class="d-flex justify-content-center gap-3 flex-wrap my-4">
-        <a class="btn btn-primary" href="{{ launch_url }}" target="_blank" rel="noopener">Open Created Outlook Draft</a>
-        <a class="btn btn-outline-secondary" href="{{ return_url|default:'/' }}">Return</a>
-    </div>
-    <p class="small text-muted">The draft is saved in Outlook Drafts with the template formatting applied.</p>
-    {% else %}
-    <h1 class="h4 mb-3">Outlook Draft Not Created</h1>
-    <p class="text-muted">The formatted Outlook draft could not be created automatically.</p>
-    {% if draft_error %}
-    <div class="alert alert-warning text-start" role="alert">{{ draft_error }}</div>
-    {% endif %}
-    <div class="d-flex justify-content-center gap-3 flex-wrap my-4">
-        {% if eml_url %}
-        <a class="btn btn-outline-primary" href="{{ eml_url }}">Use Formatted Mail Draft</a>
-        {% elif mailto_url %}
-        <a class="btn btn-outline-primary" href="{{ mailto_url }}">Use Plain Text Mail Draft</a>
+        {% if mailto_url %}
+        <a class="btn btn-primary" href="{{ mailto_url }}">Open Email Draft</a>
+        {% elif formatted_draft_url %}
+        <a class="btn btn-primary" href="{{ formatted_draft_url }}">Open Email Draft</a>
         {% endif %}
         <a class="btn btn-outline-secondary" href="{{ return_url|default:'/' }}">Return</a>
     </div>
-    <p class="small text-muted">If Outlook draft creation is unavailable, download the formatted `.eml` draft based on the quotation template and open it in Outlook.</p>
-    {% endif %}
+    <p class="small text-muted">You can review and modify the draft in your email app before sending it.</p>
 </div>
-{% if draft_created %}
 <script>
     window.addEventListener('DOMContentLoaded', function () {
-        window.open("{{ launch_url|escapejs }}", "_blank", "noopener");
+        var launchUrl = "{{ mailto_url|default:formatted_draft_url|escapejs }}";
+        if (launchUrl) {
+            window.location.href = launchUrl;
+        }
     });
 </script>
-{% endif %}
 {% endblock %}

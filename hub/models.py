@@ -694,14 +694,24 @@ class SqrSubmission(models.Model):
         return None
 
     @property
-    def computed_managed_support_end_date(self):
-        """Support End Date (Col AK) = effective AJ date + 365 days.
+    def is_managed_support_start_eligible(self):
+        """AJ is eligible only for supported scopes with a managed support amount."""
+        return self.project_details in self._WARRANTY_SCOPES and self.managed_support_amount is not None
 
-        AJ shows the manually entered managed_support_start_date when present,
-        otherwise it falls back to computed_warranty_end_date. AK should mirror
-        that displayed AJ value and add 365 days.
+    @property
+    def computed_support_start_date(self):
+        """Support Start Date (Col AJ) honoring eligibility and fallback rules."""
+        if not self.is_managed_support_start_eligible:
+            return None
+        return self.managed_support_start_date or self.computed_warranty_end_date
+
+    @property
+    def computed_managed_support_end_date(self):
+        """Support End Date (Col AK) = AJ date + 365 days.
+
+        AJ is shown only when the support-start eligibility rules pass.
         """
-        support_start_date = self.managed_support_start_date or self.computed_warranty_end_date
+        support_start_date = self.computed_support_start_date
         if support_start_date:
             return support_start_date + timedelta(days=365)
         return None

@@ -118,34 +118,34 @@
                     <p class="text-muted mb-0">Actual hours recorded against this request.</p>
                 </div>
                 <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis fs-6">
-                    {{ related_activity_summary.total_hours }} hrs total
+                    {{ related_activity_summary.total_hours|floatformat:1 }} hrs total
                 </span>
             </div>
 
             <div class="row g-3 mb-4">
                 <div class="col-sm-4">
-                    <div class="border rounded-3 p-3 h-100">
+                    <div class="request-activity-stat-card border rounded-3 p-3 h-100">
                         <div class="text-muted small text-uppercase">Entries</div>
                         <div class="h5 mb-0">{{ related_activity_summary.count }}</div>
                     </div>
                 </div>
                 <div class="col-sm-4">
-                    <div class="border rounded-3 p-3 h-100">
+                    <div class="request-activity-stat-card border rounded-3 p-3 h-100">
                         <div class="text-muted small text-uppercase">Billable</div>
-                        <div class="h5 mb-0">{{ related_activity_summary.billable_hours }} hrs</div>
+                        <div class="h5 mb-0">{{ related_activity_summary.billable_hours|floatformat:1 }} hrs</div>
                     </div>
                 </div>
                 <div class="col-sm-4">
-                    <div class="border rounded-3 p-3 h-100">
+                    <div class="request-activity-stat-card border rounded-3 p-3 h-100">
                         <div class="text-muted small text-uppercase">Non-billable</div>
-                        <div class="h5 mb-0">{{ related_activity_summary.non_billable_hours }} hrs</div>
+                        <div class="h5 mb-0">{{ related_activity_summary.non_billable_hours|floatformat:1 }} hrs</div>
                     </div>
                 </div>
             </div>
 
             {% if related_activity_logs %}
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                <div class="table-responsive request-activity-table-wrap">
+                    <table class="table align-middle mb-0 request-activity-table">
                         <thead>
                             <tr>
                                 <th>Date</th>
@@ -162,7 +162,7 @@
                                     <td>{{ activity_log.request_date|date:"M d, Y" }}</td>
                                     <td>{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}</td>
                                     <td>{{ activity_log.get_activity_type_display }}</td>
-                                    <td>{{ activity_log.actual_hours }}</td>
+                                    <td>{{ activity_log.actual_hours|floatformat:1 }}</td>
                                     <td>
                                         {% if activity_log.is_billable %}
                                             <span class="badge text-bg-success">Billable</span>

@@ -7,7 +7,10 @@ from django.contrib.auth.views import LoginView
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView, UpdateView
 import json
 from collections import defaultdict
@@ -242,6 +245,8 @@ class LandingView(TemplateView):
         return context
 
 
+@method_decorator(never_cache, name="dispatch")
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class RoleLoginView(LoginView):
     authentication_form = RoleAuthenticationForm
     template_name = "accounts/login.html"

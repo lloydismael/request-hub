@@ -228,6 +228,77 @@ body:not(.dark-mode) #sqr-cell-preview {
     box-shadow: 0 4px 18px rgba(0,0,0,0.15);
 }
 #sqr-cell-preview.visible { opacity: 1; }
+
+.sqr-approval-choice-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 10050;
+}
+
+.sqr-approval-choice-modal.is-visible {
+    display: flex;
+}
+
+.sqr-approval-choice-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.68);
+    backdrop-filter: blur(3px);
+}
+
+.sqr-approval-choice-modal__dialog {
+    position: relative;
+    width: min(100%, 560px);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: #101828;
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.35);
+}
+
+.sqr-approval-choice-modal__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.sqr-approval-choice-modal__actions .btn {
+    flex: 1 1 220px;
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog {
+    background: #ffffff;
+    color: #0f172a;
+    --bs-heading-color: #0f172a;
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h1,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h2,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h3,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h4,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h5,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h6 {
+    color: #0f172a;
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog .text-muted {
+    color: #334155 !important;
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
+    color: #0f172a;
+    background: #e2e8f0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.35rem;
+}
 </style>
 
 <div class="row g-4">
@@ -600,8 +671,8 @@ body:not(.dark-mode) #sqr-cell-preview {
                                     <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
-                            {# AJ: Support Start Date — manually editable; falls back to computed_warranty_end_date #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_start_date" data-sqr-type="date" data-sqr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{% if item.managed_support_start_date %}{{ item.managed_support_start_date|date:"M d, Y" }}{% elif item.computed_warranty_end_date %}{{ item.computed_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
+                            {# AJ: Support Start Date — scope + managed support amount required #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_start_date" data-sqr-type="date" data-sqr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}" data-sqr-computed="support_start_date"><span class="sqr-display">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
                             {# AK: Managed Support End Date — computed: Col AJ + 365 days #}
                             <td class="small" data-sqr-computed="managed_support_end_date">
                                 {% if item.computed_managed_support_end_date %}
@@ -688,7 +759,7 @@ body:not(.dark-mode) #sqr-cell-preview {
                             {# AI: Post-svc Warranty End Date #}
                             <td class="small">{% if item.computed_post_svc_warranty_end_date %}{{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AJ: Support Start Date #}
-                            <td class="small">{% if item.managed_support_start_date %}{{ item.managed_support_start_date|date:"M d, Y" }}{% elif item.computed_warranty_end_date %}{{ item.computed_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            <td class="small">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AK: Managed Support End Date #}
                             <td class="small">{% if item.computed_managed_support_end_date %}{{ item.computed_managed_support_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AL: SI/Revenue Date #}
@@ -763,6 +834,26 @@ body:not(.dark-mode) #sqr-cell-preview {
     </div>
 </div>
 
+<div class="sqr-approval-choice-modal" id="sqr-approval-choice-modal" aria-hidden="true">
+    <div class="sqr-approval-choice-modal__backdrop" data-sqr-approval-close="true"></div>
+    <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-approval-choice-title">
+        <h3 class="h5 mb-2" id="sqr-approval-choice-title">Choose approval email output</h3>
+        <p class="mb-2">The SQR status is now <strong>Approved</strong>.</p>
+        <p class="text-muted mb-0">Choose whether to open the ready-to-edit draft in the default mail app or download the formatted <code>.eml</code> file with the image and table layout.</p>
+        <div class="sqr-approval-choice-modal__actions">
+            <button type="button" class="btn btn-primary" id="sqr-approval-open-draft-btn">
+                Use ready draft email body
+            </button>
+            <button type="button" class="btn btn-outline-info" id="sqr-approval-download-eml-btn">
+                Use formatted .eml template
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="sqr-approval-cancel-btn">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
 {% if is_admin and sqr_import_form %}
 <div class="requestor-modal" id="import-sqr-modal" aria-hidden="true">
     <div class="requestor-modal__backdrop" id="import-sqr-backdrop"></div>
@@ -822,6 +913,68 @@ body:not(.dark-mode) #sqr-cell-preview {
 
 <script>
     (function () {
+    var approvalChoiceModal = document.getElementById('sqr-approval-choice-modal');
+    var approvalDraftBtn = document.getElementById('sqr-approval-open-draft-btn');
+    var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
+    var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
+    var approvalChoiceState = { draftUrl: '', emlUrl: '' };
+
+    function setApprovalChoiceVisibility(isVisible) {
+        if (!approvalChoiceModal) return;
+        approvalChoiceModal.classList.toggle('is-visible', !!isVisible);
+        approvalChoiceModal.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    function openApprovalChoiceModal(draftUrl, emlUrl) {
+        approvalChoiceState.draftUrl = draftUrl || '';
+        approvalChoiceState.emlUrl = emlUrl || '';
+        setApprovalChoiceVisibility(true);
+    }
+
+    function closeApprovalChoiceModal() {
+        approvalChoiceState.draftUrl = '';
+        approvalChoiceState.emlUrl = '';
+        setApprovalChoiceVisibility(false);
+    }
+
+    if (approvalChoiceModal) {
+        approvalChoiceModal.addEventListener('click', function (event) {
+            if (event.target && event.target.getAttribute('data-sqr-approval-close') === 'true') {
+                closeApprovalChoiceModal();
+            }
+        });
+    }
+
+    if (approvalCancelBtn) {
+        approvalCancelBtn.addEventListener('click', closeApprovalChoiceModal);
+    }
+
+    if (approvalDraftBtn) {
+        approvalDraftBtn.addEventListener('click', function () {
+            var draftUrl = approvalChoiceState.draftUrl;
+            closeApprovalChoiceModal();
+            if (draftUrl) {
+                window.location.href = draftUrl;
+            }
+        });
+    }
+
+    if (approvalEmlBtn) {
+        approvalEmlBtn.addEventListener('click', function () {
+            var emlUrl = approvalChoiceState.emlUrl;
+            closeApprovalChoiceModal();
+            if (emlUrl) {
+                window.location.href = emlUrl;
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && approvalChoiceModal && approvalChoiceModal.classList.contains('is-visible')) {
+            closeApprovalChoiceModal();
+        }
+    });
+
         var modal = document.getElementById('import-sqr-modal');
         if (!modal) return;
         var openBtn = document.getElementById('import-sqr-btn');
@@ -1450,6 +1603,11 @@ body:not(.dark-mode) #sqr-cell-preview {
 (function () {
     'use strict';
     var CSRF = '{{ csrf_token }}';
+    var approvalChoiceModal = document.getElementById('sqr-approval-choice-modal');
+    var approvalDraftBtn = document.getElementById('sqr-approval-open-draft-btn');
+    var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
+    var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
+    var approvalChoiceState = { draftUrl: '', emlUrl: '' };
     var CLOSED_LOST_LOCKED_FIELDS = new Set([
         'po_pnl_date', 'assigned_pm', 'assigned_sse', 'delivery_start_date',
         'delivery_target_finish_date', 'overall_status', 'delivery_health',
@@ -1458,6 +1616,62 @@ body:not(.dark-mode) #sqr-cell-preview {
         'revenue_date', 'revenue_source', 'revenue_reference_no',
         'revenue_remarks', 'revenue_declaration'
     ]);
+
+    function setApprovalChoiceVisibility(isVisible) {
+        if (!approvalChoiceModal) return;
+        approvalChoiceModal.classList.toggle('is-visible', !!isVisible);
+        approvalChoiceModal.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    function openApprovalChoiceModal(draftUrl, emlUrl) {
+        approvalChoiceState.draftUrl = draftUrl || '';
+        approvalChoiceState.emlUrl = emlUrl || '';
+        setApprovalChoiceVisibility(true);
+    }
+
+    function closeApprovalChoiceModal() {
+        approvalChoiceState.draftUrl = '';
+        approvalChoiceState.emlUrl = '';
+        setApprovalChoiceVisibility(false);
+    }
+
+    if (approvalChoiceModal) {
+        approvalChoiceModal.addEventListener('click', function (event) {
+            if (event.target && event.target.getAttribute('data-sqr-approval-close') === 'true') {
+                closeApprovalChoiceModal();
+            }
+        });
+    }
+
+    if (approvalCancelBtn) {
+        approvalCancelBtn.addEventListener('click', closeApprovalChoiceModal);
+    }
+
+    if (approvalDraftBtn) {
+        approvalDraftBtn.addEventListener('click', function () {
+            var draftUrl = approvalChoiceState.draftUrl;
+            closeApprovalChoiceModal();
+            if (draftUrl) {
+                window.location.href = draftUrl;
+            }
+        });
+    }
+
+    if (approvalEmlBtn) {
+        approvalEmlBtn.addEventListener('click', function () {
+            var emlUrl = approvalChoiceState.emlUrl;
+            closeApprovalChoiceModal();
+            if (emlUrl) {
+                window.location.href = emlUrl;
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && approvalChoiceModal && approvalChoiceModal.classList.contains('is-visible')) {
+            closeApprovalChoiceModal();
+        }
+    });
 
     function isClosedLostLockedCell(cell) {
         if (!cell) return false;
@@ -1627,6 +1841,7 @@ body:not(.dark-mode) #sqr-cell-preview {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'date'; w.value = currentValue || '';
+            w.title = currentValue ? 'Press Delete or Backspace to clear the date.' : 'Choose a date.';
         } else if (field === 'revenue_reference_no') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
@@ -1851,6 +2066,18 @@ body:not(.dark-mode) #sqr-cell-preview {
                         }
                     }
                 }
+                if ('support_start_date' in data && row) {
+                    var ajCellComputed = row.querySelector('[data-sqr-computed="support_start_date"]');
+                    if (ajCellComputed) {
+                        ajCellComputed.querySelector('.sqr-display').innerHTML = data.support_start_date || '<span class="text-muted fst-italic">NA</span>';
+                    }
+                }
+                if ('managed_support_end_date' in data && row) {
+                    var akCellComputed = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+                    if (akCellComputed) {
+                        akCellComputed.innerHTML = data.managed_support_end_date || '<span class="text-muted fst-italic">NA</span>';
+                    }
+                }
                 // Refresh Approval Date (col U) and Validity Due Date (col V) when status changes
                 if (('reviewed_at' in data || 'validity_due_date' in data) && row) {
                     if ('reviewed_at' in data) {
@@ -1906,24 +2133,26 @@ body:not(.dark-mode) #sqr-cell-preview {
                         }
                     }
                 }
-                // Open the approved SQR quotation draft directly in Outlook.
-                if (field === 'status' && value === 'reviewed' && data.approval_email_draft_url) {
-                    cell.title = 'Opening approved SQR quotation draft in Outlook.';
-                    window.location.href = data.approval_email_draft_url;
+                // Prompt the user to choose the approval email output after Approval.
+                if (field === 'status' && value === 'reviewed' && (data.approval_email_draft_url || data.approval_email_eml_url)) {
+                    cell.title = 'Choose how to open the approved SQR quotation email.';
+                    openApprovalChoiceModal(data.approval_email_draft_url, data.approval_email_eml_url);
                 }
                 // Refresh computed cols AI/AJ/AK when delivery_completion_signed_date changes
                 if (field === 'delivery_completion_signed_date' && row) {
                     var _naHtml = '<span class="text-muted fst-italic">NA</span>';
                     var aiCell = row.querySelector('[data-sqr-computed="post_svc_warranty_end_date"]');
                     if (aiCell) aiCell.innerHTML = data.post_svc_warranty_end_date || _naHtml;
-                    var ajCell = row.querySelector('[data-sqr-computed="warranty_end_date"]');
-                    if (ajCell) ajCell.innerHTML = data.warranty_end_date || _naHtml;
+                    var ajCell = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
+                    if (ajCell) ajCell.innerHTML = data.support_start_date || _naHtml;
                     var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
                     if (akCell) akCell.innerHTML = data.managed_support_end_date || _naHtml;
                 }
-                // Refresh AK when AJ (managed_support_start_date) is manually changed
+                // Refresh AJ/AK when AJ (managed_support_start_date) is manually changed
                 if (field === 'managed_support_start_date' && row) {
                     var _naHtml2 = '<span class="text-muted fst-italic">NA</span>';
+                    var ajCell2 = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
+                    if (ajCell2) ajCell2.innerHTML = data.support_start_date || _naHtml2;
                     var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
                     if (akCell2) akCell2.innerHTML = data.managed_support_end_date || _naHtml2;
                 }
@@ -2009,6 +2238,14 @@ body:not(.dark-mode) #sqr-cell-preview {
             if (widget.select) widget.select();
             widget.addEventListener('blur', commit);
             widget.addEventListener('keydown', function(e) {
+                if (widget.type === 'date' && (e.key === 'Delete' || e.key === 'Backspace')) {
+                    if (widget.value) {
+                        e.preventDefault();
+                        widget.value = '';
+                        commit();
+                    }
+                    return;
+                }
                 if (e.key === 'Enter' && widget.tagName !== 'TEXTAREA') { e.preventDefault(); commit(); }
                 if (e.key === 'Escape') {
                     cell.classList.remove('sqr-editing');

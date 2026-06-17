@@ -332,34 +332,34 @@
                     <div class="rmf-card__header-title">Related Activity Logs</div>
                     <div class="rmf-card__header-sub">Actual hours recorded for this request</div>
                 </div>
-                <span class="rmf-status-badge ms-auto">{{ related_activity_summary.total_hours }} hrs</span>
+                <span class="rmf-status-badge ms-auto">{{ related_activity_summary.total_hours|floatformat:1 }} hrs</span>
             </div>
 
             <div class="px-3 pb-3">
                 <div class="row g-2 mb-3">
                     <div class="col-sm-4">
-                        <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                        <div class="request-activity-stat-card border rounded-3 p-3 h-100">
                             <div class="small text-muted text-uppercase">Entries</div>
                             <div class="fs-5 fw-semibold">{{ related_activity_summary.count }}</div>
                         </div>
                     </div>
                     <div class="col-sm-4">
-                        <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                        <div class="request-activity-stat-card border rounded-3 p-3 h-100">
                             <div class="small text-muted text-uppercase">Billable</div>
-                            <div class="fs-5 fw-semibold">{{ related_activity_summary.billable_hours }} hrs</div>
+                            <div class="fs-5 fw-semibold">{{ related_activity_summary.billable_hours|floatformat:1 }} hrs</div>
                         </div>
                     </div>
                     <div class="col-sm-4">
-                        <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                        <div class="request-activity-stat-card border rounded-3 p-3 h-100">
                             <div class="small text-muted text-uppercase">Non-billable</div>
-                            <div class="fs-5 fw-semibold">{{ related_activity_summary.non_billable_hours }} hrs</div>
+                            <div class="fs-5 fw-semibold">{{ related_activity_summary.non_billable_hours|floatformat:1 }} hrs</div>
                         </div>
                     </div>
                 </div>
 
                 {% if related_activity_logs %}
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
+                    <div class="table-responsive request-activity-table-wrap">
+                        <table class="table table-sm align-middle mb-0 request-activity-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -376,7 +376,7 @@
                                         <td>{{ activity_log.request_date|date:"M d, Y" }}</td>
                                         <td>{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}</td>
                                         <td>{{ activity_log.get_activity_type_display }}</td>
-                                        <td>{{ activity_log.actual_hours }}</td>
+                                        <td>{{ activity_log.actual_hours|floatformat:1 }}</td>
                                         <td>
                                             {% if activity_log.is_billable %}
                                                 <span class="badge text-bg-success">Billable</span>

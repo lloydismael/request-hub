@@ -34,4 +34,14 @@
         <p class="login-card__footer">Developed by ESG 2026</p>
     </div>
 </section>
+<script>
+    window.addEventListener('pageshow', function (event) {
+        var navEntries = (performance.getEntriesByType && performance.getEntriesByType('navigation')) || [];
+        var isBackForward = navEntries.length > 0 && navEntries[0].type === 'back_forward';
+
+        if (event.persisted || isBackForward) {
+            window.location.reload();
+        }
+    });
+</script>
 {% endblock %}
