@@ -19,6 +19,12 @@
                     {{ object.created_at|timezone:"Asia/Manila"|date:"M d, Y" }}
                 </span>
                 <span class="rmf-status-dot rmf-status-dot--{{ object.status }}">{{ object.get_status_display }}</span>
+                {% if linked_sqr %}
+                <a href="{% url 'hub:sqr' %}" class="rmf-meta-chip rmf-meta-chip--sqr text-decoration-none" title="Linked SQR: {{ linked_sqr.reference_code }}">
+                    <i class="bi bi-file-earmark-text"></i>
+                    SQR: {{ linked_sqr.reference_code }}
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -315,6 +321,79 @@
                     </button>
                 </div>
             </form>
+        </div>
+
+        <div class="rmf-card mt-4">
+            <div class="rmf-card__header">
+                <div class="rmf-card__header-icon">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <div>
+                    <div class="rmf-card__header-title">Related Activity Logs</div>
+                    <div class="rmf-card__header-sub">Actual hours recorded for this request</div>
+                </div>
+                <span class="rmf-status-badge ms-auto">{{ related_activity_summary.total_hours|floatformat:1 }} hrs</span>
+            </div>
+
+            <div class="px-3 pb-3">
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-4">
+                        <div class="request-activity-stat-card border rounded-3 p-3 h-100">
+                            <div class="small text-muted text-uppercase">Entries</div>
+                            <div class="fs-5 fw-semibold">{{ related_activity_summary.count }}</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="request-activity-stat-card border rounded-3 p-3 h-100">
+                            <div class="small text-muted text-uppercase">Billable</div>
+                            <div class="fs-5 fw-semibold">{{ related_activity_summary.billable_hours|floatformat:1 }} hrs</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="request-activity-stat-card border rounded-3 p-3 h-100">
+                            <div class="small text-muted text-uppercase">Non-billable</div>
+                            <div class="fs-5 fw-semibold">{{ related_activity_summary.non_billable_hours|floatformat:1 }} hrs</div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if related_activity_logs %}
+                    <div class="table-responsive request-activity-table-wrap">
+                        <table class="table table-sm align-middle mb-0 request-activity-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Engineer</th>
+                                    <th>Activity</th>
+                                    <th>Hours</th>
+                                    <th>Billing</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity_log in related_activity_logs %}
+                                    <tr>
+                                        <td>{{ activity_log.request_date|date:"M d, Y" }}</td>
+                                        <td>{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}</td>
+                                        <td>{{ activity_log.get_activity_type_display }}</td>
+                                        <td>{{ activity_log.actual_hours|floatformat:1 }}</td>
+                                        <td>
+                                            {% if activity_log.is_billable %}
+                                                <span class="badge text-bg-success">Billable</span>
+                                            {% else %}
+                                                <span class="badge text-bg-secondary">Not Billable</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ activity_log.details|default:"—" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-muted small">No activity logs are linked to this request yet.</div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>

@@ -29,7 +29,21 @@
                         </li>
                     </ul>
                 {% else %}
-                    <h2 class="h5 mb-0"><i class="bi {% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %}{% elif is_requestor_ui %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %} me-2"></i>{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    {% if is_pm_esg %}
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link {% if pm_esg_tab != 'assigned' and pm_esg_tab != 'my_requests' %}active{% endif %}" href="{{ pm_esg_tab_links.all }}"><i class="bi bi-grid-fill me-1"></i>All Requests</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if pm_esg_tab == 'assigned' %}active{% endif %}" href="{{ pm_esg_tab_links.assigned }}"><i class="bi bi-clipboard2-check-fill me-1"></i>Assigned Requests</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if pm_esg_tab == 'my_requests' %}active{% endif %}" href="{{ pm_esg_tab_links.my_requests }}"><i class="bi bi-person-lines-fill me-1"></i>My Requests</a>
+                            </li>
+                        </ul>
+                    {% else %}
+                        <h2 class="h5 mb-0"><i class="bi {% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %}{% elif is_requestor_ui %}bi-person-lines-fill{% else %}bi-inbox-fill{% endif %} me-2"></i>{% if is_pm_ess %}{% if pm_ess_request_tab == 'mine' %}My Requests{% else %}All Requests{% endif %}{% elif is_requestor_ui %}My Requests{% else %}All Requests{% endif %}</h2>
+                    {% endif %}
                 {% endif %}
                 {% if role == 'admin' %}
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
@@ -359,8 +373,18 @@
                                 </th>
                                 <th>
                                     <a href="{{ sort_links.engineer }}" class="table-sort-link{% if current_sort == 'engineer' %} table-sort-link--active{% endif %}">
-                                        Assigned Engineer
+                                        Assigned Person
                                         {% if current_sort == 'engineer' %}
+                                            <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
+                                        {% else %}
+                                            <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ sort_links.backup_engineer }}" class="table-sort-link{% if current_sort == 'backup_engineer' %} table-sort-link--active{% endif %}">
+                                        Backup
+                                        {% if current_sort == 'backup_engineer' %}
                                             <i class="bi {% if current_direction == 'asc' %}bi-caret-up-fill{% else %}bi-caret-down-fill{% endif %} ms-1"></i>
                                         {% else %}
                                             <i class="bi bi-arrow-down-up ms-1 text-muted opacity-50"></i>
@@ -373,7 +397,7 @@
                                 {% if is_pm_ess %}
                                     <th>Requestor</th>
                                 {% endif %}
-                                <th>Assigned Engineer</th>
+                                <th>Assigned Person</th>
                             {% endif %}
                             {% if not is_requestor_ui %}
                                 {% if role == 'admin' %}
@@ -475,7 +499,7 @@
                     </thead>
                     <tbody>
                         {% for item in requests %}
-                            <tr class="{% if not is_requestor_ui and item.is_overdue or not is_requestor_ui and item.sla_overrun or not is_requestor_ui and item.missed_sla %}table-danger{% endif %}">
+                            <tr class="{% if not is_requestor_ui and item.engagement_type != 'deployment' and item.is_overdue or not is_requestor_ui and item.engagement_type != 'deployment' and item.sla_overrun or not is_requestor_ui and item.engagement_type != 'deployment' and item.missed_sla %}table-danger{% endif %}" data-engineer-id="{{ item.engineer.pk|default:'' }}">
                                 {% if role == 'admin' %}
                                     <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
                                         <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
@@ -549,13 +573,13 @@
                                         {% if item.engineer %}
                                             {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
                                                 {% with first=item.engineer.first_name last=item.engineer.last_name %}
-                                                <div class="table-cell-nowrap">
+                                                <div class="table-cell-nowrap engineer-filter-cell" data-engineer-id="{{ item.engineer.pk }}" title="Click to highlight all requests for this engineer" style="cursor:pointer;">
                                                     {% if item.engineer.profile_photo %}
                                                         <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
                                                     {% else %}
                                                         <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
                                                     {% endif %}
-                                                        <span>
+                                                        <span class="engineer-filter-name">
                                                             {% if first or last %}
                                                                 {{ first|default_if_none:"" }}{% if last %} {{ last|default_if_none:"" }}{% endif %}
                                                             {% else %}
@@ -567,6 +591,22 @@
                                             {% endwith %}
                                         {% else %}
                                             <span class="text-muted text-nowrap">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-nowrap">
+                                        {% if item.backup_engineer %}
+                                            {% with be_name=item.backup_engineer.get_full_name|default:item.backup_engineer.username %}
+                                            <div class="table-cell-nowrap">
+                                                {% if item.backup_engineer.profile_photo %}
+                                                    <img src="{{ item.backup_engineer.profile_photo.url }}" alt="{{ be_name }}" class="table-avatar">
+                                                {% else %}
+                                                    <span class="table-avatar table-avatar--placeholder">{{ be_name|slice:":1"|upper }}</span>
+                                                {% endif %}
+                                                <span>{{ be_name }}</span>
+                                            </div>
+                                            {% endwith %}
+                                        {% else %}
+                                            <span class="text-muted text-nowrap">&ndash;</span>
                                         {% endif %}
                                     </td>
                                     {% elif role == 'engineer' %}
@@ -704,7 +744,7 @@
                                 </td>
                                 {% if not is_requestor_ui %}
                                     <td>
-                                        {% if item.engagement_type == 'deployment' %}
+                                        {% if item.engagement_type == 'deployment' or item.engagement_type == 'certification' %}
                                             <span class="text-muted">&mdash;</span>
                                         {% elif is_pm_ess %}
                                             {% if item.due_date %}
@@ -868,7 +908,7 @@
                                 {% endif %}
                             </div>
                         {% elif field.name == 'needed_by' %}
-                            <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' %} style="display:none;"{% endif %}>
+                            <div class="mb-3" data-request-date-group{% if form.engagement_type.value == 'deployment' or form.engagement_type.value == 'certification' %} style="display:none;"{% endif %}>
                                 <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
@@ -877,7 +917,7 @@
                                 {% endif %}
                             </div>
                         {% elif field.name == 'deployment_start' %}
-                            <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' %} style="display:none;"{% endif %}>
+                            <div class="mb-3" data-deployment-group{% if form.engagement_type.value != 'deployment' and form.engagement_type.value != 'certification' %} style="display:none;"{% endif %}>
                                 <label class="form-label" for="id_{{ field.name }}">Deployment Calendar</label>
                                 <div class="deployment-calendar" data-deployment-calendar>
                                     <div class="row g-3 align-items-end">
@@ -1170,7 +1210,7 @@
                 if (!engagementSelect) {
                     return;
                 }
-                const isDeployment = engagementSelect.value === "deployment";
+                const isDeployment = engagementSelect.value === "deployment" || engagementSelect.value === "certification";
                 if (requestDateGroup) {
                     requestDateGroup.style.display = isDeployment ? "none" : "";
                 }
@@ -1695,4 +1735,68 @@
         })();
     </script>
 {% endif %}
+
+<style>
+/* Engineer filter highlight */
+.engineer-filter-name { text-decoration: none !important; }
+.engineer-filter-cell:hover .engineer-filter-name { text-decoration: none !important; color: inherit; }
+.engineer-filter-cell:hover .table-avatar--placeholder {
+    background: #6366f1;
+    color: #fff;
+}
+/* Rows dimmed when a filter is active and they don't match */
+tbody.engineer-filter-active tr { opacity: 0.25; transition: opacity 0.15s ease; }
+tbody.engineer-filter-active tr.engineer-row--highlighted { opacity: 1; }
+tbody.engineer-filter-active tr.engineer-row--highlighted { box-shadow: inset 3px 0 0 #6366f1; background-color: rgba(99,102,241,0.10) !important; }
+body.dark-mode tbody.engineer-filter-active tr.engineer-row--highlighted { background-color: rgba(99,102,241,0.18) !important; box-shadow: inset 3px 0 0 #818cf8; }
+</style>
+
+<script>
+(function() {
+    var activeEngineerId = null;
+
+    document.addEventListener('click', function(e) {
+        var cell = e.target.closest('.engineer-filter-cell');
+        if (!cell) {
+            // Clicking outside the engineer cell clears the filter
+            if (activeEngineerId !== null) {
+                clearFilter();
+            }
+            return;
+        }
+        e.stopPropagation();
+        var eid = cell.dataset.engineerId;
+        if (activeEngineerId === eid) {
+            clearFilter();
+        } else {
+            applyFilter(eid);
+        }
+    });
+
+    function applyFilter(eid) {
+        activeEngineerId = eid;
+        var tbodies = document.querySelectorAll('tbody');
+        tbodies.forEach(function(tbody) {
+            tbody.classList.add('engineer-filter-active');
+            tbody.querySelectorAll('tr[data-engineer-id]').forEach(function(row) {
+                if (row.dataset.engineerId === eid) {
+                    row.classList.add('engineer-row--highlighted');
+                } else {
+                    row.classList.remove('engineer-row--highlighted');
+                }
+            });
+        });
+    }
+
+    function clearFilter() {
+        activeEngineerId = null;
+        document.querySelectorAll('tbody').forEach(function(tbody) {
+            tbody.classList.remove('engineer-filter-active');
+            tbody.querySelectorAll('tr').forEach(function(row) {
+                row.classList.remove('engineer-row--highlighted');
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}

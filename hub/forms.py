@@ -1,6 +1,5 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
 
 from django.utils import timezone
 
@@ -61,6 +60,15 @@ def _engineer_queryset(*extra_users):
     queryset = User.objects.filter(role__in=User.ASSIGNABLE_ENGINEER_ROLES)
     if extra_ids:
         queryset = User.objects.filter(Q(role__in=User.ASSIGNABLE_ENGINEER_ROLES) | Q(pk__in=extra_ids))
+    return queryset.order_by("first_name", "last_name").distinct()
+
+
+def _admin_engineer_queryset(*extra_users):
+    """Like _engineer_queryset but includes ON_HOLD engineers so admins can assign them."""
+    extra_ids = [user.pk for user in extra_users if user and getattr(user, "pk", None)]
+    queryset = User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES)
+    if extra_ids:
+        queryset = User.objects.filter(Q(role__in=User.ENGINEER_ACCESS_ROLES) | Q(pk__in=extra_ids))
     return queryset.order_by("first_name", "last_name").distinct()
 
 
@@ -154,9 +162,15 @@ class RequestForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
 
-    def __init__(self, *args, actor_role=None, **kwargs):
+    def __init__(self, *args, actor_role=None, actor_user=None, **kwargs):
         self.actor_role = actor_role
+        self.actor_user = actor_user
         super().__init__(*args, **kwargs)
+        # Allow admins and PM-ESG to bypass engineer capacity limits at the model-validation layer.
+        # Django's ModelForm._post_clean() calls instance.full_clean() during form.is_valid(),
+        # so the flag must be set here — before that validation runs.
+        if actor_role in {User.Roles.ADMIN, User.Roles.PM_ESG}:
+            self.instance._allow_capacity_override = True
         self.project_manager_ids = set()
         include_backup = actor_role in User.ENGINEER_ACCESS_ROLES
         if not include_backup:
@@ -177,15 +191,17 @@ class RequestForm(forms.ModelForm):
         self.order_fields(desired_order)
         current_engineer = getattr(self.instance, "engineer", None)
         current_backup_engineer = getattr(self.instance, "backup_engineer", None)
-        engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
-        project_manager_qs = User.objects.filter(
-            (Q(first_name__icontains="Jeram") & Q(last_name__icontains="Zamora"))
-            | (Q(first_name__icontains="Marfelie") & Q(last_name__icontains="Barcenas"))
-            | (Q(first_name__icontains="Princess") & Q(last_name__icontains="Nacianceno"))
-        ).order_by("first_name", "last_name")
+        if actor_role in {User.Roles.ADMIN, User.Roles.PM_ESG}:
+            engineer_qs = _admin_engineer_queryset(current_engineer, current_backup_engineer)
+        else:
+            engineer_qs = _engineer_queryset(current_engineer, current_backup_engineer)
+        project_manager_qs = User.objects.filter(role=User.Roles.PM_ESG, is_active=True)
+        if actor_user and actor_user.pk:
+            project_manager_qs = project_manager_qs.exclude(pk=actor_user.pk)
+        project_manager_qs = project_manager_qs.order_by("first_name", "last_name")
         self.project_manager_ids = set(project_manager_qs.values_list("id", flat=True))
 
-        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}
+        requestor_roles = {User.Roles.REQUESTOR, User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS, User.Roles.PM_ESG, User.Roles.ADMIN}
         is_requestor_form = actor_role in requestor_roles
         all_assignee_ids = set(engineer_qs.values_list("id", flat=True)) | self.project_manager_ids
         assignee_qs = (
@@ -263,6 +279,7 @@ class RequestForm(forms.ModelForm):
         due_field.widget.attrs.pop("min", None)
 
         engagement_field = self.fields["engagement_type"]
+        # PM-ESS and REQUESTOR_ESS cannot see Support
         if actor_role in {User.Roles.REQUESTOR_ESS, User.Roles.PM_ESS}:
             filtered_choices = [
                 choice
@@ -272,10 +289,22 @@ class RequestForm(forms.ModelForm):
             if self.instance.pk and self.instance.engagement_type == Request.Engagement.SUPPORT:
                 filtered_choices.append((Request.Engagement.SUPPORT, Request.Engagement.SUPPORT.label))
             engagement_field.choices = filtered_choices
+        # Non-PM roles (Requestor, Engineers, PM-ESS) cannot see Certification — only PM-ESS and PM-ESG can
+        _PM_ROLES = {User.Roles.PM_ESS, User.Roles.PM_ESG, User.Roles.ADMIN}
+        if actor_role not in _PM_ROLES:
+            filtered_choices = [
+                choice
+                for choice in engagement_field.choices
+                if choice[0] != Request.Engagement.CERTIFICATION
+            ]
+            if self.instance.pk and self.instance.engagement_type == Request.Engagement.CERTIFICATION:
+                filtered_choices.append((Request.Engagement.CERTIFICATION, Request.Engagement.CERTIFICATION.label))
+            engagement_field.choices = filtered_choices
 
+        _DEPLOYMENT_LIKE = {Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION}
         deployment_start_field = self.fields["deployment_start"]
         deployment_end_field = self.fields["deployment_end"]
-        if self.instance.pk and self.instance.engagement_type == Request.Engagement.DEPLOYMENT:
+        if self.instance.pk and self.instance.engagement_type in _DEPLOYMENT_LIKE:
             deployment_start_field.initial = self.instance.start_date
             deployment_end_field.initial = self.instance.due_date or self.instance.start_date
         elif not self.is_bound:
@@ -299,36 +328,6 @@ class RequestForm(forms.ModelForm):
                     class_list = existing_classes.split()
                     if "is-invalid" not in class_list:
                         widget.attrs["class"] = (existing_classes + " is-invalid").strip()
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        # Enforce per-engineer ongoing capacity rules during turn-over by engineers.
-        # If the target engineer already carries a deployment, they are capped at 3 ongoing requests.
-        # Otherwise they can handle up to 5 ongoing requests (even when receiving the first deployment).
-        if self.actor_role in User.ENGINEER_ACCESS_ROLES:
-            new_engineer = cleaned_data.get("engineer")
-            if new_engineer and new_engineer != self.instance.engineer:
-                ongoing_qs = Request.objects.filter(engineer=new_engineer, status=Request.Status.ONGOING)
-                if self.instance.pk:
-                    ongoing_qs = ongoing_qs.exclude(pk=self.instance.pk)
-
-                has_deployment = ongoing_qs.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
-                capacity = 3 if has_deployment else 5
-                current_load = ongoing_qs.count()
-
-                if current_load >= capacity:
-                    name = new_engineer.get_full_name() or new_engineer.username or "Engineer"
-                    if has_deployment:
-                        msg = (
-                            f"{name} is at the deployment limit (max 3 ongoing while a deployment is active). "
-                            "Choose another engineer or wait until a deployment is completed."
-                        )
-                    else:
-                        msg = f"{name} already has {current_load} ongoing requests (limit {capacity}). Choose another engineer."
-                    self.add_error("engineer", msg)
-
-        return cleaned_data
 
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
@@ -378,6 +377,10 @@ class RequestForm(forms.ModelForm):
         engagement = self.cleaned_data.get("engagement_type") or getattr(self.instance, "engagement_type", None)
         if engagement == Request.Engagement.PROJECT_MANAGEMENT and engineer.pk not in self.project_manager_ids:
             raise forms.ValidationError("Select a preferred project manager from the approved list.")
+
+        # Admins and PM-ESG can override engineer capacity limits
+        if self.actor_role in {User.Roles.ADMIN, User.Roles.PM_ESG}:
+            return engineer
 
         ongoing_requests = Request.objects.filter(
             engineer=engineer,
@@ -451,12 +454,13 @@ class RequestAdminForm(forms.ModelForm):
         queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
+        label="Assigned Person",
     )
     backup_engineer = forms.ModelChoiceField(
         queryset=User.objects.none(),
         required=False,
         widget=AvatarSelect(attrs={"class": "form-select", "data-avatar-select": "true"}),
-        label="Backup Engineer",
+        label="Backup",
         empty_label="Select backup engineer (optional)",
     )
 
@@ -495,14 +499,14 @@ class RequestAdminForm(forms.ModelForm):
         if isinstance(req_widget, AvatarSelect):
             req_widget.avatar_mapping = _build_avatar_mapping(self.fields["requestor"].queryset)
         self.fields["requestor"].label_from_instance = _user_display
-        self.fields["engineer"].queryset = _engineer_queryset(getattr(self.instance, "engineer", None))
+        self.fields["engineer"].queryset = _admin_engineer_queryset(getattr(self.instance, "engineer", None))
         widget = self.fields["engineer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(self.fields["engineer"].queryset)
         self.fields["engineer"].label_from_instance = _user_display
         
         # Setup backup engineer field
-        self.fields["backup_engineer"].queryset = _engineer_queryset(getattr(self.instance, "backup_engineer", None))
+        self.fields["backup_engineer"].queryset = _admin_engineer_queryset(getattr(self.instance, "backup_engineer", None))
         backup_widget = self.fields["backup_engineer"].widget
         if isinstance(backup_widget, AvatarSelect):
             backup_widget.avatar_mapping = _build_avatar_mapping(self.fields["backup_engineer"].queryset)
@@ -519,26 +523,116 @@ class RequestAdminForm(forms.ModelForm):
 
 class SqrSubmissionForm(forms.ModelForm):
     GROUP_CHOICES = (
+        ("", "— Select Department —"),
         ("ESS", "ESS"),
-        ("HPE", "HPE"),
+        ("HP", "HP"),
         ("Dell", "Dell"),
-        ("ETC", "ETC"),
+        ("ENS", "ENS"),
+        ("ESG", "ESG"),
+        ("Other", "Other"),
     )
 
+    MEMBERS_BY_GROUP = {
+        "ESS": [
+            "Aileen B. Gutierrez",
+            "Leonarda G. Lucena",
+            "Kristel Camill V. Roldan",
+            "Mica Ella R. Labindao",
+            "Anabelle D. Alapide",
+            "Jimlyn Espinosa",
+        ],
+        "HP": [
+            "Ann Irma Tablada",
+            "May V. Andres-Duro",
+            "Aileen S. Felarca",
+            "Genalyn T. Bonto",
+            "Brian A. Delos Santos",
+            "Beverly Edang - Villamor",
+            "Mindy Anne S. Dapon",
+            "Kevin Pangalangan",
+            "Jacqueline Olesco - Tatel",
+            "Lorenz Gabriel M. Dasma\u00f1as",
+        ],
+        "Dell": [
+            "Roberto D. Quiambao Jr.",
+            "Rafael D. Raposas",
+            "Dinalyn D. Llanera",
+            "Ednalyn N. Malang",
+            "Queen Deniece Vergara",
+            "Jennylyn S. Billones",
+            "Ace U. Carlos",
+            "Andrea Marie S. Garcia",
+            "Ruffy P. Umayam",
+            "Lendy Gladys Fabula \u2013 Ogana",
+            "Ronstadt Joyce R. Corpuz",
+            "Mark Ni\u00f1o B. Huberit",
+            "Jelson G. Cabero",
+            "Bjay T. Jacinto",
+            "Ma. Victoria H. Ronquillo",
+        ],
+        "ENS": [
+            "Debbie S. Eusebio",
+            "Christian F. Lamando",
+            "Jhoanna Marie Quijano",
+        ],
+        "ESG": [],
+        "Other": [],
+    }
+
+    APPROVER_BY_GROUP = {
+        "ESS": "Marfelie Barcenas",
+        "HP": "Princess Nicole Nacianceno",
+        "Dell": "Jeram Zamora",
+        "ENS": "Jeram Zamora",
+        "ESG": "Jeram Zamora",
+        "Other": "Jeram Zamora",
+    }
+
+    SSE_MANHRS_SCOPES = frozenset([
+        "Training",
+        "Support",
+        "Implementation",
+        "Implementation and Project Management",
+        "Demonstration",
+        "Other",
+    ])
+    HIDE_SSE_MANHRS_SCOPES = frozenset([
+        "Project Management",
+        "Managed Support and Maintenance Service",
+        "Managed Support and Service",
+    ])
+
     SCOPE_CHOICES = (
+        ("", "— Select Scope —"),
         ("Training", "Training"),
         ("Support", "Support"),
-        ("Project Implementation", "Project Implementation"),
+        ("Implementation", "Implementation"),
         ("Project Management", "Project Management"),
-        ("Project Implementation and Management", "Project Implementation and Management"),
+        ("Implementation and Project Management", "Implementation and Project Management"),
         ("Demonstration", "Demonstration"),
-        ("Technical Support Maintenance", "Technical Support Maintenance"),
+        ("Managed Support and Maintenance Service", "Managed Support and Maintenance Service"),
+        ("Other", "Other"),
     )
 
     customer_company = forms.ChoiceField(
         choices=GROUP_CHOICES,
         widget=forms.Select(attrs={"class": "form-select"}),
-        label="Group Name",
+        label="Department",
+    )
+
+    linked_request = forms.ModelChoiceField(
+        queryset=Request.objects.select_related("account").only("id", "reference_code", "account__name").order_by("-id"),
+        required=True,
+        empty_label="— Select Request ID —",
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Request ID",
+    )
+
+    customer_contact = forms.ChoiceField(
+        choices=[("", "— Select Member —")],
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Account Manager",
+        required=False,
     )
 
     project_details = forms.ChoiceField(
@@ -557,80 +651,274 @@ class SqrSubmissionForm(forms.ModelForm):
     class Meta:
         model = SqrSubmission
         fields = [
-            "customer_name",
+            "linked_request",
             "customer_company",
             "customer_contact",
             "pm_esg_reviewer",
+            "customer_name",
             "project_title",
             "project_details",
             "sse_manhrs",
-            "documentation_links",
-            "remarks",
+            "sqr_folder_link",
         ]
         labels = {
             "customer_name": "Account Name",
-            "customer_company": "Group Name",
+            "customer_company": "Department",
             "customer_contact": "Account Manager",
             "project_title": "Service Description",
             "project_details": "Scope of Services",
             "sse_manhrs": "SSE Manhrs",
-            "documentation_links": "SQR Doc. Ref. Link",
-            "remarks": "Remarks",
+            "sqr_folder_link": "SQR Folder Link",
         }
         widgets = {
-            "customer_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account name"}),
-            "customer_contact": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter account manager"}),
-            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter service description"}),
-            "sse_manhrs": forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "0.25", "placeholder": "0.00"}),
-            "documentation_links": forms.Textarea(
-                attrs={
-                    "class": "form-control",
-                    "rows": 2,
-                    "placeholder": "https://example.com/sqr-reference",
-                }
-            ),
-            "remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Additional notes"}),
+            "customer_name": forms.TextInput(attrs={
+                "class": "form-control",
+                "placeholder": "Select or type account name",
+                "list": "sqr-account-name-options",
+                "autocomplete": "off",
+            }),
+            "project_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter project / engagement name"}),
+            "sse_manhrs": forms.NumberInput(attrs={
+                "class": "form-control",
+                "min": "0",
+                "step": "1",
+                "placeholder": "0",
+                "data-sse-manhrs": "true",
+            }),
+            "sqr_folder_link": forms.URLInput(attrs={
+                "class": "form-control",
+                "placeholder": "https://example.com/sqr-folder",
+            }),
         }
 
     def __init__(self, *args, **kwargs):
+        import json
         super().__init__(*args, **kwargs)
+        self.account_name_options = list(
+            Account.objects.order_by("name").values_list("name", flat=True).distinct()
+        )
+        required_fields = ("linked_request", "pm_esg_reviewer", "sqr_folder_link")
+        for field_name in required_fields:
+            self.fields[field_name].required = True
+            self.fields[field_name].widget.attrs["required"] = "required"
+            self.fields[field_name].widget.attrs["aria-required"] = "true"
+        self.fields["linked_request"].error_messages["required"] = "Request ID is required."
+        self.fields["pm_esg_reviewer"].error_messages["required"] = "Approver Name is required."
+        self.fields["sqr_folder_link"].error_messages["required"] = "SQR Folder Link is required."
+        # Include account name in the Request ID dropdown label to help identify requests
+        self.fields["linked_request"].label_from_instance = (
+            lambda obj: (
+                f"{obj.reference_code} \u2013 {obj.account.name}"
+                if obj.reference_code and getattr(obj, 'account', None) and obj.account.name
+                else obj.reference_code or f"Request #{obj.pk}"
+            )
+        )
         reviewer_qs = self.fields["pm_esg_reviewer"].queryset
         self.fields["pm_esg_reviewer"].label_from_instance = _user_display
         widget = self.fields["pm_esg_reviewer"].widget
         if isinstance(widget, AvatarSelect):
             widget.avatar_mapping = _build_avatar_mapping(reviewer_qs)
         self.fields["project_title"].help_text = "Project Name / Engagement Name"
-        self.fields["documentation_links"].help_text = "Provide the SQR document reference link."
 
-        # Preserve editability of historical values created before dropdown enforcement.
+        # Build approver user-ID map: group → pk of matching PM user
+        approver_id_by_group = {}
+        for group, approver_name in self.APPROVER_BY_GROUP.items():
+            name_parts = approver_name.lower().split()
+            for user in reviewer_qs:
+                full = user.get_full_name().lower()
+                if all(p in full for p in name_parts):
+                    approver_id_by_group[group] = str(user.pk)
+                    break
+
+        request_account_map = {
+            str(req.pk): req.account.name
+            for req in self.fields["linked_request"].queryset
+            if getattr(req, "account", None) and req.account.name
+        }
+
+        # Attach JSON maps to the department widget for JS consumption
+        self.fields["customer_company"].widget.attrs["data-member-map"] = json.dumps(self.MEMBERS_BY_GROUP)
+        self.fields["customer_company"].widget.attrs["data-approver-map"] = json.dumps(approver_id_by_group)
+        self.fields["customer_company"].widget.attrs["data-sse-scopes"] = json.dumps(sorted(self.SSE_MANHRS_SCOPES))
+        self.fields["linked_request"].widget.attrs["data-account-map"] = json.dumps(request_account_map)
+
+        # Populate member choices: all members + preserve any historical free-text value
+        all_contacts = [("", "— Select Member —")]
+        seen = set()
+        for members in self.MEMBERS_BY_GROUP.values():
+            for m in members:
+                if m not in seen:
+                    all_contacts.append((m, m))
+                    seen.add(m)
+        current_contact = (getattr(self.instance, "customer_contact", "") or "") if self.instance else ""
+        if current_contact and current_contact not in seen:
+            all_contacts.append((current_contact, current_contact))
+        self.fields["customer_contact"].choices = all_contacts
+
+        # Preserve editability of historical values created before dropdown enforcement
         for field_name in ("customer_company", "project_details"):
             current_value = getattr(self.instance, field_name, "") if self.instance else ""
             if current_value and current_value not in dict(self.fields[field_name].choices):
                 self.fields[field_name].choices = tuple(self.fields[field_name].choices) + ((current_value, current_value),)
 
-    def clean_documentation_links(self):
-        raw = (self.cleaned_data.get("documentation_links") or "").strip()
-        if not raw:
-            raise forms.ValidationError("Provide at least one documentation link.")
+    def clean_linked_request(self):
+        value = self.cleaned_data.get("linked_request")
+        if not value:
+            raise forms.ValidationError("Request ID is required.")
+        return value
 
-        validator = URLValidator(schemes=["http", "https"])
-        cleaned_links = []
-        seen = set()
-        for line in raw.splitlines():
-            link = line.strip()
-            if not link:
-                continue
-            try:
-                validator(link)
-            except ValidationError:
-                raise forms.ValidationError(f"Invalid URL: {link}")
-            if link not in seen:
-                seen.add(link)
-                cleaned_links.append(link)
+    def clean_pm_esg_reviewer(self):
+        value = self.cleaned_data.get("pm_esg_reviewer")
+        if not value:
+            raise forms.ValidationError("Approver Name is required.")
+        return value
 
-        if not cleaned_links:
-            raise forms.ValidationError("Provide at least one valid documentation link.")
-        return "\n".join(cleaned_links)
+    def clean_sqr_folder_link(self):
+        value = (self.cleaned_data.get("sqr_folder_link") or "").strip()
+        if not value:
+            raise forms.ValidationError("SQR Folder Link is required.")
+        return value
+
+    @staticmethod
+    def _normalize_scope(scope):
+        return " ".join((scope or "").split()).casefold()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        scope = cleaned_data.get("project_details") or ""
+        normalized_scope = self._normalize_scope(scope)
+        sse_scopes = {self._normalize_scope(item) for item in self.SSE_MANHRS_SCOPES}
+        hidden_sse_scopes = {self._normalize_scope(item) for item in self.HIDE_SSE_MANHRS_SCOPES}
+        if normalized_scope in hidden_sse_scopes or normalized_scope not in sse_scopes:
+            cleaned_data["sse_manhrs"] = None
+        return cleaned_data
+
+
+class SqrImportForm(forms.Form):
+    import_file = forms.FileField(
+        label="Import File",
+        help_text="Upload an .xlsx file based on the current SQR Export Excel template.",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "class": "form-control",
+                "accept": ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }
+        ),
+    )
+
+    def clean_import_file(self):
+        uploaded_file = self.cleaned_data.get("import_file")
+        if not uploaded_file:
+            raise ValidationError("Please choose an Excel (.xlsx) file to import.")
+        if not str(uploaded_file.name or "").lower().endswith(".xlsx"):
+            raise ValidationError("Only Excel (.xlsx) files are supported.")
+        return uploaded_file
+
+
+class SqrTrackerEditForm(forms.ModelForm):
+    """Edit form for PM / Admin — columns N, Q, T, W, X, AA–AP."""
+
+    pm_manhrs = forms.IntegerField(
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={
+            "class": "form-control",
+            "min": "0",
+            "step": "1",
+            "list": "pm-manhrs-datalist",
+            "placeholder": "e.g. 8, 16, 24, 32, 48",
+        }),
+        label="PM Man-hrs (N)",
+    )
+
+    discount_rate = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=100,
+        initial=0,
+        widget=forms.NumberInput(attrs={
+            "class": "form-control",
+            "min": "0",
+            "max": "100",
+            "step": "1",
+            "list": "discount-rate-datalist",
+            "placeholder": "0",
+        }),
+        label="Discount Rate % (Q)",
+    )
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "pm_manhrs",
+            "discount_rate",
+            "status",
+            "proposal_status",
+            "po_pnl_date",
+            "delivery_start_date",
+            "overall_status",
+            "delivery_health",
+            "delivery_progress",
+            "key_updates_risks",
+            "delivery_target_finish_date",
+            "delivery_actual_finish_date",
+            "delivery_completion_signed_date",
+            "warranty_end_date",
+            "revenue_source",
+            "revenue_reference_no",
+            "revenue_remarks",
+            "revenue_declaration",
+        ]
+        labels = {
+            "status": "SQR Status (T)",
+            "proposal_status": "Proposal Status (W)",
+            "po_pnl_date": "PO / PNL Date (X)",
+            "delivery_start_date": "Start Date (AA)",
+            "overall_status": "Overall Status (AB)",
+            "delivery_health": "Health Status (AC)",
+            "delivery_progress": "Overall Progress % (AD)",
+            "key_updates_risks": "Key Updates / Risks / Issues (AE)",
+            "delivery_target_finish_date": "Target Finish Date (AF)",
+            "delivery_actual_finish_date": "Actual Finish Date (AG)",
+            "delivery_completion_signed_date": "Completion Signed Date (AH)",
+            "warranty_end_date": "Warranty End Date (AI)",
+            "revenue_source": "Source (AM)",
+            "revenue_reference_no": "Reference No. (AN)",
+            "revenue_remarks": "Remarks (AP)",
+            "revenue_declaration": "Revenue Declaration (AQ)",
+        }
+        widgets = {
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "proposal_status": forms.Select(attrs={"class": "form-select"}),
+            "po_pnl_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "delivery_start_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "overall_status": forms.Select(attrs={"class": "form-select"}),
+            "delivery_health": forms.Select(attrs={"class": "form-select"}),
+            "delivery_progress": forms.NumberInput(attrs={
+                "class": "form-control", "min": "0", "max": "100", "step": "1", "placeholder": "0–100",
+            }),
+            "key_updates_risks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Updates, risks, issues…"}),
+            "delivery_target_finish_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "delivery_actual_finish_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "delivery_completion_signed_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "warranty_end_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "Revenue source"}),
+            "revenue_reference_no": forms.TextInput(attrs={"class": "form-control", "placeholder": "Reference number"}),
+            "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Revenue remarks…"}),
+            "revenue_declaration": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add empty leading option to optional choice fields
+        for fname in ("proposal_status", "overall_status", "delivery_health", "revenue_declaration"):
+            if fname in self.fields:
+                current = list(self.fields[fname].choices)
+                if not current or current[0][0] != "":
+                    self.fields[fname].choices = [("", "— Select —")] + current
+        # Set default discount_rate to 0 when displaying unbound form
+        if not self.is_bound:
+            self.initial.setdefault("discount_rate", 0)
 
 
 class SqrReviewForm(forms.ModelForm):
@@ -638,9 +926,14 @@ class SqrReviewForm(forms.ModelForm):
         self.reviewer_role = kwargs.pop("reviewer_role", "")
         super().__init__(*args, **kwargs)
         self.fields["status"].choices = [
+            ("", "— Select Status —"),
             (SqrSubmission.Status.FOR_REVISION, SqrSubmission.Status.FOR_REVISION.label),
             (SqrSubmission.Status.APPROVED, SqrSubmission.Status.APPROVED.label),
         ]
+
+        # Always start blank — user must actively choose a status
+        if not self.is_bound:
+            self.initial["status"] = ""
 
         selected_status = ""
         if self.is_bound:
@@ -729,6 +1022,194 @@ class SqrRevenueOrderForm(forms.ModelForm):
         if not value:
             raise forms.ValidationError("Attach the purchase order link to move this to Revenue stage.")
         return value
+
+
+class SqrProposalStatusForm(forms.ModelForm):
+    """PM fills this to set pricing breakdown, manhours, and deal/proposal status."""
+
+    # Override so any integer 0-100 is accepted (not restricted to model choices)
+    discount_rate = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=100,
+        initial=0,
+        widget=forms.NumberInput(
+            attrs={"class": "form-control", "min": "0", "max": "100", "step": "1", "placeholder": "0"}
+        ),
+    )
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "sse_manhrs",
+            "sse_amount",
+            "pm_manhrs",
+            "pm_amount",
+            "managed_support_amount",
+            "discount_rate",
+            "quotation_total_price",
+            "validity_due_date",
+            "proposal_status",
+        ]
+        labels = {
+            "sse_manhrs": "SSE Manhours",
+            "sse_amount": "SSE Amount (PHP)",
+            "pm_manhrs": "PM Manhours",
+            "pm_amount": "PM Amount (PHP)",
+            "managed_support_amount": "Managed Support Service Amount (PHP)",
+            "discount_rate": "Discount Rate",
+            "quotation_total_price": "Total Price (PHP)",
+            "validity_due_date": "Validity Due Date",
+            "proposal_status": "Proposal Status",
+        }
+        widgets = {
+            "sse_manhrs": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
+            ),
+            "sse_amount": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
+            ),
+            "pm_manhrs": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
+            ),
+            "pm_amount": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
+            ),
+            "managed_support_amount": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
+            ),
+            "quotation_total_price": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "step": "1", "placeholder": "0"}
+            ),
+            "validity_due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "proposal_status": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for f in self.fields.values():
+            f.required = False
+        self.fields["proposal_status"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.ProposalStatus.choices
+        )
+
+
+class SqrDeliveryForm(forms.ModelForm):
+    """PM fills this to track service delivery once a deal is Closed Won."""
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "po_pnl_date",
+            "assigned_pm",
+            "assigned_sse",
+            "delivery_start_date",
+            "overall_status",
+            "delivery_health",
+            "delivery_progress",
+            "key_updates_risks",
+            "delivery_target_finish_date",
+            "delivery_actual_finish_date",
+            "delivery_completion_signed_date",
+            "warranty_end_date",
+            "managed_support_start_date",
+            "managed_support_end_date",
+        ]
+        labels = {
+            "po_pnl_date": "PO / PNL Date",
+            "assigned_pm": "Assigned PM",
+            "assigned_sse": "Assigned SSE",
+            "delivery_start_date": "Start Date (Execution)",
+            "overall_status": "Overall Status",
+            "delivery_health": "Health Status",
+            "delivery_progress": "Overall Progress (%)",
+            "key_updates_risks": "Key Updates / Risks / Issues",
+            "delivery_target_finish_date": "Target Finish Date (Execution)",
+            "delivery_actual_finish_date": "Actual Finish Date (Execution)",
+            "delivery_completion_signed_date": "Completion Signed Date",
+            "warranty_end_date": "Post-service Warranty End Date",
+            "managed_support_start_date": "Managed Support Start Date",
+            "managed_support_end_date": "Managed Support End Date",
+        }
+        widgets = {
+            "po_pnl_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "assigned_pm": forms.Select(attrs={"class": "form-select"}),
+            "assigned_sse": forms.Select(attrs={"class": "form-select"}),
+            "delivery_start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "overall_status": forms.Select(attrs={"class": "form-select"}),
+            "delivery_health": forms.Select(attrs={"class": "form-select"}),
+            "delivery_progress": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "max": "100", "placeholder": "0\u2013100"}
+            ),
+            "key_updates_risks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
+            "delivery_target_finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "delivery_actual_finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "delivery_completion_signed_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "warranty_end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "managed_support_start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "managed_support_end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["overall_status"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.OverallStatus.choices
+        )
+        self.fields["delivery_health"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.DeliveryHealth.choices
+        )
+        self.fields["assigned_pm"].queryset = User.objects.filter(role="pm_esg").order_by("first_name", "last_name")
+        self.fields["assigned_sse"].queryset = User.objects.filter(role__in=["engineer", "on_hold"]).order_by("first_name", "last_name")
+        for f in self.fields.values():
+            f.required = False
+
+    def clean_delivery_progress(self):
+        value = self.cleaned_data.get("delivery_progress")
+        if value is not None and not (0 <= value <= 100):
+            raise forms.ValidationError("Progress must be between 0 and 100.")
+        return value
+
+
+class SqrRevenueForm(forms.ModelForm):
+    """PM fills this to record revenue recognition details."""
+
+    class Meta:
+        model = SqrSubmission
+        fields = [
+            "revenue_date",
+            "revenue_source",
+            "revenue_reference_no",
+            "revenue_status",
+            "revenue_remarks",
+            "revenue_declaration",
+        ]
+        labels = {
+            "revenue_date": "SI / Revenue Date",
+            "revenue_source": "Source",
+            "revenue_reference_no": "Reference No.",
+            "revenue_status": "Revenue Status",
+            "revenue_remarks": "Remarks",
+            "revenue_declaration": "Revenue Declaration",
+        }
+        widgets = {
+            "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. Invoiced"}),
+            "revenue_reference_no": forms.TextInput(attrs={"class": "form-control"}),
+            "revenue_status": forms.Select(attrs={"class": "form-select"}),
+            "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
+            "revenue_declaration": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["revenue_status"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.RevenueStatus.choices
+        )
+        self.fields["revenue_declaration"].choices = [("", "\u2014 Not set \u2014")] + list(
+            SqrSubmission.RevenueDeclaration.choices
+        )
+        for f in self.fields.values():
+            f.required = False
 
 
 class RequestStatusForm(forms.ModelForm):

@@ -10,7 +10,7 @@
                 {% csrf_token %}
                 <div class="d-flex gap-2">
                     <button class="btn btn-danger" type="submit">Delete</button>
-                    <a class="btn btn-outline-secondary" href="{% url 'hub:request-detail' object.pk %}">Cancel</a>
+                    <a class="btn btn-outline-secondary" href="{% url 'hub:request-manage-collab' object.pk %}">Cancel</a>
                 </div>
             </form>
         </div>

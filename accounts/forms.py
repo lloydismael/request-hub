@@ -60,21 +60,46 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "phone_number", "profile_photo", "banner_gradient"]
+        fields = ["first_name", "last_name", "email", "phone_number", "department", "profile_photo", "banner_gradient"]
         widgets = {
             "first_name": forms.TextInput(attrs={"class": "form-control"}),
             "last_name": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
             "phone_number": forms.TextInput(attrs={"class": "form-control"}),
+            "department": forms.Select(choices=[
+                ("", "— Select department —"),
+                ("ESS", "ESS"),
+                ("HP", "HP"),
+                ("Dell", "Dell"),
+                ("ENS", "ENS"),
+                ("ESG", "ESG"),
+                ("Other", "Other"),
+            ], attrs={"class": "form-select"}),
             "profile_photo": forms.FileInput(attrs={"class": "form-control"}),
             "banner_gradient": forms.HiddenInput(),
         }
+
+    def __init__(self, *args, is_admin=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not is_admin:
+            dept_widget = self.fields["department"].widget
+            dept_widget.attrs["disabled"] = True
+            dept_widget.attrs["title"] = "Only administrators can edit this field"
+            self.fields["department"].required = False
+
+    def clean_department(self):
+        # Non-admin: keep existing value (disabled fields are not submitted)
+        submitted = self.data.get("department")
+        if submitted is None and self.instance and self.instance.pk:
+            return self.instance.department
+        return self.cleaned_data.get("department", "")
 
     field_order = [
         "first_name",
         "last_name",
         "email",
         "phone_number",
+        "department",
         "profile_photo",
         "banner_gradient",
         "current_password",
@@ -192,22 +217,33 @@ class UserManagementForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "email", "role"]
+        fields = ["username", "first_name", "last_name", "email", "department", "role"]
         widgets = {
             "username": forms.TextInput(attrs={"class": "form-control", "placeholder": "Username"}),
             "first_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "First name"}),
             "last_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Last name"}),
             "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "name@example.com"}),
+            "department": forms.Select(choices=[
+                ("", "— Select department —"),
+                ("ESS", "ESS"),
+                ("HP", "HP"),
+                ("Dell", "Dell"),
+                ("ENS", "ENS"),
+                ("ESG", "ESG"),
+                ("Other", "Other"),
+            ], attrs={"class": "form-select"}),
         }
         labels = {
             "role": "Account Type",
+            "department": "Department",
         }
 
     field_order = [
-        "username",
         "first_name",
         "last_name",
+        "username",
         "email",
+        "department",
         "role",
         "password1",
         "password2",

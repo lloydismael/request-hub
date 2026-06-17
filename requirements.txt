@@ -7,3 +7,4 @@ requests>=2.32.0,<3
 python-dotenv==1.0.1
 gunicorn>=23.0.0,<24
 whitenoise==6.7.0
+openpyxl>=3.1,<4

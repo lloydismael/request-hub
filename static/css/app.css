@@ -453,6 +453,28 @@ body:not(.dark-mode) .btn-outline-info:hover {
     border-bottom-color: rgba(15, 23, 42, 0.08);
 }
 
+/* Ensure table text is readable inside glass cards in light mode.
+   Bootstrap resolves --bs-table-color → --bs-body-color, but the body
+   unconditionally sets color: #e2e8f0 (light grey for the dark bg),
+   causing near-invisible text on the frosted-white glass card.
+   The table rule uses a 3-level var() fallback chain, so we target
+   the cells directly with !important to cut through it. */
+body:not(.dark-mode) .glass-card .table {
+    color: #111827;
+    --bs-table-color: #111827;
+}
+/* Target td/th inside tbody only so thead.table-dark keeps white text */
+body:not(.dark-mode) .glass-card .table > tbody > tr > td,
+body:not(.dark-mode) .glass-card .table > tbody > tr > th {
+    color: #111827 !important;
+}
+body:not(.dark-mode) .glass-card .table .text-muted {
+    color: #6c757d !important;
+}
+body:not(.dark-mode) .glass-card .table .text-secondary {
+    color: #6c757d !important;
+}
+
 .request-id-cell {
     font-weight: 600;
     white-space: nowrap;
@@ -638,15 +660,12 @@ body.dark-mode .bg-primary-subtle.text-primary {
 .glass-card,
 .activity-summary-card {
     transition:
-        transform         var(--spring-dur) var(--spring),
         box-shadow        var(--spring-dur) var(--spring),
-        z-index           0s,
         background-color  0.25s ease,
         border-color      0.25s ease;
 }
 .glass-card:hover,
 .activity-summary-card:hover {
-    transform: translateY(-4px) scale(1.005);
     box-shadow: 0 20px 48px rgba(15, 23, 42, 0.28);
     position: relative;
     z-index: 10;
@@ -2379,6 +2398,11 @@ body.dark-mode .requestor-modal__header {
     border-bottom-color: rgba(148, 163, 184, 0.2);
 }
 
+body.dark-mode .requestor-modal__header h2,
+body.dark-mode .requestor-modal__header .h5 {
+    color: #f1f5f9;
+}
+
 body.dark-mode .requestor-modal__body .form-label,
 body.dark-mode .requestor-modal__body .form-text,
 body.dark-mode .requestor-modal__body .text-muted {
@@ -3411,6 +3435,7 @@ body.theme-switching *::after {
 }
 .rmf-meta-chip--account { color: #1e40af; background: #eff6ff; border-color: rgba(37,99,235,0.15); }
 .rmf-meta-chip--date    { color: #065f46; background: #f0fdf4; border-color: rgba(16,185,129,0.15); }
+.rmf-meta-chip--sqr     { color: #6d28d9; background: #f5f3ff; border-color: rgba(109,40,217,0.15); }
 
 /* Status dot in header */
 .rmf-status-dot {
@@ -3630,6 +3655,50 @@ body.theme-switching *::after {
 .rmf-log-form__field { margin-bottom: 0.75rem; }
 .rmf-log-form textarea { border-radius: 10px; font-size: 0.875rem; resize: vertical; min-height: 80px; }
 
+/* Related activity logs */
+.request-activity-stat-card {
+    background: #f8fafc;
+    border-color: rgba(15,23,42,0.08) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+}
+
+.request-activity-stat-card .text-muted,
+.request-activity-stat-card .small.text-muted {
+    color: #64748b !important;
+}
+
+.request-activity-stat-card .fs-5,
+.request-activity-stat-card .h5 {
+    color: #0f172a;
+}
+
+.request-activity-table-wrap {
+    border: 1px solid rgba(15,23,42,0.08);
+    border-radius: 14px;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.request-activity-table {
+    --bs-table-bg: transparent;
+    --bs-table-color: #0f172a;
+    margin-bottom: 0;
+}
+
+.request-activity-table thead th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom-color: rgba(15,23,42,0.08);
+}
+
+.request-activity-table tbody td {
+    color: #0f172a;
+    border-color: rgba(15,23,42,0.06);
+}
+
 /* ── Dark mode ── */
 /* page header always on dark bg, no override needed */
 body.dark-mode .rmf-back-link           { color: rgba(148,163,184,0.6); }
@@ -3637,6 +3706,7 @@ body.dark-mode .rmf-back-link:hover     { color: #93c5fd; }
 body.dark-mode .rmf-meta-chip           { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.1); color: #94a3b8; }
 body.dark-mode .rmf-meta-chip--account  { background: rgba(37,99,235,0.12); border-color: rgba(59,130,246,0.22); color: #93c5fd; }
 body.dark-mode .rmf-meta-chip--date     { background: rgba(16,185,129,0.1);  border-color: rgba(16,185,129,0.2);  color: #6ee7b7; }
+body.dark-mode .rmf-meta-chip--sqr      { background: rgba(109,40,217,0.12); border-color: rgba(139,92,246,0.22); color: #c4b5fd; }
 body.dark-mode .rmf-status-dot--ongoing   { background: rgba(234,179,8,0.12);   color: #fde047; }
 body.dark-mode .rmf-status-dot--completed { background: rgba(34,197,94,0.12);   color: #86efac; }
 body.dark-mode .rmf-status-dot--on_hold   { background: rgba(168,85,247,0.12);  color: #d8b4fe; }
@@ -3668,6 +3738,41 @@ body.dark-mode .rmf-status-badge--pending   { background: rgba(251,191,36,0.12);
 body.dark-mode .rmf-status-badge--completed { background: rgba(34,197,94,0.12);  color: #86efac; border-color: rgba(34,197,94,0.22); }
 body.dark-mode .rmf-status-badge--cancelled { background: rgba(239,68,68,0.12);  color: #fca5a5; border-color: rgba(239,68,68,0.22); }
 body.dark-mode .rmf-status-badge--on_hold   { background: rgba(168,85,247,0.12); color: #d8b4fe; border-color: rgba(168,85,247,0.22); }
+body.dark-mode .request-activity-stat-card {
+    background: rgba(30,41,59,0.88);
+    border-color: rgba(148,163,184,0.18) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+body.dark-mode .request-activity-stat-card .text-muted,
+body.dark-mode .request-activity-stat-card .small.text-muted {
+    color: #94a3b8 !important;
+}
+body.dark-mode .request-activity-stat-card .fs-5,
+body.dark-mode .request-activity-stat-card .h5 {
+    color: #f8fafc;
+}
+body.dark-mode .request-activity-table-wrap {
+    background: rgba(15,23,42,0.7);
+    border-color: rgba(148,163,184,0.16);
+}
+body.dark-mode .request-activity-table {
+    --bs-table-color: #e2e8f0;
+    --bs-table-striped-color: #e2e8f0;
+    --bs-table-hover-color: #f8fafc;
+}
+body.dark-mode .request-activity-table thead th {
+    background: rgba(30,41,59,0.92);
+    color: #cbd5e1;
+    border-bottom-color: rgba(148,163,184,0.16);
+}
+body.dark-mode .request-activity-table tbody td {
+    color: #e2e8f0;
+    border-color: rgba(148,163,184,0.12);
+    background: transparent;
+}
+body.dark-mode .request-activity-table tbody tr:hover td {
+    background: rgba(255,255,255,0.03);
+}
 
 /* ══ END REQUEST MANAGER FORM ══════════════════════════════ */
 
@@ -3843,6 +3948,26 @@ body.dark-mode .table tbody tr {
 body.dark-mode .table-hover tbody tr:hover {
     color: #fff;
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Dashboard table row highlighter ── */
+.table tbody tr {
+    transition: background-color 0.12s ease, box-shadow 0.12s ease;
+    position: relative;
+}
+.table tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.07) !important;
+    box-shadow: inset 3px 0 0 #6366f1;
+    cursor: pointer;
+}
+body.dark-mode .table tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.13) !important;
+    box-shadow: inset 3px 0 0 #818cf8;
+}
+/* Keep table-danger rows clearly red even on hover */
+.table tbody tr.table-danger:hover {
+    background-color: rgba(220, 38, 38, 0.14) !important;
+    box-shadow: inset 3px 0 0 #ef4444;
 }
 
 body.dark-mode .table thead th {
@@ -4198,6 +4323,46 @@ body.dark-mode .mgmt-limit-note { color: #64748b; }
     white-space: nowrap;
 }
 body.dark-mode .mgmt-pagination .mgmt-page-label { color: #64748b; }
+
+/* ── User avatar in management table ── */
+.mgmt-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.mgmt-avatar__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.mgmt-avatar__initial {
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* ── Role badges in management table ── */
+.mgmt-role-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    border-radius: 999px;
+    padding: 0.25em 0.65em;
+}
+.mgmt-role-badge--admin        { background: #7c3aed; color: #fff; }
+.mgmt-role-badge--engineer     { background: #0891b2; color: #fff; }
+.mgmt-role-badge--on_hold      { background: #94a3b8; color: #fff; }
+.mgmt-role-badge--requestor    { background: #059669; color: #fff; }
+.mgmt-role-badge--requestor_ess{ background: #10b981; color: #fff; }
+.mgmt-role-badge--pm_ess       { background: #d97706; color: #fff; }
+.mgmt-role-badge--pm_esg       { background: #dc2626; color: #fff; }
 
 /* ── Management table action buttons: darker amber in light mode ── */
 .mgmt-table .btn-outline-warning {
@@ -4711,6 +4876,7 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     gap: 0.35rem;
     margin-bottom: 1.25rem;
     border-bottom: 1px solid rgba(255,255,255,0.1);
+    align-items: center;
 }
 
 .profile-tab {
@@ -4725,6 +4891,75 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     transition: color 0.15s ease, border-color 0.15s ease;
     margin-bottom: -1px;
     border-radius: 0;
+}
+
+/* ── Inline view-mode toggle inside .profile-tabs ── */
+.profile-tabs__vmt {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.13);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    padding: 3px 4px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.profile-vmt__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.70);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    letter-spacing: 0.02em;
+    border: none;
+    background: transparent;
+    transition:
+        background 0.18s ease,
+        color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s var(--spring);
+}
+.profile-vmt__btn i { font-size: 12.5px; line-height: 1; }
+.profile-vmt__btn--active {
+    background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(47, 108, 243, 0.4);
+    transform: scale(1.04);
+}
+.profile-vmt__btn:hover:not(.profile-vmt__btn--active) {
+    color: rgba(255, 255, 255, 0.90);
+    background: rgba(255, 255, 255, 0.12);
+}
+.profile-vmt__divider {
+    display: block;
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.25);
+    flex-shrink: 0;
+}
+
+/* Light-mode overrides for the inline toggle */
+body:not(.dark-mode) .profile-tabs__vmt {
+    background: rgba(255, 255, 255, 0.13);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+body:not(.dark-mode) .profile-vmt__btn--active {
+    background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(47, 108, 243, 0.45);
+}
+
+/* Mobile: stack view-mode below tabs */
+body.view-mobile .profile-tabs__vmt {
+    margin-top: 4px;
 }
 
 .profile-tab:hover { color: #e2e8f0; }
@@ -5236,6 +5471,408 @@ body.dark-mode .ai-chat-close-btn {
     margin-bottom: 1.2rem;
 }
 /* ── Chart expand button ── */
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE VIEW MODE  (body.view-mobile)
+   ──────────────────────────────────────────────────────────
+   All rules scoped to body.view-mobile.
+   Changing these has ZERO effect on desktop layout.
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 1. Dark matte stage — phone "floats" on a near-black backdrop ── */
+body.view-mobile {
+    background: #05111f !important;
+}
+
+/* ── 2. Strip navbar outer background; reapply gradient to inner container ── */
+/* Avatar dropdown: ensure it floats above all content and stays within the mobile frame */
+body.view-mobile .nav-avatar-menu {
+    z-index: 9999;
+    max-width: 230px;
+    min-width: 200px;
+}
+
+body.view-mobile > nav.navbar {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+body.view-mobile > nav.navbar > .container-fluid {
+    max-width: 390px !important;
+    margin: 0 auto !important;
+    background: linear-gradient(120deg, #1d4ed8, #3b82f6) !important;
+    padding: 0.55rem 1rem !important;
+    box-shadow: 0 2px 14px rgba(15, 23, 42, 0.55);
+}
+
+/* ── 3. Force hamburger menu inside the narrow frame ── */
+body.view-mobile .navbar-expand-lg {
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-toggler {
+    display: inline-flex !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-collapse:not(.show):not(.collapsing) {
+    display: none !important;
+    flex-basis: 100% !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-collapse.show,
+body.view-mobile .navbar-expand-lg .navbar-collapse.collapsing {
+    display: block !important;
+    flex-basis: 100% !important;
+}
+body.view-mobile .navbar-expand-lg .navbar-nav {
+    flex-direction: column !important;
+}
+
+/* ── 4. Phone-width content column ── */
+body.view-mobile > main.container {
+    max-width: 390px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    min-height: calc(100vh - 52px);
+    border-left: 1px solid rgba(99, 102, 241, 0.2);
+    border-right: 1px solid rgba(99, 102, 241, 0.2);
+    position: relative;
+}
+
+/* ── 5. "Mobile Preview" label — hidden (auto screen-detection makes it unnecessary) ── */
+body.view-mobile > main.container::before {
+    display: none;
+}
+
+/* ── 6. Collapse ALL columns to full-width (fixes Bootstrap row-cols-* bare .col bug) ── */
+body.view-mobile .row {
+    flex-direction: column;
+}
+body.view-mobile .row > [class*="col-"],
+body.view-mobile .row > .col {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* ── 7. Dashboard metric cards — 2-column grid ── */
+body.view-mobile .dashboard-metrics {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+    flex-direction: unset !important;
+    margin-bottom: 0.9rem !important;
+}
+body.view-mobile .dashboard-metrics > * {
+    width: 100% !important;
+    flex: unset !important;
+    padding: 0 !important;
+}
+body.view-mobile .dashboard-metric-card {
+    min-height: 88px;
+    padding: 0.75rem 0.85rem !important;
+    border-radius: 14px;
+    gap: 0.2rem;
+}
+body.view-mobile .dashboard-metric-card__label {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+}
+body.view-mobile .dashboard-metric-card__value {
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+body.view-mobile .dashboard-metric-card__hint {
+    font-size: 0.68rem;
+}
+
+/* ── 8. Glass cards ── */
+body.view-mobile .glass-card {
+    border-radius: 16px;
+    padding: 0.85rem 0.8rem !important;
+}
+body.view-mobile .glass-card .glass-card {
+    border-radius: 12px;
+    padding: 0.6rem 0.7rem !important;
+}
+
+/* ── 9. Typography scale ── */
+body.view-mobile h4, body.view-mobile .h4 { font-size: 1rem !important; }
+body.view-mobile h5, body.view-mobile .h5 { font-size: 0.88rem !important; }
+body.view-mobile h6, body.view-mobile .h6 { font-size: 0.8rem !important; }
+body.view-mobile p, body.view-mobile li  { font-size: 0.82rem; }
+
+/* ── 10. Dashboard stat pills — keep inline, allow horizontal scroll on their row ── */
+body.view-mobile .dbd-stat-pill { min-width: 0; flex-shrink: 0; }
+body.view-mobile .dbd-stats-row {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.35rem;
+    padding-bottom: 2px;
+}
+body.view-mobile .dbd-stats-row::-webkit-scrollbar { display: none; }
+
+/* ── 11. Dashboard action/filter bar (All, Ongoing … + Export CSV) ── */
+body.view-mobile .d-flex:has(> .dbd-stat-pill) {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.35rem !important;
+    padding-bottom: 4px;
+    justify-content: flex-start !important;
+    margin-left: 0 !important;
+}
+body.view-mobile .d-flex:has(> .dbd-stat-pill)::-webkit-scrollbar { display: none; }
+
+/* ── 12. Tables — horizontal scroll, compact ── */
+body.view-mobile .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+body.view-mobile table { min-width: 320px; font-size: 0.77rem; }
+body.view-mobile .table th,
+body.view-mobile .table td { padding: 0.38rem 0.5rem; white-space: nowrap; }
+
+/* ── 13. Buttons & forms ── */
+body.view-mobile .btn        { font-size: 0.78rem; padding: 0.38rem 0.8rem; }
+body.view-mobile .btn-sm     { font-size: 0.72rem; padding: 0.3rem 0.6rem; }
+body.view-mobile .form-control,
+body.view-mobile .form-select { font-size: 0.82rem; padding: 0.38rem 0.65rem; }
+body.view-mobile label        { font-size: 0.78rem; }
+
+/* ── 14. Profile page ── */
+body.view-mobile .profile-page { max-width: 100% !important; }
+body.view-mobile .profile-hero__banner { height: 72px !important; }
+body.view-mobile .profile-hero__body { padding: 0 0.6rem 0.75rem; }
+body.view-mobile .profile-hero__avatar-wrap { margin-top: -32px !important; }
+body.view-mobile .profile-hero__avatar,
+body.view-mobile .profile-hero__avatar--placeholder {
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 1.35rem !important;
+}
+body.view-mobile .profile-hero__name { font-size: 0.95rem !important; }
+body.view-mobile .profile-hero__meta,
+body.view-mobile .profile-hero__role-badge { font-size: 0.68rem !important; }
+body.view-mobile .profile-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.1rem;
+    padding-bottom: 2px;
+}
+body.view-mobile .profile-tabs::-webkit-scrollbar { display: none; }
+body.view-mobile .profile-tab {
+    padding: 0.45rem 0.7rem !important;
+    font-size: 0.75rem !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+body.view-mobile .profile-tabs__vmt {
+    flex-shrink: 0;
+    transform: scale(0.88);
+    transform-origin: right center;
+}
+body.view-mobile .profile-card { padding: 0.9rem !important; }
+body.view-mobile .profile-avatar-section { flex-direction: column; align-items: center; gap: 0.85rem; }
+body.view-mobile .profile-avatar-preview,
+body.view-mobile .profile-avatar-preview--placeholder { width: 76px !important; height: 76px !important; }
+body.view-mobile .banner-swatch-grid { grid-template-columns: repeat(3, 1fr) !important; }
+
+/* ── 15. Reports KPI row — 2-column grid ── */
+body.view-mobile .rpt-kpi-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: unset !important;
+    gap: 0.45rem !important;
+}
+body.view-mobile .rpt-kpi { min-width: 0; }
+
+/* ══════════════════════════════════════════════════════════
+   16. REPORTS PAGE — fully isolated mobile overrides
+       (All rules prefixed body.view-mobile — zero desktop bleed)
+   ══════════════════════════════════════════════════════════ */
+
+/* ─── Report page header ─── */
+/* Force the controls row (tab group + export) to sit directly under the title
+   and scroll horizontally when the 390px frame is too narrow */
+body.view-mobile .d-flex:has(.rpt-tab-group) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
+    padding-bottom: 2px;
+}
+body.view-mobile .d-flex:has(.rpt-tab-group)::-webkit-scrollbar { display: none; }
+
+/* ─── Tab group (Operational / Activity Logs) ─── */
+body.view-mobile .rpt-tab-group {
+    flex-shrink: 0;
+    padding: 2px;
+    gap: 2px;
+    border-radius: 10px;
+}
+body.view-mobile .rpt-tab {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* ─── KPI row: override the generic single-column row rule → 2-column grid ─── */
+/* Use > [class*="col-"] > .rpt-kpi-card to avoid matching outer wrapper rows
+   that only contain KPI cards as deeper descendants */
+body.view-mobile .row:has(> [class*="col-"] > .rpt-kpi-card) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: unset !important;
+    gap: 0.45rem;
+}
+body.view-mobile .row:has(> [class*="col-"] > .rpt-kpi-card) > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    flex: unset !important;
+}
+
+/* ─── KPI cards — compact ─── */
+body.view-mobile .rpt-kpi-card {
+    padding: 0.85rem 0.75rem 0.7rem !important;
+    border-radius: 14px;
+}
+body.view-mobile .rpt-kpi-icon {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 0.78rem !important;
+    border-radius: 7px !important;
+    margin-bottom: 0.4rem !important;
+}
+body.view-mobile .rpt-kpi-value {
+    font-size: 1.5rem !important;
+    margin-bottom: 0.1rem !important;
+}
+body.view-mobile .rpt-kpi-sub {
+    /* Hide the sub-label to save vertical space in mobile cards */
+    display: none !important;
+}
+body.view-mobile .rpt-kpi-label {
+    font-size: 0.6rem !important;
+    letter-spacing: 0.04em !important;
+}
+
+/* ─── Chart cards — compact header, reduced canvas height ─── */
+body.view-mobile .rpt-chart-card {
+    padding: 1rem 0.85rem !important;
+}
+body.view-mobile .rpt-chart-head {
+    gap: 0.45rem;
+    margin-bottom: 0.65rem;
+    flex-wrap: wrap;
+    align-items: flex-start !important;
+}
+body.view-mobile .rpt-chart-icon {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 0.78rem !important;
+    border-radius: 7px !important;
+    margin-top: 0 !important;
+    flex-shrink: 0 !important;
+}
+body.view-mobile .rpt-chart-title {
+    font-size: 0.76rem !important;
+    margin-bottom: 0 !important;
+}
+body.view-mobile .rpt-chart-sub {
+    /* Hide long subtitle text on narrow mobile frame */
+    display: none !important;
+}
+body.view-mobile .rpt-expand-btn {
+    /* Keep expand button but reduce size */
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 0.7rem !important;
+}
+
+/* ─── Chart canvases — reduce height so 2+ charts fit without too much scroll ─── */
+body.view-mobile .rpt-canvas-wrap {
+    min-height: 195px !important;
+    flex: none !important;
+    height: 195px;
+}
+body.view-mobile .rpt-canvas-wrap--donut {
+    min-height: 175px !important;
+    height: 175px;
+}
+
+/* ─── Period badge ─── */
+body.view-mobile .rpt-period-badge {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.6rem;
+}
+
+/* ─── Activity filter form ─── */
+body.view-mobile .rpt-activity-filter .row {
+    flex-direction: column !important; /* already handled by generic rule; reinforce */
+}
+
+/* ─── Activity log table — hide non-essential columns to fit 390px ─── */
+/* Hidden: # (col 1) and Location (col 7) — reduces ~120px of horizontal space */
+body.view-mobile .rpt-activity-table th:nth-child(1),
+body.view-mobile .rpt-activity-table td:nth-child(1) { display: none; }   /* # */
+body.view-mobile .rpt-activity-table th:nth-child(7),
+body.view-mobile .rpt-activity-table td:nth-child(7) { display: none; }   /* Location */
+
+body.view-mobile .rpt-activity-table {
+    font-size: 0.72rem !important;
+    min-width: 420px;               /* allow horizontal scroll, but thinner than before */
+}
+body.view-mobile .rpt-activity-table th,
+body.view-mobile .rpt-activity-table td {
+    padding: 0.32rem 0.38rem !important;
+    white-space: nowrap;
+}
+
+/* ─── Eng avatar in activity table — smaller ─── */
+body.view-mobile .rpt-eng-avatar {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 0.62rem !important;
+}
+body.view-mobile .rpt-date-chip { font-size: 0.72rem; }
+body.view-mobile .rpt-account-name { font-size: 0.72rem; }
+body.view-mobile .rpt-hours-badge { font-size: 0.72rem; padding: 0.15rem 0.45rem; }
+body.view-mobile .rpt-edit-btn { width: 22px; height: 22px; font-size: 0.7rem; }
+
+/* ─── Breakdown tables (Requestor / Engineer allocation) — compact ─── */
+body.view-mobile .rpt-table-head th {
+    font-size: 0.65rem !important;
+    padding: 0.3rem 0.45rem !important;
+}
+
+/* ─── Log count badge ─── */
+body.view-mobile .rpt-log-count-badge { font-size: 0.72rem; padding: 0.25rem 0.6rem; }
+
+/* ─── Pagination row — horizontal-scroll ─── */
+body.view-mobile .rpt-log-pagination {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+}
+body.view-mobile .rpt-page-btn {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.72rem !important;
+    border-radius: 7px !important;
+}
+
+
 .rpt-expand-btn {
     flex-shrink: 0;
     width: 28px;

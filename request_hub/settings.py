@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-development-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+APP_VERSION = os.getenv("APP_VERSION", "dev")
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 
 primary_domain = os.getenv("DJANGO_PRIMARY_DOMAIN", "esgrequesthub.dreadops.site").strip()
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     "accounts.apps.AccountsConfig",
     "hub.apps.HubConfig",
 ]

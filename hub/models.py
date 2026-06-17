@@ -35,6 +35,7 @@ class Request(models.Model):
         INQUIRY = "inquiry", "Inquiry"
         DEPLOYMENT = "deployment", "Deployment"
         PROJECT_MANAGEMENT = "project_management", "Project Management"
+        CERTIFICATION = "certification", "Certification"
 
     class Status(models.TextChoices):
         ONGOING = "ongoing", "Ongoing"
@@ -65,6 +66,7 @@ class Request(models.Model):
             ("Dell", "Dell"),
             ("HP", "HP"),
             ("Network", "Network"),
+            ("Veeam", "Veeam"),
             ("Others", "Others"),
         ],
     )
@@ -79,7 +81,7 @@ class Request(models.Model):
         related_name="requests_assigned",
         blank=True,
         null=True,
-        limit_choices_to={"role__in": ["engineer", "on_hold"]},
+        limit_choices_to={"role__in": ["engineer", "on_hold", "pm_esg"]},
     )
     backup_engineer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -94,6 +96,15 @@ class Request(models.Model):
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class _ActiveManager(models.Manager):
+        def get_queryset(self):
+            return super().get_queryset().filter(is_deleted=False)
+
+    objects = _ActiveManager()
+    all_objects = models.Manager()
 
     class Meta:
         ordering = ["-created_at"]
@@ -101,7 +112,7 @@ class Request(models.Model):
     def get_absolute_url(self):
         from django.urls import reverse
 
-        return reverse("hub:request-detail", args=[self.pk])
+        return reverse("hub:request-manage-collab", args=[self.pk])
 
     def clean(self):
         super().clean()
@@ -115,9 +126,11 @@ class Request(models.Model):
             if self.pk:
                 assigned = assigned.exclude(pk=self.pk)
 
-            # Capacity: default 5 ongoing; when an engineer already has an ongoing deployment, cap at 3.
+            # Capacity: default 5 ongoing; when an engineer already has an ongoing deployment/certification, cap at 3.
             # This still allows assigning the first deployment even if they already carry up to 4 non-deployment requests.
-            has_ongoing_deployment = assigned.filter(engagement_type=self.Engagement.DEPLOYMENT).exists()
+            has_ongoing_deployment = assigned.filter(engagement_type__in=[
+                self.Engagement.DEPLOYMENT, self.Engagement.CERTIFICATION
+            ]).exists()
             max_allowed = 3 if has_ongoing_deployment else 5
 
             current_load = assigned.count()
@@ -147,7 +160,7 @@ class Request(models.Model):
                 self.due_date = computed_due
         if not self.teams_chat_topic:
             self.teams_chat_topic = self._build_teams_chat_topic(reference_code=self.reference_code)
-        self.full_clean()
+        self.full_clean(exclude=["requestor"])
         super().save(*args, **kwargs)
         if creating and not self.reference_code:
             self.reference_code = f"REQ-{self.pk:05d}"
@@ -417,9 +430,46 @@ class SqrSubmission(models.Model):
         FOR_REVISION = "for_revision", "For Revision"
         APPROVED = "reviewed", "Approved"
 
+    class ProposalStatus(models.TextChoices):
+        SUBMITTED_PENDING = "submitted_pending", "Submitted \u2013 Pending"
+        NEGOTIATION_REVIEW = "negotiation_review", "Negotiation / Review"
+        CLOSED_WON = "closed_won", "Closed Won"
+        CLOSED_LOST = "closed_lost", "Closed Lost"
+
+    class DeliveryHealth(models.TextChoices):
+        ON_TRACK = "on_track", "On Track"
+        OFF_TRACK = "off_track", "Off Track"
+        AT_RISK = "at_risk", "At Risk"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class OverallStatus(models.TextChoices):
+        ON_HOLD = "on_hold", "On Hold"
+        PLANNING = "planning", "Planning"
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class RevenueStatus(models.TextChoices):
+        INVOICED = "invoiced", "Invoiced"
+        PARTIAL = "partial", "Partial"
+        PENDING = "pending", "Pending"
+
+    class RevenueDeclaration(models.TextChoices):
+        DECLARED = "declared", "Declared"
+        NOT_YET = "not_yet", "Not Yet"
+
     reference_code = models.CharField(max_length=24, unique=True, editable=False, blank=True, null=True)
     year = models.PositiveIntegerField(editable=False, db_index=True)
     sequence_number = models.PositiveIntegerField(editable=False, db_index=True, blank=True, null=True)
+    linked_request = models.ForeignKey(
+        "Request",
+        on_delete=models.SET_NULL,
+        related_name="sqr_links",
+        blank=True,
+        null=True,
+        verbose_name="RQ ID",
+    )
     engineer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -439,6 +489,7 @@ class SqrSubmission(models.Model):
     project_details = models.TextField()
     sse_manhrs = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True)
     documentation_links = models.TextField(help_text="One link per line.")
+    sqr_folder_link = models.URLField(blank=True)
     remarks = models.TextField(blank=True)
     quotation_total_price = models.DecimalField(
         max_digits=14,
@@ -449,15 +500,86 @@ class SqrSubmission(models.Model):
     )
     discount_rate = models.PositiveSmallIntegerField(
         choices=[
+            (0, "No Discount"),
             (5, "5%"),
             (10, "10%"),
             (15, "15%"),
         ],
-        default=5,
+        default=0,
     )
+    pm_manhrs = models.DecimalField(
+        max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="Rate per manhour (PHP).",
+    )
+    # Proposal Stage – cost breakdown columns (M, O, P in Excel)
+    sse_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="SSE labour cost (PHP).",
+    )
+    pm_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="PM labour cost (PHP).",
+    )
+    managed_support_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, validators=[MinValueValidator(0)], blank=True, null=True,
+        help_text="Managed Support Service amount (PHP).",
+    )
+    validity_due_date = models.DateField(blank=True, null=True)
     po_attachment_link = models.URLField(blank=True)
     po_attached_at = models.DateTimeField(blank=True, null=True)
     revenue_overview = models.TextField(blank=True)
+    # Proposal Stage – deal tracking (set by PM after internal approval)
+    proposal_status = models.CharField(
+        max_length=25, choices=ProposalStatus.choices, blank=True, default=""
+    )
+    # Service Delivery Stage – visible when proposal_status == CLOSED_WON
+    delivery_health = models.CharField(
+        max_length=20, choices=DeliveryHealth.choices, blank=True, default=""
+    )
+    delivery_progress = models.PositiveSmallIntegerField(blank=True, null=True)
+    delivery_start_date = models.DateField(blank=True, null=True)
+    delivery_target_finish_date = models.DateField(blank=True, null=True)
+    delivery_actual_finish_date = models.DateField(blank=True, null=True)
+    delivery_completion_signed_date = models.DateField(blank=True, null=True)
+    # Service Delivery Stage – extra columns (X–AK in Excel)
+    po_pnl_date = models.DateField(blank=True, null=True, verbose_name="PO/PNL Date")
+    assigned_pm = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sqr_assigned_pm",
+        blank=True,
+        null=True,
+        verbose_name="Assigned PM",
+    )
+    assigned_sse = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sqr_assigned_sse",
+        blank=True,
+        null=True,
+        verbose_name="Assigned SSE",
+    )
+    overall_status = models.CharField(
+        max_length=20, choices=OverallStatus.choices, blank=True, default=""
+    )
+    key_updates_risks = models.TextField(blank=True)
+    warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Post-service Warranty End Date")
+    managed_support_start_date = models.DateField(blank=True, null=True)
+    managed_support_end_date = models.DateField(blank=True, null=True)
+    # Revenue Stage – columns (AL–AQ in Excel)
+    revenue_date = models.DateField(blank=True, null=True, verbose_name="SI/Revenue Date")
+    revenue_source = models.CharField(max_length=100, blank=True)
+    revenue_reference_no = models.CharField(max_length=100, blank=True)
+    revenue_status = models.CharField(
+        max_length=20, choices=RevenueStatus.choices, blank=True, default=""
+    )
+    revenue_remarks = models.TextField(blank=True)
+    revenue_declaration = models.CharField(
+        max_length=20, choices=RevenueDeclaration.choices, blank=True, default=""
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.FOR_PROCESSING)
     review_notes = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(
@@ -468,6 +590,10 @@ class SqrSubmission(models.Model):
         null=True,
     )
     reviewed_at = models.DateTimeField(blank=True, null=True)
+    revenue_unlocked = models.BooleanField(
+        default=False,
+        help_text="Set to True when PM clicks 'To Revenue' in Step 3 to enable Step 4.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -495,6 +621,102 @@ class SqrSubmission(models.Model):
         return discounted.quantize(Decimal("0.01"))
 
     @property
+    def base_cost(self):
+        """Computed cost = (sse_manhrs + pm_manhrs) × hourly_rate."""
+        if not self.hourly_rate:
+            return None
+        total_hrs = (self.sse_manhrs or Decimal("0")) + (self.pm_manhrs or Decimal("0"))
+        if not total_hrs:
+            return None
+        return (total_hrs * self.hourly_rate).quantize(Decimal("0.01"))
+
+    @property
+    def base_cost_discounted(self):
+        """Computed cost after applying discount_rate."""
+        base = self.base_cost
+        if base is None:
+            return None
+        discount = Decimal(self.discount_rate or 0) / Decimal("100")
+        return (base * (Decimal("1") - discount)).quantize(Decimal("0.01"))
+
+    @property
+    def computed_gross_total(self):
+        """SSE Amount + PM Amount + Managed Support Amount."""
+        sse = self.sse_amount or Decimal("0")
+        pm = self.pm_amount or Decimal("0")
+        mgmt = self.managed_support_amount or Decimal("0")
+        gross = sse + pm + mgmt
+        return gross.quantize(Decimal("0.01")) if gross else None
+
+    @property
+    def computed_discount_amount(self):
+        """Gross total × discount_rate / 100."""
+        gross = self.computed_gross_total
+        if gross is None:
+            return None
+        return (gross * Decimal(self.discount_rate or 0) / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def computed_total_price(self):
+        """Gross total after applying discount."""
+        gross = self.computed_gross_total
+        if gross is None:
+            return None
+        discount = Decimal(self.discount_rate or 0) / Decimal("100")
+        return (gross * (Decimal("1") - discount)).quantize(Decimal("0.01"))
+
+    _IMPL_SCOPES = frozenset(["Implementation", "Implementation and Project Management"])
+    _WARRANTY_SCOPES = frozenset([
+        "Implementation",
+        "Implementation and Project Management",
+        "Managed Support and Maintenance Service",
+    ])
+    _PM_MANHOUR_BUCKETS = frozenset([
+        Decimal("8"),
+        Decimal("16"),
+        Decimal("24"),
+        Decimal("32"),
+        Decimal("48"),
+    ])
+
+    @property
+    def computed_post_svc_warranty_end_date(self):
+        """Completion Signed Date + 30 days — only for Implementation / Impl+PM scopes."""
+        if self.project_details in self._IMPL_SCOPES and self.delivery_completion_signed_date:
+            return self.delivery_completion_signed_date + timedelta(days=30)
+        return None
+
+    @property
+    def computed_warranty_end_date(self):
+        """Completion Signed Date + 30 days — for all warranty scopes (Impl / Impl+PM / Managed Support)."""
+        if self.project_details in self._WARRANTY_SCOPES and self.delivery_completion_signed_date:
+            return self.delivery_completion_signed_date + timedelta(days=30)
+        return None
+
+    @property
+    def is_managed_support_start_eligible(self):
+        """AJ is eligible only for supported scopes with a managed support amount."""
+        return self.project_details in self._WARRANTY_SCOPES and self.managed_support_amount is not None
+
+    @property
+    def computed_support_start_date(self):
+        """Support Start Date (Col AJ) honoring eligibility and fallback rules."""
+        if not self.is_managed_support_start_eligible:
+            return None
+        return self.managed_support_start_date or self.computed_warranty_end_date
+
+    @property
+    def computed_managed_support_end_date(self):
+        """Support End Date (Col AK) = AJ date + 365 days.
+
+        AJ is shown only when the support-start eligibility rules pass.
+        """
+        support_start_date = self.computed_support_start_date
+        if support_start_date:
+            return support_start_date + timedelta(days=365)
+        return None
+
+    @property
     def revenue_stage_key(self) -> str:
         if self.status == self.Status.APPROVED and self.po_attachment_link:
             return "revenue"
@@ -502,10 +724,65 @@ class SqrSubmission(models.Model):
             return "order"
         return "quotation"
 
+    @staticmethod
+    def recommended_pm_manhrs_for_sse(sse_manhrs):
+        """Return the default PM man-hours bucket based on SSE man-hours."""
+        if sse_manhrs is None:
+            return None
+        hrs = Decimal(str(sse_manhrs))
+        if hrs <= Decimal("20"):
+            return Decimal("8")
+        if hrs <= Decimal("40"):
+            return Decimal("16")
+        if hrs <= Decimal("60"):
+            return Decimal("24")
+        if hrs <= Decimal("80"):
+            return Decimal("32")
+        return Decimal("48")
+
+    @classmethod
+    def _should_use_bucketed_pm_manhrs(cls, pm_manhrs):
+        if pm_manhrs is None:
+            return True
+        try:
+            return Decimal(str(pm_manhrs)) in cls._PM_MANHOUR_BUCKETS
+        except (ArithmeticError, ValueError, TypeError):
+            return False
+
+    @property
+    def effective_pm_manhrs(self):
+        recommended = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
+        if recommended is None:
+            return self.pm_manhrs
+        if self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
+            return recommended
+        return self.pm_manhrs
+
+    @property
+    def effective_pm_amount(self):
+        pm_manhrs = self.effective_pm_manhrs
+        if pm_manhrs is None:
+            return None
+        return (Decimal(str(pm_manhrs)) * Decimal("3000")).quantize(Decimal("0.01"))
+
     def save(self, *args, **kwargs):
         creating = self.pk is None
         if creating and not self.year:
             self.year = timezone.now().astimezone(MANILA_TZ).year
+
+        # Keep PM man-hours aligned to the SSE bucket for blank or bucket-based values.
+        if self.sse_manhrs is not None and self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
+            self.pm_manhrs = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
+
+        # Auto-compute SSE Amount (col M = col L × 2000) and PM Amount (col O = col N × 3000)
+        if self.sse_manhrs is not None:
+            self.sse_amount = (Decimal(str(self.sse_manhrs)) * Decimal("2000")).quantize(Decimal("0.01"))
+        else:
+            self.sse_amount = None
+        if self.pm_manhrs is not None:
+            self.pm_amount = (Decimal(str(self.pm_manhrs)) * Decimal("3000")).quantize(Decimal("0.01"))
+        else:
+            self.pm_amount = None
 
         super().save(*args, **kwargs)
 

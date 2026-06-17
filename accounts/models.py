@@ -68,12 +68,16 @@ class User(AbstractUser):
         blank=True,
     )
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.REQUESTOR)
+    department = models.CharField(max_length=100, blank=True, default="")
     REQUESTOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS)
-    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG)
+    REQUEST_CREATOR_ROLES = (Roles.REQUESTOR, Roles.REQUESTOR_ESS, Roles.PM_ESS, Roles.PM_ESG, Roles.ADMIN)
     ENGINEER_ACCESS_ROLES = (Roles.ENGINEER, Roles.ON_HOLD)
     ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
+    show_chatbot = models.BooleanField(default=True, verbose_name="Show AI Chatbot")
+    idle_timeout_enabled = models.BooleanField(default=True, verbose_name="5-Minute Idle Timeout")
+    show_login_banner = models.BooleanField(default=True, verbose_name="Welcome Banner on Login")
 
     def must_complete_profile(self) -> bool:
         required_fields = [self.email, self.phone_number, self.profile_photo]

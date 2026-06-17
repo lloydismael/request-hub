@@ -54,6 +54,19 @@
         <button class="profile-tab" data-profile-tab="banner" id="banner-tab-btn">
             <i class="bi bi-image-fill me-1"></i>Edit Banner
         </button>
+        <button class="profile-tab" data-profile-tab="settings">
+            <i class="bi bi-sliders me-1"></i>Settings
+        </button>
+        {# ── View mode toggle — inline in tab bar ── #}
+        <div class="profile-tabs__vmt ms-auto" id="profile-vmt-clone" role="group" aria-label="View mode">
+            <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
+                <i class="bi bi-pc-display"></i><span>Desktop</span>
+            </button>
+            <span class="profile-vmt__divider" aria-hidden="true"></span>
+            <button class="profile-vmt__btn" data-vmt="mobile" type="button" title="Mobile view" aria-pressed="false">
+                <i class="bi bi-phone-fill"></i><span>Mobile</span>
+            </button>
+        </div>
     </div>
 
     {# ── Main form ─────────────────────────────────────────── #}
@@ -66,9 +79,14 @@
                 <h2 class="profile-card__title"><i class="bi bi-person-lines-fill me-2"></i>Personal Information</h2>
                 <div class="row g-3">
                     {% for field in form %}
-                        {% if field.name in "first_name,last_name,email,phone_number" %}
+                        {% if field.name in "first_name,last_name,email,phone_number,department" %}
                             <div class="col-sm-6">
-                                <label class="form-label profile-label" for="id_{{ field.name }}">{{ field.label }}</label>
+                                <label class="form-label profile-label" for="id_{{ field.name }}">
+                                    {{ field.label }}
+                                    {% if field.name == "department" and not request.user.role == "admin" %}
+                                        <i class="bi bi-lock-fill ms-1 text-secondary" style="font-size:0.75em;" title="Only administrators can edit this field"></i>
+                                    {% endif %}
+                                </label>
                                 {{ field }}
                                 {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
                                 {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
@@ -226,6 +244,177 @@
 
     </form>
 
+    {# ── Settings tab (outside main form — its own POST) ─── #}
+    <div class="profile-panel" id="profile-panel-settings">
+        <div class="glass-card profile-card">
+            <h2 class="profile-card__title"><i class="bi bi-sliders me-2"></i>Settings</h2>
+            <p class="text-muted small mb-4">Personalise your Request Hub experience. Changes are saved immediately.</p>
+
+            <form method="post" id="profile-settings-form">
+                {% csrf_token %}
+                <input type="hidden" name="save_settings" value="1">
+
+                <div class="list-group list-group-flush">
+
+                    {# ── Chatbot ── #}
+                    <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                        <div>
+                            <div class="fw-semibold"><i class="bi bi-robot me-2 text-info"></i>AI Chatbot</div>
+                            <div class="text-muted small mt-1">Show or hide the floating AI assistant button on every page.</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input settings-toggle" type="checkbox" role="switch"
+                                   id="toggle_show_chatbot" name="show_chatbot" value="1"
+                                   {% if form.instance.show_chatbot %}checked{% endif %}
+                                   style="width:2.5em;height:1.4em;cursor:pointer;">
+                        </div>
+                    </div>
+
+                    {# ── Idle timeout ── #}
+                    <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                        <div>
+                            <div class="fw-semibold"><i class="bi bi-clock-history me-2 text-warning"></i>5-Minute Idle Timeout</div>
+                            <div class="text-muted small mt-1">Automatically log you out after 5 minutes of inactivity. Recommended for shared or public computers.</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input settings-toggle" type="checkbox" role="switch"
+                                   id="toggle_idle_timeout" name="idle_timeout_enabled" value="1"
+                                   {% if form.instance.idle_timeout_enabled %}checked{% endif %}
+                                   style="width:2.5em;height:1.4em;cursor:pointer;">
+                        </div>
+                    </div>
+
+                    {# ── Welcome banner ── #}
+                    <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                        <div>
+                            <div class="fw-semibold"><i class="bi bi-stars me-2 text-success"></i>Welcome Banner</div>
+                            <div class="text-muted small mt-1">Show the &ldquo;Welcome back!&rdquo; splash screen after every login.</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input settings-toggle" type="checkbox" role="switch"
+                                   id="toggle_show_login_banner" name="show_login_banner" value="1"
+                                   {% if form.instance.show_login_banner %}checked{% endif %}
+                                   style="width:2.5em;height:1.4em;cursor:pointer;">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-4">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-check2 me-1"></i>Save Settings
+                    </button>
+                </div>
+            </form>
+
+            {# ── Backup & Restore settings (admin only) ─────────────────────────── #}
+            {% if request.user.role == 'admin' %}
+            <hr class="my-4" style="border-color:rgba(255,255,255,0.08);">
+            <div id="profile-panel-backup">
+            <h2 class="profile-card__title"><i class="bi bi-archive-fill me-2"></i>Backup &amp; Restore</h2>
+            <p class="text-muted small mb-4">
+                Download a complete snapshot of all requests, SQR submissions, and related records.
+                Use the restore feature to recover data from a previous backup.
+                <strong class="text-warning">Restoring will permanently overwrite all current hub data.</strong>
+            </p>
+
+            {# ── Download Backup ── #}
+            <div class="list-group list-group-flush mb-4">
+                <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3"
+                     style="background:transparent;border-color:rgba(255,255,255,0.08);">
+                    <div>
+                        <div class="fw-semibold"><i class="bi bi-download me-2 text-info"></i>Download Backup</div>
+                        <div class="text-muted small mt-1">
+                            Exports all Requests, SQR Submissions, Activity Logs, and Communications as a single JSON file.
+                            User accounts are <em>not</em> included.
+                        </div>
+                    </div>
+                    <a href="{% url 'accounts:backup' %}" class="btn btn-sm btn-outline-info text-nowrap">
+                        <i class="bi bi-cloud-download me-1"></i>Download
+                    </a>
+                </div>
+            </div>
+
+            {# ── Restore ── #}
+            <div class="rounded border border-danger p-3" style="border-color:rgba(239,68,68,0.4)!important;background:rgba(239,68,68,0.05);">
+                <div class="fw-semibold text-danger mb-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>Restore from Backup</div>
+                <p class="text-muted small mb-3">
+                    Select a <code>.json</code> file previously downloaded from this page.
+                    All existing hub data will be <strong>deleted</strong> and replaced with the backup contents.
+                    This action <strong>cannot be undone</strong>.
+                </p>
+                <form method="post" enctype="multipart/form-data" action="{% url 'accounts:restore' %}" id="restore-form">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="backup_file" class="form-label small fw-semibold">Backup File (.json)</label>
+                        <input type="file" class="form-control form-control-sm" id="backup_file" name="backup_file" accept=".json" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="confirm_restore" name="confirm_restore" value="1" required>
+                        <label class="form-check-label small text-danger fw-semibold" for="confirm_restore">
+                            I understand this will permanently overwrite all current data and cannot be undone.
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-danger" id="restore-submit-btn" disabled>
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Restore Data
+                    </button>
+                </form>
+            </div>
+
+            {# ── Restore Deleted Requests ── #}
+            <hr class="my-4" style="border-color:rgba(255,255,255,0.08);">
+            <div class="fw-semibold mb-1"><i class="bi bi-recycle me-2 text-success"></i>Restore Deleted Requests</div>
+            <p class="text-muted small mb-3">
+                Requests soft-deleted from the dashboard are listed below and can be recovered at any time.
+            </p>
+            {% if deleted_requests %}
+            <div class="table-responsive rounded border" style="border-color:rgba(255,255,255,0.1)!important;">
+                <table class="table table-sm table-hover mb-0" style="font-size:0.82rem;">
+                    <thead style="background:rgba(99,102,241,0.10);">
+                        <tr>
+                            <th class="ps-3">Ref #</th>
+                            <th>Customer</th>
+                            <th>Engagement</th>
+                            <th>Engineer</th>
+                            <th>Status</th>
+                            <th>Deleted</th>
+                            <th class="pe-3"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in deleted_requests %}
+                        <tr>
+                            <td class="ps-3 fw-semibold">{{ req.reference_code }}</td>
+                            <td>{{ req.account }}</td>
+                            <td>{{ req.get_engagement_type_display }}</td>
+                            <td>{{ req.engineer.get_full_name|default:req.engineer.username|default:"—" }}</td>
+                            <td><span class="badge bg-secondary">{{ req.get_status_display }}</span></td>
+                            <td class="text-muted">{{ req.deleted_at|date:"M d, Y H:i"|default:"—" }}</td>
+                            <td class="pe-3">
+                                <form method="post" action="{% url 'hub:request-restore' req.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2"
+                                            style="font-size:0.78rem;"
+                                            onclick="return confirm('Restore {{ req.reference_code }}?')">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted small fst-italic mb-0">No deleted requests to restore.</p>
+            {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        App Version {{ app_version }}
+    </div>
+
 </div>
 
 <script>
@@ -246,6 +435,21 @@
     // Hash-based tab activation
     if (window.location.hash === '#avatar') activate('avatar');
     if (window.location.hash === '#banner') activate('banner');
+    if (window.location.hash === '#settings') activate('settings');
+    if (window.location.hash === '#backup') {
+        activate('settings');
+        const backupSection = document.getElementById('profile-panel-backup');
+        if (backupSection) backupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Restore form: enable submit only when checkbox is ticked
+    const confirmChk = document.getElementById('confirm_restore');
+    const restoreBtn = document.getElementById('restore-submit-btn');
+    if (confirmChk && restoreBtn) {
+        confirmChk.addEventListener('change', () => {
+            restoreBtn.disabled = !confirmChk.checked;
+        });
+    }
 
     // "Edit Banner" button on hero banner → jump to banner tab
     const bannerEditBtn = document.getElementById('banner-edit-btn');
@@ -329,6 +533,39 @@
         });
     }
 }());
+
+// ── Settings tab: auto-submit on toggle change ──
+(function () {
+    document.querySelectorAll('.settings-toggle').forEach(function (toggle) {
+        toggle.addEventListener('change', function () {
+            var form = document.getElementById('profile-settings-form');
+            if (form) form.submit();
+        });
+    });
+}());
+
+// ── Profile page: inline view-mode toggle ──
+(function () {
+    const VMT_KEY = 'reqHubViewMode';
+    const btns = document.querySelectorAll('#profile-vmt-clone [data-vmt]');
+    if (!btns.length) return;
+
+    const applyMode = (mode) => {
+        document.body.classList.toggle('view-mobile', mode === 'mobile');
+        try { localStorage.setItem(VMT_KEY, mode); } catch (_) {}
+        btns.forEach((btn) => {
+            const isActive = btn.dataset.vmt === mode;
+            btn.classList.toggle('profile-vmt__btn--active', isActive);
+            btn.setAttribute('aria-pressed', String(isActive));
+        });
+    };
+
+    const saved = (() => { try { return localStorage.getItem(VMT_KEY); } catch (_) { return null; } })();
+    applyMode(saved === 'mobile' ? 'mobile' : 'desktop');
+
+    btns.forEach((btn) => {
+        btn.addEventListener('click', () => applyMode(btn.dataset.vmt));
+    });
+}());
 </script>
 {% endblock %}
-

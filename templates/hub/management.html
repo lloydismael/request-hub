@@ -48,45 +48,19 @@
     <div class="tab-pane fade {% if active_tab != 'accounts' %}show active{% endif %}"
          id="users-pane" role="tabpanel" aria-labelledby="users-tab" tabindex="0">
 
-        <form method="post" class="glass-card overflow-hidden p-0" novalidate>
-            {% csrf_token %}
-            <input type="hidden" name="active_tab" value="users">
-            {% for hidden in formset.management_form %}{{ hidden }}{% endfor %}
-
-            {% if formset.non_form_errors %}
-                <div class="alert alert-danger mx-4 mt-4">
-                    {% for error in formset.non_form_errors %}<div>{{ error }}</div>{% endfor %}
-                </div>
-            {% endif %}
-
-            {# Toolbar: search + save + create button #}
+        {# Toolbar: search + New User button #}
+        <div class="glass-card overflow-hidden p-0">
             <div class="mgmt-toolbar">
                 <div class="mgmt-search-box">
                     <i class="bi bi-search mgmt-search-icon"></i>
                     <input type="text" id="user-search" class="mgmt-search-input"
-                           placeholder="Search by name, username or email…" autocomplete="off">
+                           placeholder="Search by name, username, email or department…" autocomplete="off">
                     <span class="mgmt-result-badge" id="user-count-badge"></span>
                 </div>
-                <div class="d-flex gap-2 align-items-center">
-                    <button type="submit" class="btn btn-success btn-sm" id="users-save-btn" style="display:none">
-                        <i class="bi bi-floppy-fill me-1"></i>Save Changes
-                    </button>
-                    <button type="button" class="btn btn-primary btn-sm"
-                            data-bs-toggle="modal" data-bs-target="#create-user-modal">
-                        <i class="bi bi-person-plus-fill me-1"></i>New User
-                    </button>
-                </div>
-            </div>
-
-            {# Info alert #}
-            <div class="px-4 pb-3 pt-1">
-                <div class="alert alert-info d-flex align-items-start gap-2 mb-0 py-2 small" role="alert">
-                    <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
-                    <span>
-                        <strong>Change Password</strong> resets an account to the default password
-                        <code class="mgmt-code">{{ default_password }}</code> and forces a new password at next sign-in.
-                    </span>
-                </div>
+                <button type="button" class="btn btn-primary btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#create-user-modal">
+                    <i class="bi bi-person-plus-fill me-1"></i>New User
+                </button>
             </div>
 
             {# Users table #}
@@ -94,97 +68,106 @@
                 <table class="table mgmt-table align-middle mb-0">
                     <thead class="mgmt-thead">
                         <tr>
-                            <th scope="col" style="min-width: 220px;">Name</th>
-                            <th scope="col" style="min-width: 140px;">Username</th>
-                            <th scope="col" style="min-width: 200px;">Email</th>
-                            <th scope="col" style="min-width: 160px;">Account Type</th>
-                            <th scope="col" style="min-width: 280px;">Actions</th>
+                            <th scope="col" style="min-width:220px;">Name</th>
+                            <th scope="col" style="min-width:140px;">Username</th>
+                            <th scope="col" style="min-width:200px;">Email</th>
+                            <th scope="col" style="min-width:120px;">Department</th>
+                            <th scope="col" style="min-width:160px;">Account Type</th>
+                            <th scope="col" style="min-width:160px;">Last Login</th>
+                            <th scope="col" style="min-width:160px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="users-tbody">
-                        {% for form in formset %}
-                            <tr class="mgmt-row align-top"
-                                data-search-text="{{ form.instance.get_full_name|lower }} {{ form.instance.username|lower }} {{ form.instance.email|lower }} {{ form.instance.role|lower }}">
-                                {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                        {% for user in users %}
+                            <tr class="mgmt-row align-middle"
+                                data-search-text="{{ user.get_full_name|lower }} {{ user.username|lower }} {{ user.email|lower }} {{ user.department|lower }} {{ user.role|lower }}">
+                                {# Name + avatar #}
                                 <td>
-                                    <div class="row g-2">
-                                        <div class="col-12">
-                                            {{ form.first_name }}
-                                            {% for error in form.first_name.errors %}
-                                                <div class="invalid-feedback d-block">{{ error }}</div>
-                                            {% endfor %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="mgmt-avatar flex-shrink-0">
+                                            {% if user.profile_photo %}
+                                                <img src="{{ user.profile_photo.url }}" alt="{{ user.get_full_name }}" class="mgmt-avatar__img">
+                                            {% else %}
+                                                <span class="mgmt-avatar__initial">{{ user.get_full_name|default:user.username|slice:":1"|upper }}</span>
+                                            {% endif %}
                                         </div>
-                                        <div class="col-12">
-                                            {{ form.last_name }}
-                                            {% for error in form.last_name.errors %}
-                                                <div class="invalid-feedback d-block">{{ error }}</div>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    {% if form.non_field_errors %}
-                                        {% for error in form.non_field_errors %}
-                                            <div class="invalid-feedback d-block">{{ error }}</div>
-                                        {% endfor %}
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {{ form.username }}
-                                    {% for error in form.username.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    {{ form.email }}
-                                    {% for error in form.email.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    {{ form.role }}
-                                    {% for error in form.role.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    <div class="d-flex flex-column gap-2">
-                                        {% if form.instance.pk %}
-                                            <span class="text-muted small">
-                                                <i class="bi bi-clock me-1"></i>Last login:
-                                                {% if form.instance.last_login %}
-                                                    {{ form.instance.last_login|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
-                                                {% else %}
-                                                    Never
-                                                {% endif %}
-                                            </span>
-                                            {% if form.instance.is_superuser %}
-                                                <span class="badge text-bg-warning">
+                                        <div class="lh-sm">
+                                            <div class="fw-semibold">{{ user.get_full_name|default:user.username }}</div>
+                                            {% if user.is_superuser %}
+                                                <span class="badge text-bg-warning" style="font-size:0.65rem;">
                                                     <i class="bi bi-star-fill me-1"></i>Superuser
                                                 </span>
-                                            {% elif request.user.pk == form.instance.pk %}
-                                                <span class="badge text-bg-primary">
+                                            {% elif request.user.pk == user.pk %}
+                                                <span class="badge text-bg-primary" style="font-size:0.65rem;">
                                                     <i class="bi bi-person-check-fill me-1"></i>You
                                                 </span>
                                             {% endif %}
-                                            <div class="d-flex flex-wrap gap-2 mt-1">
-                                                <button type="submit" class="btn btn-outline-warning btn-sm"
-                                                        name="user_action" value="reset_password:{{ form.instance.pk }}">
-                                                    <i class="bi bi-key-fill me-1"></i>Change Password
+                                            {% if user.must_change_password %}
+                                                <span class="badge text-bg-warning" style="font-size:0.65rem;">
+                                                    <i class="bi bi-key-fill me-1"></i>Must reset pw
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="text-muted small font-monospace">{{ user.username }}</span></td>
+                                <td><span class="small">{{ user.email|default:"—" }}</span></td>
+                                <td>
+                                    {% if user.department %}
+                                        <span class="badge text-bg-secondary">{{ user.department }}</span>
+                                    {% else %}
+                                        <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge mgmt-role-badge mgmt-role-badge--{{ user.role }}">
+                                        {{ user.get_role_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="text-muted small">
+                                        {% if user.last_login %}
+                                            {{ user.last_login|timezone:"Asia/Manila"|date:"M d, Y" }}<br>
+                                            <span class="opacity-75">{{ user.last_login|timezone:"Asia/Manila"|date:"h:i A" }}</span>
+                                        {% else %}
+                                            Never
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <button type="button"
+                                                class="btn btn-sm btn-primary mgmt-manage-btn"
+                                                data-user-pk="{{ user.pk }}"
+                                                data-user-first="{{ user.first_name|escapejs }}"
+                                                data-user-last="{{ user.last_name|escapejs }}"
+                                                data-user-username="{{ user.username|escapejs }}"
+                                                data-user-email="{{ user.email|escapejs }}"
+                                                data-user-department="{{ user.department|escapejs }}"
+                                                data-user-role="{{ user.role }}"
+                                                data-user-name="{{ user.get_full_name|default:user.username|escapejs }}"
+                                                data-bs-toggle="modal" data-bs-target="#manage-user-modal">
+                                            <i class="bi bi-pencil-square me-1"></i>Manage
+                                        </button>
+                                        {% if not user.is_superuser and request.user.pk != user.pk %}
+                                            <form method="post" action="{% url 'hub:management' %}"
+                                                  class="d-inline"
+                                                  onsubmit="return confirm('Delete account for {{ user.get_full_name|default:user.username|escapejs }}?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="active_tab" value="users">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                        name="user_action" value="delete_user:{{ user.pk }}"
+                                                        title="Delete {{ user.get_full_name|default:user.username|escapejs }}">
+                                                    <i class="bi bi-trash3-fill"></i>
                                                 </button>
-                                                {% if not form.instance.is_superuser and request.user.pk != form.instance.pk %}
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm"
-                                                            name="user_action" value="delete_user:{{ form.instance.pk }}"
-                                                            onclick="return confirm('Delete this user account?');">
-                                                        <i class="bi bi-trash3-fill me-1"></i>Delete
-                                                    </button>
-                                                {% endif %}
-                                            </div>
+                                            </form>
                                         {% endif %}
                                     </div>
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-5">
+                                <td colspan="7" class="text-center text-muted py-5">
                                     <i class="bi bi-people display-6 d-block mb-2 opacity-50"></i>
                                     No users found.
                                 </td>
@@ -199,14 +182,14 @@
                 <span class="mgmt-limit-note" id="user-limit-note"></span>
                 <div class="mgmt-pagination" id="user-pagination"></div>
             </div>
-        </form>
+        </div>
 
-        {# Create User Modal #}
+        {# ── Create User Modal ── #}
         <div class="modal fade" id="create-user-modal" tabindex="-1"
              aria-labelledby="create-user-modal-title" aria-hidden="true">
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
                 <div class="modal-content">
-                    <form method="post" novalidate>
+                    <form method="post" action="{% url 'hub:management' %}" novalidate>
                         {% csrf_token %}
                         <input type="hidden" name="active_tab" value="users">
                         <input type="hidden" name="create_user_submit" value="1">
@@ -244,6 +227,11 @@
                                     {% for error in create_user_form.email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                                 </div>
                                 <div class="col-md-6">
+                                    <label class="form-label" for="{{ create_user_form.department.id_for_label }}">Department</label>
+                                    {{ create_user_form.department }}
+                                    {% for error in create_user_form.department.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                                <div class="col-md-6">
                                     <label class="form-label" for="{{ create_user_form.role.id_for_label }}">Account Type</label>
                                     {{ create_user_form.role }}
                                     {% for error in create_user_form.role.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
@@ -270,6 +258,117 @@
                 </div>
             </div>
         </div>
+
+        {# ── Manage User Modal ── #}
+        <div class="modal fade" id="manage-user-modal" tabindex="-1"
+             aria-labelledby="manage-user-modal-title" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <form method="post" id="manage-user-form" novalidate>
+                        {% csrf_token %}
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="manage-user-modal-title">
+                                <i class="bi bi-person-gear me-2"></i>Manage User
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body pb-2">
+
+                            {# ── Section 1: Identity ── #}
+                            <p class="fw-semibold text-muted text-uppercase small mb-2">
+                                <i class="bi bi-person-fill me-1"></i>Identity
+                            </p>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-first-name">First Name</label>
+                                    <input type="text" class="form-control" id="mu-first-name" name="first_name" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-last-name">Last Name</label>
+                                    <input type="text" class="form-control" id="mu-last-name" name="last_name">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-username">Username</label>
+                                    <input type="text" class="form-control" id="mu-username" name="username" required autocomplete="off">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-email">Email</label>
+                                    <input type="email" class="form-control" id="mu-email" name="email" autocomplete="off">
+                                </div>
+                            </div>
+
+                            {# ── Section 2: Role & Department ── #}
+                            <p class="fw-semibold text-muted text-uppercase small mb-2">
+                                <i class="bi bi-shield-fill me-1"></i>Role &amp; Department
+                            </p>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-role">Account Type</label>
+                                    <select class="form-select" id="mu-role" name="role" required>
+                                        {% for value, label in role_choices %}
+                                            <option value="{{ value }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-department">Department</label>
+                                    <select class="form-select" id="mu-department" name="department">
+                                        <option value="">— Select department —</option>
+                                        <option value="ESS">ESS</option>
+                                        <option value="HP">HP</option>
+                                        <option value="Dell">Dell</option>
+                                        <option value="ENS">ENS</option>
+                                        <option value="ESG">ESG</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {# ── Section 3: Password ── #}
+                            <p class="fw-semibold text-muted text-uppercase small mb-2">
+                                <i class="bi bi-lock-fill me-1"></i>Password
+                            </p>
+                            <div class="alert alert-info d-flex align-items-start gap-2 py-2 small mb-3" role="alert">
+                                <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+                                <span>Leave blank to keep the current password. Use <strong>Reset to Default</strong> to restore
+                                <code class="mgmt-code">{{ default_password }}</code> and force a re-login.</span>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-password1">New Password</label>
+                                    <input type="password" class="form-control" id="mu-password1"
+                                           name="password1" autocomplete="new-password" placeholder="Leave blank to keep current">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="mu-password2">Confirm Password</label>
+                                    <input type="password" class="form-control" id="mu-password2"
+                                           name="password2" autocomplete="new-password" placeholder="Confirm new password">
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <button type="submit" form="mu-reset-form" class="btn btn-sm btn-outline-warning"
+                                        onclick="return confirm('Reset password to default and force re-login?');">
+                                    <i class="bi bi-key-fill me-1"></i>Reset to Default Password
+                                </button>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-floppy-fill me-1"></i>Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {# Standalone reset-password form (outside modal to avoid nested-form issue) #}
+        <form method="post" action="{% url 'hub:management' %}" id="mu-reset-form" class="d-none">
+            {% csrf_token %}
+            <input type="hidden" name="active_tab" value="users">
+            <input type="hidden" id="mu-reset-pk" name="user_action" value="">
+        </form>
 
         {% if show_create_user_modal %}
             <script>
@@ -399,9 +498,10 @@
 
 </div>
 
-{# ── Search, pagination (50/page) + dirty-save JS ── #}
+{# ── Search + pagination + Manage modal JS ── #}
 <script>
 (function () {
+    'use strict';
     var PAGE_SIZE = 50;
 
     function initTab(tbodyId, searchId, badgeId, limitNoteId, paginationId, saveBtnId, formSelector) {
@@ -414,12 +514,11 @@
         if (!tbody || !searchInput) return;
 
         var rows = Array.from(tbody.querySelectorAll('tr.mgmt-row'));
-        var currentPage  = 1;
+        var currentPage = 1;
 
-        /* ── render ── */
         function render() {
-            var q        = searchInput.value.trim().toLowerCase();
-            var filtered = q ? rows.filter(function (r) {
+            var q         = searchInput.value.trim().toLowerCase();
+            var filtered  = q ? rows.filter(function (r) {
                 return (r.dataset.searchText || '').toLowerCase().includes(q);
             }) : rows;
             var total        = rows.length;
@@ -429,30 +528,26 @@
             var start = (currentPage - 1) * PAGE_SIZE;
             var end   = start + PAGE_SIZE;
 
-            /* visibility */
             rows.forEach(function (row) { row.style.display = 'none'; });
             filtered.forEach(function (row, idx) {
                 row.style.display = (idx >= start && idx < end) ? '' : 'none';
             });
 
-            /* badge */
             if (badge) {
                 badge.textContent = q
                     ? totalFiltered + ' match' + (totalFiltered !== 1 ? 'es' : '')
                     : total + ' total';
             }
 
-            /* limit note */
             if (limitNote) {
                 if (totalFiltered > 0 && totalPages > 1) {
-                    limitNote.textContent = 'Showing ' + (start + 1) + '–' + Math.min(end, totalFiltered) + ' of ' + totalFiltered;
+                    limitNote.textContent = 'Showing ' + (start + 1) + '\u2013' + Math.min(end, totalFiltered) + ' of ' + totalFiltered;
                     limitNote.style.display = 'inline';
                 } else {
                     limitNote.style.display = 'none';
                 }
             }
 
-            /* pagination buttons */
             if (paginationEl) {
                 if (totalPages > 1) {
                     var prevId = paginationId + '-prev';
@@ -479,7 +574,6 @@
             }
         }
 
-        /* ── search ── */
         var debounce;
         searchInput.addEventListener('input', function () {
             currentPage = 1;
@@ -487,7 +581,6 @@
             debounce = setTimeout(render, 120);
         });
 
-        /* ── dirty detection → show save button ── */
         if (saveBtn && formSelector) {
             var form = document.querySelector(formSelector);
             if (form) {
@@ -500,9 +593,55 @@
         render();
     }
 
+    /* ── Manage User Modal: populate from data-* attributes ── */
+    function initManageModal() {
+        var manageForm   = document.getElementById('manage-user-form');
+        var resetPkInput = document.getElementById('mu-reset-pk');
+        if (!manageForm) return;
+
+        document.querySelectorAll('.mgmt-manage-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var pk         = btn.dataset.userPk;
+                var firstName  = btn.dataset.userFirst  || '';
+                var lastName   = btn.dataset.userLast   || '';
+                var username   = btn.dataset.userUsername || '';
+                var email      = btn.dataset.userEmail  || '';
+                var department = btn.dataset.userDepartment || '';
+                var role       = btn.dataset.userRole   || '';
+                var fullName   = btn.dataset.userName   || username;
+
+                /* Update modal title */
+                var titleEl = document.getElementById('manage-user-modal-title');
+                if (titleEl) {
+                    titleEl.innerHTML = '<i class="bi bi-person-gear me-2"></i>Manage &mdash; ' +
+                        fullName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                }
+
+                /* Set form action */
+                manageForm.action = '/users/' + pk + '/manage/';
+
+                /* Populate fields */
+                manageForm.querySelector('#mu-first-name').value  = firstName;
+                manageForm.querySelector('#mu-last-name').value   = lastName;
+                manageForm.querySelector('#mu-username').value    = username;
+                manageForm.querySelector('#mu-email').value       = email;
+                manageForm.querySelector('#mu-department').value  = department;
+                manageForm.querySelector('#mu-password1').value   = '';
+                manageForm.querySelector('#mu-password2').value   = '';
+
+                var roleSelect = manageForm.querySelector('#mu-role');
+                if (roleSelect) roleSelect.value = role;
+
+                /* Set the reset-password hidden input */
+                if (resetPkInput) resetPkInput.value = 'reset_password:' + pk;
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-        initTab('users-tbody',    'user-search',    'user-count-badge',    'user-limit-note',    'user-pagination',    'users-save-btn',    '#users-pane form');
+        initTab('users-tbody',    'user-search',    'user-count-badge',    'user-limit-note',    'user-pagination',    null, null);
         initTab('accounts-tbody', 'account-search', 'account-count-badge', 'account-limit-note', 'account-pagination', 'accounts-save-btn', '#accounts-pane form');
+        initManageModal();
     });
 }());
 </script>

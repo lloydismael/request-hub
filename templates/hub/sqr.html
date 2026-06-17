@@ -1,346 +1,1199 @@
 {% extends "base.html" %}
-{% load tz %}
-{% block title %}SQR · Request Hub{% endblock %}
+{% load tz humanize %}
+{% block title %}SQR &middot; Request Hub{% endblock %}
+
 {% block content %}
+<style>
+/* ── Expand main container to full-width on SQR page ─────────────────── */
+main.container {
+    max-width: 100% !important;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+/* ── SQR Tracker Wide Table ──────────────────────────────────────────── */
+.sqr-tracker-wrap {
+    overflow-x: auto;
+    border-radius: 0.5rem;
+    /* Ensure scroll container doesn't clip sticky shadows */
+    padding-bottom: 2px;
+    /* Hide scrollbar visually while keeping scroll functionality */
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* IE / Edge */
+}
+.sqr-tracker-wrap::-webkit-scrollbar { display: none; } /* Chrome / Safari / Opera */
+.sqr-tracker {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.78rem;
+    min-width: max-content;
+    table-layout: auto; /* Columns size to header text; data capped by max-width */
+}
+.sqr-tracker th,
+.sqr-tracker td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.4rem 0.65rem;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    vertical-align: middle;
+}
+
+/* ── Frozen columns A-E: explicit widths that match left offsets exactly ── */
+/* Width ladder:  A=110  B=130  C=144  D=160  E=160  → cumulative: 110 240 384 544 704 */
+.sqr-tracker .col-sticky-0 { position: sticky; left: 0px;   z-index: 3; width: 110px; min-width: 110px; max-width: 110px; }
+.sqr-tracker .col-sticky-1 { position: sticky; left: 110px; z-index: 3; width: 130px; min-width: 130px; max-width: 130px; }
+.sqr-tracker .col-sticky-2 { position: sticky; left: 240px; z-index: 3; width: 144px; min-width: 144px; max-width: 144px; }
+.sqr-tracker .col-sticky-3 { position: sticky; left: 384px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sqr-tracker .col-sticky-4 { position: sticky; left: 544px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; }
+
+/* Elevated z-index for thead sticky cells so they stay above scrolling data cells */
+.sqr-tracker thead .col-sticky-0,
+.sqr-tracker thead .col-sticky-1,
+.sqr-tracker thead .col-sticky-2,
+.sqr-tracker thead .col-sticky-3,
+.sqr-tracker thead .col-sticky-4 { z-index: 5; }
+
+/* Opaque backgrounds for all sticky cells — parent backdrop-filter creates stacking context */
+.sqr-tracker thead .col-sticky-0,
+.sqr-tracker thead .col-sticky-1,
+.sqr-tracker thead .col-sticky-2,
+.sqr-tracker thead .col-sticky-3,
+.sqr-tracker thead .col-sticky-4 { background-color: #1a1f2e !important; }
+.sqr-tracker tbody tr td.col-sticky-0,
+.sqr-tracker tbody tr td.col-sticky-1,
+.sqr-tracker tbody tr td.col-sticky-2,
+.sqr-tracker tbody tr td.col-sticky-3,
+.sqr-tracker tbody tr td.col-sticky-4 { background-color: #151929 !important; }
+.sqr-tracker tbody tr:hover td.col-sticky-0,
+.sqr-tracker tbody tr:hover td.col-sticky-1,
+.sqr-tracker tbody tr:hover td.col-sticky-2,
+.sqr-tracker tbody tr:hover td.col-sticky-3,
+.sqr-tracker tbody tr:hover td.col-sticky-4 { background-color: #1d2236 !important; }
+
+/* Stage group header colours */
+.sqr-stage-frozen   { background-color: #111827 !important; color: #94a3b8; }
+.sqr-stage-proposal { background-color: #0c2d42; color: #7dd3fc; }
+.sqr-stage-delivery { background-color: #162616; color: #86efac; }
+.sqr-stage-revenue  { background-color: #27162b; color: #d8b4fe; }
+.sqr-stage-action   { background-color: #111827; color: #94a3b8; }
+/* White text on column-letter and column-name rows for all stage-coloured headers */
+.sqr-col-letter th.sqr-stage-proposal,
+.sqr-col-letter th.sqr-stage-delivery,
+.sqr-col-letter th.sqr-stage-revenue,
+.sqr-col-name   th.sqr-stage-proposal,
+.sqr-col-name   th.sqr-stage-delivery,
+.sqr-col-name   th.sqr-stage-revenue { color: #ffffff !important; }
+
+/* Column letter row */
+.sqr-col-letter { background-color: #0d1117; color: #4b5563; font-size: 0.67rem; text-align: center; }
+/* Column name row */
+.sqr-col-name   { background-color: #1a1f2e; color: #e2e8f0; }
+
+/* Divider shadow after last frozen column (E) — mimics Excel frozen-pane separator */
+.sqr-tracker .col-sticky-border {
+    border-right: 2px solid #38bdf8 !important;
+    box-shadow: 4px 0 8px -2px rgba(0,0,0,0.6) !important;
+}
+
+/* Non-fixed-width cells that may wrap (used outside frozen area) */
+.sqr-tracker .cell-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* Scrollable columns — auto-size to header text; cap data cells so they don't blow up columns */
+.sqr-tracker th:not([class*="col-sticky"]) { min-width: 70px; max-width: 220px; white-space: nowrap; }
+.sqr-tracker td:not([class*="col-sticky"]) { min-width: 70px; max-width: 220px; }
+/* sqr-col-wide no longer used on th — kept for any legacy td references */
+.sqr-tracker td.sqr-col-wide { min-width: 140px; max-width: 220px; }
+/* AN (col 40 = Reference No.) and AP (col 42 = Remarks): pin to header text width */
+.sqr-tracker tr > :nth-child(40) { max-width: 130px; min-width: 0; }
+.sqr-tracker tr > :nth-child(42) { max-width: 100px; min-width: 0; }
+.sqr-tracker tr > :nth-child(43) { max-width: 150px; min-width: 0; }
+
+/* ── Light-mode overrides: sticky body cells must be light so dark text is readable ── */
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-4 { background-color: #f0f4f8 !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr:hover td.col-sticky-4 { background-color: #e2e8f0 !important; }
+
+/* ── Inline cell editing (Excel-like) ──────────────────────────────────── */
+.sqr-inline-cell { cursor: cell; position: relative; }
+.sqr-inline-cell:not(.sqr-editing):hover { outline: 1px solid rgba(99,102,241,.5); outline-offset: -1px; }
+.sqr-inline-cell.sqr-editing { padding: 1px !important; overflow: visible !important; }
+.sqr-inline-cell .sqr-inline-input {
+    font-size: 0.78rem; min-width: 60px; width: 100%; padding: 1px 4px;
+    border: 1px solid #6366f1; border-radius: 3px; background: #1e2640; color: #e2e8f0;
+    box-shadow: 0 0 0 2px rgba(99,102,241,.3);
+}
+.sqr-inline-cell .sqr-inline-input:focus { outline: none; }
+body:not(.dark-mode) .sqr-inline-cell .sqr-inline-input {
+    background: #fff;
+    color: #1e293b;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99,102,241,.25);
+}
+/* Light-mode: text-info links (cols F & K) need darker colour for readability */
+body:not(.dark-mode) .sqr-tracker a.text-info {
+    color: #0c63b4 !important;
+}
+body:not(.dark-mode) .sqr-tracker a.text-info:hover {
+    color: #084a8a !important;
+}
+.sqr-inline-cell.sqr-saving .sqr-display { opacity: .4; }
+@keyframes sqr-saved-flash { 0%,100%{box-shadow:inset 0 0 0 2px #22c55e} 50%{box-shadow:inset 0 0 0 2px #4ade80} }
+.sqr-inline-cell.sqr-saved { animation: sqr-saved-flash .6s ease; }
+.sqr-inline-cell.sqr-error { box-shadow: inset 0 0 0 2px #ef4444; }
+/* Tooltip hint for editable cells */
+.sqr-inline-cell[title]::after { display: none; }
+
+/* ── For Revision row highlight ─────────────────────────────────────────── */
+/* Non-sticky cells: semi-transparent tint is fine (they scroll behind sticky cols) */
+.sqr-tracker tbody tr.sqr-row--revision td { background-color: rgba(239,68,68,0.08) !important; }
+.sqr-tracker tbody tr.sqr-row--revision:hover td { background-color: rgba(239,68,68,0.16) !important; }
+/* Sticky cells MUST use opaque colours — transparent backgrounds cause scrolling content to bleed through */
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0,
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-1,
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-2,
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-3,
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-4 { background-color: #271520 !important; }
+.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-0,
+.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-1,
+.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-2,
+.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-3,
+.sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #321826 !important; }
+/* Light mode */
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td { background-color: rgba(220,38,38,0.06) !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td { background-color: rgba(220,38,38,0.12) !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-4 { background-color: #fde8e8 !important; }
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-0,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-1,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-2,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-3,
+body:not(.dark-mode) .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 { background-color: #fbd5d5 !important; }
+@keyframes sqr-revision-pulse { 0%,100%{ box-shadow: inset 3px 0 0 #ef4444; } 50%{ box-shadow: inset 3px 0 0 #fca5a5; } }
+.sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 { animation: sqr-revision-pulse 1.8s ease-in-out infinite; }
+/* ── Closed Lost: overlay NA on Service Delivery (cols 24-37) + Revenue (38-43) ── */
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) {
+    background-color: rgba(148, 163, 184, 0.10) !important;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) > * {
+    opacity: 0.55;
+    filter: grayscale(0.35);
+}
+.sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43):hover {
+    outline: none !important;
+}
+body:not(.dark-mode) .sqr-row--closed-lost td:nth-child(n+24):nth-child(-n+43) {
+    background-color: #eef2f7 !important;
+    color: #64748b;
+}
+body:not(.dark-mode) .sqr-row--closed-lost:hover td:nth-child(n+24):nth-child(-n+43) {
+    background-color: #e2e8f0 !important;
+}
+
+/* Hover preview popover */
+#sqr-cell-preview {
+    position: fixed;
+    z-index: 9999;
+    max-width: 340px;
+    padding: 0.45rem 0.7rem;
+    background: #1e2436;
+    color: #e2e8f0;
+    border: 1px solid rgba(99,102,241,0.4);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+body:not(.dark-mode) #sqr-cell-preview {
+    background: #fff;
+    color: #1e293b;
+    border-color: rgba(99,102,241,0.3);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+}
+#sqr-cell-preview.visible { opacity: 1; }
+
+.sqr-approval-choice-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 10050;
+}
+
+.sqr-approval-choice-modal.is-visible {
+    display: flex;
+}
+
+.sqr-approval-choice-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.68);
+    backdrop-filter: blur(3px);
+}
+
+.sqr-approval-choice-modal__dialog {
+    position: relative;
+    width: min(100%, 560px);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: #101828;
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.35);
+}
+
+.sqr-approval-choice-modal__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.sqr-approval-choice-modal__actions .btn {
+    flex: 1 1 220px;
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog {
+    background: #ffffff;
+    color: #0f172a;
+    --bs-heading-color: #0f172a;
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h1,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h2,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h3,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h4,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h5,
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog h6 {
+    color: #0f172a;
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog .text-muted {
+    color: #334155 !important;
+}
+
+body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
+    color: #0f172a;
+    background: #e2e8f0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.35rem;
+}
+</style>
+
 <div class="row g-4">
     <div class="col-12">
-        <div class="glass-card p-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h2 class="h5 mb-0"><i class="bi bi-file-earmark-text-fill me-2"></i>SQR Submissions</h2>
-                <div class="d-flex gap-2 flex-wrap align-items-center">
-                    {% if active_sqr_tab == 'submissions' %}
-                        {% if can_create_sqr %}
-                            <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">New Submission</button>
-                        {% endif %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total: {{ sqr_counts.total }}</span>
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing: {{ sqr_counts.processing }}</span>
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision: {{ sqr_counts.for_revision }}</span>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Approved: {{ sqr_counts.approved }}</span>
-                    {% elif show_revenue_tracker_tab %}
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Quotation Stage: {{ quotation_stage_count }}</span>
-                        <span class="badge bg-info-subtle text-info border border-info-subtle">Order Stage: {{ order_stage_count }}</span>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Revenue Stage: {{ revenue_stage_totals.count }}</span>
+
+        {# ── Header card ──────────────────────────────────────────────────── #}
+        <div class="glass-card p-3 mb-3">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2"></i>Service Quotation Request</h2>
+                <div class="d-flex gap-2">
+                    {% if is_pm %}
+                        <a href="{% url 'hub:sqr-export' %}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+                        </a>
+                    {% endif %}
+                    {% if is_admin and sqr_import_form %}
+                        <button type="button" class="btn btn-sm btn-outline-info" id="import-sqr-btn">
+                            <i class="bi bi-upload me-1"></i>Import Data
+                        </button>
+                    {% endif %}
+                    {% if can_create_sqr %}
+                        <button type="button" class="btn btn-sm btn-primary" id="new-sqr-btn">
+                            <i class="bi bi-plus-lg me-1"></i>New Submission
+                        </button>
                     {% endif %}
                 </div>
             </div>
-
-            <ul class="nav nav-tabs mb-3">
-                <li class="nav-item">
-                    <a class="nav-link {% if active_sqr_tab == 'submissions' %}active{% endif %}" href="{% url 'hub:sqr' %}?tab=submissions"><i class="bi bi-file-earmark-text me-1"></i>SQR Submissions</a>
-                </li>
-                {% if show_revenue_tracker_tab %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if active_sqr_tab == 'revenue-tracker' %}active{% endif %}" href="{% url 'hub:sqr' %}?tab=revenue-tracker"><i class="bi bi-graph-up-arrow me-1"></i>Revenue Tracker</a>
-                    </li>
+            {# Summary badges — clickable filters #}
+            <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters">
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="" style="cursor:pointer;">Total: {{ proposal_counts.total }}</span>
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted" style="cursor:pointer;">
+                    <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
+                </span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="status:for_revision" style="cursor:pointer;">
+                    <i class="bi bi-pencil-square me-1"></i>For Revision: {{ proposal_counts.for_revision }}
+                </span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="status:reviewed" style="cursor:pointer;">
+                    <i class="bi bi-check2-circle me-1"></i>Approved: {{ proposal_counts.approved }}
+                </span>
+                {% if proposal_counts.submitted_pending %}
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:submitted_pending" style="cursor:pointer;">
+                    <i class="bi bi-send me-1"></i>Submitted&ndash;Pending: {{ proposal_counts.submitted_pending }}
+                </span>
                 {% endif %}
-            </ul>
+                {% if proposal_counts.negotiation %}
+                <span class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sqr-filter="proposal_status:negotiation_review" style="cursor:pointer;">
+                    <i class="bi bi-chat-dots me-1"></i>Negotiation: {{ proposal_counts.negotiation }}
+                </span>
+                {% endif %}
+                {% if proposal_counts.closed_won %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_won" style="cursor:pointer;">
+                    <i class="bi bi-trophy me-1"></i>Closed Won: {{ proposal_counts.closed_won }}
+                </span>
+                {% endif %}
+                {% if proposal_counts.closed_lost %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_lost" style="cursor:pointer;">
+                    <i class="bi bi-x-circle me-1"></i>Closed Lost: {{ proposal_counts.closed_lost }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
 
-            {% if active_sqr_tab == 'submissions' %}
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead>
-                            <tr>
-                                <th>SQR ID</th>
-                                <th>Engineer</th>
-                                <th>Account Details</th>
-                                <th>Service</th>
-                                <th>SSE Manhrs</th>
-                                <th>Docs</th>
-                                <th>Approver</th>
-                                <th>Status</th>
-                                <th>Updated</th>
-                                <th class="text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in sqr_submissions %}
-                            <tr>
-                                <td class="fw-semibold">{{ item.reference_code }}</td>
-                                <td>{{ item.engineer.get_full_name|default:item.engineer.username }}</td>
-                                <td>
-                                    <div class="fw-semibold">{{ item.customer_name }}</div>
-                                    {% if item.customer_company %}<div class="small text-muted">Group: {{ item.customer_company }}</div>{% endif %}
-                                    {% if item.customer_contact %}<div class="small text-muted">Manager: {{ item.customer_contact }}</div>{% endif %}
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ item.project_title }}</div>
-                                    <div class="small text-muted">{{ item.project_details|truncatechars:100 }}</div>
-                                    {% if item.remarks %}<div class="small text-muted">Remarks: {{ item.remarks|truncatechars:60 }}</div>{% endif %}
-                                </td>
-                                <td>{{ item.sse_manhrs|default:"-" }}</td>
-                                <td>
-                                    {% if item.documentation_link_list %}
-                                        <ul class="list-unstyled mb-0 small">
-                                            {% for link in item.documentation_link_list %}
-                                                <li><a href="{{ link }}" target="_blank" rel="noopener">Link {{ forloop.counter }}</a></li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <span class="text-muted">No links</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}</td>
-                                <td>
-                                    {% if item.status == 'reviewed' %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>
-                                    {% elif item.status == 'for_revision' %}
-                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
-                                    {% else %}
-                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
-                                    {% endif %}
-                                </td>
-                                <td class="small text-muted">
-                                    {% if item.reviewed_at %}
-                                        Reviewed {{ item.reviewed_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
-                                    {% else %}
-                                        {{ item.updated_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    {% if request.user.is_engineer_access_role and item.engineer_id == request.user.id %}
-                                        <div class="d-flex gap-1 justify-content-end">
-                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-edit' item.pk %}">Edit</a>
-                                            <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:sqr-delete' item.pk %}">Delete</a>
+        {# ── Main Tracker Table ────────────────────────────────────────────── #}
+        <div class="glass-card p-2">
+            <div class="sqr-tracker-wrap">
+                <table class="sqr-tracker table-hover">
+                    <thead>
+                        {# Row 1: Stage group headers #}
+                        <tr>
+                            {# A-E: individual sticky frozen cells (each must be its own <th> for correct sticky anchoring) #}
+                            <th class="sqr-stage-frozen col-sticky-0"></th>
+                            <th class="sqr-stage-frozen col-sticky-1"></th>
+                            <th class="sqr-stage-frozen col-sticky-2"></th>
+                            <th class="sqr-stage-frozen col-sticky-3"></th>
+                            <th class="sqr-stage-frozen col-sticky-4 col-sticky-border"></th>
+                            {# F(RQ ID) + G-W = 18 cols, Proposal Stage #}
+                            <th colspan="18" class="sqr-stage-proposal text-center">
+                                <i class="bi bi-file-earmark-text me-1"></i>Proposal Stage
+                            </th>
+                            {# X-AK = cols 24-37 = 14 cols, Service Delivery Stage #}
+                            <th colspan="14" class="sqr-stage-delivery text-center">
+                                <i class="bi bi-tools me-1"></i>Service Delivery Stage
+                            </th>
+                            {# AL-AQ = cols 38-43 = 6 cols, Revenue Stage #}
+                            <th colspan="6" class="sqr-stage-revenue text-center">
+                                <i class="bi bi-bar-chart-line-fill me-1"></i>Revenue Stage
+                            </th>
+                            {# Action col #}
+                            <th class="sqr-stage-action text-center">Action</th>
+                        </tr>
+                        {# Row 2: Column letters #}
+                        <tr class="sqr-col-letter">
+                            <th class="col-sticky-0">A</th>
+                            <th class="col-sticky-1">B</th>
+                            <th class="col-sticky-2">C</th>
+                            <th class="col-sticky-3">D</th>
+                            <th class="col-sticky-4 col-sticky-border">E</th>
+                            <th class="sqr-stage-proposal">F</th>
+                            <th class="sqr-stage-proposal">G</th><th class="sqr-stage-proposal">H</th><th class="sqr-stage-proposal">I</th><th class="sqr-stage-proposal">J</th><th class="sqr-stage-proposal">K</th>
+                            <th class="sqr-stage-proposal">L</th><th class="sqr-stage-proposal">M</th><th class="sqr-stage-proposal">N</th><th class="sqr-stage-proposal">O</th><th class="sqr-stage-proposal">P</th>
+                            <th class="sqr-stage-proposal">Q</th><th class="sqr-stage-proposal">R</th><th class="sqr-stage-proposal">S</th><th class="sqr-stage-proposal">T</th><th class="sqr-stage-proposal">U</th>
+                            <th class="sqr-stage-proposal">V</th><th class="sqr-stage-proposal">W</th>
+                            <th class="sqr-stage-delivery">X</th><th class="sqr-stage-delivery">Y</th><th class="sqr-stage-delivery">Z</th><th class="sqr-stage-delivery">AA</th><th class="sqr-stage-delivery">AB</th>
+                            <th class="sqr-stage-delivery">AC</th><th class="sqr-stage-delivery">AD</th><th class="sqr-stage-delivery">AE</th><th class="sqr-stage-delivery">AF</th><th class="sqr-stage-delivery">AG</th>
+                            <th class="sqr-stage-delivery">AH</th><th class="sqr-stage-delivery">AI</th><th class="sqr-stage-delivery">AJ</th><th class="sqr-stage-delivery">AK</th>
+                            <th class="sqr-stage-revenue">AL</th><th class="sqr-stage-revenue">AM</th><th class="sqr-stage-revenue">AN</th><th class="sqr-stage-revenue">AO</th><th class="sqr-stage-revenue">AP</th><th class="sqr-stage-revenue">AQ</th>
+                            <th>&mdash;</th>
+                        </tr>
+                        {# Row 3: Column names #}
+                        <tr class="sqr-col-name">
+                            <th class="col-sticky-0">SQR Date</th>
+                            <th class="col-sticky-1">SQR ID</th>
+                            <th class="col-sticky-2">Account Name</th>
+                            <th class="col-sticky-3">Service Description</th>
+                            <th class="col-sticky-4 col-sticky-border">Scope of Services</th>
+                            <th class="sqr-stage-proposal">RQ ID</th>
+                            <th class="sqr-stage-proposal">Group Name</th>
+                            <th class="sqr-stage-proposal">Account Manager</th>
+                            <th class="sqr-stage-proposal">Requester Name</th>
+                            <th class="sqr-stage-proposal">Approver Name</th>
+                            <th class="sqr-stage-proposal">SQR Doc. Ref. Link</th>
+                            <th class="sqr-stage-proposal">SSE Man-hrs</th>
+                            <th class="sqr-stage-proposal">SSE Amount</th>
+                            <th class="sqr-stage-proposal">PM Man-hrs</th>
+                            <th class="sqr-stage-proposal">PM Amount</th>
+                            <th class="sqr-stage-proposal">Managed Support Svc. Amt.</th>
+                            <th class="sqr-stage-proposal">Discount Rate</th>
+                            <th class="sqr-stage-proposal">Discount Amount</th>
+                            <th class="sqr-stage-proposal">Total Price</th>
+                            <th class="sqr-stage-proposal">SQR Status</th>
+                            <th class="sqr-stage-proposal">Approval Date</th>
+                            <th class="sqr-stage-proposal">Validity Due Date</th>
+                            <th class="sqr-stage-proposal">Proposal Status</th>
+                            <th class="sqr-stage-delivery">PO / PNL Date</th>
+                            <th class="sqr-stage-delivery">Assigned PM</th>
+                            <th class="sqr-stage-delivery">Assigned SSE</th>
+                            <th class="sqr-stage-delivery">Start Date</th>
+                            <th class="sqr-stage-delivery">Target Finish Date</th>
+                            <th class="sqr-stage-delivery">Overall Status</th>
+                            <th class="sqr-stage-delivery">Health Status</th>
+                            <th class="sqr-stage-delivery">Overall Progress %</th>
+                            <th class="sqr-stage-delivery">Key Updates / Risks / Issues</th>
+                            <th class="sqr-stage-delivery">Actual Finish Date</th>
+                            <th class="sqr-stage-delivery">Completion Signed Date</th>
+                            <th class="sqr-stage-delivery">Post-svc Warranty End Date</th>
+                            <th class="sqr-stage-delivery">Support Start Date</th>
+                            <th class="sqr-stage-delivery">Support End Date</th>
+                            <th class="sqr-stage-revenue">SI / Revenue Date</th>
+                            <th class="sqr-stage-revenue">Source</th>
+                            <th class="sqr-stage-revenue">Reference No.</th>
+                            <th class="sqr-stage-revenue">Revenue Status</th>
+                            <th class="sqr-stage-revenue">Remarks</th>
+                            <th class="sqr-stage-revenue">Revenue Declaration</th>
+                            <th class="text-center" style="min-width:80px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in proposal_submissions %}
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}" data-sqr-status="{{ item.status }}" data-sqr-proposal-status="{{ item.proposal_status|default:'' }}" data-sqr-ref="{{ item.reference_code|default:'' }}" data-sqr-customer="{{ item.customer_name|default:''|escapejs }}" data-engineer-email="{{ item.engineer.email|default:'' }}" data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}" data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
+                            {# A: SQR Date #}
+                            <td class="col-sticky-0 small">
+                                {% if item.status == 'for_revision' %}
+                                    <span class="d-flex align-items-center gap-1">
+                                        <i class="bi bi-exclamation-triangle-fill text-danger" title="Action required: For Revision"></i>
+                                        {{ item.created_at|date:"M d, Y" }}
+                                    </span>
+                                {% else %}
+                                    {{ item.created_at|date:"M d, Y" }}
+                                {% endif %}
+                            </td>
+                            {# B: SQR ID #}
+                            <td class="col-sticky-1 fw-semibold">
+                                {% if is_pm %}
+                                    <span class="fw-semibold">{{ item.reference_code }}</span>
+                                {% elif can_create_sqr and item.engineer_id == request.user.id %}
+                                    <button type="button"
+                                            class="btn btn-link p-0 fw-semibold text-decoration-none text-reset sqr-open-edit-btn"
+                                            style="font-size:inherit;line-height:inherit;"
+                                            data-pk="{{ item.pk }}"
+                                            data-url="{% url 'hub:sqr-edit' item.pk %}"
+                                            data-customer-name="{{ item.customer_name }}"
+                                            data-customer-company="{{ item.customer_company|default:'' }}"
+                                            data-customer-contact="{{ item.customer_contact|default:'' }}"
+                                            data-project-title="{{ item.project_title }}"
+                                            data-project-details="{{ item.project_details|default:'' }}"
+                                            data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
+                                            data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                            data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
+                                            data-remarks="{{ item.remarks|default:'' }}"
+                                            data-linked-request="{{ item.linked_request_id|default:'' }}"
+                                            data-linked-request-text="{{ item.linked_request.reference_code|default:'' }}{% if item.linked_request and item.linked_request.account %} – {{ item.linked_request.account.name }}{% endif %}">{{ item.reference_code }}</button>
+                                {% else %}
+                                    {{ item.reference_code }}
+                                {% endif %}
+                            </td>
+                            {# C: Account Name #}
+                            <td class="col-sticky-2{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_name" data-sqr-type="text" data-sqr-value="{{ item.customer_name|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_name }}</span></td>
+                            {# D: Service Description #}
+                            <td class="col-sticky-3{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_title" data-sqr-type="text" data-sqr-value="{{ item.project_title|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_title }}</span></td>
+                            {# E: Scope of Services #}
+                            <td class="col-sticky-4 col-sticky-border{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_details" data-sqr-type="select" data-sqr-value="{{ item.project_details|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</span></td>
+                            {# F: RQ ID — supplied by engineer; links to Request; editable inline by PM/Admin #}
+                            <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="linked_request" data-sqr-type="select" data-sqr-value="{{ item.linked_request_id|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
+                                {% if item.linked_request %}
+                                    <a href="{% url 'hub:request-manage-collab' item.linked_request.pk %}" class="text-info" target="_blank">{{ item.linked_request.reference_code }}</a>
+                                {% else %}&ndash;{% endif %}
+                                </span>
+                            </td>
+                            {# G: Group Name #}
+                            <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_company" data-sqr-type="select" data-sqr-value="{{ item.customer_company|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_company|default:"&ndash;" }}</span></td>
+                            {# H: Account Manager #}
+                            <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_contact" data-sqr-type="text" data-sqr-value="{{ item.customer_contact|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_contact|default:"&ndash;" }}</span></td>
+                            {# I: Requester Name #}
+                            <td class="small">{% if item.engineer %}{{ item.engineer.get_full_name|default:item.engineer.username }}{% else %}&ndash;{% endif %}</td>
+                            {# J: Approver Name #}
+                            <td class="small">{% if item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
+                            {# K: SQR Doc. Ref. Link #}
+                            <td class="small">
+                                {% if item.sqr_folder_link %}
+                                    <a href="{{ item.sqr_folder_link }}" target="_blank" rel="noopener" class="text-info">Link</a>
+                                {% else %}
+                                    <span class="text-muted">&ndash;</span>
+                                {% endif %}
+                            </td>
+                            {# L: SSE Man-hrs #}
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{% if item.sse_manhrs != None %}{{ item.sse_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
+                            {# M: SSE Amount #}
+                            <td class="text-end small" data-sqr-computed="sse_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            {# N: PM Man-hrs #}
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sqr-display">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
+                            {# O: PM Amount #}
+                            <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            {# P: Managed Support Service Amount #}
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</span></td>
+                            {# Q: Discount Rate #}
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="discount_rate" data-sqr-type="number" data-sqr-value="{{ item.discount_rate|default:'0' }}"{% endif %}><span class="sqr-display">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</span></td>
+                            {# R: Discount Amount #}
+                            <td class="text-end small" data-sqr-computed="discount_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.computed_discount_amount %}&#8369;{{ item.computed_discount_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            {# S: Total Price #}
+                            <td class="text-end small fw-semibold" data-sqr-computed="total_price" data-sqr-row-pk="{{ item.pk }}">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            {# T: SQR Status #}
+                            <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="status" data-sqr-type="select" data-sqr-value="{{ item.status|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
+                                {% if item.status == 'submitted' %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
+                                {% elif item.status == 'for_revision' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
+                                {% elif item.status == 'reviewed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>
+                                {% else %}
+                                    <span class="text-muted small">{{ item.status }}</span>
+                                {% endif %}
+                                </span>
+                            </td>
+                            {# U: Approval Date #}
+                            <td class="small" data-sqr-computed="reviewed_at">{{ item.reviewed_at|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# V: Validity Due Date #}
+                            <td class="small" data-sqr-computed="validity_due_date">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# W: Proposal Status #}
+                            <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="proposal_status" data-sqr-type="select" data-sqr-value="{{ item.proposal_status|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
+                                {% if item.proposal_status == 'submitted_pending' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted&ndash;Pending</span>
+                                {% elif item.proposal_status == 'negotiation_review' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>
+                                {% elif item.proposal_status == 'closed_won' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>
+                                {% elif item.proposal_status == 'closed_lost' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed Lost</span>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                                </span>
+                            </td>
+                            {# X: PO/PNL Date — delivery stage, PM only #}
+                            {% if is_pm %}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# Y: Assigned PM — defaults to col J (pm_esg_reviewer) on Approval; editable #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</span></td>
+                            {# Z: Assigned SSE — inline-editable by PM/Admin #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_sse" data-sqr-type="select" data-sqr-value="{{ item.assigned_sse_id|default:'' }}"><span class="sqr-display">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</span></td>
+                            {# AA: Start Date #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_start_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# AG: Target Finish Date #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# AB: Overall Status #}
+                            <td class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="overall_status" data-sqr-type="select" data-sqr-value="{{ item.overall_status|default:'' }}">
+                                <span class="sqr-display">
+                                {% if item.overall_status == 'on_hold' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
+                                {% elif item.overall_status == 'planning' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">Planning</span>
+                                {% elif item.overall_status == 'in_progress' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>
+                                {% elif item.overall_status == 'completed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>
+                                {% elif item.overall_status == 'cancelled' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                                </span>
+                            </td>
+                            {# AC: Health Status #}
+                            <td class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_health" data-sqr-type="select" data-sqr-value="{{ item.delivery_health|default:'' }}">
+                                <span class="sqr-display">
+                                {% if item.delivery_health == 'on_track' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>
+                                {% elif item.delivery_health == 'off_track' %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Off Track</span>
+                                {% elif item.delivery_health == 'at_risk' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>
+                                {% elif item.delivery_health == 'completed' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>
+                                {% elif item.delivery_health == 'cancelled' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                                </span>
+                            </td>
+                            {# AD: Overall Progress % #}
+                            <td class="sqr-inline-cell" style="min-width:120px;" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_progress" data-sqr-type="number" data-sqr-value="{{ item.delivery_progress|default:'' }}">
+                                <span class="sqr-display">
+                                {% if item.delivery_progress is not None %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
+                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                 role="progressbar"
+                                                 style="width:{{ item.delivery_progress }}%"
+                                                 aria-valuenow="{{ item.delivery_progress }}"
+                                                 aria-valuemin="0" aria-valuemax="100"></div>
                                         </div>
-                                    {% elif can_review_sqr %}
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:sqr-review' item.pk %}">Manage</a>
-                                    {% elif item.status == 'reviewed' %}
-                                        <span class="text-success small">Approved</span>
-                                    {% elif item.status == 'for_revision' %}
-                                        <span class="text-danger small">For Revision</span>
+                                        <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% endif %}
+                                </span>
+                            </td>
+                            {# AE: Key Updates/Risks/Issues #}
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="key_updates_risks" data-sqr-type="text" data-sqr-value="{{ item.key_updates_risks|default:''|escapejs }}"><span class="sqr-display">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</span></td>
+                            {# AF: Actual Finish Date #}
+                            <td class="small sqr-inline-cell"
+                                data-sqr-pk="{{ item.pk }}"
+                                data-sqr-field="delivery_actual_finish_date"
+                                data-sqr-type="date"
+                                data-sqr-value="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}"
+                                data-sqr-target-date="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}">
+                                <span class="sqr-display">
+                                {% if item.delivery_actual_finish_date %}
+                                    {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
+                                        <span class="text-danger">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
                                     {% else %}
-                                        <span class="text-muted small">For Processing</span>
+                                        <span class="text-success">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
                                     {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="10" class="text-center text-muted py-4">No SQR submissions yet.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% elif show_revenue_tracker_tab %}
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-uppercase text-muted">Quotation Stage</div>
-                            <div class="h5 mb-0">{{ quotation_stage_count }}</div>
-                            <div class="small text-muted">New and For Revision SQR</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-uppercase text-muted">Order Stage</div>
-                            <div class="h5 mb-0">{{ order_stage_count }}</div>
-                            <div class="small text-muted">Approved and waiting for P.O</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-uppercase text-muted">Revenue Stage</div>
-                            <div class="h5 mb-0">{{ revenue_stage_totals.count }}</div>
-                            <div class="small text-muted">With P.O and revenue details</div>
-                        </div>
-                    </div>
-                </div>
+                                {% else %}
+                                    <span class="text-muted">&ndash;</span>
+                                {% endif %}
+                                </span>
+                            </td>
+                            {# AH: Completion Signed Date #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# AI: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Implementation / Impl+PM only) #}
+                            <td class="small" data-sqr-computed="post_svc_warranty_end_date">
+                                {% if item.computed_post_svc_warranty_end_date %}
+                                    {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">NA</span>
+                                {% endif %}
+                            </td>
+                            {# AJ: Support Start Date — scope + managed support amount required #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_start_date" data-sqr-type="date" data-sqr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}" data-sqr-computed="support_start_date"><span class="sqr-display">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
+                            {# AK: Managed Support End Date — computed: Col AJ + 365 days #}
+                            <td class="small" data-sqr-computed="managed_support_end_date">
+                                {% if item.computed_managed_support_end_date %}
+                                    {{ item.computed_managed_support_end_date|date:"M d, Y" }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">NA</span>
+                                {% endif %}
+                            </td>
+                            {# AL: SI/Revenue Date — inline calendar date input #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_date" data-sqr-type="date" data-sqr-value="{{ item.revenue_date|date:'Y-m-d'|default:'' }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            {# AM: Source — dropdown: Internal / Invoiced #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="select" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</span></td>
+                            {# AN: Reference No. — alphanumeric uppercase #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="{{ item.revenue_reference_no|upper|default:'' }}"><span class="sqr-display">{{ item.revenue_reference_no|upper|truncatechars:30|default:"&ndash;" }}</span></td>
+                            {# AO: Revenue Status — computed: "Billed" if revenue_date set, else "For Billing" #}
+                            <td class="small">
+                                {% if item.revenue_date %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>
+                                {% endif %}
+                            </td>
+                            {# AP: Remarks — short text input #}
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="text" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</span></td>
+                            {# AQ: Revenue Declaration — dropdown: Declared / Not Yet #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_declaration" data-sqr-type="select" data-sqr-value="{{ item.revenue_declaration|default:'' }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</span></td>
+                            {% else %}
+                            {# Non-PM/Engineer: read-only view of delivery + revenue columns #}
+                            {# X: PO/PNL Date #}
+                            <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# Y: Assigned PM #}
+                            <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
+                            {# Z: Assigned SSE #}
+                            <td class="small">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</td>
+                            {# AA: Start Date #}
+                            <td class="small">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AG: Target Finish Date #}
+                            <td class="small">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AB: Overall Status #}
+                            <td>
+                                {% if item.overall_status == 'on_hold' %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
+                                {% elif item.overall_status == 'planning' %}<span class="badge bg-info-subtle text-info border border-info-subtle">Planning</span>
+                                {% elif item.overall_status == 'in_progress' %}<span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>
+                                {% elif item.overall_status == 'completed' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>
+                                {% elif item.overall_status == 'cancelled' %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
+                            </td>
+                            {# AC: Health Status #}
+                            <td>
+                                {% if item.delivery_health == 'on_track' %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>
+                                {% elif item.delivery_health == 'off_track' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Off Track</span>
+                                {% elif item.delivery_health == 'at_risk' %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>
+                                {% elif item.delivery_health == 'completed' %}<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>
+                                {% elif item.delivery_health == 'cancelled' %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
+                            </td>
+                            {# AD: Overall Progress % #}
+                            <td style="min-width:120px;">
+                                {% if item.delivery_progress is not None %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
+                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                 role="progressbar" style="width:{{ item.delivery_progress }}%"
+                                                 aria-valuenow="{{ item.delivery_progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
+                                    </div>
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
+                            </td>
+                            {# AE: Key Updates #}
+                            <td class="cell-wrap small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            {# AF: Actual Finish Date #}
+                            <td class="small">
+                                {% if item.delivery_actual_finish_date %}
+                                    {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
+                                        <span class="text-danger">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
+                                    {% else %}
+                                        <span class="text-success">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                {% else %}<span class="text-muted">&ndash;</span>{% endif %}
+                            </td>
+                            {# AH: Completion Signed Date #}
+                            <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AI: Post-svc Warranty End Date #}
+                            <td class="small">{% if item.computed_post_svc_warranty_end_date %}{{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AJ: Support Start Date #}
+                            <td class="small">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AK: Managed Support End Date #}
+                            <td class="small">{% if item.computed_managed_support_end_date %}{{ item.computed_managed_support_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AL: SI/Revenue Date #}
+                            <td class="small">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            {# AM: Source #}
+                            <td class="small">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</td>
+                            {# AN: Reference No. #}
+                            <td class="small" title="{{ item.revenue_reference_no|upper|default:'' }}">{{ item.revenue_reference_no|upper|truncatechars:30|default:"&ndash;" }}</td>
+                            {# AO: Revenue Status #}
+                            <td class="small">
+                                {% if item.revenue_date %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% else %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>{% endif %}
+                            </td>
+                            {# AP: Remarks #}
+                            <td class="cell-wrap small">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</td>
+                            {# AQ: Revenue Declaration #}
+                            <td class="small">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</td>
+                            {% endif %}
+                            {# Action col #}
+                            <td class="text-center" style="min-width:80px;">
+                                {% if is_admin %}
+                                    {# Admin: inline editing active — only delete button #}
+                                    <a class="btn btn-sm btn-outline-danger py-0 px-2"
+                                       href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                {% elif is_pm %}
+                                    {# PM-ESG: inline editing active — no action buttons #}
+                                    <span class="text-muted small">&ndash;</span>
+                                {% elif can_create_sqr and item.engineer_id == request.user.id %}
+                                    <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary py-0 px-2 sqr-open-edit-btn"
+                                                title="Edit"
+                                                data-pk="{{ item.pk }}"
+                                                data-url="{% url 'hub:sqr-edit' item.pk %}"
+                                                data-customer-name="{{ item.customer_name }}"
+                                                data-customer-company="{{ item.customer_company|default:'' }}"
+                                                data-customer-contact="{{ item.customer_contact|default:'' }}"
+                                                data-project-title="{{ item.project_title }}"
+                                                data-project-details="{{ item.project_details|default:'' }}"
+                                                data-pm-esg-reviewer="{{ item.pm_esg_reviewer_id|default:'' }}"
+                                                data-sse-manhrs="{{ item.sse_manhrs|default:'' }}"
+                                                data-sqr-folder-link="{{ item.sqr_folder_link|default:'' }}"
+                                                data-remarks="{{ item.remarks|default:'' }}"
+                                                data-linked-request="{{ item.linked_request_id|default:'' }}"
+                                                data-linked-request-text="{{ item.linked_request.reference_code|default:'' }}{% if item.linked_request and item.linked_request.account %} – {{ item.linked_request.account.name }}{% endif %}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                           href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">&ndash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="44" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-                <div class="mb-4">
-                    <h3 class="h6 mb-2">Quotation Stage</h3>
-                    <p class="small text-muted mb-2">Set quotation amount and discount rate (5%, 10%, 15%).</p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>SQR ID</th>
-                                    <th>Engineer</th>
-                                    <th>Account</th>
-                                    <th>Status</th>
-                                    <th style="min-width: 280px;">Quotation Setup</th>
-                                    <th>Discounted Price</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in quotation_stage_items %}
-                                <tr>
-                                    <td class="fw-semibold">{{ item.submission.reference_code }}</td>
-                                    <td>{{ item.submission.engineer.get_full_name|default:item.submission.engineer.username }}</td>
-                                    <td>{{ item.submission.customer_name }}</td>
-                                    <td>
-                                        {% if item.submission.status == 'for_revision' %}
-                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>
-                                        {% else %}
-                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="post" action="{% url 'hub:sqr-revenue-update' item.submission.pk %}" class="row g-2 align-items-end">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="stage_action" value="quotation">
-                                            <div class="col-sm-5">
-                                                <label class="form-label small mb-1" for="{{ item.form.quotation_total_price.id_for_label }}">Total Price</label>
-                                                {{ item.form.quotation_total_price }}
-                                            </div>
-                                            <div class="col-sm-4">
-                                                <label class="form-label small mb-1" for="{{ item.form.discount_rate.id_for_label }}">Discount</label>
-                                                {{ item.form.discount_rate }}
-                                            </div>
-                                            <div class="col-sm-3 d-grid">
-                                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        {% if item.submission.discounted_price is not None %}
-                                            {{ item.submission.discounted_price|floatformat:2 }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No SQR in Quotation stage.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+    </div>
+</div>
 
-                <div class="mb-4">
-                    <h3 class="h6 mb-2">Order Stage</h3>
-                    <p class="small text-muted mb-2">Approved SQR with finalized price, waiting for customer Purchase Order.</p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>SQR ID</th>
-                                    <th>Account</th>
-                                    <th>Total Price</th>
-                                    <th>Discounted Price</th>
-                                    <th style="min-width: 320px;">P.O Attachment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in order_stage_items %}
-                                <tr>
-                                    <td class="fw-semibold">{{ item.submission.reference_code }}</td>
-                                    <td>{{ item.submission.customer_name }}</td>
-                                    <td>{{ item.submission.quotation_total_price|default:"-" }}</td>
-                                    <td>
-                                        {% if item.submission.discounted_price is not None %}
-                                            {{ item.submission.discounted_price|floatformat:2 }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="post" action="{% url 'hub:sqr-revenue-update' item.submission.pk %}" class="row g-2 align-items-end">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="stage_action" value="order">
-                                            <div class="col-12">
-                                                <label class="form-label small mb-1" for="{{ item.form.po_attachment_link.id_for_label }}">P.O Attachment Link</label>
-                                                {{ item.form.po_attachment_link }}
-                                            </div>
-                                            <div class="col-12">
-                                                <label class="form-label small mb-1" for="{{ item.form.revenue_overview.id_for_label }}">Revenue Overview</label>
-                                                {{ item.form.revenue_overview }}
-                                            </div>
-                                            <div class="col-12 d-grid d-sm-flex justify-content-sm-end">
-                                                <button class="btn btn-sm btn-outline-success" type="submit">Attach P.O and Move to Revenue</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No SQR in Order stage.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                        <h3 class="h6 mb-0">Revenue Stage</h3>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Total Price: {{ revenue_stage_totals.total_price|floatformat:2 }}</span>
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">Discounted Price: {{ revenue_stage_totals.discounted_price|floatformat:2 }}</span>
-                        </div>
-                    </div>
-                    <p class="small text-muted mb-2">Shows finalized revenue details after P.O is attached.</p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>SQR ID</th>
-                                    <th>Account</th>
-                                    <th>Total Price</th>
-                                    <th>Discount</th>
-                                    <th>Discounted Price</th>
-                                    <th>P.O Link</th>
-                                    <th>Revenue Overview</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in revenue_stage_submissions %}
-                                <tr>
-                                    <td class="fw-semibold">{{ item.reference_code }}</td>
-                                    <td>{{ item.customer_name }}</td>
-                                    <td>{{ item.quotation_total_price|default:"-" }}</td>
-                                    <td>{{ item.discount_rate }}%</td>
-                                    <td>
-                                        {% if item.discounted_price is not None %}
-                                            {{ item.discounted_price|floatformat:2 }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if item.po_attachment_link %}
-                                            <a href="{{ item.po_attachment_link }}" target="_blank" rel="noopener">View P.O</a>
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ item.revenue_overview|default:"-"|truncatechars:120 }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No SQR in Revenue stage.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            {% endif %}
+<div class="sqr-approval-choice-modal" id="sqr-approval-choice-modal" aria-hidden="true">
+    <div class="sqr-approval-choice-modal__backdrop" data-sqr-approval-close="true"></div>
+    <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-approval-choice-title">
+        <h3 class="h5 mb-2" id="sqr-approval-choice-title">Choose approval email output</h3>
+        <p class="mb-2">The SQR status is now <strong>Approved</strong>.</p>
+        <p class="text-muted mb-0">Choose whether to open the ready-to-edit draft in the default mail app or download the formatted <code>.eml</code> file with the image and table layout.</p>
+        <div class="sqr-approval-choice-modal__actions">
+            <button type="button" class="btn btn-primary" id="sqr-approval-open-draft-btn">
+                Use ready draft email body
+            </button>
+            <button type="button" class="btn btn-outline-info" id="sqr-approval-download-eml-btn">
+                Use formatted .eml template
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="sqr-approval-cancel-btn">
+                Cancel
+            </button>
         </div>
     </div>
 </div>
 
+{% if is_admin and sqr_import_form %}
+<div class="requestor-modal" id="import-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="import-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="import-sqr-title" style="max-width: 560px;">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="import-sqr-title"><i class="bi bi-upload me-2"></i>Import SQR Data</h2>
+            <button type="button" class="btn-close" id="close-import-sqr-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <form method="post" action="{% url 'hub:sqr-import' %}" enctype="multipart/form-data" id="import-sqr-form">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="{{ sqr_import_form.import_file.id_for_label }}">{{ sqr_import_form.import_file.label }}</label>
+                    {{ sqr_import_form.import_file }}
+                    {% if sqr_import_form.import_file.help_text %}
+                        <div class="form-text">{{ sqr_import_form.import_file.help_text }}</div>
+                    {% endif %}
+                </div>
+                <div class="alert alert-warning small" role="alert">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    This import will <strong>replace all current rows</strong> in the SQR table using the uploaded Excel file.
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" value="1" id="import-sqr-confirm" name="confirm_overwrite">
+                    <label class="form-check-label small" for="import-sqr-confirm">
+                        I confirm that I want to proceed and overwrite the current SQR table.
+                    </label>
+                </div>
+                <div class="alert alert-danger small d-none" id="import-sqr-error" role="alert"></div>
+                <div class="d-none" id="import-sqr-progress-wrap">
+                    <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
+                        <span id="import-sqr-progress-text">Preparing import…</span>
+                        <span id="import-sqr-progress-percent">0%</span>
+                    </div>
+                    <div class="progress" style="height: 18px;">
+                        <div
+                            class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                            id="import-sqr-progress-bar"
+                            role="progressbar"
+                            style="width: 0%"
+                            aria-valuenow="0"
+                            aria-valuemin="0"
+                            aria-valuemax="100"></div>
+                    </div>
+                            <div class="small text-muted mt-2" id="import-sqr-progress-count">Rows added: 0</div>
+                </div>
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-import-sqr-btn">Cancel</button>
+                    <button class="btn btn-info" type="submit" id="submit-import-sqr-btn">
+                        <i class="bi bi-cloud-arrow-up me-1"></i>Import
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+    var approvalChoiceModal = document.getElementById('sqr-approval-choice-modal');
+    var approvalDraftBtn = document.getElementById('sqr-approval-open-draft-btn');
+    var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
+    var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
+    var approvalChoiceState = { draftUrl: '', emlUrl: '' };
+
+    function setApprovalChoiceVisibility(isVisible) {
+        if (!approvalChoiceModal) return;
+        approvalChoiceModal.classList.toggle('is-visible', !!isVisible);
+        approvalChoiceModal.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    function openApprovalChoiceModal(draftUrl, emlUrl) {
+        approvalChoiceState.draftUrl = draftUrl || '';
+        approvalChoiceState.emlUrl = emlUrl || '';
+        setApprovalChoiceVisibility(true);
+    }
+
+    function closeApprovalChoiceModal() {
+        approvalChoiceState.draftUrl = '';
+        approvalChoiceState.emlUrl = '';
+        setApprovalChoiceVisibility(false);
+    }
+
+    if (approvalChoiceModal) {
+        approvalChoiceModal.addEventListener('click', function (event) {
+            if (event.target && event.target.getAttribute('data-sqr-approval-close') === 'true') {
+                closeApprovalChoiceModal();
+            }
+        });
+    }
+
+    if (approvalCancelBtn) {
+        approvalCancelBtn.addEventListener('click', closeApprovalChoiceModal);
+    }
+
+    if (approvalDraftBtn) {
+        approvalDraftBtn.addEventListener('click', function () {
+            var draftUrl = approvalChoiceState.draftUrl;
+            closeApprovalChoiceModal();
+            if (draftUrl) {
+                window.location.href = draftUrl;
+            }
+        });
+    }
+
+    if (approvalEmlBtn) {
+        approvalEmlBtn.addEventListener('click', function () {
+            var emlUrl = approvalChoiceState.emlUrl;
+            closeApprovalChoiceModal();
+            if (emlUrl) {
+                window.location.href = emlUrl;
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && approvalChoiceModal && approvalChoiceModal.classList.contains('is-visible')) {
+            closeApprovalChoiceModal();
+        }
+    });
+
+        var modal = document.getElementById('import-sqr-modal');
+        if (!modal) return;
+        var openBtn = document.getElementById('import-sqr-btn');
+        var closeBtn = document.getElementById('close-import-sqr-btn');
+        var cancelBtn = document.getElementById('cancel-import-sqr-btn');
+        var backdrop = document.getElementById('import-sqr-backdrop');
+        var form = document.getElementById('import-sqr-form');
+        var submitBtn = document.getElementById('submit-import-sqr-btn');
+        var confirmInput = document.getElementById('import-sqr-confirm');
+        var errorBox = document.getElementById('import-sqr-error');
+        var progressWrap = document.getElementById('import-sqr-progress-wrap');
+        var progressBar = document.getElementById('import-sqr-progress-bar');
+        var progressText = document.getElementById('import-sqr-progress-text');
+        var progressPercent = document.getElementById('import-sqr-progress-percent');
+        var progressCount = document.getElementById('import-sqr-progress-count');
+        var pollingTimer = null;
+
+        function getCsrfToken() {
+            var csrfInput = form ? form.querySelector('input[name="csrfmiddlewaretoken"]') : null;
+            return csrfInput ? csrfInput.value : '';
+        }
+
+        function setError(message) {
+            if (!errorBox) return;
+            if (message) {
+                errorBox.textContent = message;
+                errorBox.classList.remove('d-none');
+            } else {
+                errorBox.textContent = '';
+                errorBox.classList.add('d-none');
+            }
+        }
+
+        function setProgress(percent, message, isDone, isFailed) {
+            var normalized = Math.max(0, Math.min(100, parseInt(percent || 0, 10) || 0));
+            if (progressWrap) progressWrap.classList.remove('d-none');
+            if (progressBar) {
+                progressBar.style.width = normalized + '%';
+                progressBar.setAttribute('aria-valuenow', normalized);
+                progressBar.classList.toggle('bg-danger', !!isFailed);
+                progressBar.classList.toggle('bg-success', !!isDone && !isFailed);
+                progressBar.classList.toggle('bg-info', !isDone && !isFailed);
+                progressBar.classList.toggle('progress-bar-animated', !isDone && !isFailed);
+                progressBar.classList.toggle('progress-bar-striped', !isDone && !isFailed);
+            }
+            if (progressText && message) progressText.textContent = message;
+            if (progressPercent) progressPercent.textContent = normalized + '%';
+        }
+
+        function setImportedCount(count) {
+            var normalized = Math.max(0, parseInt(count || 0, 10) || 0);
+            if (progressCount) progressCount.textContent = 'Rows added: ' + normalized;
+        }
+
+        function setBusy(isBusy) {
+            if (submitBtn) submitBtn.disabled = !!isBusy;
+            if (confirmInput) confirmInput.disabled = !!isBusy;
+        }
+
+        function stopPolling() {
+            if (pollingTimer) {
+                window.clearTimeout(pollingTimer);
+                pollingTimer = null;
+            }
+        }
+
+        function resetImportState() {
+            stopPolling();
+            setBusy(false);
+            setError('');
+            setProgress(0, 'Preparing import…', false, false);
+            setImportedCount(0);
+            if (progressWrap) progressWrap.classList.add('d-none');
+        }
+
+        function pollStatus(jobId) {
+            fetch('{% url "hub:sqr-import-status" %}?job_id=' + encodeURIComponent(jobId), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        return { ok: response.ok, data: data };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) {
+                        throw new Error((result.data && (result.data.error || (result.data.errors && result.data.errors[0]))) || 'Unable to read import status.');
+                    }
+
+                    var status = result.data.status || {};
+                    var state = status.state || 'queued';
+                    setProgress(status.percent || 0, status.message || 'Import in progress…', state === 'completed', state === 'failed');
+                    setImportedCount((status.result && status.result.created) || status.created || 0);
+
+                    if (state === 'completed') {
+                        setBusy(false);
+                        setTimeout(function () {
+                            window.location.reload();
+                        }, 900);
+                        return;
+                    }
+
+                    if (state === 'failed') {
+                        setBusy(false);
+                        setError((status.errors && status.errors[0]) || status.message || 'Import failed.');
+                        return;
+                    }
+
+                    pollingTimer = window.setTimeout(function () {
+                        pollStatus(jobId);
+                    }, 800);
+                })
+                .catch(function (error) {
+                    setBusy(false);
+                    setError(error && error.message ? error.message : 'Import status check failed.');
+                });
+        }
+
+        function openModal() {
+            modal.classList.add('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('requestor-modal-open');
+        }
+
+        function closeModal() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+            resetImportState();
+        }
+
+        if (openBtn) openBtn.addEventListener('click', openModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (backdrop) backdrop.addEventListener('click', closeModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('requestor-modal--visible')) closeModal();
+        });
+
+        if (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                setError('');
+
+                if (!confirmInput || !confirmInput.checked) {
+                    setError('Please confirm first before importing.');
+                    return;
+                }
+
+                var fileInput = document.getElementById('{{ sqr_import_form.import_file.id_for_label }}');
+                if (!fileInput || !fileInput.files || !fileInput.files.length) {
+                    setError('Please choose an Excel file to import.');
+                    return;
+                }
+
+                var formData = new FormData(form);
+                setBusy(true);
+                setProgress(0, 'Starting import…', false, false);
+                fetch(form.getAttribute('action'), {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    credentials: 'same-origin'
+                })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            return { ok: response.ok, data: data };
+                        });
+                    })
+                    .then(function (result) {
+                        if (!result.ok || !result.data.ok) {
+                            throw new Error((result.data && (result.data.error || (result.data.errors && result.data.errors[0]))) || 'Import could not be started.');
+                        }
+                        pollStatus(result.data.job_id);
+                    })
+                    .catch(function (error) {
+                        setBusy(false);
+                        setError(error && error.message ? error.message : 'Import could not be started.');
+                    });
+            });
+        }
+
+        resetImportState();
+    })();
+</script>
+{% endif %}
+
+{# ── New SQR Submission Modal ──────────────────────────────────────────── #}
 {% if can_create_sqr %}
 <div class="requestor-modal" id="create-sqr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
     <div class="requestor-modal__backdrop" id="create-sqr-backdrop"></div>
     <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-sqr-title">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="create-sqr-title">New Submission</h2>
+            <h2 class="h5 mb-0" id="create-sqr-title"><i class="bi bi-plus-circle me-2"></i>New SQR Submission</h2>
             <button type="button" class="btn-close" id="close-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form method="post" novalidate>
+            <form method="post">
                 {% csrf_token %}
                 {% if sqr_form.errors %}
-                    <div class="alert alert-danger" role="alert">Please resolve the highlighted fields before submitting.</div>
+                    <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-2"></i>Please resolve the highlighted fields before submitting.</div>
                 {% endif %}
                 {% for field in sqr_form %}
                     <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
+                        {% if field.name == 'customer_name' %}
+                            <datalist id="sqr-account-name-options">
+                                {% for account_name in sqr_form.account_name_options %}
+                                    <option value="{{ account_name }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        {% endif %}
                         {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                         {% if field.errors %}
                             <div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>
@@ -349,7 +1202,9 @@
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end mt-4">
                     <button type="button" class="btn btn-outline-secondary" id="cancel-sqr-btn">Cancel</button>
-                    <button class="btn btn-primary" type="submit">Submit Submission</button>
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-send me-1"></i>Submit
+                    </button>
                 </div>
             </form>
         </div>
@@ -359,50 +1214,1280 @@
 <script>
     (function () {
         const modal = document.getElementById("create-sqr-modal");
-        if (!modal) {
-            return;
-        }
-
+        if (!modal) return;
         const openBtn = document.getElementById("new-sqr-btn");
         const closeBtn = document.getElementById("close-sqr-btn");
         const cancelBtn = document.getElementById("cancel-sqr-btn");
         const backdrop = document.getElementById("create-sqr-backdrop");
-
         const openModal = () => {
             modal.classList.add("requestor-modal--visible");
             modal.setAttribute("aria-hidden", "false");
             document.body.classList.add("requestor-modal-open");
         };
-
         const closeModal = () => {
             modal.classList.remove("requestor-modal--visible");
             modal.setAttribute("aria-hidden", "true");
             document.body.classList.remove("requestor-modal-open");
         };
+        if (openBtn) openBtn.addEventListener("click", openModal);
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+        if (backdrop) backdrop.addEventListener("click", closeModal);
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && modal.classList.contains("requestor-modal--visible")) closeModal();
+        });
+        if (modal.dataset.openOnLoad === "true") openModal();
+    })();
 
-        if (openBtn) {
-            openBtn.addEventListener("click", openModal);
-        }
-        if (closeBtn) {
-            closeBtn.addEventListener("click", closeModal);
-        }
-        if (cancelBtn) {
-            cancelBtn.addEventListener("click", closeModal);
-        }
-        if (backdrop) {
-            backdrop.addEventListener("click", closeModal);
-        }
+    // Department → Account Manager filtering
+    (function () {
+        var linkedRequestSel = document.getElementById('id_linked_request');
+        var customerNameInput = document.getElementById('id_customer_name');
+        var deptSel = document.getElementById('id_customer_company');
+        var memberSel = document.getElementById('id_customer_contact');
+        var approverSel = document.getElementById('id_pm_esg_reviewer');
+        var scopeSel = document.getElementById('id_project_details');
+        var sseManhrsInput = document.getElementById('id_sse_manhrs');
 
-        document.addEventListener("keydown", function (event) {
-            if (event.key === "Escape" && modal.classList.contains("requestor-modal--visible")) {
-                closeModal();
+        if (!deptSel) return;
+
+        // Managed Support Service Amount preview
+        var MANAGED_SCOPES_NEW = ['Implementation', 'Implementation and Project Management', 'Managed Support and Maintenance Service'];
+        function updateManagedSupportPreview() {
+            var scope = scopeSel ? scopeSel.value : '';
+            var dept  = deptSel  ? deptSel.value  : '';
+            var disp  = document.getElementById('new-managed-support-display');
+            if (!disp) return;
+            if (MANAGED_SCOPES_NEW.indexOf(scope) !== -1) {
+                var amt = dept === 'ESS' ? 149000 : 192000;
+                disp.value = amt.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } else {
+                disp.value = '0.00';
             }
+        }
+
+        var memberMap = {}, approverMap = {}, sseScopes = [], requestAccountMap = {};
+        try { memberMap = JSON.parse(deptSel.dataset.memberMap || '{}'); } catch (e) {}
+        try { approverMap = JSON.parse(deptSel.dataset.approverMap || '{}'); } catch (e) {}
+        try { sseScopes = JSON.parse(deptSel.dataset.sseScopes || '[]'); } catch (e) {}
+        try { requestAccountMap = JSON.parse((linkedRequestSel && linkedRequestSel.dataset.accountMap) || '{}'); } catch (e) {}
+
+        var hiddenSseManhrsScopes = [
+            'Project Management',
+            'Managed Support and Maintenance Service',
+            'Managed Support and Service'
+        ];
+
+        function normalizeScope(scope) {
+            return (scope || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+        }
+
+        var normalizedSseScopes = sseScopes.map(normalizeScope);
+        var normalizedHiddenSseManhrsScopes = hiddenSseManhrsScopes.map(normalizeScope);
+
+        function updateMembers(dept) {
+            if (!memberSel) return;
+            var currentVal = memberSel.value;
+            memberSel.innerHTML = '';
+            var emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '— Select Member —';
+            memberSel.appendChild(emptyOpt);
+            var members = memberMap[dept] || [];
+            members.forEach(function (m) {
+                var opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                if (m === currentVal) opt.selected = true;
+                memberSel.appendChild(opt);
+            });
+        }
+
+        function updateApprover(dept) {
+            if (!approverSel || !approverMap[dept]) return;
+            approverSel.value = approverMap[dept];
+        }
+
+        function updateAccountNameFromRequest() {
+            if (!linkedRequestSel || !customerNameInput) return;
+            var accountName = requestAccountMap[linkedRequestSel.value] || '';
+            if (accountName) customerNameInput.value = accountName;
+        }
+
+        function shouldShowSseManhrs(scope) {
+            var normalizedScope = normalizeScope(scope);
+            if (!normalizedScope) return false;
+            if (normalizedHiddenSseManhrsScopes.indexOf(normalizedScope) !== -1) return false;
+            return normalizedSseScopes.indexOf(normalizedScope) !== -1;
+        }
+
+        function updateSseManhrs() {
+            var input = document.getElementById('id_sse_manhrs');
+            var scopeInput = document.getElementById('id_project_details');
+            if (!input) return;
+            var row = input.closest('.mb-3');
+            if (!row) return;
+            var show = scopeInput ? shouldShowSseManhrs(scopeInput.value) : false;
+            row.style.display = show ? '' : 'none';
+            input.disabled = !show;
+            if (!show) input.value = '';
+        }
+
+        deptSel.addEventListener('change', function () {
+            updateMembers(this.value);
+            updateApprover(this.value);
+            updateSseManhrs();
+            updateManagedSupportPreview();
         });
 
-        if (modal.dataset.openOnLoad === "true") {
-            openModal();
+        if (linkedRequestSel) {
+            linkedRequestSel.addEventListener('change', updateAccountNameFromRequest);
+            linkedRequestSel.addEventListener('input', updateAccountNameFromRequest);
         }
+
+        if (scopeSel) {
+            scopeSel.addEventListener('change', function() { updateSseManhrs(); updateManagedSupportPreview(); });
+            scopeSel.addEventListener('input', function() { updateSseManhrs(); updateManagedSupportPreview(); });
+        }
+
+        document.addEventListener('change', function (event) {
+            if (event.target && event.target.id === 'id_linked_request') {
+                updateAccountNameFromRequest();
+            }
+            if (event.target && event.target.id === 'id_project_details') {
+                updateSseManhrs();
+                updateManagedSupportPreview();
+            }
+        }, true);
+
+        window.addEventListener('load', updateSseManhrs);
+        window.addEventListener('pageshow', updateSseManhrs);
+        requestAnimationFrame(updateSseManhrs);
+        setTimeout(updateSseManhrs, 0);
+
+        updateMembers(deptSel.value);
+        updateAccountNameFromRequest();
+        updateSseManhrs();
+        updateManagedSupportPreview();
     })();
 </script>
+{% endif %}
+
+{# ── Edit SQR Submission Modal ────────────────────────────────────────── #}
+{% if sqr_edit_form %}
+<div class="requestor-modal" id="edit-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="edit-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="edit-sqr-title">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="edit-sqr-title"><i class="bi bi-pencil-square me-2"></i>Edit SQR Submission</h2>
+            <button type="button" class="btn-close" id="close-edit-sqr-btn" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <form id="edit-sqr-form" method="post" action="" novalidate>
+                {% csrf_token %}
+                {% for field in sqr_edit_form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    </div>
+                    {% if field.name == 'sse_manhrs' %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">SSE Amount (M = L × 2,000) — computed</label>
+                        <input type="text" id="edit-sse-amount-display" readonly class="form-control" placeholder="—">
+                        <div class="form-text">Auto-calculated: SSE Man-hrs × ₱2,000.</div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-edit-sqr-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Edit SQR Modal ────────────────────────────────────────────────────
+    (function () {
+        var editModal  = document.getElementById('edit-sqr-modal');
+        if (!editModal) return;
+        var editForm   = document.getElementById('edit-sqr-form');
+        var backdrop   = document.getElementById('edit-sqr-backdrop');
+        var closeBtn   = document.getElementById('close-edit-sqr-btn');
+        var cancelBtn  = document.getElementById('cancel-edit-sqr-btn');
+        var activeRow  = null;
+
+        function setVal(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.value = (val != null) ? String(val) : '';
+        }
+
+        function openEditModal(btn) {
+            activeRow = btn.closest('tr');
+            editForm.action = btn.dataset.url;
+
+            // Set department & rebuild member options with preserved contact
+            var deptSel   = document.getElementById('edit_customer_company');
+            var memberSel = document.getElementById('edit_customer_contact');
+            var contact   = btn.dataset.customerContact || '';
+            if (deptSel) {
+                deptSel.value = btn.dataset.customerCompany || '';
+                if (typeof window.rebuildEditMembers === 'function') {
+                    window.rebuildEditMembers(deptSel.value, contact);
+                }
+            }
+            if (memberSel) memberSel.value = contact;
+
+            setVal('edit_customer_name',   btn.dataset.customerName);
+            setVal('edit_project_title',   btn.dataset.projectTitle);
+            setVal('edit_project_details', btn.dataset.projectDetails);
+            setVal('edit_pm_esg_reviewer', btn.dataset.pmEsgReviewer);
+            var rawSseManhrs = btn.dataset.sseManhrs;
+            var normalizedSseManhrs = parseFloat(rawSseManhrs);
+            setVal('edit_sse_manhrs',      isNaN(normalizedSseManhrs) ? rawSseManhrs : String(Math.round(normalizedSseManhrs)));
+            setVal('edit_sqr_folder_link', btn.dataset.sqrFolderLink);
+            setVal('edit_remarks',         btn.dataset.remarks);
+
+            // Pre-populate linked_request; inject the current option if it was
+            // filtered out of the server-rendered dropdown (already linked to this SQR).
+            var lrSel = document.getElementById('edit_linked_request');
+            if (lrSel) {
+                var lrId   = btn.dataset.linkedRequest   || '';
+                var lrText = btn.dataset.linkedRequestText || '';
+                // Remove any previously injected option
+                var prev = lrSel.querySelector('option[data-injected]');
+                if (prev) prev.remove();
+                if (lrId && !lrSel.querySelector('option[value="' + lrId + '"]')) {
+                    var opt = new Option(lrText, lrId);
+                    opt.setAttribute('data-injected', '1');
+                    lrSel.add(opt, 1); // insert after the blank placeholder
+                }
+                lrSel.value = lrId;
+            }
+
+            // Refresh live SSE Amount (M) display on open
+            var mDisp = document.getElementById('edit-sse-amount-display');
+            if (mDisp) {
+                var sv2 = parseFloat(btn.dataset.sseManhrs);
+                mDisp.value = isNaN(sv2) ? '' : (sv2 * 2000).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+            }
+
+            // Re-evaluate SSE manhrs visibility
+            var scopeSel = document.getElementById('edit_project_details');
+            if (scopeSel) scopeSel.dispatchEvent(new Event('change'));
+
+            // Show modal
+            editModal.classList.add('requestor-modal--visible');
+            editModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('requestor-modal-open');
+
+            // Reveal delete button in the row
+            if (activeRow) {
+                var delBtn = activeRow.querySelector('.sqr-delete-btn');
+                if (delBtn) delBtn.classList.remove('d-none');
+            }
+        }
+
+        function closeEditModal() {
+            editModal.classList.remove('requestor-modal--visible');
+            editModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+            if (activeRow) {
+                var delBtn = activeRow.querySelector('.sqr-delete-btn');
+                if (delBtn) delBtn.classList.add('d-none');
+            }
+            activeRow = null;
+        }
+
+        document.querySelectorAll('.sqr-open-edit-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () { openEditModal(this); });
+        });
+        if (closeBtn)  closeBtn.addEventListener('click', closeEditModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+        if (backdrop)  backdrop.addEventListener('click', closeEditModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && editModal.classList.contains('requestor-modal--visible')) closeEditModal();
+        });
+    })();
+
+    // ── Dept → Account Manager filtering for EDIT form ───────────────────
+    (function () {
+        var deptSel    = document.getElementById('edit_customer_company');
+        var memberSel  = document.getElementById('edit_customer_contact');
+        var approverSel = document.getElementById('edit_pm_esg_reviewer');
+        var scopeSel   = document.getElementById('edit_project_details');
+
+        if (!deptSel) return;
+
+        // Read data maps — edit_customer_company carries the same attrs as id_customer_company
+        var memberMap = {}, approverMap = {}, sseScopes = [];
+        try { memberMap   = JSON.parse(deptSel.dataset.memberMap   || '{}'); } catch (e) {}
+        try { approverMap = JSON.parse(deptSel.dataset.approverMap || '{}'); } catch (e) {}
+        try { sseScopes   = JSON.parse(deptSel.dataset.sseScopes   || '[]'); } catch (e) {}
+
+        // Exposed so openEditModal() can call with a preserved contact value
+        window.rebuildEditMembers = function (dept, preserve) {
+            if (!memberSel) return;
+            memberSel.innerHTML = '';
+            var empty = document.createElement('option');
+            empty.value = ''; empty.textContent = '— Select Member —';
+            memberSel.appendChild(empty);
+            var members = memberMap[dept] || [];
+            members.forEach(function (m) {
+                var opt = document.createElement('option');
+                opt.value = m; opt.textContent = m;
+                if (m === preserve) opt.selected = true;
+                memberSel.appendChild(opt);
+            });
+            // If preserved value is not in the list, append it so it displays correctly
+            if (preserve && preserve !== '' && !members.includes(preserve)) {
+                var opt = document.createElement('option');
+                opt.value = preserve; opt.textContent = preserve; opt.selected = true;
+                memberSel.appendChild(opt);
+            }
+        };
+
+        deptSel.addEventListener('change', function () {
+            window.rebuildEditMembers(this.value, '');
+            if (approverSel && approverMap[this.value]) approverSel.value = approverMap[this.value];
+        });
+
+        function updateEditSseManhrs() {
+            var sseManhrsInput = document.getElementById('edit_sse_manhrs');
+            if (!sseManhrsInput) return;
+            var row = sseManhrsInput.closest('.mb-3');
+            if (!row) return;
+            var show = scopeSel ? sseScopes.indexOf(scopeSel.value) !== -1 : false;
+            row.style.display = show ? '' : 'none';
+            if (!show) sseManhrsInput.value = '';
+        }
+        if (scopeSel) scopeSel.addEventListener('change', updateEditSseManhrs);
+
+        // Live SSE Amount (M = L × 2 000) display inside SSE edit modal
+        (function () {
+            var sseInput = document.getElementById('edit_sse_manhrs');
+            var display  = document.getElementById('edit-sse-amount-display');
+            function refresh() {
+                if (!display) return;
+                var v = parseFloat(sseInput ? sseInput.value : '');
+                display.value = isNaN(v) ? '' : (v * 2000).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+            }
+            if (sseInput) sseInput.addEventListener('input', refresh);
+        })();
+    })();
+</script>
+{% endif %}
+
+{# ── datalists (shared) ─────────────────────────────────────────────────── #}
+<datalist id="pm-manhrs-datalist">
+    <option value="8">
+    <option value="16">
+    <option value="24">
+    <option value="32">
+    <option value="48">
+</datalist>
+<datalist id="discount-rate-datalist">
+    <option value="0">
+    <option value="5">
+    <option value="10">
+    <option value="15">
+</datalist>
+
+{# ── Inline cell editing JS (Admin / PM-ESG) ──────────────────────────── #}
+{% if is_pm %}
+<script>
+(function () {
+    'use strict';
+    var CSRF = '{{ csrf_token }}';
+    var approvalChoiceModal = document.getElementById('sqr-approval-choice-modal');
+    var approvalDraftBtn = document.getElementById('sqr-approval-open-draft-btn');
+    var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
+    var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
+    var approvalChoiceState = { draftUrl: '', emlUrl: '' };
+    var CLOSED_LOST_LOCKED_FIELDS = new Set([
+        'po_pnl_date', 'assigned_pm', 'assigned_sse', 'delivery_start_date',
+        'delivery_target_finish_date', 'overall_status', 'delivery_health',
+        'delivery_progress', 'key_updates_risks', 'delivery_actual_finish_date',
+        'delivery_completion_signed_date', 'managed_support_start_date',
+        'revenue_date', 'revenue_source', 'revenue_reference_no',
+        'revenue_remarks', 'revenue_declaration'
+    ]);
+
+    function setApprovalChoiceVisibility(isVisible) {
+        if (!approvalChoiceModal) return;
+        approvalChoiceModal.classList.toggle('is-visible', !!isVisible);
+        approvalChoiceModal.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    function openApprovalChoiceModal(draftUrl, emlUrl) {
+        approvalChoiceState.draftUrl = draftUrl || '';
+        approvalChoiceState.emlUrl = emlUrl || '';
+        setApprovalChoiceVisibility(true);
+    }
+
+    function closeApprovalChoiceModal() {
+        approvalChoiceState.draftUrl = '';
+        approvalChoiceState.emlUrl = '';
+        setApprovalChoiceVisibility(false);
+    }
+
+    if (approvalChoiceModal) {
+        approvalChoiceModal.addEventListener('click', function (event) {
+            if (event.target && event.target.getAttribute('data-sqr-approval-close') === 'true') {
+                closeApprovalChoiceModal();
+            }
+        });
+    }
+
+    if (approvalCancelBtn) {
+        approvalCancelBtn.addEventListener('click', closeApprovalChoiceModal);
+    }
+
+    if (approvalDraftBtn) {
+        approvalDraftBtn.addEventListener('click', function () {
+            var draftUrl = approvalChoiceState.draftUrl;
+            closeApprovalChoiceModal();
+            if (draftUrl) {
+                window.location.href = draftUrl;
+            }
+        });
+    }
+
+    if (approvalEmlBtn) {
+        approvalEmlBtn.addEventListener('click', function () {
+            var emlUrl = approvalChoiceState.emlUrl;
+            closeApprovalChoiceModal();
+            if (emlUrl) {
+                window.location.href = emlUrl;
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && approvalChoiceModal && approvalChoiceModal.classList.contains('is-visible')) {
+            closeApprovalChoiceModal();
+        }
+    });
+
+    function isClosedLostLockedCell(cell) {
+        if (!cell) return false;
+        var row = cell.closest('tr');
+        if (!row || row.dataset.sqrProposalStatus !== 'closed_lost') return false;
+        return CLOSED_LOST_LOCKED_FIELDS.has(cell.dataset.sqrField || '');
+    }
+
+    /* PM users for Assigned PM dropdown — from context */
+    var SQR_PM_USERS = {{ sqr_pm_users_json|default:"[]"|safe }};
+    var PM_USER_CHOICES = [['', '\u2014 Select PM \u2014']];
+    var PM_USER_MAP = {};
+    SQR_PM_USERS.forEach(function(u) {
+        var name = (u.first_name + ' ' + u.last_name).trim() || u.username;
+        PM_USER_CHOICES.push([String(u.pk), name]);
+        PM_USER_MAP[String(u.pk)] = name;
+    });
+
+    /* SSE (Engineer) users for Assigned SSE dropdown */
+    var SQR_SSE_USERS = {{ sqr_sse_users_json|default:"[]"|safe }};
+    var SSE_USER_CHOICES = [['', '\u2014 Select SSE \u2014']];
+    var SSE_USER_MAP = {};
+    SQR_SSE_USERS.forEach(function(u) {
+        var name = (u.first_name + ' ' + u.last_name).trim() || u.username;
+        SSE_USER_CHOICES.push([String(u.pk), name]);
+        SSE_USER_MAP[String(u.pk)] = name;
+    });
+
+    /* Request options for RQ ID dropdown */
+    var SQR_RQ_OPTIONS = {{ sqr_rq_options_json|default:"[]"|safe }};
+    var RQ_CHOICES = [['', '\u2014 Select RQ ID \u2014']];
+    var RQ_MAP = {};
+    SQR_RQ_OPTIONS.forEach(function(r) {
+        RQ_CHOICES.push([String(r.pk), r.reference_code]);
+        RQ_MAP[String(r.pk)] = r.reference_code;
+    });
+
+    /* Choice maps — value → label (for display after save) */
+    var LABELS = {
+        status: {submitted:'For Processing', for_revision:'For Revision', reviewed:'Approved'},
+        proposal_status: {submitted_pending:'Submitted\u2013Pending', negotiation_review:'Negotiation / Review', closed_won:'Closed Won', closed_lost:'Closed Lost'},
+        overall_status: {on_hold:'On Hold', planning:'Planning', in_progress:'In Progress', completed:'Completed', cancelled:'Cancelled'},
+        delivery_health: {on_track:'On Track', off_track:'Off Track', at_risk:'At Risk', completed:'Completed', cancelled:'Cancelled'},
+        project_details: {'Training':'Training','Support':'Support','Implementation':'Implementation','Project Management':'Project Management','Implementation and Project Management':'Implementation and Project Management','Demonstration':'Demonstration','Managed Support and Maintenance Service':'Managed Support and Maintenance Service','Other':'Other'},
+        customer_company: {ESS:'ESS', HP:'HP', Dell:'Dell', ENS:'ENS', ESG:'ESG', Other:'Other'},
+        revenue_source: {internal:'Internal', invoiced:'Invoiced'},
+        revenue_declaration: {declared:'Declared', not_yet:'Not Yet'},
+    };
+    var CHOICES = {
+        status: [['','—'],['submitted','For Processing'],['for_revision','For Revision'],['reviewed','Approved']],
+        proposal_status: [['','—'],['submitted_pending','Submitted\u2013Pending'],['negotiation_review','Negotiation / Review'],['closed_won','Closed Won'],['closed_lost','Closed Lost']],
+        overall_status: [['','—'],['on_hold','On Hold'],['planning','Planning'],['in_progress','In Progress'],['completed','Completed'],['cancelled','Cancelled']],
+        delivery_health: [['','—'],['on_track','On Track'],['off_track','Off Track'],['at_risk','At Risk'],['completed','Completed'],['cancelled','Cancelled']],
+        project_details: [['','— Select Scope —'],['Training','Training'],['Support','Support'],['Implementation','Implementation'],['Project Management','Project Management'],['Implementation and Project Management','Implementation and Project Management'],['Demonstration','Demonstration'],['Managed Support and Maintenance Service','Managed Support and Maintenance Service'],['Other','Other']],
+        customer_company: [['','— Select —'],['ESS','ESS'],['HP','HP'],['Dell','Dell'],['ENS','ENS'],['ESG','ESG'],['Other','Other']],
+        revenue_source: [['','— Select —'],['internal','Internal'],['invoiced','Invoiced']],
+        revenue_declaration: [['','— Select —'],['declared','Declared'],['not_yet','Not Yet']],
+        assigned_pm: PM_USER_CHOICES,
+        assigned_sse: SSE_USER_CHOICES,
+        linked_request: RQ_CHOICES,
+    };
+
+    function fmtDate(iso) {
+        if (!iso) return '\u2013';
+        try {
+            var d = new Date(iso + 'T00:00:00');
+            return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+        } catch(e) { return iso; }
+    }
+
+    function getDisplay(field, value) {
+        if (!value && value !== 0) return '\u2013';
+        if (field === 'status') {
+            if (value === 'reviewed')     return '<span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>';
+            if (value === 'for_revision') return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>';
+            return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>';
+        }
+        if (field === 'proposal_status') {
+            if (value === 'submitted_pending')  return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted\u2013Pending</span>';
+            if (value === 'negotiation_review') return '<span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>';
+            if (value === 'closed_won')         return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>';
+            if (value === 'closed_lost')        return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed Lost</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'overall_status') {
+            if (value === 'on_hold')    return '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>';
+            if (value === 'planning')   return '<span class="badge bg-info-subtle text-info border border-info-subtle">Planning</span>';
+            if (value === 'in_progress')return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>';
+            if (value === 'completed')  return '<span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>';
+            if (value === 'cancelled')  return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'delivery_health') {
+            if (value === 'on_track')  return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>';
+            if (value === 'off_track') return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Off Track</span>';
+            if (value === 'at_risk')   return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-shield-exclamation me-1"></i>At Risk</span>';
+            if (value === 'completed') return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-patch-check me-1"></i>Completed</span>';
+            if (value === 'cancelled') return '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'revenue_declaration') {
+            if (value === 'declared') return '<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>';
+            if (value === 'not_yet') return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';
+        if (field === 'assigned_sse') return SSE_USER_MAP[String(value)] || '\u2013';
+        if (field === 'linked_request') return RQ_MAP[String(value)] || String(value);
+        if (LABELS[field]) return LABELS[field][value] || value;
+        var lower = field.toLowerCase();
+        if (lower.indexOf('date') !== -1 && field !== 'key_updates_risks') return fmtDate(value);
+        if (field === 'delivery_progress') {
+            if (value === '' || value === null || value === undefined) return '<span class="text-muted small">\u2013</span>';
+            var pct = parseInt(value, 10);
+            if (isNaN(pct)) return value + '%';
+            var barClass = pct >= 100 ? 'bg-success' : pct >= 60 ? 'bg-info' : pct >= 30 ? 'bg-warning' : 'bg-danger';
+            return '<div class="d-flex align-items-center gap-2">'
+                + '<div class="progress flex-grow-1" style="height:6px;min-width:60px;">'
+                + '<div class="progress-bar ' + barClass + '" role="progressbar" style="width:' + pct + '%" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"></div>'
+                + '</div>'
+                + '<span class="small fw-semibold">' + pct + '%</span>'
+                + '</div>';
+        }
+        if (field === 'discount_rate') {
+            if (value === '' || value === null || value === undefined || String(value) === '0') {
+                return '\u2013';
+            }
+            return value + '%';
+        }
+        if (field === 'delivery_actual_finish_date') {
+            if (!value) return '<span class="text-muted">\u2013</span>';
+            var actCell = arguments[2];
+            var targetDate = actCell ? (actCell.dataset.sqrTargetDate || '') : '';
+            var formatted = fmtDate(value);
+            if (targetDate && value > targetDate) {
+                return '<span class="text-danger">' + formatted + '</span>';
+            }
+            return '<span class="text-success">' + formatted + '</span>';
+        }
+        if (field === 'pm_manhrs') {
+            var n = parseFloat(value);
+            return isNaN(n) ? value : n.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        }
+        if (field === 'sse_manhrs') {
+            var sse = parseFloat(value);
+            return isNaN(sse) ? value : sse.toLocaleString('en-PH', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        }
+        if (field === 'managed_support_amount') {
+            var n = parseFloat(value);
+            return isNaN(n) ? value : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        return value;
+    }
+
+    function buildWidget(field, currentValue) {
+        var w;
+        if (CHOICES[field]) {
+            w = document.createElement('select');
+            w.className = 'sqr-inline-input form-select form-select-sm';
+            CHOICES[field].forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c[0]; o.textContent = c[1];
+                if (c[0] === currentValue) o.selected = true;
+                w.appendChild(o);
+            });
+        } else if (field.indexOf('date') !== -1 && field !== 'key_updates_risks') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'date'; w.value = currentValue || '';
+            w.title = currentValue ? 'Press Delete or Backspace to clear the date.' : 'Choose a date.';
+        } else if (field === 'revenue_reference_no') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'text'; w.value = (currentValue || '').toUpperCase();
+            w.maxLength = 50;
+            w.style.minWidth = '120px'; w.style.textTransform = 'uppercase';
+            w.addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+        } else if (field === 'managed_support_amount') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'number'; w.min = '0'; w.step = '0.01';
+            w.style.width = '110px';
+            w.value = currentValue || '';
+        } else if (field === 'pm_manhrs') {
+            var presets = ['8', '16', '24', '32', '48'];
+            var isCustomVal = currentValue !== '' && presets.indexOf(currentValue) === -1;
+            var wrapper = document.createElement('div');
+            wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
+            var sel = document.createElement('select');
+            sel.className = 'sqr-inline-input form-select form-select-sm';
+            sel.style.width = '85px';
+            var emptyOpt = document.createElement('option');
+            emptyOpt.value = ''; emptyOpt.textContent = '\u2014';
+            sel.appendChild(emptyOpt);
+            presets.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v; o.textContent = v;
+                if (!isCustomVal && currentValue === v) o.selected = true;
+                sel.appendChild(o);
+            });
+            var customOpt = document.createElement('option');
+            customOpt.value = '__custom__'; customOpt.textContent = 'Custom\u2026';
+            if (isCustomVal) customOpt.selected = true;
+            sel.appendChild(customOpt);
+            var inp = document.createElement('input');
+            inp.type = 'number'; inp.min = '0'; inp.step = '1';
+            inp.className = 'sqr-inline-input';
+            inp.style.width = '65px';
+            inp.style.display = isCustomVal ? '' : 'none';
+            inp.value = isCustomVal ? currentValue : '';
+            inp.placeholder = 'hrs';
+            sel.addEventListener('change', function() {
+                inp.style.display = sel.value === '__custom__' ? '' : 'none';
+                if (sel.value === '__custom__') { inp.focus(); if (inp.select) inp.select(); }
+            });
+            Object.defineProperty(wrapper, 'value', {
+                get: function() { return sel.value === '__custom__' ? inp.value : sel.value; }
+            });
+            wrapper.appendChild(sel);
+            wrapper.appendChild(inp);
+            w = wrapper;
+        } else if (field === 'discount_rate') {
+            var drPresets = ['5', '10', '15'];
+            var drCustom = currentValue !== '' && currentValue !== '0' && drPresets.indexOf(currentValue) === -1;
+            var wrapper = document.createElement('div');
+            wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
+            var sel = document.createElement('select');
+            sel.className = 'sqr-inline-input form-select form-select-sm';
+            sel.style.width = '90px';
+            var emptyOpt = document.createElement('option');
+            emptyOpt.value = ''; emptyOpt.textContent = '\u2014';
+            sel.appendChild(emptyOpt);
+            drPresets.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v; o.textContent = v + '%';
+                if (!drCustom && currentValue === v) o.selected = true;
+                sel.appendChild(o);
+            });
+            var customOpt = document.createElement('option');
+            customOpt.value = '__custom__'; customOpt.textContent = 'Custom\u2026';
+            if (drCustom) customOpt.selected = true;
+            sel.appendChild(customOpt);
+            var inp = document.createElement('input');
+            inp.type = 'number'; inp.min = '0'; inp.max = '100'; inp.step = '1';
+            inp.className = 'sqr-inline-input';
+            inp.style.width = '65px';
+            inp.style.display = drCustom ? '' : 'none';
+            inp.value = drCustom ? currentValue : '';
+            inp.placeholder = '%';
+            sel.addEventListener('change', function() {
+                inp.style.display = sel.value === '__custom__' ? '' : 'none';
+                if (sel.value === '__custom__') { inp.focus(); if (inp.select) inp.select(); }
+            });
+            Object.defineProperty(wrapper, 'value', {
+                get: function() { return sel.value === '__custom__' ? inp.value : sel.value; }
+            });
+            wrapper.appendChild(sel);
+            wrapper.appendChild(inp);
+            w = wrapper;
+        } else if (field === 'delivery_progress') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'number'; w.min = '0'; w.max = '100'; w.step = '1';
+            w.style.width = '80px';
+            w.value = currentValue || '';
+            w.addEventListener('input', function() {
+                var v = parseInt(this.value, 10);
+                if (!isNaN(v)) {
+                    if (v > 100) this.value = '100';
+                    if (v < 0)   this.value = '0';
+                }
+            });
+        } else if (field === 'sse_manhrs') {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'number'; w.min = '0'; w.step = '1';
+            w.style.width = '80px';
+            var normalizedSse = parseFloat(currentValue);
+            w.value = isNaN(normalizedSse) ? (currentValue || '') : String(Math.round(normalizedSse));
+        } else {
+            w = document.createElement('input');
+            w.className = 'sqr-inline-input';
+            w.type = 'text'; w.value = currentValue || '';
+            w.style.minWidth = '120px';
+        }
+        return w;
+    }
+
+    function saveField(pk, field, value, cell, displayEl, reviewNotes) {
+        var url = '/sqr/' + pk + '/inline-update/';
+        cell.classList.add('sqr-saving');
+        var payload = {field: field, value: value};
+        if (reviewNotes !== undefined && reviewNotes !== null) payload.review_notes = reviewNotes;
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify(payload),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            cell.classList.remove('sqr-saving');
+            if (data.ok) {
+                var normalizedValue = value;
+                if (field === 'discount_rate' && (value === '' || value === null || value === undefined)) {
+                    normalizedValue = '0';
+                }
+                cell.dataset.sqrValue = normalizedValue;
+                displayEl.innerHTML = getDisplay(field, normalizedValue, cell);
+                cell.classList.add('sqr-saved');
+                setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
+                var row = cell.closest('tr');
+                // Sync Closed Lost NA on delivery/revenue cells after proposal_status change
+                if (field === 'proposal_status' && row) {
+                    if (value === 'closed_lost') {
+                        row.classList.add('sqr-row--closed-lost');
+                    } else {
+                        row.classList.remove('sqr-row--closed-lost');
+                    }
+                    row.dataset.sqrProposalStatus = value;
+                }
+                // Sync revision row highlighting and date-cell icon after status change
+                if (field === 'status' && row) {
+                    if (value === 'for_revision') {
+                        row.classList.add('sqr-row--revision');
+                    } else {
+                        row.classList.remove('sqr-row--revision');
+                    }
+                    // Update the date cell (col A) to show/hide the action-required icon
+                    var dateCell = row.querySelector('td.col-sticky-0');
+                    if (dateCell) {
+                        var dateText = dateCell.textContent.trim();
+                        if (value === 'for_revision') {
+                            dateCell.innerHTML = '<span class="d-flex align-items-center gap-1">'
+                                + '<i class="bi bi-exclamation-triangle-fill text-danger" title="Action required: For Revision"></i>'
+                                + dateText + '</span>';
+                        } else {
+                            dateCell.textContent = dateText;
+                        }
+                    }
+                }
+                // Helper: format a number as ₱X,XXX.XX
+                function pesoFmt(raw) {
+                    if (!raw && raw !== 0) return '\u2013';
+                    var n = parseFloat(raw);
+                    return isNaN(n) ? String(raw) : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+                }
+                // Refresh PM Man-hrs (col N) when sse_manhrs (col L) changes
+                if ('pm_manhrs' in data) {
+                    var pmCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : null;
+                    if (pmCell) {
+                        pmCell.dataset.sqrValue = data.pm_manhrs;
+                        var pmDisp = pmCell.querySelector('.sqr-display');
+                        if (pmDisp) pmDisp.innerHTML = getDisplay('pm_manhrs', data.pm_manhrs, pmCell);
+                    }
+                }
+                // Refresh PM Amount (col O) when pm_manhrs (col N) changes
+                if ('pm_amount' in data) {
+                    var pmSourceCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : cell;
+                    var pmAmtCell = pmSourceCell ? pmSourceCell.nextElementSibling : null;
+                    if (pmAmtCell) pmAmtCell.textContent = pesoFmt(data.pm_amount);
+                }
+                // Refresh SSE Amount (col M) when sse_manhrs (col L) changes
+                if ('sse_amount' in data) {
+                    var sseSourceCell = row ? row.querySelector('[data-sqr-field="sse_manhrs"]') : cell;
+                    var sseAmtCell = sseSourceCell ? sseSourceCell.nextElementSibling : null;
+                    if (sseAmtCell) sseAmtCell.textContent = pesoFmt(data.sse_amount);
+                }
+                // Refresh Discount Amount (col R) and Total Price (col S) when any component changes
+                if ('computed_discount_amount' in data || 'computed_total_price' in data) {
+                    var rowEl = cell.closest('tr');
+                    if (rowEl) {
+                        var pk = String(cell.dataset.sqrPk || (cell.closest('[data-sqr-pk]') ? cell.closest('[data-sqr-pk]').dataset.sqrPk : ''));
+                        if ('computed_discount_amount' in data) {
+                            var daCell = rowEl.querySelector('[data-sqr-computed="discount_amount"]');
+                            if (daCell) daCell.textContent = pesoFmt(data.computed_discount_amount);
+                        }
+                        if ('computed_total_price' in data) {
+                            var tpCell = rowEl.querySelector('[data-sqr-computed="total_price"]');
+                            if (tpCell) tpCell.textContent = pesoFmt(data.computed_total_price);
+                        }
+                    }
+                }
+                // Refresh Managed Support Svc. Amt. (col P) when scope or group changes
+                if ('managed_support_amount' in data) {
+                    if (row) {
+                        var msaCell = row.querySelector('[data-sqr-field="managed_support_amount"]');
+                        if (msaCell) {
+                            var msaVal = data.managed_support_amount;
+                            msaCell.dataset.sqrValue = msaVal;
+                            var msaDisp = msaCell.querySelector('.sqr-display');
+                            if (msaDisp) msaDisp.innerHTML = pesoFmt(msaVal);
+                        }
+                    }
+                }
+                if ('support_start_date' in data && row) {
+                    var ajCellComputed = row.querySelector('[data-sqr-computed="support_start_date"]');
+                    if (ajCellComputed) {
+                        ajCellComputed.querySelector('.sqr-display').innerHTML = data.support_start_date || '<span class="text-muted fst-italic">NA</span>';
+                    }
+                }
+                if ('managed_support_end_date' in data && row) {
+                    var akCellComputed = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+                    if (akCellComputed) {
+                        akCellComputed.innerHTML = data.managed_support_end_date || '<span class="text-muted fst-italic">NA</span>';
+                    }
+                }
+                // Refresh Approval Date (col U) and Validity Due Date (col V) when status changes
+                if (('reviewed_at' in data || 'validity_due_date' in data) && row) {
+                    if ('reviewed_at' in data) {
+                        var raCell = row.querySelector('[data-sqr-computed="reviewed_at"]');
+                        if (raCell) raCell.textContent = data.reviewed_at || '\u2013';
+                    }
+                    if ('validity_due_date' in data) {
+                        var vddCell = row.querySelector('[data-sqr-computed="validity_due_date"]');
+                        if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
+                    }
+                }
+                // Refresh AO Revenue Status badge when revenue_date changes
+                if (field === 'revenue_date' && row) {
+                    var aoCell = row.querySelector('[data-sqr-field="revenue_date"]');
+                    if (aoCell) {
+                        var aoRow = aoCell.closest('tr');
+                        if (aoRow) {
+                            var tds = aoRow.querySelectorAll('td');
+                            // AO is the next non-editable td after AN (revenue_reference_no)
+                            var anCell = aoRow.querySelector('[data-sqr-field="revenue_reference_no"]');
+                            if (anCell && anCell.nextElementSibling) {
+                                var aoStatusCell = anCell.nextElementSibling;
+                                if (value) {
+                                    aoStatusCell.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>';
+                                } else {
+                                    aoStatusCell.innerHTML = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>';
+                                }
+                            }
+                        }
+                    }
+                }
+                // Refresh Assigned PM (col Y) when status → Approved auto-sets it
+                if ('assigned_pm_pk' in data && row) {
+                    var pmCell = row.querySelector('[data-sqr-field="assigned_pm"]');
+                    if (pmCell) {
+                        var pmPk = data.assigned_pm_pk ? String(data.assigned_pm_pk) : '';
+                        var pmName = data.assigned_pm_name || '\u2013';
+                        pmCell.dataset.sqrValue = pmPk;
+                        var pmDisp = pmCell.querySelector('.sqr-display');
+                        if (pmDisp) pmDisp.innerHTML = pmName;
+                    }
+                }
+                // For linked_request: update display with clickable REQ link
+                if (field === 'linked_request' && 'rq_pk' in data) {
+                    var rqPk = data.rq_pk;
+                    var rqCode = data.rq_code || '';
+                    var rqDisp = cell.querySelector('.sqr-display');
+                    if (rqDisp) {
+                        if (rqPk && rqCode) {
+                            rqDisp.innerHTML = '<a href="/requests/' + rqPk + '/manage/collab/" class="text-info" target="_blank">' + rqCode + '</a>';
+                        } else {
+                            rqDisp.innerHTML = '\u2013';
+                        }
+                    }
+                }
+                // Prompt the user to choose the approval email output after Approval.
+                if (field === 'status' && value === 'reviewed' && (data.approval_email_draft_url || data.approval_email_eml_url)) {
+                    cell.title = 'Choose how to open the approved SQR quotation email.';
+                    openApprovalChoiceModal(data.approval_email_draft_url, data.approval_email_eml_url);
+                }
+                // Refresh computed cols AI/AJ/AK when delivery_completion_signed_date changes
+                if (field === 'delivery_completion_signed_date' && row) {
+                    var _naHtml = '<span class="text-muted fst-italic">NA</span>';
+                    var aiCell = row.querySelector('[data-sqr-computed="post_svc_warranty_end_date"]');
+                    if (aiCell) aiCell.innerHTML = data.post_svc_warranty_end_date || _naHtml;
+                    var ajCell = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
+                    if (ajCell) ajCell.innerHTML = data.support_start_date || _naHtml;
+                    var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+                    if (akCell) akCell.innerHTML = data.managed_support_end_date || _naHtml;
+                }
+                // Refresh AJ/AK when AJ (managed_support_start_date) is manually changed
+                if (field === 'managed_support_start_date' && row) {
+                    var _naHtml2 = '<span class="text-muted fst-italic">NA</span>';
+                    var ajCell2 = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
+                    if (ajCell2) ajCell2.innerHTML = data.support_start_date || _naHtml2;
+                    var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+                    if (akCell2) akCell2.innerHTML = data.managed_support_end_date || _naHtml2;
+                }
+            } else {
+                cell.classList.add('sqr-error');
+                setTimeout(function() { cell.classList.remove('sqr-error'); }, 2500);
+            }
+        })
+        .catch(function() {
+            cell.classList.remove('sqr-saving');
+            cell.classList.add('sqr-error');
+            setTimeout(function() { cell.classList.remove('sqr-error'); }, 2500);
+        });
+    }
+
+    function activateCell(cell) {
+        if (cell.classList.contains('sqr-editing')) return;
+        if (isClosedLostLockedCell(cell)) return;
+        var field = cell.dataset.sqrField;
+        var pk = cell.dataset.sqrPk;
+        if (!field || !pk) return;
+
+        var displayEl = cell.querySelector('.sqr-display');
+        var currentValue = cell.dataset.sqrValue || '';
+
+        cell.classList.add('sqr-editing');
+        if (displayEl) displayEl.style.display = 'none';
+
+        var widget = buildWidget(field, currentValue);
+        cell.appendChild(widget);
+
+        function commit() {
+            var newVal = widget.value;
+            cell.classList.remove('sqr-editing');
+            widget.remove();
+            if (displayEl) displayEl.style.display = '';
+            if (newVal !== currentValue) {
+                if (field === 'status' && newVal === 'for_revision') {
+                    openRevisionModal(pk, newVal, cell, displayEl || cell, cell);
+                } else {
+                    saveField(pk, field, newVal, cell, displayEl || cell);
+                }
+            }
+        }
+
+        if (widget.classList && widget.classList.contains('sqr-composite-widget')) {
+            var cmpSel = widget.querySelector('select');
+            var cmpInp = widget.querySelector('input[type="number"]');
+            if (cmpSel) cmpSel.focus();
+            widget.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    if (!widget.contains(document.activeElement) && cell.contains(widget)) commit();
+                }, 150);
+            });
+            if (cmpSel) {
+                cmpSel.addEventListener('change', function() {
+                    if (cmpSel.value !== '__custom__') setTimeout(function() { commit(); }, 50);
+                });
+                cmpSel.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') { cell.classList.remove('sqr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
+                });
+            }
+            if (cmpInp) {
+                cmpInp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                    if (e.key === 'Escape') { cell.classList.remove('sqr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
+                });
+            }
+        } else if (widget.tagName === 'SELECT') {
+            widget.focus();
+            widget.addEventListener('change', function() { commit(); });
+            widget.addEventListener('blur', function() {
+                setTimeout(function() {
+                    if (cell.contains(widget)) commit();
+                }, 100);
+            });
+        } else {
+            widget.focus();
+            // Auto-open calendar picker for date inputs
+            if (widget.type === 'date' && typeof widget.showPicker === 'function') {
+                try { widget.showPicker(); } catch(e) {}
+            }
+            if (widget.select) widget.select();
+            widget.addEventListener('blur', commit);
+            widget.addEventListener('keydown', function(e) {
+                if (widget.type === 'date' && (e.key === 'Delete' || e.key === 'Backspace')) {
+                    if (widget.value) {
+                        e.preventDefault();
+                        widget.value = '';
+                        commit();
+                    }
+                    return;
+                }
+                if (e.key === 'Enter' && widget.tagName !== 'TEXTAREA') { e.preventDefault(); commit(); }
+                if (e.key === 'Escape') {
+                    cell.classList.remove('sqr-editing');
+                    widget.remove();
+                    if (displayEl) displayEl.style.display = '';
+                }
+            });
+        }
+    }
+
+    function openRevisionModal(pk, statusVal, cell, displayEl, triggerCell) {
+        var modal     = document.getElementById('sqr-revision-modal');
+        var notesArea = document.getElementById('sqr-revision-notes');
+        var confirmBtn = document.getElementById('sqr-revision-confirm');
+        var cancelBtn  = document.getElementById('sqr-revision-cancel');
+        var closeBtn   = document.getElementById('sqr-revision-close');
+        var backdrop   = document.getElementById('sqr-revision-backdrop');
+        if (!modal || !notesArea) return;
+
+        // Gather row metadata for Teams GC deep-link
+        var row = (triggerCell || cell).closest('tr');
+        var sqrRef       = row ? (row.dataset.sqrRef || '') : '';
+        var customerName = row ? (row.dataset.sqrCustomer || '') : '';
+        var engineerEmail = row ? (row.dataset.engineerEmail || '') : '';
+        var pmEmail       = row ? (row.dataset.pmEmail || '') : '';
+        var engineerName  = row ? (row.dataset.engineerName || '') : '';
+
+        notesArea.value = '';
+        modal.classList.add('requestor-modal--visible');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('requestor-modal-open');
+        setTimeout(function() { notesArea.focus(); }, 100);
+
+        function closeModal() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('requestor-modal-open');
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            if (closeBtn)  closeBtn.removeEventListener('click', onCancel);
+            if (backdrop)  backdrop.removeEventListener('click', onCancel);
+        }
+
+        function openTeamsRevisionChat(notes) {
+            if (!engineerEmail && !pmEmail) return;
+            var participants = [engineerEmail, pmEmail].filter(Boolean).join(',');
+            var gcName = (sqrRef ? sqrRef + ' ' : '') + customerName;
+            var displayName = engineerName ? '@' + engineerName : 'Team';
+            var message = 'Hi ' + displayName + ',\n\n'
+                + 'Submitted SQR is for revision, please refer to the ff. comments below.\n\n'
+                + 'Comments:\n' + (notes || '') + '\n\nThanks';
+            var teamsUrl = 'https://teams.microsoft.com/l/chat/0/0'
+                + '?users=' + encodeURIComponent(participants)
+                + '&topicName=' + encodeURIComponent(gcName)
+                + '&message=' + encodeURIComponent(message);
+            window.open(teamsUrl, '_blank', 'noopener');
+        }
+
+        function onConfirm() {
+            var notes = notesArea.value.trim();
+            closeModal();
+            saveField(pk, 'status', statusVal, cell, displayEl, notes);
+            openTeamsRevisionChat(notes);
+        }
+
+        function onCancel() { closeModal(); }
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        if (closeBtn) closeBtn.addEventListener('click', onCancel);
+        if (backdrop) backdrop.addEventListener('click', onCancel);
+    }
+
+    document.querySelectorAll('.sqr-inline-cell').forEach(function(cell) {
+        cell.title = isClosedLostLockedCell(cell)
+            ? 'Locked because Proposal Status is Closed Lost'
+            : 'Click to edit';
+        cell.addEventListener('click', function(e) {
+            if (isClosedLostLockedCell(cell)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (!cell.classList.contains('sqr-editing')) activateCell(cell);
+        });
+    });
+
+})();
+</script>
+{% endif %}
+
+{# ── Hover preview popover — all users ───────────────────────────────── #}
+<script>
+(function() {
+    var preview = document.getElementById('sqr-cell-preview');
+    if (!preview) {
+        preview = document.createElement('div');
+        preview.id = 'sqr-cell-preview';
+        document.body.appendChild(preview);
+    }
+
+    var hoverTimer = null;
+    var activeCell = null;
+
+    function isClipped(td) {
+        if (td.scrollWidth > td.offsetWidth) return true;
+        var span = td.querySelector('.sqr-display') || td;
+        if (span.scrollHeight > span.offsetHeight + 2) return true;
+        if (span.scrollWidth > span.offsetWidth) return true;
+        return false;
+    }
+
+    function showPreview(td, e) {
+        var span = td.querySelector('.sqr-display') || td;
+        var fullText = td.dataset.sqrValue !== undefined
+            ? td.dataset.sqrValue
+            : span.textContent.trim();
+        if (!fullText || fullText === '\u2013' || fullText === 'NA') return;
+        preview.textContent = fullText;
+        positionPreview(e);
+        preview.classList.add('visible');
+        activeCell = td;
+    }
+
+    function positionPreview(e) {
+        var vw = window.innerWidth, vh = window.innerHeight;
+        var pw = 340, ph = 120;
+        var x = e.clientX + 14;
+        var y = e.clientY + 14;
+        if (x + pw > vw - 10) x = e.clientX - pw - 10;
+        if (y + ph > vh - 10) y = e.clientY - ph - 10;
+        preview.style.left = x + 'px';
+        preview.style.top = y + 'px';
+    }
+
+    function hidePreview() {
+        preview.classList.remove('visible');
+        activeCell = null;
+    }
+
+    document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
+        td.addEventListener('mouseenter', function(e) {
+            if (td.classList.contains('sqr-editing')) return;
+            if (!isClipped(td)) return;
+            hoverTimer = setTimeout(function() { showPreview(td, e); }, 350);
+        });
+        td.addEventListener('mousemove', function(e) {
+            if (activeCell === td) positionPreview(e);
+        });
+        td.addEventListener('mouseleave', function() {
+            clearTimeout(hoverTimer);
+            hidePreview();
+        });
+        td.addEventListener('click', function() {
+            clearTimeout(hoverTimer);
+            hidePreview();
+        });
+    });
+})();
+</script>
+
+<script>
+// ── Badge filter ──────────────────────────────────────────────────────────
+(function () {
+    var activeFilter = '';   // '' = show all
+
+    function applyFilter(filter) {
+        var rows = document.querySelectorAll('.sqr-tracker tbody tr');
+        rows.forEach(function (row) {
+            if (!filter) {
+                row.style.display = '';
+                return;
+            }
+            var parts  = filter.split(':');
+            var col    = parts[0];   // 'status' or 'proposal_status'
+            var val    = parts[1];
+            var rowVal = col === 'status'
+                ? (row.dataset.sqrStatus || '')
+                : (row.dataset.sqrProposalStatus || '');
+            row.style.display = (rowVal === val) ? '' : 'none';
+        });
+    }
+
+    document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
+        badge.addEventListener('click', function () {
+            var filter = badge.dataset.sqrFilter;
+            if (activeFilter === filter) {
+                // clicking the same badge again clears the filter
+                activeFilter = '';
+            } else {
+                activeFilter = filter;
+            }
+            // update active visual state
+            document.querySelectorAll('.sqr-badge-filter').forEach(function (b) {
+                if (b.dataset.sqrFilter === activeFilter) {
+                    b.style.outline = '2px solid currentColor';
+                    b.style.outlineOffset = '2px';
+                } else {
+                    b.style.outline = '';
+                    b.style.outlineOffset = '';
+                }
+            });
+            applyFilter(activeFilter);
+        });
+    });
+})();
+</script>
+
+{# ── For Revision Comments Modal (PM/Admin inline edit) ───────────────── #}
+{% if is_pm %}
+<div class="requestor-modal" id="sqr-revision-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="sqr-revision-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-revision-title" style="max-width:500px;">
+        <div class="requestor-modal__header">
+            <h2 class="h5 mb-0" id="sqr-revision-title">
+                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>For Revision &mdash; Add Comments
+            </h2>
+            <button type="button" class="btn-close" id="sqr-revision-close" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <p class="text-muted small mb-3">
+                Provide clear comments or instructions for the engineer.
+                These will be saved to the SQR and included in the email notification sent to them.
+            </p>
+            <div class="mb-4">
+                <label class="form-label fw-semibold" for="sqr-revision-notes">
+                    <i class="bi bi-chat-left-text me-1"></i>Revision Comments <span class="text-danger">*</span>
+                </label>
+                <textarea id="sqr-revision-notes" class="form-control" rows="6"
+                    placeholder="e.g. Please update the project scope and revise the SSE man-hours. The current estimate appears underquoted for an Implementation engagement. Ensure the documentation links are also attached before resubmitting."></textarea>
+                <div class="form-text">These notes will be saved to the SQR record and emailed to the engineer.</div>
+            </div>
+            <div class="d-flex gap-2 justify-content-end">
+                <button type="button" class="btn btn-outline-secondary" id="sqr-revision-cancel">
+                    <i class="bi bi-x me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="sqr-revision-confirm">
+                    <i class="bi bi-send me-1"></i>Submit &amp; Notify Engineer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endif %}
 {% endblock %}

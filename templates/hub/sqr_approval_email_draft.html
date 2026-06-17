@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Approval Email Draft · {{ submission.reference_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center justify-content-between gap-3 mb-4 flex-wrap">
+        <div>
+            <p class="text-uppercase text-muted small fw-semibold mb-1">SQR Approval Email Draft</p>
+            <h1 class="h3 fw-bold mb-0">{{ submission.reference_code }} · {{ submission.customer_name|default:'SQR' }}</h1>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" href="{{ back_url }}">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </a>
+            <form method="post" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-send-check me-1"></i>Send Email
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <h2 class="h6 fw-bold mb-3">Email Details</h2>
+                    <div class="mb-3">
+                        <div class="small text-muted text-uppercase fw-semibold">To</div>
+                        {% for recipient in recipients %}
+                            <div class="fw-semibold text-break">{{ recipient }}</div>
+                        {% empty %}
+                            <div class="text-danger">No recipient email configured.</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <div class="small text-muted text-uppercase fw-semibold">Subject</div>
+                        <div class="fw-semibold text-break">{{ subject }}</div>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        Review the quotation-style body below. Click <strong>Send Email</strong> only after confirming the draft.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-9">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h6 fw-bold mb-0">
+                        <i class="bi bi-envelope-paper me-2 text-success"></i>Email Body Preview
+                    </h2>
+                </div>
+                <div class="card-body bg-light rounded-bottom p-3 p-md-4">
+                    <div class="bg-white border rounded shadow-sm overflow-auto">
+                        {{ html_preview|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

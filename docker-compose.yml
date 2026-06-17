@@ -2,27 +2,10 @@ version: "3.9"
 
 services:
   web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-      - .:/app
+    image: lloydismael12/request-hub:v43.7
     ports:
       - "8000:8000"
+    environment:
+      - APP_VERSION=v43.7
     env_file:
       - .env
-    depends_on:
-      - db
-
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: ${DB_NAME:-requesthub}
-      POSTGRES_USER: ${DB_USER:-requesthub}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-requesthub}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-volumes:
-  postgres_data:

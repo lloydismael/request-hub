@@ -1,21 +1,40 @@
 import csv
+import base64
+import html
+import json
 import logging
+import mimetypes
+import re
+import threading
+import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date, datetime, timedelta
+from email.charset import Charset, QP
+from email.header import Header
+from email.mime.image import MIMEImage
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
+
+import msal
+import requests
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
+from django.core.cache import cache
+from django.db import close_old_connections
 from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
 from django.db.models import Count, Min, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -40,8 +59,12 @@ from .forms import (
     AdminRequestFilterForm,
     EngineerActivityLogForm,
     RequestAdminForm,
+    SqrDeliveryForm,
+    SqrProposalStatusForm,
+    SqrRevenueForm,
     SqrRevenueOrderForm,
     SqrRevenueQuotationForm,
+    SqrImportForm,
     RequestForm,
     RequestStatusForm,
     SqrReviewForm,
@@ -67,6 +90,279 @@ from .mixins import (
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
+
+SQR_APPROVAL_SERVICE_COMPONENT = "Systems Support & Maintenance Service - 1 Year"
+SQR_APPROVAL_LOGO_URL = "https://raw.githubusercontent.com/lloydismael/request-hub/dev/static/img/phil-data-full-logo.png"
+SQR_APPROVAL_LOGO_PATH = Path(settings.BASE_DIR) / "static" / "img" / "phil-data-full-logo.png"
+SQR_APPROVAL_LOGO_CID = "sqr-approval-logo@request-hub"
+SQR_APPROVAL_INCLUDED_SERVICES = [
+    "Proactive System Health Checks",
+    "System/Platform Patching (scheduled)",
+    "Incident Support",
+    "Basic Troubleshooting and Issue Isolation",
+    "Monthly System Status Report",
+    "Advisory Support",
+]
+
+
+def _format_sqr_approval_greeting(requestor_name: str) -> str:
+    cleaned_name = (requestor_name or "").strip()
+    return f"Hi @{cleaned_name}" if cleaned_name else "Hi"
+
+
+def _split_sqr_scope_items(scope_text: str) -> list[str]:
+    cleaned = (scope_text or "").replace("\r", "").strip()
+    if not cleaned:
+        return list(SQR_APPROVAL_INCLUDED_SERVICES)
+
+    if "•" in cleaned:
+        raw_items = cleaned.split("•")
+    elif "\n" in cleaned:
+        raw_items = cleaned.splitlines()
+    elif ";" in cleaned:
+        raw_items = cleaned.split(";")
+    else:
+        raw_items = [cleaned]
+
+    items: list[str] = []
+    for raw_item in raw_items:
+        item = re.sub(r"^[\-•\s]+", "", raw_item).strip()
+        if item:
+            items.append(item)
+    return items or list(SQR_APPROVAL_INCLUDED_SERVICES)
+
+
+def _get_sqr_scope_items(submission: "SqrSubmission") -> list[str]:
+    return _split_sqr_scope_items(submission.project_details or "")
+
+
+def _get_sqr_service_component(submission: "SqrSubmission") -> str:
+    return SQR_APPROVAL_SERVICE_COMPONENT
+
+
+def _get_sqr_logo_attachment() -> Optional[dict]:
+    try:
+        logo_bytes = SQR_APPROVAL_LOGO_PATH.read_bytes()
+    except OSError:
+        logger.warning("SQR approval logo file is unavailable at %s", SQR_APPROVAL_LOGO_PATH)
+        return None
+
+    content_type = mimetypes.guess_type(str(SQR_APPROVAL_LOGO_PATH))[0] or "image/png"
+    return {
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        "name": SQR_APPROVAL_LOGO_PATH.name,
+        "contentType": content_type,
+        "isInline": True,
+        "contentId": SQR_APPROVAL_LOGO_CID,
+        "contentBytes": base64.b64encode(logo_bytes).decode("ascii"),
+    }
+
+
+def _build_sqr_approval_mime_message(context: dict, sender_email: str, *, mark_as_unsent: bool = False) -> str:
+    windows_charset = Charset("windows-1252")
+    windows_charset.body_encoding = QP
+
+    message = MIMEMultipart("related")
+    message.set_param("type", "multipart/alternative")
+    message["Subject"] = Header(context["subject"], "windows-1252")
+    message["From"] = sender_email
+    recipients = context.get("recipients") or []
+    if recipients[:1]:
+        message["To"] = recipients[0]
+    if recipients[1:]:
+        message["Cc"] = ", ".join(recipients[1:])
+    if mark_as_unsent:
+        message["X-Unsent"] = "1"
+
+    alternative = MIMEMultipart("alternative")
+    alternative.attach(MIMEText(context["plain_text"], "plain", windows_charset))
+    alternative.attach(MIMEText(context.get("html_draft") or context["html_preview"], "html", windows_charset))
+    message.attach(alternative)
+
+    for attachment in context.get("attachments") or []:
+        raw_bytes = base64.b64decode(attachment["contentBytes"])
+        maintype, _, subtype = (attachment.get("contentType") or "application/octet-stream").partition("/")
+        if maintype == "image":
+            part = MIMEImage(raw_bytes, _subtype=subtype or "png")
+        else:
+            part = MIMEApplication(raw_bytes, _subtype=subtype or "octet-stream")
+        part.add_header("Content-Disposition", "inline", filename=attachment.get("name") or "attachment")
+        if attachment.get("contentId"):
+            part.add_header("Content-ID", f'<{attachment["contentId"]}>')
+        message.attach(part)
+
+    return base64.b64encode(message.as_bytes()).decode("ascii")
+
+
+def _format_sqr_approval_subject(submission: "SqrSubmission") -> str:
+    rq_id = submission.linked_request.reference_code if submission.linked_request else ""
+    if rq_id:
+        return f"{submission.reference_code} • {rq_id} • {submission.customer_name}"
+    return f"{submission.reference_code} • {submission.customer_name}"
+
+
+def _format_sqr_approval_date(submission: "SqrSubmission") -> str:
+    if not submission.reviewed_at:
+        return "—"
+    return submission.reviewed_at.astimezone(MANILA_TZ).strftime("%B %d, %Y")
+
+
+def _format_sqr_approval_total_price(submission: "SqrSubmission") -> str:
+    if submission.computed_total_price is not None:
+        return f"PHP {submission.computed_total_price:,.2f}"
+    if submission.quotation_total_price is not None:
+        return f"PHP {submission.quotation_total_price:,.2f}"
+    return "—"
+
+
+def _format_sqr_approval_validity_date(submission: "SqrSubmission") -> str:
+    return submission.validity_due_date.strftime("%B %d, %Y") if submission.validity_due_date else "—"
+
+
+def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: str) -> list[str]:
+    scope_items = _get_sqr_scope_items(submission)
+    service_component = _get_sqr_service_component(submission)
+    return [
+        _format_sqr_approval_greeting(requestor_name),
+        "",
+        "Submitted SQR is now approved. Please refer to the quotation details below.",
+        "",
+        f"Date: {_format_sqr_approval_date(submission)}",
+        "SERVICE QUOTATION",
+        "",
+        f"SQR ID: {submission.reference_code or ''}",
+        f"Account / Customer: {submission.customer_name or ''}",
+        f"Service Description: {(submission.project_title or '').strip()}",
+        f"Account Manager: {(submission.customer_contact or '').strip()}",
+        "",
+        "SCOPE OF SERVICES",
+        *[f"• {item}" for item in scope_items],
+        "",
+        "Service Component | Qty | Total Price",
+        f"{service_component} | 1 lot | {_format_sqr_approval_total_price(submission)}",
+        f"Total: {_format_sqr_approval_total_price(submission)}",
+        "",
+        f"Quotation Validity Until: {_format_sqr_approval_validity_date(submission)}",
+        "",
+        "Terms and Conditions",
+        "VAT: This quote excludes Value Added Tax (VAT).",
+        "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
+        "This is a budgetary quote.",
+        "This quote is issued for internal billing purposes only.",
+        "Travel costs within Metro Manila are included.",
+        "This quote does not include hardware, software licenses, or subscriptions unless stated.",
+        "",
+        "For any questions or to discuss this quote further, please don't hesitate to contact us:",
+        "EnterpriseServices@phildata.com",
+    ]
+
+
+def _build_sqr_approval_html(submission: "SqrSubmission", requestor_name: str) -> str:
+    return _build_sqr_approval_html_markup(submission, requestor_name, logo_src=SQR_APPROVAL_LOGO_URL)
+
+
+def _build_sqr_approval_draft_html(submission: "SqrSubmission", requestor_name: str) -> str:
+    return _build_sqr_approval_html_markup(submission, requestor_name, logo_src=f"cid:{SQR_APPROVAL_LOGO_CID}")
+
+
+def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name: str, *, logo_src: str) -> str:
+    summary_rows = [
+        ("SQR ID", submission.reference_code or "—"),
+        ("Account / Customer", submission.customer_name or "—"),
+        ("Service Description", (submission.project_title or "").strip() or "—"),
+        ("Account Manager", (submission.customer_contact or "").strip() or "—"),
+    ]
+    scope_items = _get_sqr_scope_items(submission)
+    service_component = html.escape(_get_sqr_service_component(submission))
+    approval_date = html.escape(_format_sqr_approval_date(submission))
+    total_price = html.escape(_format_sqr_approval_total_price(submission))
+    validity_date = html.escape(_format_sqr_approval_validity_date(submission))
+    greeting = html.escape(_format_sqr_approval_greeting(requestor_name))
+    logo_url = html.escape(logo_src)
+
+    summary_headers_html = "".join(
+        f'<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">{html.escape(label)}</span></div></th>'
+        for label, _value in summary_rows
+    )
+    summary_values_html = "".join(
+        f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{html.escape(value)}</div></td>'
+        for _label, value in summary_rows
+    )
+    scope_items_html = "".join(
+        f'<li style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);direction:ltr;line-height:1.6;margin:0 0 8px;"><span style="line-height:1.6;" role="presentation">{html.escape(item)}</span></li>'
+        for item in scope_items
+    )
+
+    return "".join(
+        [
+            '<html><head><meta http-equiv="Content-Type" content="text/html; charset=Windows-1252"><style type="text/css" style="display:none;"> P {margin-top:0;margin-bottom:0;} </style></head><body dir="ltr">',
+            '<div class="elementToProof" style="background-color:rgb(244,247,251);padding:24px 12px;">',
+            '<div class="elementToProof" style="background-color:rgb(255,255,255);margin:0 auto;border-width:1px;border-style:solid;border-color:rgb(215,222,232);max-width:860px;">',
+            '<div class="elementToProof" style="padding:28px 30px 32px;">',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 12px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">{greeting}</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 22px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">Submitted SQR is now approved. Please refer to the quotation details below.</span></p>',
+            '<div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:rgb(16,24,40);">',
+            f'<img width="193" height="80" style="width:193.667px;height:80px;max-width:1070px;" src="{logo_url}" alt="Phil-Data">',
+            '</div>',
+            '<table role="presentation" style="direction:ltr;margin:0 0 18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<tbody><tr>',
+            '<td style="direction:ltr;vertical-align:bottom;">',
+            '<div class="elementToProof" style="direction:ltr;letter-spacing:0.08em;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgb(71,84,103);"><span style="letter-spacing:0.08em;">Date</span></div>',
+            f'<div class="elementToProof" style="direction:ltr;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);">{approval_date}</div>',
+            '</td>',
+            '<td style="direction:ltr;text-align:right;vertical-align:bottom;">',
+            '<div class="elementToProof" style="direction:ltr;text-align:right;letter-spacing:0.05em;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:700;color:rgb(17,24,39);"><span style="letter-spacing:0.05em;">SERVICE QUOTATION</span></div>',
+            '</td>',
+            '</tr></tbody></table>',
+            '<table role="presentation" style="direction:ltr;width:100%;table-layout:fixed;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<tbody>',
+            f'<tr>{summary_headers_html}</tr>',
+            f'<tr>{summary_values_html}</tr>',
+            '</tbody></table>',
+            '<div class="elementToProof" style="margin-top:18px;">',
+            '<div class="elementToProof" style="background-color:rgb(255,255,255);border-width:1px;border-style:solid;border-color:rgb(207,216,227);">',
+            '<div class="elementToProof" style="direction:ltr;background-color:rgb(255,255,255);padding-top:14px;padding-right:16px;padding-left:16px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgb(16,24,40);"><span style="letter-spacing:0.04em;font-weight:700;">SCOPE OF SERVICES</span></div>',
+            f'<ul style="direction:ltr;margin:10px 0 0;padding-right:24px;padding-bottom:16px;padding-left:34px;">{scope_items_html}</ul>',
+            '</div>',
+            '</div>',
+            '<table role="presentation" style="direction:ltr;margin-top:18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<tbody>',
+            '<tr>',
+            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Service Component</span></div></th>',
+            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:120px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Qty</span></div></th>',
+            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:180px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Total Price</span></div></th>',
+            '</tr>',
+            '<tr>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{service_component}</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">1 lot</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{total_price}</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;"></td>',
+            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">Total</span></div></td>',
+            f'<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">{total_price}</span></div></td>',
+            '</tr>',
+            '</tbody></table>',
+            f'<p class="elementToProof" style="direction:ltr;margin:14px 0 0;font-size:13px;color:rgb(71,84,103);"><span style="font-family:Arial,Helvetica,sans-serif;">Quotation Validity Until: </span><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);"><b>{validity_date}</b></span></p>',
+            '<div class="elementToProof" style="margin-top:24px;">',
+            '<div class="elementToProof" style="direction:ltr;margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:rgb(16,24,40);"><span style="font-weight:700;">Terms and Conditions</span></div>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">VAT: This quote excludes Value Added Tax (VAT).</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><i>For P&amp;L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.</i></span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">This is a budgetary quote.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">This quote is issued for internal billing purposes only.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">Travel costs within Metro Manila are included.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">This quote does not include hardware, software licenses, or subscriptions unless stated.</span></p>',
+            '</div>',
+            '<div class="elementToProof" style="margin-top:22px;padding-top:16px;border-top:1px solid rgb(228,231,236);">',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 6px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">For any questions or to discuss this quote further, please don\'t hesitate to contact us:</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0;font-size:13px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(21,96,130);font-weight:700;"><a href="mailto:EnterpriseServices@phildata.com" style="color:rgb(21,96,130);text-decoration:none;margin-top:0;margin-bottom:0;">EnterpriseServices@phildata.com</a></span></p>',
+            '</div>',
+            '</div>',
+            '</div>',
+            '</div>',
+            '</body></html>',
+        ]
+    )
 
 
 @dataclass(frozen=True)
@@ -534,6 +830,28 @@ def notify_status_update(log, source_label):
         )
 
 
+def get_request_activity_log_context(request_obj: Request) -> dict:
+    related_activity_logs = (
+        request_obj.activity_logs.select_related("engineer", "account")
+        .order_by("-request_date", "-created_at")
+    )
+    activity_summary = related_activity_logs.aggregate(
+        total_hours=Sum("actual_hours"),
+        billable_hours=Sum("actual_hours", filter=Q(is_billable=True)),
+    )
+    total_hours = activity_summary.get("total_hours") or Decimal("0")
+    billable_hours = activity_summary.get("billable_hours") or Decimal("0")
+    return {
+        "related_activity_logs": related_activity_logs,
+        "related_activity_summary": {
+            "count": related_activity_logs.count(),
+            "total_hours": total_hours,
+            "billable_hours": billable_hours,
+            "non_billable_hours": total_hours - billable_hours,
+        },
+    }
+
+
 def create_change_status_log(request_obj: Request, actor_user: User, source_label: str, summary_text: str) -> None:
     """Persist a status log entry describing automatic updates."""
     if not summary_text:
@@ -743,11 +1061,474 @@ def _admin_sort_account_manager_key(request_obj):
     return (has_name, normalized)
 
 
+def _send_sqr_new_submission_email(
+    submission: SqrSubmission,
+    *,
+    http_request=None,
+) -> None:
+    """Send an email to the assigned PM-ESG reviewer when a new SQR is submitted."""
+    reviewer = submission.pm_esg_reviewer
+    if not reviewer:
+        logger.warning(
+            "SQR new-submission email skipped: no PM-ESG reviewer assigned (SQR %s)",
+            submission.reference_code,
+        )
+        return
+
+    reviewer_email = (getattr(reviewer, "email", "") or "").strip()
+    if not reviewer_email:
+        # Fall back to username if it looks like an email address
+        username = (getattr(reviewer, "username", "") or "").strip()
+        if "@" in username:
+            reviewer_email = username
+    if not reviewer_email:
+        logger.warning(
+            "SQR new-submission email skipped: reviewer %s has no email (SQR %s)",
+            getattr(reviewer, "username", "?"),
+            submission.reference_code,
+        )
+        return
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+    if not use_acs:
+        logger.warning(
+            "ACS email not configured; SQR new-submission email skipped for %s",
+            submission.reference_code,
+        )
+        return
+
+    reviewer_name = reviewer.get_full_name() or reviewer.username
+    engineer_name = submission.engineer.get_full_name() or submission.engineer.username
+    sqr_path = reverse("hub:sqr")
+    if http_request:
+        try:
+            sqr_url = http_request.build_absolute_uri(sqr_path)
+        except Exception:
+            sqr_url = sqr_path
+    else:
+        sqr_url = sqr_path
+
+    customer_company = (submission.customer_company or "").strip()
+    submitted_date = (
+        submission.created_at.astimezone(MANILA_TZ).strftime("%B %d, %Y  %I:%M %p")
+        if submission.created_at
+        else "—"
+    )
+    divider = "─" * 56
+
+    body_lines = [
+        f"Hi {reviewer_name},",
+        "",
+        f"A new SQR submission has been created and assigned to you for review.",
+        f"Please review it at your earliest convenience.",
+        "",
+        divider,
+        "  SUBMISSION DETAILS",
+        divider,
+        f"  Reference:      {submission.reference_code}",
+        f"  Submitted By:   {engineer_name}",
+        f"  Customer:       {submission.customer_name}",
+    ]
+    if customer_company:
+        body_lines.append(f"  Company/Group:  {customer_company}")
+    body_lines += [
+        f"  Project Title:  {submission.project_title}",
+        f"  Scope of Svc:   {submission.project_details or '—'}",
+        f"  Date Submitted: {submitted_date}",
+        "",
+        divider,
+        "  NEXT STEPS",
+        divider,
+        "  1. Log in to Request Hub and open the SQR Review page.",
+        "  2. Review the submission details and quotation.",
+        "  3. Approve or request revision with your comments.",
+        "",
+        f"  View SQR Tracker:  {sqr_url}",
+        "",
+        divider,
+        "This is an automated notification from Request Hub.",
+        "Please do not reply directly to this message.",
+    ]
+
+    subject = f"[Request Hub] New SQR Submitted — {submission.reference_code} ({submission.customer_name})"
+    plain_text = "\n".join(body_lines)
+
+    try:
+        from azure.communication.email import EmailClient
+
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {"to": [{"address": reviewer_email}]},
+            "content": {
+                "subject": subject,
+                "plainText": plain_text,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        logger.info(
+            "SQR new-submission email sent to %s for %s",
+            reviewer_email,
+            submission.reference_code,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "SQR new-submission email send failed for %s to %s",
+            submission.reference_code,
+            reviewer_email,
+            exc_info=exc,
+        )
+
+
+def _send_sqr_for_revision_email(
+    submission: SqrSubmission,
+    reviewer_name: str,
+    *,
+    http_request=None,
+) -> None:
+    """Send an email to the SQR creator when the status is set to For Revision."""
+    engineer = submission.engineer
+    engineer_email = (getattr(engineer, "email", "") or "").strip()
+    if not engineer_email:
+        logger.warning(
+            "SQR for-revision email skipped: engineer %s has no email (SQR %s)",
+            getattr(engineer, "username", "?"),
+            submission.reference_code,
+        )
+        return
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+    if not use_acs:
+        logger.warning(
+            "ACS email not configured; SQR for-revision email skipped for %s",
+            submission.reference_code,
+        )
+        return
+
+    engineer_name = engineer.get_full_name() or engineer.username
+    sqr_edit_path = reverse("hub:sqr")
+    if http_request:
+        try:
+            sqr_url = http_request.build_absolute_uri(sqr_edit_path)
+        except Exception:
+            sqr_url = sqr_edit_path
+    else:
+        sqr_url = sqr_edit_path
+
+    review_notes = (submission.review_notes or "").strip()
+    customer_company = (submission.customer_company or "").strip()
+    reviewed_date = (
+        submission.updated_at.strftime("%B %d, %Y  %I:%M %p")
+        if submission.updated_at
+        else "—"
+    )
+    divider = "─" * 56
+
+    body_lines = [
+        f"Hi {engineer_name},",
+        "",
+        "Your SQR submission has been reviewed and marked For Revision.",
+        "Please address the reviewer's comments and resubmit at your earliest convenience.",
+        "",
+        divider,
+        "  SQR DETAILS",
+        divider,
+        f"  Reference:      {submission.reference_code}",
+        f"  Customer:       {submission.customer_name}",
+    ]
+    if customer_company:
+        body_lines.append(f"  Company/Group:  {customer_company}")
+    body_lines += [
+        f"  Project Title:  {submission.project_title}",
+        f"  Reviewed By:    {reviewer_name}",
+        f"  Date Reviewed:  {reviewed_date}",
+        "",
+        divider,
+        "  REVIEWER COMMENTS",
+        divider,
+        (
+            review_notes
+            if review_notes
+            else "No specific comments were provided. Please follow up with the reviewer for details."
+        ),
+        "",
+        divider,
+        "  NEXT STEPS",
+        divider,
+        "  1. Log in to Request Hub and navigate to your SQR submissions.",
+        "  2. Carefully review the comments above.",
+        "  3. Update your SQR submission accordingly.",
+        "  4. Resubmit for review once the changes are complete.",
+        "",
+        f"  View SQR Tracker:  {sqr_url}",
+        "",
+        divider,
+        "If you have questions, please reach out to your reviewer directly.",
+        "",
+        "This is an automated notification from Request Hub.",
+        "ESG Request Hub  |  ESGRequestHub@phildata.com",
+    ]
+
+    subject = f"[Request Hub] {submission.reference_code} \u2014 Action Required: For Revision"
+    plain_text = "\n".join(body_lines)
+
+    try:
+        from azure.communication.email import EmailClient
+
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {
+                "to": [{"address": engineer_email}],
+            },
+            "content": {
+                "subject": subject,
+                "plainText": plain_text,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        logger.info(
+            "SQR for-revision email sent to %s for %s",
+            engineer_email,
+            submission.reference_code,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "SQR for-revision email send failed for %s to %s",
+            submission.reference_code,
+            engineer_email,
+            exc_info=exc,
+        )
+
+
+def _send_sqr_approved_email(
+    submission: SqrSubmission,
+    reviewer_name: str,
+    *,
+    http_request=None,
+) -> None:
+    """Send an email to the SQR creator when the status is set to Approved."""
+    engineer = submission.engineer
+    engineer_email = (getattr(engineer, "email", "") or "").strip()
+    if not engineer_email:
+        logger.warning(
+            "SQR approved email skipped: engineer %s has no email (SQR %s)",
+            getattr(engineer, "username", "?"),
+            submission.reference_code,
+        )
+        return
+
+    use_acs = bool(settings.ACS_EMAIL_CONNECTION_STRING and settings.ACS_EMAIL_SENDER)
+    if not use_acs:
+        logger.warning(
+            "ACS email not configured; SQR approved email skipped for %s",
+            submission.reference_code,
+        )
+        return
+
+    engineer_name = (engineer.get_full_name() or engineer.username or "").strip()
+    subject = _format_sqr_approval_subject(submission)
+    body_lines = _build_sqr_approval_body_lines(submission, engineer_name)
+    plain_text = "\n".join(body_lines)
+    html_text = _build_sqr_approval_html(submission, engineer_name)
+
+    try:
+        from azure.communication.email import EmailClient
+
+        client = EmailClient.from_connection_string(settings.ACS_EMAIL_CONNECTION_STRING)
+        message = {
+            "senderAddress": settings.ACS_EMAIL_SENDER,
+            "recipients": {
+                "to": [
+                    {"address": engineer_email},
+                    {"address": "ESGRequestHub@phildata.com"},
+                ]
+            },
+            "content": {
+                "subject": subject,
+                "plainText": plain_text,
+                "html": html_text,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        logger.info(
+            "SQR approved email sent to %s for %s",
+            engineer_email,
+            submission.reference_code,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "SQR approved email send failed for %s to %s",
+            submission.reference_code,
+            engineer_email,
+            exc_info=exc,
+        )
+
+
+def _get_sqr_approval_email_context(submission: SqrSubmission) -> dict:
+    engineer = submission.engineer
+    engineer_email = (getattr(engineer, "email", "") or "").strip()
+    engineer_name = (engineer.get_full_name() or engineer.username or "").strip() if engineer else ""
+    recipients = [email for email in (engineer_email, "ESGRequestHub@phildata.com") if email]
+    logo_attachment = _get_sqr_logo_attachment()
+    attachments = [logo_attachment] if logo_attachment else []
+    return {
+        "submission": submission,
+        "subject": _format_sqr_approval_subject(submission),
+        "recipients": recipients,
+        "plain_text": "\n".join(_build_sqr_approval_body_lines(submission, engineer_name)),
+        "html_preview": _build_sqr_approval_html(submission, engineer_name),
+        "html_draft": _build_sqr_approval_draft_html(submission, engineer_name),
+        "attachments": attachments,
+    }
+
+
+def _get_graph_access_token() -> tuple[str, str]:
+    if not (settings.PHILDATA_TENANT_ID and settings.PHILDATA_CLIENT_ID and settings.PHILDATA_CLIENT_SECRET):
+        return "", "Microsoft Graph draft creation is not configured. Set PHILDATA_TENANT_ID, PHILDATA_CLIENT_ID, and PHILDATA_CLIENT_SECRET."
+
+    app = msal.ConfidentialClientApplication(
+        client_id=settings.PHILDATA_CLIENT_ID,
+        client_credential=settings.PHILDATA_CLIENT_SECRET,
+        authority=f"https://login.microsoftonline.com/{settings.PHILDATA_TENANT_ID}",
+    )
+    token_result = app.acquire_token_for_client(scopes=settings.PHILDATA_GRAPH_SCOPE)
+    access_token = token_result.get("access_token")
+    if access_token:
+        return access_token, ""
+    error_description = token_result.get("error_description") or token_result.get("error") or "Unable to acquire Microsoft Graph access token."
+    return "", error_description
+
+
+def _extract_graph_error_message(response: requests.Response) -> str:
+    try:
+        error_payload = response.json()
+        return error_payload.get("error", {}).get("message") or response.text
+    except ValueError:
+        return response.text
+
+
+def _create_sqr_approval_graph_draft_json(context: dict, sender_email: str, access_token: str) -> tuple[str, str]:
+    graph_url = f"https://graph.microsoft.com/v1.0/users/{quote(sender_email, safe='')}/messages"
+    recipients = context.get("recipients") or []
+    payload = {
+        "subject": context["subject"],
+        "body": {
+            "contentType": "HTML",
+            "content": context.get("html_draft") or context["html_preview"],
+        },
+        "toRecipients": [
+            {"emailAddress": {"address": email}}
+            for email in recipients[:1]
+            if email
+        ],
+        "ccRecipients": [
+            {"emailAddress": {"address": email}}
+            for email in recipients[1:]
+            if email
+        ],
+    }
+    attachments = context.get("attachments") or []
+    if attachments:
+        payload["attachments"] = attachments
+
+    try:
+        response = requests.post(
+            graph_url,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        return "", f"Unable to contact Microsoft Graph: {exc}"
+
+    if response.status_code not in (200, 201):
+        message = _extract_graph_error_message(response)
+        return "", f"Microsoft Graph JSON draft creation failed ({response.status_code}): {message}"
+
+    draft = response.json()
+    return draft.get("webLink") or "", ""
+
+
+def _create_sqr_approval_graph_draft_mime(context: dict, sender_email: str, access_token: str) -> tuple[str, str]:
+    graph_url = f"https://graph.microsoft.com/v1.0/users/{quote(sender_email, safe='')}/messages"
+    mime_payload = _build_sqr_approval_mime_message(context, sender_email)
+    try:
+        response = requests.post(
+            graph_url,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "text/plain",
+            },
+            data=mime_payload,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        return "", f"Unable to contact Microsoft Graph: {exc}"
+
+    if response.status_code not in (200, 201):
+        message = _extract_graph_error_message(response)
+        return "", f"Microsoft Graph MIME draft creation failed ({response.status_code}): {message}"
+
+    draft = response.json()
+    return draft.get("webLink") or "", ""
+
+
+def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[str, str]:
+    sender_email = (sender_email or "").strip()
+    if not sender_email:
+        return "", "The signed-in user does not have an email address configured for Outlook draft creation."
+
+    access_token, token_error = _get_graph_access_token()
+    if token_error:
+        return "", token_error
+
+    web_link, json_error = _create_sqr_approval_graph_draft_json(context, sender_email, access_token)
+    if web_link:
+        return web_link, ""
+
+    web_link, mime_error = _create_sqr_approval_graph_draft_mime(context, sender_email, access_token)
+    if web_link:
+        return web_link, ""
+
+    if json_error and mime_error:
+        return "", f"{json_error} Fallback attempt also failed: {mime_error}"
+    return "", json_error or mime_error or "Microsoft Graph draft creation failed."
+
+
+def _build_sqr_approval_mailto_url(context: dict) -> str:
+    recipients = context.get("recipients") or []
+    to_recipient = recipients[0] if recipients else ""
+    cc_recipients = ";".join(recipients[1:])
+    mailto_parts = [
+        f"mailto:{quote(to_recipient)}",
+        f"subject={quote(context['subject'])}",
+        f"body={quote(context['plain_text'])}",
+    ]
+    if cc_recipients:
+        mailto_parts.insert(1, f"cc={quote(cc_recipients)}")
+    return "?".join([mailto_parts[0], "&".join(mailto_parts[1:])])
+
+
 def _admin_sort_engineer_key(request_obj):
     engineer = getattr(request_obj, "engineer", None)
     if engineer:
         engineer_name = (engineer.get_full_name() or engineer.username or "").strip().lower()
         return (0, engineer_name)
+    return (1, "")
+
+
+def _admin_sort_backup_engineer_key(request_obj):
+    backup = getattr(request_obj, "backup_engineer", None)
+    if backup:
+        name = (backup.get_full_name() or backup.username or "").strip().lower()
+        return (0, name)
     return (1, "")
 
 
@@ -905,7 +1686,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if user.role == PM_ESS_ROLE:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=user.role)
+                form = RequestForm(actor_role=user.role, actor_user=user)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
@@ -972,10 +1753,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "completed": metrics["completed"],
             }
             context["request_report_data"] = self._build_request_report_data(requests)
-        elif user.role in REQUEST_CREATOR_ROLES and user.role != PM_ESG_ROLE:
+        elif user.role in REQUEST_CREATOR_ROLES and user.role not in ADMIN_PANEL_ROLES:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=user.role)
+                form = RequestForm(actor_role=user.role, actor_user=user)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             metric_filter = self.request.GET.get("metric_filter") or ""
@@ -1093,6 +1874,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     1
                     for req in requests
                     if req.status == Request.Status.ONGOING
+                and req.engagement_type not in {
+                    Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                }
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ),
@@ -1112,6 +1896,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     req
                     for req in requests
                     if req.status == Request.Status.ONGOING
+                    and req.engagement_type not in {
+                        Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                    }
                     and req.due_date
                     and 0 <= (req.due_date - today).days <= 3
                 ]
@@ -1157,7 +1944,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if not metric_filter or metric_filter not in metric_keys:
                 metric_filter = "open"
 
-            queryset = Request.objects.select_related("account", "engineer", "requestor")
+            pm_esg_tab = ""
+            if user.role == PM_ESG_ROLE:
+                pm_esg_tab = (self.request.GET.get("pm_esg_tab") or "all").strip().lower()
+                if pm_esg_tab not in {"all", "assigned", "my_requests"}:
+                    pm_esg_tab = "all"
+
+            queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
+            if pm_esg_tab == "assigned":
+                queryset = queryset.filter(engineer=user)
+            elif pm_esg_tab == "my_requests":
+                queryset = queryset.filter(requestor=user)
             filter_form = AdminRequestFilterForm(self.request.GET or None)
             filtered_queryset = filter_form.filter_queryset(queryset)
             requests = filter_form.filter_sequence(filtered_queryset)
@@ -1172,6 +1969,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "account": lambda req: (req.account.name.lower() if req.account else ""),
                 "account_manager": _admin_sort_account_manager_key,
                 "engineer": _admin_sort_engineer_key,
+                "backup_engineer": _admin_sort_backup_engineer_key,
                 "engagement": lambda req: req.engagement_type or "",
                 "product_category": lambda req: req.product_category or "",
                 "status": lambda req: req.status or "",
@@ -1272,10 +2070,23 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
 
+            pm_esg_tab_links = {}
+            if user.role == PM_ESG_ROLE:
+                for key in ("all", "assigned", "my_requests"):
+                    params = self.request.GET.copy()
+                    if key == "all":
+                        params.pop("pm_esg_tab", None)
+                    else:
+                        params["pm_esg_tab"] = key
+                    encoded = params.urlencode()
+                    pm_esg_tab_links[key] = f"?{encoded}" if encoded else "?"
+            context["pm_esg_tab"] = pm_esg_tab
+            context["pm_esg_tab_links"] = pm_esg_tab_links
+
         if context.get("can_create_request") and "form" not in context:
             form = kwargs.get("form")
             if form is None:
-                form = RequestForm(actor_role=user.role)
+                form = RequestForm(actor_role=user.role, actor_user=user)
             context["form"] = form
             context["account_name_choices"] = form.account_name_suggestions
             context["form_has_errors"] = form.is_bound and bool(form.errors)
@@ -1299,6 +2110,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 req
                 for req in requests
                 if req.status == Request.Status.ONGOING
+                and req.engagement_type not in {
+                    Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+                }
                 and req.due_date
                 and 0 <= (req.due_date - today).days <= 3
             ]
@@ -1540,7 +2354,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if request.user.role not in REQUEST_CREATOR_ROLES:
             return redirect("hub:dashboard")
-        form = RequestForm(request.POST, actor_role=request.user.role)
+        form = RequestForm(request.POST, actor_role=request.user.role, actor_user=request.user)
         if form.is_valid():
             req = form.save(commit=False)
             req.requestor = request.user
@@ -1548,6 +2362,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req.account_manager = full_name or request.user.username
             req._actor_user = request.user
             req._actor_source = "Dashboard · New Request"
+            if request.user.role in ADMIN_PANEL_ROLES:
+                req._allow_capacity_override = True
             req.save()
             notify_engineer_assignment_notification(req, actor_user=request.user)
             assignment_email_result = notify_engineer_assignment_email(
@@ -1589,10 +2405,114 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
 
+def _refresh_sqr_request_account_map(form):
+    import json
+    form.fields["linked_request"].widget.attrs["data-account-map"] = json.dumps({
+        str(req.pk): req.account.name
+        for req in form.fields["linked_request"].queryset
+        if getattr(req, "account", None) and req.account.name
+    })
+
+
+def _get_sqr_export_columns():
+    def _date(d):
+        return d.strftime("%Y-%m-%d") if d else ""
+
+    def _name(u):
+        return (u.get_full_name() or u.username) if u else ""
+
+    return [
+        ("SQR Date", lambda s: _date(s.created_at.date())),
+        ("SQR ID", lambda s: s.reference_code or ""),
+        ("Account Name", lambda s: s.customer_name or ""),
+        ("Service Description", lambda s: s.project_title or ""),
+        ("Scope of Services", lambda s: s.project_details or ""),
+        ("RQ ID", lambda s: s.linked_request.reference_code if s.linked_request else ""),
+        ("Group Name", lambda s: s.customer_company or ""),
+        ("Account Manager", lambda s: s.customer_contact or ""),
+        ("Requester Name", lambda s: _name(s.engineer)),
+        ("Approver Name", lambda s: _name(s.pm_esg_reviewer)),
+        ("SQR Doc. Ref. Link", lambda s: s.sqr_folder_link or ""),
+        ("SSE Man-hrs", lambda s: float(s.sse_manhrs) if s.sse_manhrs is not None else ""),
+        ("SSE Amount", lambda s: float(s.sse_amount) if s.sse_amount is not None else ""),
+        ("PM Man-hrs", lambda s: float(s.pm_manhrs) if s.pm_manhrs is not None else ""),
+        ("PM Amount", lambda s: float(s.pm_amount) if s.pm_amount is not None else ""),
+        ("Managed Support Svc. Amt.", lambda s: float(s.managed_support_amount) if s.managed_support_amount is not None else ""),
+        ("Discount Rate (%)", lambda s: float(s.discount_rate) if s.discount_rate is not None else ""),
+        ("Discount Amount", lambda s: float(s.computed_discount_amount) if s.computed_discount_amount is not None else ""),
+        ("Total Price", lambda s: float(s.computed_total_price) if s.computed_total_price is not None else ""),
+        ("SQR Status", lambda s: s.get_status_display() if hasattr(s, "get_status_display") else s.status),
+        ("Approval Date", lambda s: _date(s.reviewed_at.date()) if s.reviewed_at else ""),
+        ("Validity Due Date", lambda s: _date(s.validity_due_date)),
+        ("Proposal Status", lambda s: s.get_proposal_status_display() if hasattr(s, "get_proposal_status_display") else (s.proposal_status or "")),
+        ("PO / PNL Date", lambda s: _date(s.po_pnl_date)),
+        ("Assigned PM", lambda s: _name(s.assigned_pm) or _name(s.pm_esg_reviewer)),
+        ("Assigned SSE", lambda s: _name(s.assigned_sse)),
+        ("Start Date", lambda s: _date(s.delivery_start_date)),
+        ("Target Finish Date", lambda s: _date(s.delivery_target_finish_date)),
+        ("Overall Status", lambda s: s.overall_status or ""),
+        ("Health Status", lambda s: s.delivery_health or ""),
+        ("Overall Progress %", lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
+        ("Key Updates / Risks", lambda s: s.key_updates_risks or ""),
+        ("Actual Finish Date", lambda s: _date(s.delivery_actual_finish_date)),
+        ("Completion Signed Date", lambda s: _date(s.delivery_completion_signed_date)),
+        ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
+        ("Support Start Date", lambda s: _date(s.computed_support_start_date)),
+        ("Support End Date", lambda s: _date(s.computed_managed_support_end_date)),
+        ("SI / Revenue Date", lambda s: _date(s.revenue_date)),
+        ("Source", lambda s: s.revenue_source or ""),
+        ("Reference No.", lambda s: (s.revenue_reference_no or "").upper()),
+        ("Revenue Status", lambda s: "Billed" if s.revenue_date else "For Billing"),
+        ("Remarks", lambda s: s.revenue_remarks or ""),
+        ("Revenue Declaration", lambda s: s.get_revenue_declaration_display() if s.revenue_declaration else ""),
+    ]
+
+
+def _normalize_import_text(value) -> str:
+    return " ".join(
+        str(value or "")
+        .replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("_", " ")
+        .split()
+    ).casefold()
+
+
+def _build_choice_import_map(choices) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for value, label in choices:
+        mapping[_normalize_import_text(value)] = value
+        mapping[_normalize_import_text(label)] = value
+    return mapping
+
+
+def _make_sqr_edit_form(user):
+    """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests.
+
+    Excludes requests already linked to ANY SQR; the current submission's linked
+    request is injected dynamically by the modal JS so the engineer can keep it.
+    """
+    used_req_ids = SqrSubmission.objects.exclude(linked_request_id=None).values_list("linked_request_id", flat=True)
+    form = SqrSubmissionForm(auto_id="edit_%s")
+    form.fields["linked_request"].queryset = (
+        Request.objects.filter(engineer=user)
+        .exclude(id__in=used_req_ids)
+        .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+    )
+    _refresh_sqr_request_account_map(form)
+    return form
+
+
 class SqrListView(LoginRequiredMixin, TemplateView):
     template_name = "hub/sqr.html"
 
+    VALID_TABS = {"proposal", "delivery", "revenue-report"}
+    PM_ONLY_TABS = {"delivery", "revenue-report"}
+
     def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            return redirect_to_login(request.get_full_path())
         if request.user.role not in SQR_ACCESS_ROLES:
             messages.error(request, "You are not allowed to access SQR.")
             return redirect("hub:dashboard")
@@ -1603,11 +2523,12 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "engineer",
             "pm_esg_reviewer",
             "reviewed_by",
+            "assigned_pm",
+            "assigned_sse",
+            "linked_request",
         ).order_by("-created_at")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
-        if self.request.user.role == PM_ESG_ROLE:
-            return queryset.filter(pm_esg_reviewer=self.request.user)
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -1615,87 +2536,133 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         can_create = user.role in ENGINEER_ACCESS_ROLES
         can_review = user.role in ADMIN_PANEL_ROLES
-        show_revenue_tracker_tab = user.role == PM_ESG_ROLE
-        active_tab = (self.request.GET.get("tab") or "submissions").strip().lower()
-        if active_tab not in {"submissions", "revenue-tracker"}:
-            active_tab = "submissions"
-        if not show_revenue_tracker_tab and active_tab == "revenue-tracker":
-            active_tab = "submissions"
+        is_pm = user.role in ADMIN_PANEL_ROLES
+        is_admin = user.role == User.Roles.ADMIN
+
+        active_tab = (self.request.GET.get("tab") or "proposal").strip().lower()
+        if active_tab not in self.VALID_TABS:
+            active_tab = "proposal"
+        if active_tab in self.PM_ONLY_TABS and not is_pm:
+            active_tab = "proposal"
 
         form = kwargs.get("form")
         if can_create and form is None:
             form = SqrSubmissionForm()
+            # Scope RQ ID dropdown to requests assigned to this engineer only,
+            # excluding requests that already have an SQR submission.
+            _used_req_ids = SqrSubmission.objects.exclude(linked_request_id=None).values_list("linked_request_id", flat=True)
+            form.fields["linked_request"].queryset = (
+                Request.objects.filter(engineer=user)
+                .exclude(id__in=_used_req_ids)
+                .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+            )
+            _refresh_sqr_request_account_map(form)
 
-        submissions = list(self.get_queryset())
+        all_submissions = list(self.get_queryset())
 
-        quotation_stage_submissions = []
-        order_stage_submissions = []
-        revenue_stage_submissions = []
-        quotation_stage_items = []
-        order_stage_items = []
-        revenue_stage_totals = {
-            "count": 0,
-            "total_price": Decimal("0.00"),
-            "discounted_price": Decimal("0.00"),
+        # ── Proposal Stage ──────────────────────────────────────────────────
+        proposal_counts = {
+            "total": len(all_submissions),
+            "processing": sum(1 for s in all_submissions if s.status == SqrSubmission.Status.FOR_PROCESSING),
+            "for_revision": sum(1 for s in all_submissions if s.status == SqrSubmission.Status.FOR_REVISION),
+            "approved": sum(1 for s in all_submissions if s.status == SqrSubmission.Status.APPROVED),
+            "submitted_pending": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.SUBMITTED_PENDING
+            ),
+            "negotiation": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.NEGOTIATION_REVIEW
+            ),
+            "closed_won": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON
+            ),
+            "closed_lost": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+            ),
         }
 
-        if show_revenue_tracker_tab:
-            for item in submissions:
-                if item.revenue_stage_key == "quotation":
-                    quotation_stage_submissions.append(item)
-                elif item.revenue_stage_key == "order":
-                    order_stage_submissions.append(item)
-                else:
-                    revenue_stage_submissions.append(item)
+        # ── Service Delivery Stage ───────────────────────────────────────────
+        delivery_submissions = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON]
+            if is_pm else []
+        )
+        delivery_health_counts = {}
+        for choice_val, choice_label in SqrSubmission.DeliveryHealth.choices:
+            delivery_health_counts[choice_val] = sum(
+                1 for s in delivery_submissions if s.delivery_health == choice_val
+            )
 
-            quotation_stage_items = [
-                {
-                    "submission": item,
-                    "form": SqrRevenueQuotationForm(instance=item, prefix=f"quote-{item.pk}"),
-                }
-                for item in quotation_stage_submissions
-            ]
-            order_stage_items = [
-                {
-                    "submission": item,
-                    "form": SqrRevenueOrderForm(instance=item, prefix=f"order-{item.pk}"),
-                }
-                for item in order_stage_submissions
-            ]
+        # ── Revenue & Report Stage ──────────────────────────────────────────
+        won_submissions = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_WON]
+            if is_pm else []
+        )
+        lost_submissions = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST]
+            if is_pm else []
+        )
+        in_negotiation = (
+            [s for s in all_submissions if s.proposal_status == SqrSubmission.ProposalStatus.NEGOTIATION_REVIEW]
+            if is_pm else []
+        )
+        total_with_deal_status = sum(
+            1 for s in all_submissions if s.proposal_status
+        ) if is_pm else 0
+        won_total_price = sum(s.quotation_total_price or Decimal("0") for s in won_submissions)
+        won_discounted_total = sum(s.discounted_price or Decimal("0") for s in won_submissions)
+        lost_total_price = sum(s.quotation_total_price or Decimal("0") for s in lost_submissions)
+        win_rate = (
+            round(len(won_submissions) / total_with_deal_status * 100, 1)
+            if total_with_deal_status > 0 else 0
+        )
+        top_won = sorted(won_submissions, key=lambda s: s.quotation_total_price or Decimal("0"), reverse=True)[:5]
 
-            total_price = Decimal("0.00")
-            discounted_price = Decimal("0.00")
-            for item in revenue_stage_submissions:
-                total_price += item.quotation_total_price or Decimal("0.00")
-                discounted_price += item.discounted_price or Decimal("0.00")
-
-            revenue_stage_totals = {
-                "count": len(revenue_stage_submissions),
-                "total_price": total_price,
-                "discounted_price": discounted_price,
-            }
+        revenue_data = {
+            "won_count": len(won_submissions),
+            "lost_count": len(lost_submissions),
+            "negotiation_count": len(in_negotiation),
+            "won_total_price": won_total_price,
+            "won_discounted_total": won_discounted_total,
+            "lost_total_price": lost_total_price,
+            "win_rate": win_rate,
+            "top_won": top_won,
+            "lost_submissions": lost_submissions,
+            "revenue_submissions": [s for s in all_submissions if s.status == SqrSubmission.Status.APPROVED] if is_pm else [],
+        }
 
         context.update(
             {
                 "can_create_sqr": can_create,
                 "can_review_sqr": can_review,
+                "is_pm": is_pm,
+                "is_admin": is_admin,
                 "sqr_form": form,
+                "sqr_import_form": SqrImportForm() if is_admin else None,
+                "sqr_edit_form": _make_sqr_edit_form(user) if can_create else None,
                 "sqr_form_has_errors": bool(form and form.is_bound and form.errors),
-                "sqr_submissions": submissions,
                 "active_sqr_tab": active_tab,
-                "show_revenue_tracker_tab": show_revenue_tracker_tab,
-                "sqr_counts": {
-                    "total": len(submissions),
-                    "processing": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_PROCESSING),
-                    "for_revision": sum(1 for item in submissions if item.status == SqrSubmission.Status.FOR_REVISION),
-                    "approved": sum(1 for item in submissions if item.status == SqrSubmission.Status.APPROVED),
-                },
-                "quotation_stage_items": quotation_stage_items,
-                "quotation_stage_count": len(quotation_stage_submissions),
-                "order_stage_items": order_stage_items,
-                "order_stage_count": len(order_stage_submissions),
-                "revenue_stage_submissions": revenue_stage_submissions,
-                "revenue_stage_totals": revenue_stage_totals,
+                "proposal_submissions": all_submissions,
+                "proposal_counts": proposal_counts,
+                "delivery_submissions": delivery_submissions,
+                "delivery_health_counts": delivery_health_counts,
+                "revenue_data": revenue_data,
+                "sqr_pm_users_json": json.dumps(list(
+                    User.objects.filter(role=User.Roles.PM_ESG)
+                    .values("pk", "first_name", "last_name", "username")
+                    .order_by("first_name", "last_name")
+                )) if is_pm else "[]",
+                "sqr_sse_users_json": json.dumps(list(
+                    User.objects.filter(role__in=[User.Roles.ENGINEER, User.Roles.ON_HOLD])
+                    .values("pk", "first_name", "last_name", "username")
+                    .order_by("first_name", "last_name")
+                )) if is_pm else "[]",
+                "sqr_rq_options_json": json.dumps(list(
+                    Request.objects.order_by("-id")[:300]
+                    .values("pk", "reference_code")
+                )) if is_pm else "[]",
             }
         )
         return context
@@ -1706,11 +2673,35 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             return redirect("hub:sqr")
 
         form = SqrSubmissionForm(request.POST)
+        form.fields["linked_request"].queryset = (
+            Request.objects.filter(engineer=request.user).select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+        )
+        _refresh_sqr_request_account_map(form)
         if form.is_valid():
             submission = form.save(commit=False)
             submission.engineer = request.user
             submission.status = SqrSubmission.Status.FOR_PROCESSING
+            # Auto-compute Managed Support Service Amount (col P) per business rules
+            _MANAGED_SCOPES = frozenset([
+                "Implementation",
+                "Implementation and Project Management",
+                "Managed Support and Maintenance Service",
+            ])
+            scope = form.cleaned_data.get("project_details", "") or ""
+            group = form.cleaned_data.get("customer_company", "") or ""
+            if scope in _MANAGED_SCOPES:
+                submission.managed_support_amount = (
+                    Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+                )
+            else:
+                submission.managed_support_amount = None
             submission.save()
+            # Reload with reviewer to ensure email field is populated
+            submission = (
+                SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer")
+                .get(pk=submission.pk)
+            )
+            _send_sqr_new_submission_email(submission, http_request=request)
             self._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
             return redirect("hub:sqr")
@@ -1724,11 +2715,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         message = (
             f"{actor_name} submitted {submission.reference_code} for {submission.customer_name}."
         )
-
         recipients: dict[int, User] = {submission.pm_esg_reviewer_id: submission.pm_esg_reviewer}
         for admin in User.objects.filter(role=User.Roles.ADMIN):
             recipients[admin.pk] = admin
-
         recipients.pop(submission.engineer_id, None)
         for recipient in recipients.values():
             Notification.objects.create(
@@ -1746,12 +2735,44 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
     success_url = reverse_lazy("hub:sqr")
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in ENGINEER_ACCESS_ROLES:
-            messages.error(request, "Only engineers can edit SQR submissions.")
+        if request.user.role not in ENGINEER_ACCESS_ROLES and request.user.role != User.Roles.ADMIN:
+            messages.error(request, "Only engineers or admins can edit SQR submissions.")
             return redirect("hub:sqr")
-        return super().dispatch(request, *args, **kwargs)
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That SQR submission no longer exists.")
+            return redirect("hub:sqr")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        obj = self.object
+        # Exclude requests already linked to OTHER SQR submissions;
+        # this keeps the current linked_request in the queryset so it stays valid.
+        others_used_ids = (
+            SqrSubmission.objects.exclude(pk=obj.pk)
+            .exclude(linked_request_id=None)
+            .values_list("linked_request_id", flat=True)
+        )
+        if self.request.user.role == User.Roles.ADMIN:
+            qs = (
+                Request.objects
+                .exclude(id__in=others_used_ids)
+                .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+            )
+        else:
+            qs = (
+                Request.objects
+                .filter(engineer=self.request.user)
+                .exclude(id__in=others_used_ids)
+                .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
+            )
+        form.fields["linked_request"].queryset = qs
+        return form
 
     def get_queryset(self):
+        if self.request.user.role == User.Roles.ADMIN:
+            return SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer")
         return SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer").filter(engineer=self.request.user)
 
     def get_context_data(self, **kwargs):
@@ -1773,12 +2794,19 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("hub:sqr")
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in ENGINEER_ACCESS_ROLES:
-            messages.error(request, "Only engineers can delete SQR submissions.")
+        if request.user.role not in ENGINEER_ACCESS_ROLES and request.user.role != User.Roles.ADMIN:
+            messages.error(request, "Only engineers or admins can delete SQR submissions.")
+            return redirect("hub:sqr")
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That SQR submission no longer exists.")
             return redirect("hub:sqr")
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
+        if self.request.user.role == User.Roles.ADMIN:
+            return SqrSubmission.objects.all()
         return SqrSubmission.objects.filter(engineer=self.request.user)
 
     def form_valid(self, form):
@@ -1788,69 +2816,262 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
         return response
 
 
-class SqrReviewUpdateView(LoginRequiredMixin, UpdateView):
-    model = SqrSubmission
-    form_class = SqrReviewForm
-    template_name = "hub/sqr_review_form.html"
-    success_url = reverse_lazy("hub:sqr")
+class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
+    """AJAX endpoint for inline cell editing of SQR submissions (Admin / PM-ESG)."""
 
-    def get_success_url(self):
-        return reverse("hub:sqr-review", args=[self.object.pk])
+    _ADMIN_ALLOWED = frozenset([
+        "customer_name", "customer_company", "customer_contact",
+        "project_title", "project_details", "sse_manhrs",
+        "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
+        "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
+        "delivery_actual_finish_date", "delivery_completion_signed_date",
+        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
+    ])
+    _PM_ESG_ALLOWED = frozenset([
+        "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
+        "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
+        "delivery_actual_finish_date", "delivery_completion_signed_date",
+        "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
+    ])
+    _DATE_FIELDS = frozenset([
+        "po_pnl_date", "delivery_start_date", "delivery_target_finish_date",
+        "delivery_actual_finish_date", "delivery_completion_signed_date", "warranty_end_date",
+        "managed_support_start_date", "revenue_date",
+    ])
+    _INT_FIELDS = frozenset(["discount_rate", "delivery_progress"])
+    _DECIMAL_FIELDS = frozenset(["sse_manhrs", "pm_manhrs", "managed_support_amount"])
+    _FK_FIELDS = frozenset(["assigned_pm", "assigned_sse", "linked_request"])
+    _CLOSED_LOST_LOCKED_FIELDS = frozenset([
+        "po_pnl_date", "assigned_pm", "assigned_sse", "delivery_start_date",
+        "delivery_target_finish_date", "overall_status", "delivery_health",
+        "delivery_progress", "key_updates_risks", "delivery_actual_finish_date",
+        "delivery_completion_signed_date", "managed_support_start_date",
+        "revenue_date", "revenue_source", "revenue_reference_no",
+        "revenue_remarks", "revenue_declaration",
+    ])
 
-    def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in ADMIN_PANEL_ROLES:
-            messages.error(request, "Only PM-ESG or Admin can review SQR submissions.")
-            return redirect("hub:sqr")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["reviewer_role"] = self.request.user.role
-        return kwargs
-
-    def get_queryset(self):
-        queryset = SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "reviewed_by")
-        if self.request.user.role == PM_ESG_ROLE:
-            return queryset.filter(pm_esg_reviewer=self.request.user)
-        return queryset
-
-    def form_valid(self, form):
-        original = SqrSubmission.objects.get(pk=form.instance.pk)
-        form.instance.reviewed_by = self.request.user
-        if form.cleaned_data.get("status") == SqrSubmission.Status.APPROVED:
-            if not form.instance.reviewed_at:
-                form.instance.reviewed_at = timezone.now()
+    def post(self, request, pk):
+        if request.user.role == User.Roles.ADMIN:
+            allowed = self._ADMIN_ALLOWED
+        elif request.user.role == User.Roles.PM_ESG:
+            allowed = self._PM_ESG_ALLOWED
         else:
-            form.instance.reviewed_at = None
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
 
-        response = super().form_valid(form)
+        try:
+            data = json.loads(request.body)
+        except (ValueError, KeyError):
+            return JsonResponse({"ok": False, "error": "Invalid request"}, status=400)
 
-        review_changed = (
-            original.status != self.object.status
-            or (original.review_notes or "") != (self.object.review_notes or "")
+        field = data.get("field", "")
+        value = data.get("value", "")
+        review_notes_override = data.get("review_notes", None)  # supplied when status → for_revision
+
+        if not field or field not in allowed:
+            return JsonResponse({"ok": False, "error": "Field not allowed"}, status=400)
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("engineer"), pk=pk
         )
-        if review_changed:
-            self._notify_engineer_review(self.object)
+        old_status = submission.status
 
-        messages.success(self.request, f"SQR {self.object.reference_code} status updated.")
-        return response
+        if (
+            submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+            and field in self._CLOSED_LOST_LOCKED_FIELDS
+        ):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Delivery and revenue fields are locked when Proposal Status is Closed Lost",
+                },
+                status=400,
+            )
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["back_url"] = reverse("hub:sqr")
-        context["can_launch_revision_teams"] = self.object.status == SqrSubmission.Status.FOR_REVISION
-        context["can_launch_approval_email"] = self.object.status == SqrSubmission.Status.APPROVED
-        return context
+        try:
+            if field in self._DATE_FIELDS:
+                coerced = date.fromisoformat(value) if value else None
+            elif field in self._INT_FIELDS:
+                coerced = int(value) if value not in ("", None) else None
+                if field == "discount_rate" and coerced is None:
+                    coerced = 0
+                if field == "delivery_progress" and coerced is not None:
+                    coerced = max(0, min(100, coerced))
+            elif field in self._DECIMAL_FIELDS:
+                coerced = Decimal(str(value)) if value not in ("", None) else None
+            elif field in self._FK_FIELDS:
+                coerced = int(value) if value not in ("", None) else None
+            else:
+                coerced = value  # str fields — allow empty string
+        except (ValueError, TypeError):
+            return JsonResponse({"ok": False, "error": f"Invalid value for {field}"}, status=400)
 
-    def _notify_engineer_review(self, submission: SqrSubmission) -> None:
-        reviewer_name = self.request.user.get_full_name() or self.request.user.username
-        status_label = submission.get_status_display()
-        Notification.objects.create(
-            recipient=submission.engineer,
-            message=f"{reviewer_name} marked {submission.reference_code} as {status_label}.",
-            actor=reviewer_name,
-            source="SQR · Review Update",
-        )
+        # For FK fields, set the _id attribute directly
+        if field in self._FK_FIELDS:
+            setattr(submission, field + "_id", coerced)
+        else:
+            setattr(submission, field, coerced)
+        save_fields = [field]
+
+        # Auto-recompute PM Amount (col O = col N × 3000) when pm_manhrs changes
+        if field == "pm_manhrs":
+            submission.pm_amount = (
+                (Decimal(str(coerced)) * Decimal("3000")).quantize(Decimal("0.01"))
+                if coerced is not None else None
+            )
+            save_fields.append("pm_amount")
+
+        # Auto-recompute SSE Amount (col M = col L × 2000) when sse_manhrs changes
+        if field == "sse_manhrs":
+            submission.sse_amount = (
+                (Decimal(str(coerced)) * Decimal("2000")).quantize(Decimal("0.01"))
+                if coerced is not None else None
+            )
+            submission.pm_manhrs = submission.recommended_pm_manhrs_for_sse(coerced)
+            submission.pm_amount = (
+                (Decimal(str(submission.pm_manhrs)) * Decimal("3000")).quantize(Decimal("0.01"))
+                if submission.pm_manhrs is not None else None
+            )
+            save_fields.extend(["sse_amount", "pm_manhrs", "pm_amount"])
+
+        # Auto-recompute Managed Support Svc. Amt. (col P) when scope or group changes
+        _MANAGED_SCOPES = frozenset([
+            "Implementation",
+            "Implementation and Project Management",
+            "Managed Support and Maintenance Service",
+        ])
+        if field in ("project_details", "customer_company"):
+            scope = coerced if field == "project_details" else submission.project_details
+            group = coerced if field == "customer_company" else submission.customer_company
+            new_msa = (
+                Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+            ) if scope in _MANAGED_SCOPES else None
+            submission.managed_support_amount = new_msa
+            save_fields.append("managed_support_amount")
+
+        # When status changes: auto-set reviewed_at, validity_due_date, reviewed_by, assigned_pm
+        if field == "status":
+            if coerced == SqrSubmission.Status.APPROVED:
+                now = timezone.now()
+                if not submission.reviewed_at:
+                    submission.reviewed_at = now
+                submission.validity_due_date = submission.reviewed_at.date() + timedelta(days=90)
+                submission.reviewed_by = request.user
+                save_fields += ["reviewed_at", "reviewed_by", "validity_due_date"]
+                if not submission.assigned_pm_id:
+                    submission.assigned_pm_id = submission.pm_esg_reviewer_id
+                    save_fields.append("assigned_pm")
+            else:
+                submission.reviewed_at = None
+                submission.validity_due_date = None
+                save_fields += ["reviewed_at", "validity_due_date"]
+            # Save review_notes when status → for_revision (provided by the comments modal)
+            if coerced == SqrSubmission.Status.FOR_REVISION and review_notes_override is not None:
+                submission.review_notes = review_notes_override
+                submission.reviewed_by = request.user
+                if "review_notes" not in save_fields:
+                    save_fields.append("review_notes")
+                if "reviewed_by" not in save_fields:
+                    save_fields.append("reviewed_by")
+
+        submission.save(update_fields=save_fields)
+
+        # Email engineer when status changed to For Revision via inline edit
+        if (
+            field == "status"
+            and coerced == SqrSubmission.Status.FOR_REVISION
+            and old_status != SqrSubmission.Status.FOR_REVISION
+        ):
+            reviewer_name = request.user.get_full_name() or request.user.username
+            _send_sqr_for_revision_email(
+                submission,
+                reviewer_name,
+                http_request=request,
+            )
+
+        # When status → Approved: launch the user's default email app with the draft.
+        _approval_email_draft_url = None
+        _approval_email_eml_url = None
+        if (
+            field == "status"
+            and coerced == SqrSubmission.Status.APPROVED
+            and old_status != SqrSubmission.Status.APPROVED
+        ):
+            _approval_email_draft_url = _build_sqr_approval_mailto_url(_get_sqr_approval_email_context(submission))
+            _approval_email_eml_url = reverse("hub:sqr-approval-email-eml", args=[submission.pk])
+
+        response_data = {"ok": True}
+        if _approval_email_draft_url:
+            response_data["approval_email_draft_url"] = _approval_email_draft_url
+        if _approval_email_eml_url:
+            response_data["approval_email_eml_url"] = _approval_email_eml_url
+        if "pm_amount" in save_fields:
+            response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
+        if "pm_manhrs" in save_fields:
+            response_data["pm_manhrs"] = str(int(submission.pm_manhrs)) if submission.pm_manhrs is not None else ""
+        if "sse_amount" in save_fields:
+            response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
+        # Return recomputed discount amount and total price whenever any component changes
+        _PRICE_TRIGGERS = frozenset(["pm_amount", "sse_amount", "managed_support_amount", "discount_rate"])
+        if any(f in save_fields for f in _PRICE_TRIGGERS) or field in _PRICE_TRIGGERS:
+            da = submission.computed_discount_amount
+            tp = submission.computed_total_price
+            response_data["computed_discount_amount"] = str(da) if da is not None else ""
+            response_data["computed_total_price"] = str(tp) if tp is not None else ""
+        if "managed_support_amount" in save_fields:
+            msa = submission.managed_support_amount
+            response_data["managed_support_amount"] = str(msa) if msa is not None else ""
+        if "reviewed_at" in save_fields:
+            rat = submission.reviewed_at
+            rat_manila = rat.astimezone(MANILA_TZ) if rat else None
+            response_data["reviewed_at"] = rat_manila.strftime("%b %d, %Y") if rat_manila else ""
+        if "validity_due_date" in save_fields:
+            vdd = submission.validity_due_date
+            response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""
+        if "assigned_pm" in save_fields:
+            pm = submission.assigned_pm
+            response_data["assigned_pm_pk"] = pm.pk if pm else ""
+            response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
+        if field == "assigned_sse":
+            sse = submission.assigned_sse
+            response_data["assigned_sse_name"] = (sse.get_full_name() or sse.username) if sse else ""
+        if field == "linked_request":
+            req = submission.linked_request
+            response_data["rq_pk"] = req.pk if req else ""
+            response_data["rq_code"] = req.reference_code if req else ""
+        def _fmt(d):
+            return d.strftime("%b %d, %Y") if d else ""
+
+        if field == "delivery_completion_signed_date":
+            response_data["post_svc_warranty_end_date"] = _fmt(submission.computed_post_svc_warranty_end_date)
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        if field in ("project_details", "customer_company"):
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        # Return updated AK when AJ (managed_support_start_date) changes
+        if field == "managed_support_start_date":
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        if field == "managed_support_amount":
+            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        return JsonResponse(response_data)
+
+
+class SqrReviewUpdateView(LoginRequiredMixin, View):
+    """Legacy SQR review page removed; status review now happens inline on the SQR tracker."""
+
+    def get(self, request, *args, **kwargs):
+        messages.info(request, "The SQR review page has been removed. Update SQR status directly from the tracker.")
+        return redirect("hub:sqr")
+
+    def post(self, request, *args, **kwargs):
+        messages.info(request, "The SQR review page has been removed. Update SQR status directly from the tracker.")
+        return redirect("hub:sqr")
 
 
 class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
@@ -1918,6 +3139,117 @@ class SqrRevenueTrackerUpdateView(LoginRequiredMixin, View):
         return redirect(self._tracker_redirect_url())
 
 
+class SqrProposalUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: update pricing and deal/proposal status on an approved SQR."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Proposal details.")
+            return redirect("hub:sqr")
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG can update this proposal.")
+            return redirect("hub:sqr")
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Proposal details can only be updated after the SQR is Approved.")
+            return redirect("hub:sqr")
+
+        form = SqrProposalStatusForm(request.POST, instance=submission)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Proposal details updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr")
+
+
+class SqrToRevenueView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: unlock Step 4 Revenue Stage by clicking 'To Revenue'."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can unlock the Revenue Stage.")
+            return redirect("hub:sqr")
+
+        submission = get_object_or_404(SqrSubmission, pk=pk)
+
+        if not submission.revenue_unlocked:
+            submission.revenue_unlocked = True
+            submission.save(update_fields=["revenue_unlocked", "updated_at"])
+            messages.success(request, f"Revenue Stage unlocked for {submission.reference_code}.")
+        return redirect("hub:sqr")
+
+
+class SqrDeliveryUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: update Service Delivery tracking on a Closed Won SQR."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Service Delivery details.")
+            return redirect("hub:sqr")
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        form = SqrDeliveryForm(request.POST, instance=submission)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Service delivery updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr")
+
+
+class SqrRevenueUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: record revenue recognition details on an approved SQR."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Revenue details.")
+            return redirect("hub:sqr")
+
+        submission = get_object_or_404(
+            SqrSubmission.objects.select_related("pm_esg_reviewer"),
+            pk=pk,
+        )
+
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            messages.error(request, "Only the assigned PM-ESG can update this revenue record.")
+            return redirect("hub:sqr")
+
+        if submission.status != SqrSubmission.Status.APPROVED:
+            messages.error(request, "Revenue details can only be updated after the SQR is Approved.")
+            return redirect("hub:sqr")
+
+        form = SqrRevenueForm(request.POST, instance=submission)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Revenue details updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr")
+
+
 class SqrTeamsRedirectView(LoginRequiredMixin, View):
     def post(self, request, pk):
         submission = get_object_or_404(
@@ -1925,34 +3257,35 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
             pk=pk,
         )
 
-        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
+        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr")
 
         if request.user.role not in ADMIN_PANEL_ROLES:
-            messages.error(request, "Only PM-ESG or Admin can create SQR revision Teams groups.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Only PM-ESG or Admin can create SQR revision Teams groups."}, status=403)
 
         if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
-            messages.error(request, "Only the assigned PM-ESG approver can create the revision Teams group.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Only the assigned PM-ESG approver can create the revision Teams group."}, status=403)
 
         if submission.status != SqrSubmission.Status.FOR_REVISION:
-            messages.error(request, "Set SQR status to For Revision before creating a Teams group.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Set SQR status to For Revision before creating a Teams group."}, status=400)
 
         approver_email = submission.pm_esg_reviewer.email if submission.pm_esg_reviewer and submission.pm_esg_reviewer.email else None
         requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
         if not approver_email or not requestor_email:
-            messages.error(request, "Unable to create Teams group. Ensure both approver and requestor emails are configured.")
-            return redirect(redirect_target)
+            return JsonResponse({"error": "Unable to create Teams group. Ensure both approver and requestor emails are configured."}, status=400)
 
         requestor_name = submission.engineer.get_full_name() or submission.engineer.username
         participants = ",".join(sorted({approver_email, requestor_email}))
-        topic = f"{submission.reference_code}+{submission.customer_name}"
-        comments = (submission.review_notes or "").strip() or "No comments provided."
+        topic = f"SQR {submission.reference_code} {submission.customer_name}"
+        raw_notes = (submission.review_notes or "").strip()
+        if raw_notes:
+            lines = [l.strip() for l in raw_notes.splitlines() if l.strip()]
+            numbered = "\n".join(f"{i + 1}. {line}" for i, line in enumerate(lines))
+        else:
+            numbered = "1.\n2.\n3.\n4.\n5."
         message_body = (
             f"Hi @{requestor_name}\n"
             "Submitted SQR is for revision, please refer to the ff. comments below.\n\n"
-            f"{comments}\n\n"
+            f"Comments\n{numbered}\n\n"
             "Thanks"
         )
         teams_url = (
@@ -1960,83 +3293,114 @@ class SqrTeamsRedirectView(LoginRequiredMixin, View):
             f"{quote(participants)}&topicName={quote(topic)}&message={quote(message_body)}"
         )
 
-        messages.info(request, "Launching Microsoft Teams…")
-        return render(
-            request,
-            "hub/teams_redirect.html",
-            {"teams_url": teams_url},
-        )
+        return JsonResponse({"teams_url": teams_url})
 
 
 class SqrApprovalOutlookRedirectView(LoginRequiredMixin, View):
-    def post(self, request, pk):
-        submission = get_object_or_404(
-            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer"),
+    """Launch the default mail app compose window for the approved SQR draft."""
+
+    def _get_submission(self, pk):
+        return get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "linked_request"),
             pk=pk,
         )
 
-        redirect_target = request.META.get("HTTP_REFERER") or reverse("hub:sqr-review", args=[submission.pk])
-
+    def _validate_access(self, request, submission):
         if request.user.role not in ADMIN_PANEL_ROLES:
-            messages.error(request, "Only PM-ESG or Admin can generate SQR approval advisory emails.")
-            return redirect(redirect_target)
-
+            return "Only PM-ESG or Admin can draft SQR approval advisory emails."
         if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
-            messages.error(request, "Only the assigned PM-ESG approver can generate this approval advisory email.")
-            return redirect(redirect_target)
-
+            return "Only the assigned PM-ESG approver can draft this approval advisory email."
         if submission.status != SqrSubmission.Status.APPROVED:
-            messages.error(request, "Set SQR status to Approved before generating the advisory email.")
-            return redirect(redirect_target)
-
+            return "Set SQR status to Approved before drafting the advisory email."
         requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
         if not requestor_email:
-            messages.error(request, "Unable to draft an email. Ensure the requestor (engineer) has an email configured.")
+            return "Unable to draft an email. Ensure the requestor (engineer) has an email configured."
+        return ""
+
+    def get(self, request, pk):
+        submission = self._get_submission(pk)
+        redirect_target = reverse("hub:sqr")
+        validation_error = self._validate_access(request, submission)
+        if validation_error:
+            messages.error(request, validation_error)
             return redirect(redirect_target)
 
-        requestor_name = submission.engineer.get_full_name() or submission.engineer.username
-        recipients = ",".join(sorted({requestor_email, "ESGRequestHub@phildata.com"}))
-        subject = quote(f"{submission.reference_code}+{submission.customer_name}")
-        total_price_text = f"{submission.quotation_total_price:,.2f}" if submission.quotation_total_price is not None else "TBD"
-        discounted_price_text = f"{submission.discounted_price:,.2f}" if submission.discounted_price is not None else "TBD"
-        discount_rate_text = f"{submission.discount_rate}%"
+        context = _get_sqr_approval_email_context(submission)
+        return HttpResponseRedirect(_build_sqr_approval_mailto_url(context))
 
-        body_template = (
-            "Hi @{requestor_name}\n"
-            "Submitted SQR is now approved, please refer to the ff. details below.\n"
-            "SQR ID: {reference_code}\n"
-            "Customer Name: {customer_name}\n"
-            "Service Description: {service_description}\n"
-            "Account Manager: {account_manager}\n"
-            "Scope of Services: {scope_of_services}\n"
-            "Quantity: 1 Lot\n"
-            "Total Price: {total_price}\n"
-            "Discount Rate: {discount_rate}\n"
-            "Discounted Price: {discounted_price}\n"
-            "Remarks: {remarks}"
-        )
-        body = quote(
-            body_template.format(
-                requestor_name=requestor_name,
-                reference_code=submission.reference_code,
-                customer_name=submission.customer_name,
-                service_description=(submission.project_title or "").strip(),
-                account_manager=(submission.customer_contact or "").strip(),
-                scope_of_services=(submission.project_details or "").strip(),
-                total_price=total_price_text,
-                discount_rate=discount_rate_text,
-                discounted_price=discounted_price_text,
-                remarks=(submission.remarks or "").strip(),
-            )
+    def post(self, request, pk):
+        return self.get(request, pk)
+
+
+class SqrApprovalEmlDownloadView(LoginRequiredMixin, View):
+    """Download a formatted Outlook-compatible EML fallback for approved SQR quotations."""
+
+    def _get_submission(self, pk):
+        return get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "linked_request"),
+            pk=pk,
         )
 
-        mailto_url = f"mailto:{recipients}?subject={subject}&body={body}"
-        messages.info(request, "Drafting approval advisory in your default mail client…")
-        return render(
-            request,
-            "hub/outlook_redirect.html",
-            {"mailto_url": mailto_url},
+    def _validate_access(self, request, submission):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return "Only PM-ESG or Admin can draft SQR approval advisory emails."
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            return "Only the assigned PM-ESG approver can draft this approval advisory email."
+        if submission.status != SqrSubmission.Status.APPROVED:
+            return "Set SQR status to Approved before drafting the advisory email."
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            return "Unable to draft an email. Ensure the requestor (engineer) has an email configured."
+        return ""
+
+    def get(self, request, pk):
+        submission = self._get_submission(pk)
+        validation_error = self._validate_access(request, submission)
+        if validation_error:
+            messages.error(request, validation_error)
+            return redirect("hub:sqr")
+
+        sender_email = (getattr(request.user, "email", "") or "").strip() or settings.DEFAULT_FROM_EMAIL
+        context = _get_sqr_approval_email_context(submission)
+        mime_payload = _build_sqr_approval_mime_message(context, sender_email, mark_as_unsent=True)
+        eml_bytes = base64.b64decode(mime_payload)
+
+        filename_base = re.sub(r"[^A-Za-z0-9._-]+", "_", context["subject"]).strip("_") or submission.reference_code or "sqr-approval-draft"
+        response = HttpResponse(eml_bytes, content_type="message/rfc822")
+        response["Content-Disposition"] = f'attachment; filename="{filename_base}.eml"'
+        return response
+
+
+class SqrApprovalFormattedDraftView(LoginRequiredMixin, View):
+    """Open the default mail app with an editable draft for the approved SQR email."""
+
+    def _get_submission(self, pk):
+        return get_object_or_404(
+            SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer", "linked_request"),
+            pk=pk,
         )
+
+    def _validate_access(self, request, submission):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return "Only PM-ESG or Admin can draft SQR approval advisory emails."
+        if request.user.role == PM_ESG_ROLE and submission.pm_esg_reviewer_id != request.user.id:
+            return "Only the assigned PM-ESG approver can draft this approval advisory email."
+        if submission.status != SqrSubmission.Status.APPROVED:
+            return "Set SQR status to Approved before drafting the advisory email."
+        requestor_email = submission.engineer.email if submission.engineer and submission.engineer.email else None
+        if not requestor_email:
+            return "Unable to draft an email. Ensure the requestor (engineer) has an email configured."
+        return ""
+
+    def get(self, request, pk):
+        submission = self._get_submission(pk)
+        validation_error = self._validate_access(request, submission)
+        if validation_error:
+            messages.error(request, validation_error)
+            return redirect("hub:sqr")
+
+        context = _get_sqr_approval_email_context(submission)
+        return HttpResponseRedirect(_build_sqr_approval_mailto_url(context))
 
 
 class RequestDetailView(LoginRequiredMixin, DetailView):
@@ -2059,6 +3423,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         request_obj = context["request_obj"]
         context["status_logs"] = request_obj.status_logs.select_related("author")
+        context.update(get_request_activity_log_context(request_obj))
         can_comment = self._user_can_comment(self.request.user, request_obj)
         context["can_comment"] = can_comment
         if can_comment:
@@ -2073,7 +3438,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if not self._user_can_comment(request.user, self.object):
-            return redirect("hub:request-detail", pk=self.object.pk)
+            return redirect("hub:request-manage-collab", pk=self.object.pk)
         form = StatusLogForm(request.POST)
         if form.is_valid():
             log = form.save(commit=False)
@@ -2082,7 +3447,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             log.save()
             notify_status_update(log, "Request Detail · Status Update")
             messages.success(request, "Status log saved.")
-            return redirect("hub:request-detail", pk=self.object.pk)
+            return redirect("hub:request-manage-collab", pk=self.object.pk)
         context = self.get_context_data(log_form=form)
         return self.render_to_response(context)
 
@@ -2105,6 +3470,13 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
     template_name = "hub/request_manager_form.html"
     context_object_name = "service_request"
     success_url = reverse_lazy("hub:dashboard")
+
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That request no longer exists.")
+            return redirect("hub:dashboard")
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -2169,6 +3541,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         context["status_allowed"] = False
         context["account_name_choices"] = []
         context["is_admin_form"] = True
+        context.update(get_request_activity_log_context(self.object))
         return context
 
     def _handle_status_log_post(self, request):
@@ -2224,7 +3597,9 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
             assigned = Request.objects.filter(engineer=engineer, status=Request.Status.ONGOING)
             if self.object.pk:
                 assigned = assigned.exclude(pk=self.object.pk)
-            has_deployment = assigned.filter(engagement_type=Request.Engagement.DEPLOYMENT).exists()
+            has_deployment = assigned.filter(engagement_type__in=[
+                Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION
+            ]).exists()
             capacity = 3 if has_deployment else 5
             data[str(engineer.pk)] = {
                 "name": engineer.get_full_name() or engineer.username or "Engineer",
@@ -2293,7 +3668,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.role not in (REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}):
+        allowed = ADMIN_PANEL_ROLES | REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}
+        if request.user.role not in allowed:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         return super().dispatch(request, *args, **kwargs)
@@ -2303,11 +3679,17 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         pk = self.kwargs["pk"]
         user = self.request.user
 
+        # Admins and PM-ESG can view any request
+        if user.role in ADMIN_PANEL_ROLES:
+            return get_object_or_404(queryset, pk=pk)
+
         if user.role == PM_ESS_ROLE:
             queryset = queryset.filter(pk=pk).filter(Q(requestor__role=User.Roles.REQUESTOR_ESS) | Q(requestor=user))
         elif user.role in REQUEST_CREATOR_ROLES:
+            # Requestors can only see their own requests
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role in ENGINEER_ACCESS_ROLES:
+            # Engineers can only see requests they are assigned to (primary or backup)
             queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
         else:
             raise Http404
@@ -2344,7 +3726,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
 
     def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
         if form is None:
-            form = RequestForm(instance=request_obj, actor_role=self.request.user.role)
+            form = RequestForm(instance=request_obj, actor_role=self.request.user.role, actor_user=self.request.user)
         status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
         if status_allowed and status_form is None:
             status_form = RequestStatusForm(instance=request_obj)
@@ -2360,6 +3742,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         else:
             back_url = referer
 
+        linked_sqr = SqrSubmission.objects.filter(linked_request=request_obj).first()
+
         return {
             "object": request_obj,
             "form": form,
@@ -2369,10 +3753,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "account_name_choices": getattr(form, "account_name_suggestions", ()),
             "back_url": back_url,
             "status_allowed": status_allowed,
+            "linked_sqr": linked_sqr,
+            **get_request_activity_log_context(request_obj),
         }
 
     def _handle_details_update(self, request, request_obj):
-        form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role)
+        form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role, actor_user=request.user)
         if form.is_valid():
             source_label = self._source_label("Manage Request")
             form.instance._actor_user = request.user
@@ -2512,6 +3898,13 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("hub:dashboard")
     template_name = "hub/request_confirm_delete.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Http404:
+            messages.error(request, "That request no longer exists.")
+            return redirect("hub:dashboard")
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
@@ -2522,9 +3915,28 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
         return qs.none()
 
     def delete(self, request, *args, **kwargs):
-        response = super().delete(request, *args, **kwargs)
-        messages.success(request, "Request deleted successfully.")
-        return response
+        obj = self.get_object()
+        Request.objects.filter(pk=obj.pk).update(is_deleted=True, deleted_at=timezone.now())
+        messages.success(request, f"Request {obj.reference_code} deleted. You can restore it from Profile → Backup &amp; Restore.")
+        return redirect(self.success_url)
+
+
+class RequestRestoreView(LoginRequiredMixin, View):
+    """POST → restore a soft-deleted request (admin only)."""
+
+    def post(self, request, pk):
+        if request.user.role != User.Roles.ADMIN:
+            messages.error(request, "Access denied.")
+            return redirect("accounts:update")
+        updated = Request.all_objects.filter(pk=pk, is_deleted=True).update(
+            is_deleted=False, deleted_at=None
+        )
+        if updated:
+            ref = Request.all_objects.filter(pk=pk).values_list("reference_code", flat=True).first()
+            messages.success(request, f"Request {ref} has been restored.")
+        else:
+            messages.error(request, "Request not found or already active.")
+        return redirect(str(reverse_lazy("accounts:update")) + "#backup")
 
 
 class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
@@ -2910,6 +4322,642 @@ class RequestExportCSVView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             )
 
         return response
+
+
+class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
+    """Export all SQR submissions to an Excel (.xlsx) file."""
+
+    def get(self, request, *args, **kwargs):
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        qs = SqrSubmission.objects.select_related(
+            "engineer", "pm_esg_reviewer", "reviewed_by",
+            "assigned_pm", "assigned_sse", "linked_request",
+        ).order_by("-created_at")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "SQR"
+
+        # ── Styles ──────────────────────────────────────────────
+        hdr_font  = Font(bold=True, color="FFFFFF", size=9)
+        hdr_fill  = PatternFill("solid", fgColor="1A1F2E")
+        hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell_align = Alignment(vertical="center")
+        thin = Side(style="thin", color="CCCCCC")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        columns = _get_sqr_export_columns()
+
+        # ── Header row ──────────────────────────────────────────
+        ws.row_dimensions[1].height = 36
+        for col_idx, (label, _) in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=label)
+            cell.font  = hdr_font
+            cell.fill  = hdr_fill
+            cell.alignment = hdr_align
+            cell.border = border
+
+        # ── Data rows ───────────────────────────────────────────
+        for row_idx, submission in enumerate(qs, start=2):
+            ws.row_dimensions[row_idx].height = 18
+            for col_idx, (_, extractor) in enumerate(columns, start=1):
+                try:
+                    val = extractor(submission)
+                except Exception:
+                    val = ""
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.alignment = cell_align
+                cell.border = border
+
+        # ── Auto-fit column widths (header text drives minimum) ─
+        for col_idx, (label, _) in enumerate(columns, start=1):
+            col_letter = get_column_letter(col_idx)
+            max_len = len(label)
+            for row_idx in range(2, ws.max_row + 1):
+                v = ws.cell(row=row_idx, column=col_idx).value
+                if v:
+                    max_len = max(max_len, min(len(str(v)), 40))
+            ws.column_dimensions[col_letter].width = max_len + 2
+
+        # ── Freeze top row ──────────────────────────────────────
+        ws.freeze_panes = "A2"
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        timestamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        response = HttpResponse(
+            buf.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="sqr-export-{timestamp}.xlsx"'
+        return response
+
+
+class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
+    """Import SQR data from Excel and overwrite the current SQR table."""
+
+    EXPECTED_HEADERS = [label for label, _ in _get_sqr_export_columns()]
+    STATUS_MAP = _build_choice_import_map(SqrSubmission.Status.choices)
+    PROPOSAL_STATUS_MAP = _build_choice_import_map(SqrSubmission.ProposalStatus.choices)
+    OVERALL_STATUS_MAP = _build_choice_import_map(SqrSubmission.OverallStatus.choices)
+    DELIVERY_HEALTH_MAP = _build_choice_import_map(SqrSubmission.DeliveryHealth.choices)
+    REVENUE_DECLARATION_MAP = _build_choice_import_map(SqrSubmission.RevenueDeclaration.choices)
+    IMPORT_STATUS_TIMEOUT = 60 * 60
+    MANAGED_SCOPES = frozenset([
+        "Implementation",
+        "Implementation and Project Management",
+        "Managed Support and Maintenance Service",
+    ])
+
+    def post(self, request, *args, **kwargs):
+        form = SqrImportForm(request.POST, request.FILES)
+        if not form.is_valid():
+            error_list = form.errors.get("import_file", form.non_field_errors())
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "errors": [str(error) for error in error_list],
+                },
+                status=400,
+            )
+
+        should_overwrite = str(request.POST.get("confirm_overwrite", "")).strip().lower()
+        if should_overwrite not in {"1", "true", "yes", "on"}:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "errors": ["Please confirm that the current SQR table will be replaced before importing."],
+                },
+                status=400,
+            )
+
+        upload = form.cleaned_data["import_file"]
+        try:
+            file_bytes = upload.read()
+        except Exception:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "errors": ["The selected file could not be read. Please upload a valid Excel file."],
+                },
+                status=400,
+            )
+
+        if not file_bytes:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "errors": ["The selected file is empty."],
+                },
+                status=400,
+            )
+
+        job_id = uuid.uuid4().hex
+        self._set_status(
+            request.user,
+            job_id,
+            {
+                "state": "queued",
+                "percent": 0,
+                "processed": 0,
+                "total": 0,
+                "message": "Preparing import…",
+                "errors": [],
+                "result": None,
+            },
+        )
+
+        worker = threading.Thread(
+            target=self._run_import_job,
+            kwargs={
+                "job_id": job_id,
+                "user_id": request.user.pk,
+                "file_bytes": file_bytes,
+            },
+            daemon=True,
+        )
+        worker.start()
+
+        return JsonResponse({
+            "ok": True,
+            "job_id": job_id,
+            "message": "Import started.",
+        })
+
+    def get(self, request, *args, **kwargs):
+        job_id = (request.GET.get("job_id") or "").strip()
+        if not job_id:
+            return JsonResponse({"ok": False, "error": "Missing import job id."}, status=400)
+        status = self._get_status(request.user, job_id)
+        if status is None:
+            return JsonResponse({"ok": False, "error": "Import job not found."}, status=404)
+        return JsonResponse({"ok": True, "status": status})
+
+    @classmethod
+    def _status_cache_key(cls, user_id, job_id):
+        return f"sqr-import:{user_id}:{job_id}"
+
+    @classmethod
+    def _set_status(cls, user, job_id, payload):
+        user_id = user.pk if hasattr(user, "pk") else user
+        cache.set(cls._status_cache_key(user_id, job_id), payload, timeout=cls.IMPORT_STATUS_TIMEOUT)
+
+    @classmethod
+    def _get_status(cls, user, job_id):
+        user_id = user.pk if hasattr(user, "pk") else user
+        return cache.get(cls._status_cache_key(user_id, job_id))
+
+    @classmethod
+    def _update_status(cls, user_id, job_id, **changes):
+        current = cache.get(cls._status_cache_key(user_id, job_id), {}) or {}
+        current.update(changes)
+        cache.set(cls._status_cache_key(user_id, job_id), current, timeout=cls.IMPORT_STATUS_TIMEOUT)
+
+    def _run_import_job(self, *, job_id, user_id, file_bytes):
+        close_old_connections()
+        try:
+            actor = User.objects.get(pk=user_id)
+            row_payloads = self._parse_import_file(file_bytes=file_bytes, actor=actor, user_id=user_id, job_id=job_id)
+            total = len(row_payloads)
+            if total <= 0:
+                raise ValueError("Import failed: the file does not contain any data rows.")
+
+            self._update_status(
+                user_id,
+                job_id,
+                state="running",
+                total=total,
+                processed=0,
+                created=0,
+                percent=5,
+                message="Replacing current SQR table…",
+            )
+
+            created_count = 0
+            with transaction.atomic():
+                SqrSubmission.objects.all().delete()
+                for index, payload in enumerate(row_payloads, start=1):
+                    submission = SqrSubmission()
+                    data = payload["data"].copy()
+                    created_at_value = data.pop("created_at", None)
+                    reference_code = data.pop("reference_code", "")
+                    year = data.pop("year", None)
+                    sequence_number = data.pop("sequence_number", None)
+
+                    for field_name, field_value in data.items():
+                        setattr(submission, field_name, field_value)
+
+                    if year:
+                        submission.year = year
+                    if sequence_number:
+                        submission.sequence_number = sequence_number
+                    if reference_code:
+                        submission.reference_code = reference_code
+
+                    submission.save()
+
+                    updates = {}
+                    if created_at_value:
+                        updates["created_at"] = created_at_value
+                    if reference_code:
+                        updates["reference_code"] = reference_code
+                    if sequence_number:
+                        updates["sequence_number"] = sequence_number
+                    if year:
+                        updates["year"] = year
+                    if updates:
+                        SqrSubmission.objects.filter(pk=submission.pk).update(**updates)
+
+                    created_count += 1
+                    percent = min(100, 5 + int((index / total) * 95))
+                    self._update_status(
+                        user_id,
+                        job_id,
+                        state="running",
+                        processed=index,
+                        created=created_count,
+                        total=total,
+                        percent=percent,
+                        message=f"Imported {index} of {total} row(s)…",
+                    )
+
+            self._update_status(
+                user_id,
+                job_id,
+                state="completed",
+                processed=created_count,
+                created=created_count,
+                total=created_count,
+                percent=100,
+                message="Import completed successfully.",
+                result={
+                    "created": created_count,
+                    "updated": 0,
+                },
+            )
+        except Exception as exc:
+            logger.exception("SQR import job failed", extra={"job_id": job_id, "user_id": user_id})
+            self._update_status(
+                user_id,
+                job_id,
+                state="failed",
+                percent=0,
+                message=str(exc) or "Import failed.",
+                errors=[str(exc) or "Import failed."],
+            )
+        finally:
+            close_old_connections()
+
+    def _parse_import_file(self, *, file_bytes, actor, user_id, job_id):
+        import io
+        from openpyxl import load_workbook
+
+        try:
+            workbook = load_workbook(io.BytesIO(file_bytes), data_only=True)
+            worksheet = workbook.active
+        except Exception as exc:
+            raise ValueError("The selected file could not be read. Please upload a valid Excel file.") from exc
+
+        request_map = {
+            _normalize_import_text(item.reference_code): item
+            for item in Request.objects.select_related("account", "engineer").all()
+            if item.reference_code
+        }
+        pm_users = list(User.objects.filter(role=User.Roles.PM_ESG).order_by("first_name", "last_name", "username"))
+        engineer_users = list(User.objects.filter(role__in=User.ENGINEER_ACCESS_ROLES).order_by("first_name", "last_name", "username"))
+        pm_lookup = self._build_user_lookup(pm_users)
+        engineer_lookup = self._build_user_lookup(engineer_users)
+
+        start_row = self._detect_data_start_row(worksheet)
+        candidate_rows = list(
+            worksheet.iter_rows(
+                min_row=start_row,
+                max_row=worksheet.max_row,
+                max_col=len(self.EXPECTED_HEADERS),
+                values_only=True,
+            )
+        )
+        non_blank_rows = [row for row in candidate_rows if not self._is_blank_row(row)]
+
+        self._update_status(
+            user_id,
+            job_id,
+            state="running",
+            processed=0,
+            total=len(non_blank_rows),
+            percent=1,
+            message="Reading Excel rows…",
+            errors=[],
+        )
+
+        row_payloads = []
+        row_errors = []
+        total_rows = max(len(non_blank_rows), 1)
+        processed_rows = 0
+        for excel_row_number, row in enumerate(candidate_rows, start=start_row):
+            if self._is_blank_row(row):
+                continue
+            row_data = {
+                header: row[idx] if idx < len(row) else None
+                for idx, header in enumerate(self.EXPECTED_HEADERS)
+            }
+            try:
+                row_payloads.append(
+                    self._prepare_row_payload(
+                        row_data=row_data,
+                        request_map=request_map,
+                        pm_lookup=pm_lookup,
+                        engineer_lookup=engineer_lookup,
+                        actor=actor,
+                    )
+                )
+            except ValueError as exc:
+                row_errors.append(f"Row {excel_row_number}: {exc}")
+
+            processed_rows += 1
+            self._update_status(
+                user_id,
+                job_id,
+                state="running",
+                processed=processed_rows,
+                total=len(non_blank_rows),
+                percent=min(45, int((processed_rows / total_rows) * 45)),
+                message=f"Validated {processed_rows} of {len(non_blank_rows)} row(s)…",
+            )
+
+        if not row_payloads and not row_errors:
+            raise ValueError("Import failed: the file does not contain any data rows.")
+
+        if row_errors:
+            preview_errors = row_errors[:5]
+            suffix = f" ...and {len(row_errors) - 5} more error(s)." if len(row_errors) > 5 else ""
+            raise ValueError(f"Import failed with {len(row_errors)} row error(s). {' | '.join(preview_errors)}{suffix}")
+
+        return row_payloads
+
+    def _detect_data_start_row(self, worksheet):
+        first_row = [self._stringify(value) for value in next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), [])]
+        normalized_first_row = [_normalize_import_text(value) for value in first_row]
+        expected_prefix = [_normalize_import_text(label) for label in self.EXPECTED_HEADERS[:3]]
+        if normalized_first_row[:3] == expected_prefix:
+            return 2
+        return 1
+
+    @staticmethod
+    def _stringify(value) -> str:
+        return str(value or "").strip()
+
+    @staticmethod
+    def _is_blank_row(row) -> bool:
+        return all(str(value or "").strip() == "" for value in row)
+
+    @staticmethod
+    def _build_user_lookup(users):
+        lookup = {}
+        for user in users:
+            keys = {
+                _normalize_import_text(user.username),
+                _normalize_import_text(user.get_full_name()),
+                _normalize_import_text(f"{user.first_name} {user.last_name}"),
+            }
+            for key in {item for item in keys if item}:
+                lookup.setdefault(key, []).append(user)
+        return lookup
+
+    @staticmethod
+    def _first_lookup_user(lookup):
+        for users in lookup.values():
+            if users:
+                return users[0]
+        return None
+
+    def _parse_user(self, raw_value, lookup, label):
+        normalized = _normalize_import_text(raw_value)
+        if not normalized:
+            return None
+        matches = lookup.get(normalized, [])
+        if not matches:
+            raise ValueError(f"{label} was not found: {raw_value}")
+        unique_matches = {user.pk: user for user in matches}
+        if len(unique_matches) > 1:
+            raise ValueError(f"{label} matches multiple users: {raw_value}")
+        return next(iter(unique_matches.values()))
+
+    def _parse_user_lenient(self, raw_value, lookup):
+        normalized = _normalize_import_text(raw_value)
+        if not normalized:
+            return None
+        matches = lookup.get(normalized, [])
+        if not matches:
+            return None
+        unique_matches = {user.pk: user for user in matches}
+        if len(unique_matches) > 1:
+            return None
+        return next(iter(unique_matches.values()))
+
+    @staticmethod
+    def _parse_choice(raw_value, mapping, label, default_blank=True):
+        normalized = _normalize_import_text(raw_value)
+        if not normalized:
+            return "" if default_blank else None
+        value = mapping.get(normalized)
+        if value is None:
+            raise ValueError(f"Invalid {label}: {raw_value}")
+        return value
+
+    @staticmethod
+    def _parse_choice_lenient(raw_value, mapping, default_blank=True):
+        normalized = _normalize_import_text(raw_value)
+        if not normalized:
+            return "" if default_blank else None
+        return mapping.get(normalized, "" if default_blank else None)
+
+    @staticmethod
+    def _parse_decimal(raw_value, label):
+        if raw_value in (None, ""):
+            return None
+        text_value = str(raw_value).replace(",", "").strip()
+        if not text_value:
+            return None
+        try:
+            return Decimal(text_value)
+        except Exception as exc:
+            raise ValueError(f"Invalid {label}: {raw_value}") from exc
+
+    @classmethod
+    def _parse_decimal_lenient(cls, raw_value, label):
+        try:
+            return cls._parse_decimal(raw_value, label)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_int(raw_value, label):
+        if raw_value in (None, ""):
+            return None
+        try:
+            return int(Decimal(str(raw_value)))
+        except Exception as exc:
+            raise ValueError(f"Invalid {label}: {raw_value}") from exc
+
+    @classmethod
+    def _parse_int_lenient(cls, raw_value, label):
+        try:
+            return cls._parse_int(raw_value, label)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_date(raw_value, label):
+        if raw_value in (None, ""):
+            return None
+        if isinstance(raw_value, datetime):
+            return raw_value.date()
+        if isinstance(raw_value, date):
+            return raw_value
+        text_value = str(raw_value).strip()
+        if not text_value:
+            return None
+        try:
+            return date.fromisoformat(text_value)
+        except Exception:
+            pass
+        for fmt in ("%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(text_value, fmt).date()
+            except ValueError:
+                continue
+        raise ValueError(f"Invalid {label}: {raw_value}")
+
+    @classmethod
+    def _parse_date_lenient(cls, raw_value, label):
+        try:
+            return cls._parse_date(raw_value, label)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _to_datetime(value):
+        if not value:
+            return None
+        return timezone.make_aware(datetime.combine(value, datetime.min.time()), MANILA_TZ)
+
+    def _prepare_row_payload(self, *, row_data, request_map, pm_lookup, engineer_lookup, actor):
+        sqr_id = self._stringify(row_data.get("SQR ID"))
+        request_code = self._stringify(row_data.get("RQ ID"))
+        linked_request = request_map.get(_normalize_import_text(request_code)) if request_code else None
+
+        default_engineer = getattr(linked_request, "engineer", None) or self._first_lookup_user(engineer_lookup) or actor
+        default_pm = self._first_lookup_user(pm_lookup) or actor
+
+        engineer = self._parse_user_lenient(row_data.get("Requester Name"), engineer_lookup)
+        pm_reviewer = self._parse_user_lenient(row_data.get("Approver Name"), pm_lookup)
+        assigned_pm = self._parse_user_lenient(row_data.get("Assigned PM"), pm_lookup)
+        assigned_sse = self._parse_user_lenient(row_data.get("Assigned SSE"), engineer_lookup)
+
+        status = self._parse_choice_lenient(row_data.get("SQR Status"), self.STATUS_MAP) or SqrSubmission.Status.FOR_PROCESSING
+        proposal_status = self._parse_choice_lenient(row_data.get("Proposal Status"), self.PROPOSAL_STATUS_MAP)
+        overall_status = self._parse_choice_lenient(row_data.get("Overall Status"), self.OVERALL_STATUS_MAP)
+        delivery_health = self._parse_choice_lenient(row_data.get("Health Status"), self.DELIVERY_HEALTH_MAP)
+        revenue_declaration = self._parse_choice_lenient(row_data.get("Revenue Declaration"), self.REVENUE_DECLARATION_MAP)
+
+        customer_name = self._stringify(row_data.get("Account Name"))
+        project_title = self._stringify(row_data.get("Service Description"))
+        project_details = self._stringify(row_data.get("Scope of Services"))
+        sqr_folder_link = self._stringify(row_data.get("SQR Doc. Ref. Link"))
+
+        sse_manhrs = self._parse_decimal_lenient(row_data.get("SSE Man-hrs"), "SSE Man-hrs")
+        pm_manhrs = self._parse_decimal_lenient(row_data.get("PM Man-hrs"), "PM Man-hrs")
+        discount_rate = self._parse_int_lenient(row_data.get("Discount Rate (%)"), "Discount Rate (%)")
+        discount_rate = 0 if discount_rate is None else max(0, min(100, discount_rate))
+        delivery_progress = self._parse_int_lenient(row_data.get("Overall Progress %"), "Overall Progress %")
+        if delivery_progress is not None:
+            delivery_progress = max(0, min(100, delivery_progress))
+
+        reviewed_date_value = row_data.get("Approval Date", row_data.get("Reviewed Date"))
+        approval_date = self._parse_date_lenient(reviewed_date_value, "Approval Date")
+        validity_due_date = self._parse_date_lenient(row_data.get("Validity Due Date"), "Validity Due Date")
+        created_date = self._parse_date_lenient(row_data.get("SQR Date"), "SQR Date")
+
+        instance = SqrSubmission()
+        reference_meta = self._parse_reference_code(sqr_id)
+        data = {
+            "linked_request": linked_request,
+            "engineer": engineer or default_engineer,
+            "pm_esg_reviewer": pm_reviewer or default_pm,
+            "customer_name": customer_name or "Legacy Imported Record",
+            "customer_company": self._stringify(row_data.get("Group Name")),
+            "customer_contact": self._stringify(row_data.get("Account Manager")),
+            "project_title": project_title or "Legacy Imported Service",
+            "project_details": project_details or "Imported legacy data with incomplete details.",
+            "sse_manhrs": sse_manhrs,
+            "sqr_folder_link": sqr_folder_link,
+            "discount_rate": discount_rate,
+            "pm_manhrs": pm_manhrs,
+            "proposal_status": proposal_status,
+            "po_pnl_date": self._parse_date_lenient(row_data.get("PO / PNL Date"), "PO / PNL Date"),
+            "assigned_pm": assigned_pm or pm_reviewer or default_pm,
+            "assigned_sse": assigned_sse or engineer or default_engineer,
+            "delivery_start_date": self._parse_date_lenient(row_data.get("Start Date"), "Start Date"),
+            "delivery_target_finish_date": self._parse_date_lenient(row_data.get("Target Finish Date"), "Target Finish Date"),
+            "overall_status": overall_status,
+            "delivery_health": delivery_health,
+            "delivery_progress": delivery_progress,
+            "key_updates_risks": self._stringify(row_data.get("Key Updates / Risks")),
+            "delivery_actual_finish_date": self._parse_date_lenient(row_data.get("Actual Finish Date"), "Actual Finish Date"),
+            "delivery_completion_signed_date": self._parse_date_lenient(row_data.get("Completion Signed Date"), "Completion Signed Date"),
+            "revenue_date": self._parse_date_lenient(row_data.get("SI / Revenue Date"), "SI / Revenue Date"),
+            "revenue_source": self._stringify(row_data.get("Source")),
+            "revenue_reference_no": self._stringify(row_data.get("Reference No.")),
+            "revenue_remarks": self._stringify(row_data.get("Remarks")),
+            "revenue_declaration": revenue_declaration,
+            "status": status,
+            "documentation_links": "",
+            "remarks": "",
+            "reference_code": sqr_id,
+            "year": reference_meta["year"],
+            "sequence_number": reference_meta["sequence_number"],
+        }
+
+        if status == SqrSubmission.Status.APPROVED:
+            reviewed_at = self._to_datetime(approval_date) or timezone.now()
+            data["reviewed_at"] = reviewed_at
+            data["reviewed_by"] = actor
+            data["validity_due_date"] = validity_due_date or (reviewed_at.date() + timedelta(days=90))
+        else:
+            data["reviewed_at"] = None
+            data["reviewed_by"] = None
+            data["validity_due_date"] = validity_due_date
+
+        scope = data["project_details"]
+        group = data["customer_company"]
+        data["managed_support_amount"] = (
+            Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+        ) if scope in self.MANAGED_SCOPES else None
+
+        if created_date:
+            data["created_at"] = self._to_datetime(created_date)
+
+        return {"instance": instance, "data": data}
+
+    @staticmethod
+    def _parse_reference_code(reference_code):
+        cleaned = str(reference_code or "").strip()
+        if not cleaned:
+            current_year = timezone.now().astimezone(MANILA_TZ).year
+            return {"year": current_year, "sequence_number": None}
+        match = re.fullmatch(r"SQR-(\d{4})-(\d{4})", cleaned, flags=re.IGNORECASE)
+        if not match:
+            raise ValueError(f"Invalid SQR ID format: {reference_code}")
+        return {
+            "year": int(match.group(1)),
+            "sequence_number": int(match.group(2)),
+        }
 
 
 class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
@@ -3600,6 +5648,8 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
             "default_password": getattr(settings, "DEFAULT_USER_PASSWORD", "@Password"),
+            "users": User.objects.select_related().order_by("date_joined", "username"),
+            "role_choices": User.Roles.choices,
         }
 
     @staticmethod
@@ -3701,6 +5751,24 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         display_name = target_user.get_full_name() or target_user.username
         target_user.delete()
         messages.success(request, f"Deleted user account for {display_name}.")
+        return redirect("hub:management")
+
+
+class UserEditView(AdminRequiredMixin, LoginRequiredMixin, View):
+    """Handle the per-user Manage modal: update info and optionally change password."""
+
+    def post(self, request, pk):
+        target_user = get_object_or_404(User, pk=pk)
+        form = UserManagementForm(request.POST, instance=target_user)
+        if form.is_valid():
+            form.save()
+            display_name = target_user.get_full_name() or target_user.username
+            messages.success(request, f"Updated user account for {display_name}.")
+        else:
+            for field_name, field_errors in form.errors.items():
+                label = form.fields[field_name].label if field_name in form.fields else field_name
+                for error in field_errors:
+                    messages.error(request, f"{label}: {error}")
         return redirect("hub:management")
 
 
@@ -3809,7 +5877,7 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
 
         if request.user.role not in ENGINEER_ACCESS_ROLES or request_obj.engineer_id != request.user.id:
             messages.error(request, "You are not allowed to update this request's status.")
-            return redirect("hub:request-detail", pk=pk)
+            return redirect("hub:request-manage-collab", pk=pk)
 
         original = Request.objects.get(pk=request_obj.pk)
         form = RequestStatusForm(request.POST, instance=request_obj)
@@ -3828,4 +5896,4 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             messages.success(request, "Request status updated.")
         else:
             messages.error(request, "Unable to update status. Please try again.")
-        return redirect("hub:request-detail", pk=pk)
+        return redirect("hub:request-manage-collab", pk=pk)
