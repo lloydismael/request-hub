@@ -272,7 +272,6 @@ def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name:
         ("Service Description", (submission.project_title or "").strip() or "—"),
         ("Account Manager", (submission.customer_contact or "").strip() or "—"),
     ]
-    scope_items = _get_sqr_scope_items(submission)
     service_component = html.escape(_get_sqr_service_component(submission))
     approval_date = html.escape(_format_sqr_approval_date(submission))
     total_price = html.escape(_format_sqr_approval_total_price(submission))
@@ -287,10 +286,6 @@ def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name:
     summary_values_html = "".join(
         f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{html.escape(value)}</div></td>'
         for _label, value in summary_rows
-    )
-    scope_items_html = "".join(
-        f'<li style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);direction:ltr;line-height:1.6;margin:0 0 8px;"><span style="line-height:1.6;" role="presentation">{html.escape(item)}</span></li>'
-        for item in scope_items
     )
 
     return "".join(
@@ -319,12 +314,6 @@ def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name:
             f'<tr>{summary_headers_html}</tr>',
             f'<tr>{summary_values_html}</tr>',
             '</tbody></table>',
-            '<div class="elementToProof" style="margin-top:18px;">',
-            '<div class="elementToProof" style="background-color:rgb(255,255,255);border-width:1px;border-style:solid;border-color:rgb(207,216,227);">',
-            '<div class="elementToProof" style="direction:ltr;background-color:rgb(255,255,255);padding-top:14px;padding-right:16px;padding-left:16px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgb(16,24,40);"><span style="letter-spacing:0.04em;font-weight:700;">SCOPE OF SERVICES</span></div>',
-            f'<ul style="direction:ltr;margin:10px 0 0;padding-right:24px;padding-bottom:16px;padding-left:34px;">{scope_items_html}</ul>',
-            '</div>',
-            '</div>',
             '<table role="presentation" style="direction:ltr;margin-top:18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
             '<tbody>',
             '<tr>',
@@ -2526,7 +2515,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "assigned_pm",
             "assigned_sse",
             "linked_request",
-        ).order_by("-created_at")
+        ).order_by("-created_at", "-pk")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
         return queryset
