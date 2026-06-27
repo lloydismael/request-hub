@@ -1,6 +1,7 @@
 import csv
 import base64
 import html
+from django.db import IntegrityError
 import json
 import logging
 import mimetypes
@@ -222,31 +223,49 @@ def _format_sqr_approval_validity_date(submission: "SqrSubmission") -> str:
 
 
 def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: str) -> list[str]:
-    scope_items = _get_sqr_scope_items(submission)
     service_component = _get_sqr_service_component(submission)
+    total_price = _format_sqr_approval_total_price(submission)
+    approval_date = _format_sqr_approval_date(submission)
+    validity_date = _format_sqr_approval_validity_date(submission)
+    customer_name = submission.customer_name or "—"
+    service_description = (submission.project_title or "").strip() or "—"
+    account_manager = (submission.customer_contact or "").strip() or "—"
+    scope_of_services = (submission.project_details or "").strip() or "—"
+    summary_rows = [
+        ("SQR ID", submission.reference_code or "—"),
+        ("Customer Name", customer_name),
+        ("Service Description", service_description),
+        ("Account Manager", account_manager),
+        ("Scope of Services", scope_of_services),
+    ]
+    summary_width = max(len(label) for label, _ in summary_rows) + 2
+
+    def format_label_value(label: str, value: str) -> str:
+        return f"{label:<{summary_width}}: {value}"
+
     return [
-        _format_sqr_approval_greeting(requestor_name),
+        "Submitted SQR is now approved, please refer to the ff. details below.",
         "",
-        "Submitted SQR is now approved. Please refer to the quotation details below.",
+        format_label_value("SQR ID", submission.reference_code or "—"),
+        format_label_value("Customer Name", customer_name),
+        format_label_value("Service Description", service_description),
+        format_label_value("Account Manager", account_manager),
+        format_label_value("Scope of Services", scope_of_services),
+        format_label_value("Add-On Service", service_component),
+        "Included Services:",
+        "• Proactive System Health Checks",
+        "• System/Platform Patching (scheduled)",
+        "• Incident Support",
+        "• Basic Troubleshooting and Issue Isolation",
+        "• Monthly System Status Report",
+        "• Advisory Support",
         "",
-        f"Date: {_format_sqr_approval_date(submission)}",
-        "SERVICE QUOTATION",
+        format_label_value("Quantity", "1 Lot"),
+        format_label_value("Total Price", total_price),
+        format_label_value("Approval Date", approval_date),
+        format_label_value("Quotation Validity Until", validity_date),
         "",
-        f"SQR ID: {submission.reference_code or ''}",
-        f"Account / Customer: {submission.customer_name or ''}",
-        f"Service Description: {(submission.project_title or '').strip()}",
-        f"Account Manager: {(submission.customer_contact or '').strip()}",
-        "",
-        "SCOPE OF SERVICES",
-        *[f"• {item}" for item in scope_items],
-        "",
-        "Service Component | Qty | Total Price",
-        f"{service_component} | 1 lot | {_format_sqr_approval_total_price(submission)}",
-        f"Total: {_format_sqr_approval_total_price(submission)}",
-        "",
-        f"Quotation Validity Until: {_format_sqr_approval_validity_date(submission)}",
-        "",
-        "Terms and Conditions",
+        "**TERMS AND CONDITIONS**",
         "VAT: This quote excludes Value Added Tax (VAT).",
         "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
         "This is a budgetary quote.",
@@ -2982,31 +3001,50 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         )
         _refresh_sqr_request_account_map(form)
         if form.is_valid():
-            submission = form.save(commit=False)
-            submission.engineer = request.user
-            submission.status = SqrSubmission.Status.FOR_PROCESSING
-            # Auto-compute Managed Support Service Amount (col P) per business rules
-            _MANAGED_SCOPES = frozenset([
-                "Implementation",
-                "Implementation and Project Management",
-                "Managed Support and Maintenance Service",
-            ])
-            scope = form.cleaned_data.get("project_details", "") or ""
-            group = form.cleaned_data.get("customer_company", "") or ""
-            if scope in _MANAGED_SCOPES:
-                submission.managed_support_amount = (
-                    Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
-                )
-            else:
-                submission.managed_support_amount = None
-            submission.save()
+            linked_request = form.cleaned_data.get("linked_request")
+            if linked_request and SqrSubmission.objects.filter(linked_request=linked_request).exists():
+                form.add_error("linked_request", "An SQR already exists for the selected Request ID.")
+                context = self.get_context_data(form=form)
+                return self.render_to_response(context)
+
+            try:
+                with transaction.atomic():
+                    if linked_request:
+                        Request.objects.select_for_update().filter(pk=linked_request.pk).first()
+                        if SqrSubmission.objects.select_for_update().filter(linked_request=linked_request).exists():
+                            form.add_error("linked_request", "An SQR already exists for the selected Request ID.")
+                            context = self.get_context_data(form=form)
+                            return self.render_to_response(context)
+
+                    submission = form.save(commit=False)
+                    submission.engineer = request.user
+                    submission.status = SqrSubmission.Status.FOR_PROCESSING
+                    # Auto-compute Managed Support Service Amount (col P) per business rules
+                    _MANAGED_SCOPES = frozenset([
+                        "Implementation",
+                        "Implementation and Project Management",
+                        "Managed Support and Maintenance Service",
+                    ])
+                    scope = form.cleaned_data.get("project_details", "") or ""
+                    group = form.cleaned_data.get("customer_company", "") or ""
+                    if scope in _MANAGED_SCOPES:
+                        submission.managed_support_amount = (
+                            Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+                        )
+                    else:
+                        submission.managed_support_amount = None
+                    submission.save()
+            except IntegrityError:
+                form.add_error("linked_request", "An SQR already exists for the selected Request ID.")
+                context = self.get_context_data(form=form)
+                return self.render_to_response(context)
             # Reload with reviewer to ensure email field is populated
             submission = (
                 SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer")
                 .get(pk=submission.pk)
             )
             _send_sqr_new_submission_email(submission, http_request=request)
-            self._notify_sqr_submission(submission)
+            SqrReportsDataView._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
             return redirect("hub:sqr")
 
@@ -3988,6 +4026,10 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            return redirect_to_login(request.get_full_path())
+
         allowed = ADMIN_PANEL_ROLES | REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}
         if request.user.role not in allowed:
             messages.error(request, "You are not allowed to manage this request.")
@@ -4402,7 +4444,12 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         return render(
             request,
             "hub/outlook_redirect.html",
-            {"mailto_url": outlook_url},
+            {
+                "mailto_url": outlook_url,
+                "launch_url": outlook_url,
+                "formatted_draft_url": "",
+                "return_url": redirect_target,
+            },
         )
 
 
@@ -4503,7 +4550,12 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         return render(
             request,
             "hub/outlook_redirect.html",
-            {"mailto_url": outlook_url},
+            {
+                "mailto_url": outlook_url,
+                "launch_url": outlook_url,
+                "formatted_draft_url": "",
+                "return_url": redirect_target,
+            },
         )
 
 

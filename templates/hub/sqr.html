@@ -252,28 +252,148 @@ body:not(.dark-mode) #sqr-cell-preview {
 
 .sqr-approval-choice-modal__dialog {
     position: relative;
-    width: min(100%, 560px);
-    border-radius: 1rem;
-    padding: 1.5rem;
-    background: #101828;
+    width: min(100%, 760px);
+    border-radius: 1.35rem;
+    padding: 1.65rem;
+    background:
+        radial-gradient(circle at top left, rgba(47,108,243,0.22), transparent 34%),
+        linear-gradient(145deg, #0f172a 0%, #111827 54%, #0b1220 100%);
     color: #e5e7eb;
     border: 1px solid rgba(148, 163, 184, 0.22);
-    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.35);
+    box-shadow: 0 28px 70px rgba(2, 6, 23, 0.48);
+}
+
+.sqr-approval-choice-modal__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.14);
+    color: #86efac;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .sqr-approval-choice-modal__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1.25rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.35rem;
 }
 
-.sqr-approval-choice-modal__actions .btn {
-    flex: 1 1 220px;
+.sqr-approval-option {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.85rem;
+    min-height: 112px;
+    padding: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    border-radius: 1rem;
+    background: rgba(15, 23, 42, 0.76);
+    color: #e5e7eb;
+    text-align: left;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 34px rgba(2,6,23,0.28);
+}
+
+.sqr-approval-option::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+}
+
+.sqr-approval-option:hover::before,
+.sqr-approval-option:focus-visible::before {
+    opacity: 1;
+}
+
+.sqr-approval-option:hover,
+.sqr-approval-option:focus-visible {
+    transform: translateY(-4px) scale(1.01) !important;
+    color: #ffffff;
+    outline: none;
+}
+
+.sqr-approval-option__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 1rem;
+    font-size: 1.35rem;
+    box-shadow: 0 10px 24px rgba(2,6,23,0.28);
+}
+
+.sqr-approval-option__label {
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.sqr-approval-option__hint {
+    display: block;
+    margin-top: 0.35rem;
+    color: #cbd5e1;
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.sqr-approval-option__arrow {
+    color: rgba(226,232,240,0.72);
+    font-size: 1.1rem;
+}
+
+.sqr-approval-option--draft {
+    border-color: rgba(96,165,250,0.45);
+}
+
+.sqr-approval-option--draft::before {
+    background: linear-gradient(135deg, rgba(47,108,243,0.24), rgba(14,165,233,0.12));
+}
+
+.sqr-approval-option--draft .sqr-approval-option__icon {
+    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    color: #ffffff;
+}
+
+.sqr-approval-option--eml {
+    border-color: rgba(45,212,191,0.48);
+}
+
+.sqr-approval-option--eml::before {
+    background: linear-gradient(135deg, rgba(20,184,166,0.24), rgba(34,197,94,0.12));
+}
+
+.sqr-approval-option--eml .sqr-approval-option__icon {
+    background: linear-gradient(135deg, #0f766e, #22c55e);
+    color: #ffffff;
+}
+
+.sqr-approval-choice-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+    .sqr-approval-choice-modal__actions {
+        grid-template-columns: 1fr;
+    }
 }
 
 body:not(.dark-mode) .sqr-approval-choice-modal__dialog {
-    background: #ffffff;
+    background:
+        radial-gradient(circle at top left, rgba(47,108,243,0.12), transparent 36%),
+        linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
     color: #0f172a;
     --bs-heading-color: #0f172a;
     border-color: rgba(148, 163, 184, 0.28);
@@ -298,6 +418,21 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
     background: #e2e8f0;
     padding: 0.1rem 0.35rem;
     border-radius: 0.35rem;
+}
+
+body:not(.dark-mode) .sqr-approval-option {
+    background: rgba(255, 255, 255, 0.86);
+    color: #0f172a;
+    border-color: rgba(148,163,184,0.36);
+    box-shadow: 0 16px 34px rgba(15,23,42,0.12);
+}
+
+body:not(.dark-mode) .sqr-approval-option__hint {
+    color: #475569;
+}
+
+body:not(.dark-mode) .sqr-approval-option__arrow {
+    color: #64748b;
 }
 
 .sqr-report-shell {
@@ -1944,16 +2079,28 @@ body:not(.dark-mode) .sqr-report-badge {
 <div class="sqr-approval-choice-modal" id="sqr-approval-choice-modal" aria-hidden="true">
     <div class="sqr-approval-choice-modal__backdrop" data-sqr-approval-close="true"></div>
     <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-approval-choice-title">
-        <h3 class="h5 mb-2" id="sqr-approval-choice-title">Choose approval email output</h3>
-        <p class="mb-2">The SQR status is now <strong>Approved</strong>.</p>
-        <p class="text-muted mb-0">Choose whether to open the ready-to-edit draft in the default mail app or download the formatted <code>.eml</code> file with the image and table layout.</p>
+        <span class="sqr-approval-choice-modal__eyebrow"><i class="bi bi-check2-circle"></i> SQR Approved</span>
+        <h3 class="h4 mt-3 mb-2" id="sqr-approval-choice-title">Choose how to prepare the approval advisory</h3>
+        <p class="text-muted mb-0">Select the fastest editable draft or download the polished Outlook <code>.eml</code> template with Phil-Data branding and table layout.</p>
         <div class="sqr-approval-choice-modal__actions">
-            <button type="button" class="btn btn-primary" id="sqr-approval-open-draft-btn">
-                Use ready draft email body
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--draft" id="sqr-approval-open-draft-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-envelope-paper"></i></span>
+                <span>
+                    <span class="sqr-approval-option__label">Use ready draft email body</span>
+                    <span class="sqr-approval-option__hint">Opens your mail app with a clean, table-style plain-text quotation ready to edit.</span>
+                </span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-arrow-right-circle"></i></span>
             </button>
-            <button type="button" class="btn btn-outline-info" id="sqr-approval-download-eml-btn">
-                Use formatted .eml template
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--eml" id="sqr-approval-download-eml-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-file-earmark-richtext"></i></span>
+                <span>
+                    <span class="sqr-approval-option__label">Use formatted .eml template</span>
+                    <span class="sqr-approval-option__hint">Downloads the Outlook-ready branded template with logo, table, totals, and validity details.</span>
+                </span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-download"></i></span>
             </button>
+        </div>
+        <div class="sqr-approval-choice-modal__footer">
             <button type="button" class="btn btn-outline-secondary" id="sqr-approval-cancel-btn">
                 Cancel
             </button>
@@ -2326,7 +2473,7 @@ body:not(.dark-mode) .sqr-report-badge {
             <button type="button" class="btn-close" id="close-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form method="post">
+            <form method="post" id="create-sqr-form">
                 {% csrf_token %}
                 {% if sqr_form.errors %}
                     <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-2"></i>Please resolve the highlighted fields before submitting.</div>
@@ -2350,7 +2497,7 @@ body:not(.dark-mode) .sqr-report-badge {
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end mt-4">
                     <button type="button" class="btn btn-outline-secondary" id="cancel-sqr-btn">Cancel</button>
-                    <button class="btn btn-primary" type="submit">
+                    <button class="btn btn-primary" type="submit" id="submit-sqr-btn">
                         <i class="bi bi-send me-1"></i>Submit
                     </button>
                 </div>
@@ -2367,6 +2514,8 @@ body:not(.dark-mode) .sqr-report-badge {
         const closeBtn = document.getElementById("close-sqr-btn");
         const cancelBtn = document.getElementById("cancel-sqr-btn");
         const backdrop = document.getElementById("create-sqr-backdrop");
+        const form = document.getElementById("create-sqr-form");
+        const submitBtn = document.getElementById("submit-sqr-btn");
         const openModal = () => {
             modal.classList.add("requestor-modal--visible");
             modal.setAttribute("aria-hidden", "false");
@@ -2384,6 +2533,15 @@ body:not(.dark-mode) .sqr-report-badge {
         document.addEventListener("keydown", function (e) {
             if (e.key === "Escape" && modal.classList.contains("requestor-modal--visible")) closeModal();
         });
+        if (form) {
+            form.addEventListener("submit", function () {
+                if (!submitBtn || submitBtn.disabled) {
+                    return false;
+                }
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+            });
+        }
         if (modal.dataset.openOnLoad === "true") openModal();
     })();
 

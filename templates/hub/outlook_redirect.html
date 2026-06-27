@@ -18,7 +18,7 @@
 </div>
 <script>
     window.addEventListener('DOMContentLoaded', function () {
-        var launchUrl = "{{ mailto_url|default:formatted_draft_url|escapejs }}";
+        var launchUrl = "{{ launch_url|default:''|escapejs }}";
         if (launchUrl) {
             window.location.href = launchUrl;
         }

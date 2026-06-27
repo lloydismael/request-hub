@@ -599,6 +599,13 @@ class SqrSubmission(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["linked_request"],
+                condition=Q(linked_request__isnull=False),
+                name="unique_sqrsubmission_linked_request",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.reference_code or f"SQR draft #{self.pk}"
