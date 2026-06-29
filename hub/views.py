@@ -3316,7 +3316,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 now = timezone.now()
                 if not submission.reviewed_at:
                     submission.reviewed_at = now
-                submission.validity_due_date = submission.reviewed_at.date() + timedelta(days=90)
+                submission.validity_due_date = submission.reviewed_at.date() + timedelta(days=45)
                 submission.reviewed_by = request.user
                 save_fields += ["reviewed_at", "reviewed_by", "validity_due_date"]
                 if not submission.assigned_pm_id:
@@ -5300,7 +5300,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
             reviewed_at = self._to_datetime(approval_date) or timezone.now()
             data["reviewed_at"] = reviewed_at
             data["reviewed_by"] = actor
-            data["validity_due_date"] = validity_due_date or (reviewed_at.date() + timedelta(days=90))
+            data["validity_due_date"] = validity_due_date or (reviewed_at.date() + timedelta(days=45))
         else:
             data["reviewed_at"] = None
             data["reviewed_by"] = None
