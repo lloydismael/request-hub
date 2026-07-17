@@ -758,12 +758,10 @@ class SqrSubmission(models.Model):
 
     @property
     def effective_pm_manhrs(self):
-        recommended = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
-        if recommended is None:
+        """Return the saved PM man-hours, defaulting only when blank."""
+        if self.pm_manhrs is not None:
             return self.pm_manhrs
-        if self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
-            return recommended
-        return self.pm_manhrs
+        return self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
 
     @property
     def effective_pm_amount(self):
@@ -777,8 +775,9 @@ class SqrSubmission(models.Model):
         if creating and not self.year:
             self.year = timezone.now().astimezone(MANILA_TZ).year
 
-        # Keep PM man-hours aligned to the SSE bucket for blank or bucket-based values.
-        if self.sse_manhrs is not None and self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
+        # Default PM man-hours from SSE only while the PM value is blank.
+        # Do not overwrite manually chosen bucket values such as 8/16/24/32/48.
+        if self.sse_manhrs is not None and self.pm_manhrs is None:
             self.pm_manhrs = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
 
         # Auto-compute SSE Amount (col M = col L × 2000) and PM Amount (col O = col N × 3000)
