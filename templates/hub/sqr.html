@@ -1740,7 +1740,7 @@ body:not(.dark-mode) .sqr-report-badge {
                             {# D: Service Description #}
                             <td class="col-sticky-3{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_title" data-sqr-type="text" data-sqr-value="{{ item.project_title|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_title }}</span></td>
                             {# E: Scope of Services #}
-                            <td class="col-sticky-4 col-sticky-border{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_details" data-sqr-type="select" data-sqr-value="{{ item.project_details|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</span></td>
+                            <td class="col-sticky-4 col-sticky-border{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_details" data-sqr-type="select" data-sqr-value="{{ item.project_details|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</span></td>
                             {# F: RQ ID — supplied by engineer; links to Request; editable inline by PM/Admin #}
                             <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="linked_request" data-sqr-type="select" data-sqr-value="{{ item.linked_request_id|default:'' }}"{% endif %}>
                                 <span class="sqr-display">

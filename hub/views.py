@@ -3188,7 +3188,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
-        "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "project_details", "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
