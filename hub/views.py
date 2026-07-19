@@ -6148,7 +6148,7 @@ class NotificationListView(LoginRequiredMixin, ListView):
     model = Notification
     template_name = "hub/notifications.html"
     context_object_name = "notifications"
-    paginate_by = 25
+    paginate_by = 50
 
     def get_queryset(self):
         queryset = (
@@ -6158,6 +6158,41 @@ class NotificationListView(LoginRequiredMixin, ListView):
         user = self.request.user
         if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
             queryset = queryset.filter(source__icontains="new request")
+
+        # ── Filter: read/unread ──
+        self._filter_read = self.request.GET.get("filter", "all")
+        if self._filter_read == "unread":
+            queryset = queryset.filter(is_read=False)
+        elif self._filter_read == "read":
+            queryset = queryset.filter(is_read=True)
+
+        # ── Filter: category ──
+        self._filter_category = self.request.GET.get("category", "")
+        if self._filter_category:
+            # We can't directly filter on computed properties, so filter on message/source patterns
+            cat = self._filter_category
+            if cat == "new_request":
+                queryset = queryset.filter(source__icontains="new request")
+            elif cat == "assignment":
+                queryset = queryset.filter(message__icontains="assigned to request")
+            elif cat == "update":
+                queryset = queryset.filter(
+                    Q(source__icontains="status update") |
+                    Q(message__icontains="posted an update") |
+                    Q(message__icontains=" updated ")
+                )
+            elif cat == "completion":
+                queryset = queryset.filter(
+                    Q(message__icontains="completed") |
+                    Q(message__icontains="closed") |
+                    Q(source__icontains="close")
+                )
+            elif cat == "reminder":
+                queryset = queryset.filter(
+                    Q(source__icontains="nudge") |
+                    Q(message__icontains="reminder")
+                )
+
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -6168,7 +6203,53 @@ class NotificationListView(LoginRequiredMixin, ListView):
             base_qs = base_qs.filter(source__icontains="new request")
         context["unread_count"] = base_qs.filter(is_read=False).count()
         context["total_count"] = base_qs.count()
+        context["current_filter"] = self._filter_read
+        context["current_category"] = self._filter_category
+
+        # ── Category breakdown for the summary bar ──
+        category_counts = {
+            "new_request": base_qs.filter(source__icontains="new request").count(),
+            "assignment": base_qs.filter(message__icontains="assigned to request").count(),
+            "update": base_qs.filter(
+                Q(source__icontains="status update") |
+                Q(message__icontains="posted an update") |
+                Q(message__icontains=" updated ")
+            ).count(),
+            "completion": base_qs.filter(
+                Q(message__icontains="completed") |
+                Q(message__icontains="closed") |
+                Q(source__icontains="close")
+            ).count(),
+            "reminder": base_qs.filter(
+                Q(source__icontains="nudge") |
+                Q(message__icontains="reminder")
+            ).count(),
+        }
+        context["category_counts"] = category_counts
+
+        # ── Date-grouped notifications for timeline display ──
+        notifications_list = list(context["notifications"])
+        context["grouped_notifications"] = self._group_by_date(notifications_list)
+
         return context
+
+    def _group_by_date(self, notifications):
+        """Group notifications by Today, Yesterday, This Week, Older."""
+        now = timezone.now().date()
+        groups = {"Today": [], "Yesterday": [], "This Week": [], "Older": []}
+
+        for n in notifications:
+            created_date = timezone.localtime(n.created_at, MANILA_TZ).date()
+            if created_date == now:
+                groups["Today"].append(n)
+            elif created_date == now - timedelta(days=1):
+                groups["Yesterday"].append(n)
+            elif (now - created_date).days < 7:
+                groups["This Week"].append(n)
+            else:
+                groups["Older"].append(n)
+
+        return {k: v for k, v in groups.items() if v}
 
 
 class NotificationReadView(LoginRequiredMixin, View):
