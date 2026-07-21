@@ -22,14 +22,10 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v43.7`
-- **App version shown in profile:** `v43.7`
-- **Latest SQR updates included:**
-      - Approved SQR status now uses the user-facing label **Approved**
-      - Approval flow can open a ready-to-edit mail draft directly from the user's mail app
-      - Rich-format `.eml` download remains available as an alternate option
-      - Support Start Date (`AJ`) and Support End Date (`AK`) refresh instantly when Managed Support Amount (`P`) changes
-      - Clearing inline date fields in the SQR tracker now works correctly
+- **Current image tag:** `lloydismael12/request-hub:v46.8`
+- **App version shown in profile:** `v46.8`
+- **Latest update included:**
+      - Restored the compact floating AI chatbot popup while keeping the current chat embed and file upload support.
 
 ---
 
@@ -378,8 +374,8 @@ docker run --rm -p 8000:8000 --env-file .env lloydismael12/request-hub:latest
 ```powershell
 $containers = docker ps --format "{{.ID}} {{.Ports}}" | Where-Object { $_ -match "0\.0\.0\.0:8000->8000/tcp|:::8000->8000/tcp" }
 $containers | ForEach-Object { docker rm -f (($_ -split ' ')[0]) }
-docker build -t lloydismael12/request-hub:v43.7 -t lloydismael12/request-hub:latest .
-docker run --rm -p 8000:8000 --env-file .env -e APP_VERSION=v43.7 lloydismael12/request-hub:v43.7
+docker build -t lloydismael12/request-hub:v46.8 -t lloydismael12/request-hub:latest .
+docker run --rm -p 8000:8000 --env-file .env -e APP_VERSION=v46.8 lloydismael12/request-hub:v46.8
 ```
 
 ### Push to Docker Hub

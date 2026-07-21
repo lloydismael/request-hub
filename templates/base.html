@@ -515,43 +515,33 @@
                 const toggleBtn = document.getElementById('ai-chat-toggle-btn');
                 const chatWindow = document.getElementById('ai-chat-window');
                 const closeBtn = document.getElementById('ai-chat-close-btn');
-                const icon = toggleBtn.querySelector('i');
                 const chatStateKey = 'reqHubChatOpen';
+
+                if (!toggleBtn || !chatWindow) return;
 
                 const applyChatState = (open, options = {}) => {
                     const shouldFocus = Boolean(options.focus);
 
-                    if (open) {
-                        chatWindow.classList.add('open');
-                        toggleBtn.classList.add('active');
-                        icon.classList.remove('bi-robot');
-                        icon.classList.add('bi-x-lg');
-                        toggleBtn.setAttribute('aria-expanded', 'true');
-                        localStorage.setItem(chatStateKey, '1');
-                        if (shouldFocus) {
-                            chatWindow.focus();
-                        }
-                    } else {
-                        chatWindow.classList.remove('open');
-                        toggleBtn.classList.remove('active');
-                        icon.classList.remove('bi-x-lg');
-                        icon.classList.add('bi-robot');
-                        toggleBtn.setAttribute('aria-expanded', 'false');
-                        localStorage.setItem(chatStateKey, '0');
-                        if (shouldFocus) {
-                            toggleBtn.focus();
-                        }
+                    chatWindow.classList.toggle('open', open);
+                    toggleBtn.classList.toggle('active', open);
+                    toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    toggleBtn.setAttribute('aria-label', open ? 'Close AI Assistant' : 'Open AI Assistant');
+                    localStorage.setItem(chatStateKey, open ? '1' : '0');
+
+                    if (shouldFocus) {
+                        (open ? chatWindow : toggleBtn).focus();
                     }
                 };
 
-                // Toggle visibility
                 const toggleChat = () => {
                     const isOpen = chatWindow.classList.contains('open');
                     applyChatState(!isOpen, { focus: true });
                 };
 
-                if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
-                if (closeBtn) closeBtn.addEventListener('click', () => applyChatState(false, { focus: true }));
+                toggleBtn.addEventListener('click', toggleChat);
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => applyChatState(false, { focus: true }));
+                }
 
                 if (localStorage.getItem(chatStateKey) === '1') {
                     applyChatState(true);
@@ -573,33 +563,33 @@
                 const chatObserver = new MutationObserver(removeInjectedAgentLabel);
                 chatObserver.observe(document.body, { childList: true, subtree: true });
 
-                // Focus Trap Logic
-                if (chatWindow) {
-                    chatWindow.addEventListener('keydown', (e) => {
-                        if (e.key === 'Tab' || e.key === 'Escape') {
-                            if (e.key === 'Escape') {
-                                toggleChat();
-                                return;
-                            }
-                            const focusableElements = chatWindow.querySelectorAll('button, [href], iframe, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-                            if (focusableElements.length) {
-                                const firstElement = focusableElements[0];
-                                const lastElement = focusableElements[focusableElements.length - 1];
-                                if (e.shiftKey) { 
-                                    if (document.activeElement === firstElement) {
-                                        lastElement.focus();
-                                        e.preventDefault();
-                                    }
-                                } else { 
-                                    if (document.activeElement === lastElement) {
-                                        firstElement.focus();
-                                        e.preventDefault();
-                                    }
-                                }
-                            }
+                chatWindow.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        applyChatState(false, { focus: true });
+                        return;
+                    }
+
+                    if (e.key !== 'Tab' || !chatWindow.classList.contains('open')) {
+                        return;
+                    }
+
+                    const focusableElements = chatWindow.querySelectorAll('button, [href], iframe, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                    if (!focusableElements.length) {
+                        return;
+                    }
+
+                    const firstElement = focusableElements[0];
+                    const lastElement = focusableElements[focusableElements.length - 1];
+                    if (e.shiftKey) {
+                        if (document.activeElement === firstElement) {
+                            lastElement.focus();
+                            e.preventDefault();
                         }
-                    });
-                }
+                    } else if (document.activeElement === lastElement) {
+                        firstElement.focus();
+                        e.preventDefault();
+                    }
+                });
             };
 
             // Ensure DOM is ready before init
@@ -616,14 +606,15 @@
     <!-- AI Chat Bot Widget -->
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
-        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" aria-modal="true" tabindex="-1">
+        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" tabindex="-1">
             <button id="ai-chat-close-btn" class="ai-chat-close-btn" type="button" aria-label="Close AI Assistant">
                 <i class="bi bi-x-lg" aria-hidden="true"></i>
             </button>
-            <div class="ai-chat-body" style="height: 100%; width: 100%;">
+            <div class="ai-chat-body">
                 <iframe 
                     id="ai-chat-iframe"
-                    src="https://copilotstudio.microsoft.com/environments/Default-1d11f56e-9937-45ad-80aa-03b05da28e8d/bots/auto_agent_TCzv9/webchat?__version__=2"
+                    src="https://copilotstudio.microsoft.com/environments/Default-1d11f56e-9937-45ad-80aa-03b05da28e8d/bots/auto_agent_TCzv9/canvas?__version__=2&amp;enableFileAttachment=true&amp;tenantId=1d11f56e-9937-45ad-80aa-03b05da28e8d"
+                    data-connection-string="https://default1d11f56e993745ad80aa03b05da28e.8d.environment.api.powerplatform.com/copilotstudio/dataverse-backed/authenticated/bots/auto_agent_TCzv9/conversations?api-version=2022-03-01-preview"
                     frameborder="0" 
                     style="width: 100%; height: 100%;"
                     sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
