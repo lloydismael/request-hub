@@ -22,10 +22,10 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v47.0`
-- **App version shown in profile:** `v47.0`
+- **Current image tag:** `lloydismael12/request-hub:v48.0`
+- **App version shown in profile:** `v48.0`
 - **Latest update included:**
-      - Added a server-backed Undo safety net for PM/Admin inline edits on the SQR tracker.
+      - Added PM/Admin SQR View History with permanent change tracking and safe per-change restore.
 
 ---
 

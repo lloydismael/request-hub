@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from hub.forms import RequestForm
-from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange
+from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange, SqrSubmissionHistory
 from hub.views import (
     AssignmentEmailResult,
     DashboardView,
@@ -521,3 +521,129 @@ class SqrInlineUndoTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(SqrSubmissionChange.objects.count(), 0)
+
+
+class SqrHistoryTests(TestCase):
+    def setUp(self):
+        self.engineer = User.objects.create_user(
+            username="sqr_history_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.history.engineer@example.com",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_history_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.history.pm@example.com",
+            first_name="History",
+            last_name="PM",
+        )
+        self.admin = User.objects.create_user(
+            username="sqr_history_admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="sqr.history.admin@example.com",
+        )
+        self.requestor = User.objects.create_user(
+            username="sqr_history_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="sqr.history.requestor@example.com",
+        )
+        self.account = Account.objects.create(name="SQR History Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="SQR History Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+        )
+        self.submission = SqrSubmission.objects.create(
+            linked_request=self.request_obj,
+            engineer=self.engineer,
+            pm_esg_reviewer=self.pm,
+            customer_name="History Customer",
+            customer_company="ESS",
+            customer_contact="History Contact",
+            project_title="History Project",
+            project_details="Implementation",
+            sse_manhrs=Decimal("20"),
+            documentation_links="https://example.com/doc",
+            sqr_folder_link="https://example.com/sqr",
+        )
+        self.client.force_login(self.pm)
+
+    def _inline_update(self, field, value):
+        return self.client.post(
+            reverse("hub:sqr-inline-update", args=[self.submission.pk]),
+            data=json.dumps({"field": field, "value": value}),
+            content_type="application/json",
+        )
+
+    def test_inline_update_creates_permanent_history(self):
+        response = self._inline_update("pm_manhrs", "16")
+
+        self.assertEqual(response.status_code, 200)
+        history = SqrSubmissionHistory.objects.get(submission=self.submission)
+        self.assertEqual(history.action, SqrSubmissionHistory.Action.UPDATED)
+        self.assertEqual(history.field, "pm_manhrs")
+        self.assertEqual(history.old_values["pm_manhrs"], "8")
+        self.assertEqual(history.new_values["pm_manhrs"], "16")
+        self.assertIn("PM Man-hrs", history.summary)
+
+    def test_pm_admin_can_fetch_history(self):
+        self._inline_update("pm_manhrs", "16")
+
+        pm_response = self.client.get(reverse("hub:sqr-history", args=[self.submission.pk]))
+        self.assertEqual(pm_response.status_code, 200)
+        self.assertTrue(pm_response.json()["ok"])
+        self.assertEqual(len(pm_response.json()["entries"]), 1)
+
+        self.client.force_login(self.admin)
+        admin_response = self.client.get(reverse("hub:sqr-history", args=[self.submission.pk]))
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertTrue(admin_response.json()["ok"])
+
+    def test_engineer_cannot_fetch_history(self):
+        self._inline_update("pm_manhrs", "16")
+        self.client.force_login(self.engineer)
+
+        response = self.client.get(reverse("hub:sqr-history", args=[self.submission.pk]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(response.json()["ok"])
+
+    def test_restore_reverts_history_entry(self):
+        response = self._inline_update("pm_manhrs", "16")
+        self.assertEqual(response.status_code, 200)
+        history = SqrSubmissionHistory.objects.get(action=SqrSubmissionHistory.Action.UPDATED)
+
+        restore_response = self.client.post(reverse("hub:sqr-history-restore", args=[self.submission.pk, history.pk]))
+
+        self.assertEqual(restore_response.status_code, 200)
+        self.assertTrue(restore_response.json()["ok"])
+        self.submission.refresh_from_db()
+        history.refresh_from_db()
+        self.assertEqual(self.submission.pm_manhrs, Decimal("8"))
+        self.assertEqual(self.submission.pm_amount, Decimal("24000.00"))
+        self.assertIsNotNone(history.restored_at)
+        self.assertEqual(history.restored_by, self.pm)
+        restore_entry = SqrSubmissionHistory.objects.get(action=SqrSubmissionHistory.Action.RESTORED)
+        self.assertEqual(restore_entry.metadata["restored_history_id"], history.pk)
+
+    def test_stale_restore_is_rejected(self):
+        response = self._inline_update("pm_manhrs", "16")
+        self.assertEqual(response.status_code, 200)
+        history = SqrSubmissionHistory.objects.get(action=SqrSubmissionHistory.Action.UPDATED)
+        SqrSubmission.objects.filter(pk=self.submission.pk).update(
+            pm_manhrs=Decimal("24"),
+            pm_amount=Decimal("72000.00"),
+        )
+
+        restore_response = self.client.post(reverse("hub:sqr-history-restore", args=[self.submission.pk, history.pk]))
+
+        self.assertEqual(restore_response.status_code, 409)
+        self.assertFalse(restore_response.json()["ok"])

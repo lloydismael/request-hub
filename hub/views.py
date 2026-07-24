@@ -83,6 +83,7 @@ from .models import (
     RequestCommunication,
     SqrSubmission,
     SqrSubmissionChange,
+    SqrSubmissionHistory,
     StatusLog,
 )
 from .mixins import (
@@ -3142,7 +3143,23 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def form_valid(self, form):
+        original = SqrSubmission.objects.get(pk=self.object.pk)
         response = super().form_valid(form)
+        changed_fields = []
+        for field in form.changed_data:
+            if hasattr(self.object, field):
+                changed_fields.append(field)
+        if changed_fields:
+            old_values = SqrInlineFieldUpdateView._snapshot_values(original, changed_fields)
+            new_values = SqrInlineFieldUpdateView._snapshot_values(self.object, changed_fields)
+            record_sqr_history(
+                self.object,
+                self.request.user,
+                field=changed_fields[0] if len(changed_fields) == 1 else "",
+                old_values=old_values,
+                new_values=new_values,
+                source="engineer_edit",
+            )
         messages.success(self.request, f"SQR {self.object.reference_code} updated.")
         return response
 
@@ -3173,6 +3190,122 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
         response = super().form_valid(form)
         messages.success(self.request, f"SQR {reference_code} deleted.")
         return response
+
+
+SQR_HISTORY_FIELD_LABELS = {
+    "customer_name": "Account Name",
+    "customer_company": "Group Name",
+    "customer_contact": "Account Manager",
+    "project_title": "Service Description",
+    "project_details": "Scope of Services",
+    "linked_request": "RQ ID",
+    "sse_manhrs": "SSE Man-hrs",
+    "sse_amount": "SSE Amount",
+    "pm_manhrs": "PM Man-hrs",
+    "pm_amount": "PM Amount",
+    "managed_support_amount": "Managed Support Svc. Amt.",
+    "discount_rate": "Discount Rate",
+    "status": "SQR Status",
+    "reviewed_at": "Approval Date",
+    "reviewed_by": "Reviewed By",
+    "review_notes": "Review Notes",
+    "validity_due_date": "Validity Due Date",
+    "proposal_status": "Proposal Status",
+    "po_pnl_date": "PO / PNL Date",
+    "assigned_pm": "Assigned PM",
+    "assigned_sse": "Assigned SSE",
+    "delivery_start_date": "Start Date",
+    "delivery_target_finish_date": "Target Finish Date",
+    "overall_status": "Overall Status",
+    "delivery_health": "Health Status",
+    "delivery_progress": "Overall Progress %",
+    "key_updates_risks": "Key Updates / Risks / Issues",
+    "delivery_actual_finish_date": "Actual Finish Date",
+    "delivery_completion_signed_date": "Completion Signed Date",
+    "warranty_end_date": "Post-svc Warranty End Date",
+    "managed_support_start_date": "Support Start Date",
+    "revenue_date": "SI / Revenue Date",
+    "revenue_source": "Revenue Source",
+    "revenue_reference_no": "Reference No.",
+    "revenue_remarks": "Revenue Remarks",
+    "revenue_declaration": "Revenue Declaration",
+}
+
+SQR_HISTORY_CHOICE_LABELS = {
+    "status": dict(SqrSubmission.Status.choices),
+    "proposal_status": dict(SqrSubmission.ProposalStatus.choices),
+    "delivery_health": dict(SqrSubmission.DeliveryHealth.choices),
+    "overall_status": dict(SqrSubmission.OverallStatus.choices),
+    "revenue_declaration": dict(SqrSubmission.RevenueDeclaration.choices),
+    "revenue_source": {"internal": "Internal", "invoiced": "Invoiced"},
+}
+
+
+def get_sqr_history_field_label(field: str) -> str:
+    return SQR_HISTORY_FIELD_LABELS.get(field, (field or "SQR").replace("_", " ").title())
+
+
+def format_sqr_history_value(field: str, value) -> str:
+    if value in (None, ""):
+        return "—"
+    if field in SQR_HISTORY_CHOICE_LABELS:
+        return SQR_HISTORY_CHOICE_LABELS[field].get(value, str(value))
+    if field in {"assigned_pm", "assigned_sse", "reviewed_by"}:
+        user = User.objects.filter(pk=value).first()
+        return (user.get_full_name() or user.username) if user else str(value)
+    if field == "linked_request":
+        request_obj = Request.objects.filter(pk=value).first()
+        return request_obj.reference_code if request_obj else str(value)
+    if field == "discount_rate":
+        return f"{value}%" if str(value) != "0" else "No Discount"
+    if field.endswith("_amount") or field in {"quotation_total_price", "computed_total_price", "computed_discount_amount"}:
+        try:
+            amount = Decimal(str(value))
+            return f"₱{amount:,.2f}"
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def build_sqr_history_summary(field: str, old_values: dict, new_values: dict, action: str = "updated") -> str:
+    changed = [key for key in new_values.keys() if old_values.get(key) != new_values.get(key)]
+    primary = field if field in changed else (changed[0] if changed else field)
+    label = get_sqr_history_field_label(primary)
+    if action == SqrSubmissionHistory.Action.RESTORED:
+        return f"Restored {label}."
+    if not changed:
+        return f"Saved {label}."
+    old_display = format_sqr_history_value(primary, old_values.get(primary))
+    new_display = format_sqr_history_value(primary, new_values.get(primary))
+    extra = len(changed) - 1
+    suffix = f" and {extra} related value{'s' if extra != 1 else ''}" if extra > 0 else ""
+    return f"Changed {label} from {old_display} to {new_display}{suffix}."
+
+
+def record_sqr_history(
+    submission: SqrSubmission,
+    actor: User,
+    *,
+    field: str,
+    old_values: dict,
+    new_values: dict,
+    action: str = SqrSubmissionHistory.Action.UPDATED,
+    source: str = "inline",
+    metadata: dict | None = None,
+) -> SqrSubmissionHistory | None:
+    if old_values == new_values:
+        return None
+    return SqrSubmissionHistory.objects.create(
+        submission=submission,
+        actor=actor,
+        action=action,
+        field=field or "",
+        old_values=old_values or {},
+        new_values=new_values or {},
+        summary=build_sqr_history_summary(field, old_values or {}, new_values or {}, action),
+        source=source,
+        metadata=metadata or {},
+    )
 
 
 class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
@@ -3474,13 +3607,23 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         old_values = self._snapshot_values(original_submission, tracked_fields)
         with transaction.atomic():
             submission.save(update_fields=save_fields)
+            new_values = self._snapshot_values(submission, tracked_fields)
             change = SqrSubmissionChange.objects.create(
                 submission=submission,
                 changed_by=request.user,
                 field=field,
                 old_values=old_values,
-                new_values=self._snapshot_values(submission, tracked_fields),
+                new_values=new_values,
                 expires_at=timezone.now() + self._UNDO_RETENTION,
+            )
+            record_sqr_history(
+                submission,
+                request.user,
+                field=field,
+                old_values=old_values,
+                new_values=new_values,
+                source="inline",
+                metadata={"change_id": change.pk},
             )
 
         # Email engineer when status changed to For Revision via inline edit
@@ -3587,6 +3730,120 @@ class SqrInlineFieldUndoView(SqrInlineFieldUpdateView):
             undone=True,
         )
         return JsonResponse(response_data)
+
+
+class SqrHistoryView(LoginRequiredMixin, View):
+    """Return PM/Admin-visible permanent history for a single SQR."""
+
+    def get(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        submission = get_object_or_404(SqrSubmission, pk=pk)
+        entries = []
+        for entry in submission.history_entries.select_related("actor", "restored_by").all()[:200]:
+            changed_fields = [
+                key for key in entry.new_values.keys()
+                if entry.old_values.get(key) != entry.new_values.get(key)
+            ]
+            fields = changed_fields or list(entry.new_values.keys()) or ([entry.field] if entry.field else [])
+            entries.append({
+                "id": entry.pk,
+                "action": entry.action,
+                "action_label": entry.get_action_display(),
+                "field": entry.field,
+                "field_label": get_sqr_history_field_label(entry.field),
+                "summary": entry.summary,
+                "actor": entry.actor.get_full_name() or entry.actor.username,
+                "created_at": timezone.localtime(entry.created_at, MANILA_TZ).strftime("%b %d, %Y · %I:%M %p"),
+                "source": entry.source,
+                "is_restored": entry.is_restored,
+                "restored_by": (entry.restored_by.get_full_name() or entry.restored_by.username) if entry.restored_by else "",
+                "restored_at": timezone.localtime(entry.restored_at, MANILA_TZ).strftime("%b %d, %Y · %I:%M %p") if entry.restored_at else "",
+                "restore_url": reverse("hub:sqr-history-restore", args=[submission.pk, entry.pk]),
+                "restorable": entry.action == SqrSubmissionHistory.Action.UPDATED and not entry.is_restored and bool(entry.old_values),
+                "changes": [
+                    {
+                        "field": changed_field,
+                        "field_label": get_sqr_history_field_label(changed_field),
+                        "old": format_sqr_history_value(changed_field, entry.old_values.get(changed_field)),
+                        "new": format_sqr_history_value(changed_field, entry.new_values.get(changed_field)),
+                    }
+                    for changed_field in fields
+                ],
+            })
+        return JsonResponse({
+            "ok": True,
+            "submission": {
+                "id": submission.pk,
+                "reference_code": submission.reference_code or str(submission),
+            },
+            "entries": entries,
+        })
+
+
+class SqrHistoryRestoreView(LoginRequiredMixin, View):
+    """Restore a single permanent SQR history entry when no later edit touched it."""
+
+    def post(self, request, pk, history_id):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        allowed = SqrInlineFieldUpdateView._allowed_fields_for_user(request.user) or frozenset()
+        with transaction.atomic():
+            history = get_object_or_404(
+                SqrSubmissionHistory.objects.select_for_update().select_related("submission"),
+                pk=history_id,
+                submission_id=pk,
+            )
+            if history.action != SqrSubmissionHistory.Action.UPDATED or history.is_restored:
+                return JsonResponse({"ok": False, "error": "This history entry cannot be restored."}, status=400)
+            restore_fields = list(history.old_values.keys())
+            disallowed = [field for field in restore_fields if field not in allowed and field not in {"reviewed_at", "reviewed_by", "validity_due_date", "review_notes", "sse_amount", "pm_amount", "managed_support_amount"}]
+            if disallowed:
+                return JsonResponse({"ok": False, "error": "You cannot restore one or more fields in this history entry."}, status=403)
+
+            submission = SqrSubmission.objects.select_for_update().get(pk=pk)
+            current_values = SqrInlineFieldUpdateView._snapshot_values(submission, history.new_values.keys())
+            if current_values != history.new_values:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Restore skipped because this SQR changed after the selected history entry.",
+                    },
+                    status=409,
+                )
+
+            for restore_field, restore_value in history.old_values.items():
+                SqrInlineFieldUpdateView._apply_serialized_field_value(submission, restore_field, restore_value)
+            update_values = {}
+            for restore_field in restore_fields:
+                if restore_field in SqrInlineFieldUpdateView._SERIALIZED_FK_FIELDS:
+                    update_values[f"{restore_field}_id"] = getattr(submission, f"{restore_field}_id")
+                else:
+                    update_values[restore_field] = getattr(submission, restore_field)
+            SqrSubmission.objects.filter(pk=submission.pk).update(**update_values)
+            history.restored_at = timezone.now()
+            history.restored_by = request.user
+            history.save(update_fields=["restored_at", "restored_by"])
+            restore_entry = record_sqr_history(
+                submission,
+                request.user,
+                field=history.field,
+                old_values=history.new_values,
+                new_values=history.old_values,
+                action=SqrSubmissionHistory.Action.RESTORED,
+                source="history_restore",
+                metadata={"restored_history_id": history.pk},
+            )
+
+        return JsonResponse({
+            "ok": True,
+            "message": "History entry restored.",
+            "restored_history_id": history.pk,
+            "restore_entry_id": restore_entry.pk if restore_entry else None,
+            "reload_required": True,
+        })
 
 
 class SqrReviewUpdateView(LoginRequiredMixin, View):

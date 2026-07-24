@@ -1675,7 +1675,7 @@ body:not(.dark-mode) .sqr-report-badge {
                             <th class="sqr-stage-revenue">Revenue Status</th>
                             <th class="sqr-stage-revenue">Remarks</th>
                             <th class="sqr-stage-revenue">Revenue Declaration</th>
-                            <th class="text-center" style="min-width:80px;">Action</th>
+                            <th class="text-center" style="min-width:135px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2020,16 +2020,29 @@ body:not(.dark-mode) .sqr-report-badge {
                             <td class="small">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</td>
                             {% endif %}
                             {# Action col #}
-                            <td class="text-center" style="min-width:80px;">
+                            <td class="text-center" style="min-width:135px;">
                                 {% if is_admin %}
-                                    {# Admin: inline editing active — only delete button #}
-                                    <a class="btn btn-sm btn-outline-danger py-0 px-2"
-                                       href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
+                                    <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn"
+                                                data-history-url="{% url 'hub:sqr-history' item.pk %}"
+                                                data-sqr-ref="{{ item.reference_code|default:'' }}"
+                                                title="View History">
+                                            <i class="bi bi-clock-history me-1"></i>View History
+                                        </button>
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2"
+                                           href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
                                 {% elif is_pm %}
-                                    {# PM-ESG: inline editing active — no action buttons #}
-                                    <span class="text-muted small">&ndash;</span>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn"
+                                            data-history-url="{% url 'hub:sqr-history' item.pk %}"
+                                            data-sqr-ref="{{ item.reference_code|default:'' }}"
+                                            title="View History">
+                                        <i class="bi bi-clock-history me-1"></i>View History
+                                    </button>
                                 {% elif can_create_sqr and item.engineer_id == request.user.id %}
                                     <div class="d-flex gap-1 justify-content-center flex-nowrap">
                                         <button type="button"
@@ -2075,6 +2088,35 @@ body:not(.dark-mode) .sqr-report-badge {
 
     </div>
 </div>
+
+{% if is_pm %}
+<div class="requestor-modal" id="sqr-history-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="sqr-history-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-history-title" style="max-width: 980px;">
+        <div class="requestor-modal__header">
+            <div>
+                <h2 class="h5 mb-1" id="sqr-history-title"><i class="bi bi-clock-history me-2"></i>SQR History</h2>
+                <div class="small text-muted" id="sqr-history-subtitle">Loading history…</div>
+            </div>
+            <button type="button" class="btn-close" id="sqr-history-close" aria-label="Close"></button>
+        </div>
+        <div class="requestor-modal__body">
+            <div class="alert alert-warning small mb-3" role="alert">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Restore reverts only the selected recorded field snapshot. Emails, Teams chats, and other external side effects cannot be undone.
+            </div>
+            <div class="alert alert-danger small d-none" id="sqr-history-error" role="alert"></div>
+            <div id="sqr-history-loading" class="text-center text-muted py-4">
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading history…
+            </div>
+            <div id="sqr-history-empty" class="text-center text-muted py-5 d-none">
+                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No history recorded for this SQR yet.
+            </div>
+            <div id="sqr-history-list" class="d-flex flex-column gap-3"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div id="sqr-undo-toast" class="position-fixed bottom-0 end-0 m-4 p-3 rounded-4 shadow-lg border bg-body text-body d-none" role="status" aria-live="polite" style="z-index:1085; max-width:380px;">
     <div class="d-flex align-items-start gap-3">
@@ -2476,6 +2518,148 @@ body:not(.dark-mode) .sqr-report-badge {
 
         resetImportState();
     })();
+</script>
+{% endif %}
+
+{% if is_pm %}
+<script>
+(function () {
+    'use strict';
+    var CSRF = '{{ csrf_token }}';
+    var modal = document.getElementById('sqr-history-modal');
+    if (!modal) return;
+    var backdrop = document.getElementById('sqr-history-backdrop');
+    var closeBtn = document.getElementById('sqr-history-close');
+    var subtitle = document.getElementById('sqr-history-subtitle');
+    var errorBox = document.getElementById('sqr-history-error');
+    var loading = document.getElementById('sqr-history-loading');
+    var empty = document.getElementById('sqr-history-empty');
+    var list = document.getElementById('sqr-history-list');
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function setVisible(el, visible) {
+        if (el) el.classList.toggle('d-none', !visible);
+    }
+
+    function setError(message) {
+        if (!errorBox) return;
+        errorBox.textContent = message || '';
+        errorBox.classList.toggle('d-none', !message);
+    }
+
+    function openModal() {
+        modal.classList.add('requestor-modal--visible');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('requestor-modal-open');
+    }
+
+    function closeModal() {
+        modal.classList.remove('requestor-modal--visible');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('requestor-modal-open');
+    }
+
+    function renderEntries(entries) {
+        list.innerHTML = '';
+        setVisible(empty, !entries.length);
+        entries.forEach(function (entry) {
+            var changesHtml = (entry.changes || []).map(function (change) {
+                return '<tr>'
+                    + '<td class="small fw-semibold">' + escapeHtml(change.field_label) + '</td>'
+                    + '<td class="small text-muted">' + escapeHtml(change.old) + '</td>'
+                    + '<td class="small">' + escapeHtml(change.new) + '</td>'
+                    + '</tr>';
+            }).join('');
+            var restoreHtml = entry.restorable
+                ? '<button type="button" class="btn btn-sm btn-outline-warning sqr-history-restore-btn" data-restore-url="' + escapeHtml(entry.restore_url) + '"><i class="bi bi-arrow-counterclockwise me-1"></i>Restore</button>'
+                : (entry.is_restored ? '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Restored</span>' : '');
+            var card = document.createElement('div');
+            card.className = 'card border-0 shadow-sm bg-body-tertiary';
+            card.innerHTML = '<div class="card-body">'
+                + '<div class="d-flex justify-content-between gap-3 align-items-start mb-2">'
+                + '<div><div class="fw-semibold">' + escapeHtml(entry.summary || entry.action_label) + '</div>'
+                + '<div class="small text-muted">' + escapeHtml(entry.created_at) + ' · ' + escapeHtml(entry.actor) + '</div></div>'
+                + '<div class="text-end">' + restoreHtml + '</div>'
+                + '</div>'
+                + '<div class="table-responsive"><table class="table table-sm mb-0 align-middle">'
+                + '<thead><tr><th>Field</th><th>Previous</th><th>New</th></tr></thead>'
+                + '<tbody>' + changesHtml + '</tbody></table></div>'
+                + (entry.is_restored && entry.restored_by ? '<div class="small text-muted mt-2">Restored by ' + escapeHtml(entry.restored_by) + ' on ' + escapeHtml(entry.restored_at) + '.</div>' : '')
+                + '</div>';
+            list.appendChild(card);
+        });
+    }
+
+    function loadHistory(button) {
+        var url = button.dataset.historyUrl;
+        var ref = button.dataset.sqrRef || 'SQR';
+        if (subtitle) subtitle.textContent = ref;
+        setError('');
+        list.innerHTML = '';
+        setVisible(loading, true);
+        setVisible(empty, false);
+        openModal();
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'})
+            .then(function (response) {
+                return response.json().then(function (data) { return {ok: response.ok, data: data}; });
+            })
+            .then(function (result) {
+                setVisible(loading, false);
+                if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'Unable to load SQR history.');
+                if (subtitle) subtitle.textContent = 'History for ' + (result.data.submission.reference_code || ref);
+                renderEntries(result.data.entries || []);
+            })
+            .catch(function (error) {
+                setVisible(loading, false);
+                setError(error && error.message ? error.message : 'Unable to load SQR history.');
+            });
+    }
+
+    document.querySelectorAll('.sqr-history-btn').forEach(function (button) {
+        button.addEventListener('click', function () { loadHistory(button); });
+    });
+
+    if (list) {
+        list.addEventListener('click', function (event) {
+            var button = event.target.closest('.sqr-history-restore-btn');
+            if (!button) return;
+            if (!confirm('Restore this recorded change?')) return;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Restoring...';
+            fetch(button.dataset.restoreUrl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                credentials: 'same-origin'
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) { return {ok: response.ok, data: data}; });
+                })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'Unable to restore this history entry.');
+                    window.location.reload();
+                })
+                .catch(function (error) {
+                    setError(error && error.message ? error.message : 'Unable to restore this history entry.');
+                    button.disabled = false;
+                    button.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>Restore';
+                });
+        });
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && modal.classList.contains('requestor-modal--visible')) closeModal();
+    });
+})();
 </script>
 {% endif %}
 

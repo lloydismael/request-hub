@@ -855,6 +855,58 @@ class SqrSubmissionChange(models.Model):
         return self.undone_at is not None
 
 
+class SqrSubmissionHistory(models.Model):
+    """Permanent user-visible history entry for SQR field and workflow changes."""
+
+    class Action(models.TextChoices):
+        UPDATED = "updated", "Updated"
+        RESTORED = "restored", "Restored"
+
+    submission = models.ForeignKey(
+        SqrSubmission,
+        on_delete=models.CASCADE,
+        related_name="history_entries",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_history_entries",
+    )
+    action = models.CharField(max_length=40, choices=Action.choices, default=Action.UPDATED)
+    field = models.CharField(max_length=100, blank=True)
+    old_values = models.JSONField(default=dict, blank=True)
+    new_values = models.JSONField(default=dict, blank=True)
+    summary = models.TextField(blank=True)
+    source = models.CharField(max_length=120, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    restored_at = models.DateTimeField(blank=True, null=True)
+    restored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_history_restores",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [
+            models.Index(fields=["submission", "-created_at"]),
+            models.Index(fields=["actor", "-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        action = self.get_action_display() if self.action else "History"
+        field = f" · {self.field}" if self.field else ""
+        return f"{action} for {self.submission}{field}"
+
+    @property
+    def is_restored(self) -> bool:
+        return self.restored_at is not None
+
+
 class Notification(models.Model):
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     message = models.CharField(max_length=255)
