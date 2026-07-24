@@ -3764,6 +3764,8 @@ body.theme-switching *::after {
     --bs-table-bg: transparent;
     --bs-table-color: #0f172a;
     margin-bottom: 0;
+    width: 100%;
+    table-layout: fixed;
 }
 
 .request-activity-table thead th {
@@ -3778,6 +3780,76 @@ body.theme-switching *::after {
 .request-activity-table tbody td {
     color: #0f172a;
     border-color: rgba(15,23,42,0.06);
+}
+
+.request-activity-table th,
+.request-activity-table td {
+    vertical-align: middle;
+}
+
+.request-activity-col {
+    overflow: hidden;
+}
+
+.request-activity-col--date {
+    width: 17%;
+    white-space: nowrap;
+}
+
+.request-activity-col--engineer {
+    width: 18%;
+}
+
+.request-activity-col--activity {
+    width: 12%;
+}
+
+.request-activity-col--hours {
+    width: 8%;
+    white-space: nowrap;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.request-activity-col--billing {
+    width: 12%;
+    white-space: nowrap;
+}
+
+.request-activity-col--details {
+    width: 33%;
+}
+
+.request-activity-cell-text,
+.request-activity-detail-preview {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.request-activity-cell-text {
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.request-activity-detail-preview {
+    color: #475569;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    max-height: calc(1.35em * 2);
+}
+
+.request-activity-detail-preview--empty {
+    color: #94a3b8;
+    white-space: nowrap;
+    display: block;
 }
 
 /* ── Dark mode ── */
@@ -3850,6 +3922,15 @@ body.dark-mode .request-activity-table tbody td {
     color: #e2e8f0;
     border-color: rgba(148,163,184,0.12);
     background: transparent;
+}
+body.dark-mode .request-activity-cell-text {
+    color: #f8fafc;
+}
+body.dark-mode .request-activity-detail-preview {
+    color: #cbd5e1;
+}
+body.dark-mode .request-activity-detail-preview--empty {
+    color: #64748b;
 }
 body.dark-mode .request-activity-table tbody tr:hover td {
     background: rgba(255,255,255,0.03);

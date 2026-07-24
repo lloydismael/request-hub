@@ -809,6 +809,52 @@ class SqrSubmission(models.Model):
             self.reference_code = reference_code
 
 
+class SqrSubmissionChange(models.Model):
+    """Server-backed undo snapshot for inline SQR tracker edits."""
+
+    submission = models.ForeignKey(
+        SqrSubmission,
+        on_delete=models.CASCADE,
+        related_name="field_changes",
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_field_changes",
+    )
+    field = models.CharField(max_length=100)
+    old_values = models.JSONField()
+    new_values = models.JSONField()
+    changed_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    undone_at = models.DateTimeField(blank=True, null=True)
+    undone_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_field_changes_undone",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-changed_at"]
+        indexes = [
+            models.Index(fields=["submission", "field", "changed_at"]),
+            models.Index(fields=["undone_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Undo snapshot for {self.submission} · {self.field}"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_undone(self) -> bool:
+        return self.undone_at is not None
+
+
 class Notification(models.Model):
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     message = models.CharField(max_length=255)

@@ -82,6 +82,7 @@ from .models import (
     Request,
     RequestCommunication,
     SqrSubmission,
+    SqrSubmissionChange,
     StatusLog,
 )
 from .mixins import (
@@ -3211,13 +3212,146 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "revenue_date", "revenue_source", "revenue_reference_no",
         "revenue_remarks", "revenue_declaration",
     ])
+    _SERIALIZED_FK_FIELDS = _FK_FIELDS | frozenset(["reviewed_by"])
+    _UNDO_RETENTION = timedelta(hours=24)
+    _PRICE_TRIGGERS = frozenset(["pm_amount", "sse_amount", "managed_support_amount", "discount_rate"])
+
+    @classmethod
+    def _allowed_fields_for_user(cls, user):
+        if user.role == User.Roles.ADMIN:
+            return cls._ADMIN_ALLOWED
+        if user.role == User.Roles.PM_ESG:
+            return cls._PM_ESG_ALLOWED
+        return None
+
+    @classmethod
+    def _tracked_fields_for_change(cls, field, save_fields=None):
+        tracked = set(save_fields or []) | {field}
+        if field == "sse_manhrs":
+            tracked.update(["sse_amount", "pm_manhrs", "pm_amount"])
+        if field == "pm_manhrs":
+            tracked.add("pm_amount")
+        if field in ("project_details", "customer_company"):
+            tracked.add("managed_support_amount")
+        if field == "status":
+            tracked.update(["reviewed_at", "reviewed_by", "validity_due_date", "review_notes", "assigned_pm"])
+        return sorted(tracked)
+
+    @classmethod
+    def _serialize_field_value(cls, submission, field):
+        if field in cls._SERIALIZED_FK_FIELDS:
+            value = getattr(submission, f"{field}_id", None)
+        else:
+            value = getattr(submission, field)
+        if isinstance(value, Decimal):
+            normalized = value.normalize()
+            return format(normalized, "f")
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
+
+    @classmethod
+    def _snapshot_values(cls, submission, fields):
+        return {field: cls._serialize_field_value(submission, field) for field in fields}
+
+    @classmethod
+    def _apply_serialized_field_value(cls, submission, field, value):
+        if field in cls._DATE_FIELDS or field == "validity_due_date":
+            restored = date.fromisoformat(value) if value else None
+        elif field == "reviewed_at":
+            restored = datetime.fromisoformat(value) if value else None
+        elif field in cls._INT_FIELDS:
+            restored = int(value) if value not in ("", None) else None
+            if field == "discount_rate" and restored is None:
+                restored = 0
+        elif field in cls._DECIMAL_FIELDS or field in ("sse_amount", "pm_amount"):
+            restored = Decimal(str(value)) if value not in ("", None) else None
+        else:
+            restored = value
+
+        if field in cls._SERIALIZED_FK_FIELDS:
+            setattr(submission, f"{field}_id", restored)
+        else:
+            setattr(submission, field, restored)
+
+    @staticmethod
+    def _fmt_date_display(value):
+        return value.strftime("%b %d, %Y") if value else ""
+
+    @classmethod
+    def _build_inline_response(cls, submission, field, save_fields, request=None, change=None, undone=False, approval_urls=None):
+        response_data = {
+            "ok": True,
+            "field": field,
+            "field_value": cls._serialize_field_value(submission, field),
+        }
+        approval_urls = approval_urls or {}
+        if approval_urls.get("draft"):
+            response_data["approval_email_draft_url"] = approval_urls["draft"]
+        if approval_urls.get("eml"):
+            response_data["approval_email_eml_url"] = approval_urls["eml"]
+        if change is not None:
+            response_data["change_id"] = change.pk
+            response_data["undo_url"] = reverse("hub:sqr-inline-undo", args=[submission.pk, change.pk])
+            response_data["undo_expires_at"] = change.expires_at.isoformat()
+        if undone:
+            response_data["undone"] = True
+        if field == "status":
+            response_data["workflow_side_effect_warning"] = True
+            response_data["workflow_side_effect_message"] = (
+                "Status was reverted in Request Hub. Emails, Teams chats, or Outlook drafts already opened cannot be undone."
+                if undone else
+                "This status change can be reverted in Request Hub, but emails, Teams chats, or Outlook drafts cannot be undone."
+            )
+
+        save_fields = set(save_fields or [])
+        if "pm_amount" in save_fields:
+            response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
+        if "pm_manhrs" in save_fields:
+            response_data["pm_manhrs"] = str(int(submission.pm_manhrs)) if submission.pm_manhrs is not None else ""
+        if "sse_amount" in save_fields:
+            response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
+        if any(f in save_fields for f in cls._PRICE_TRIGGERS) or field in cls._PRICE_TRIGGERS:
+            da = submission.computed_discount_amount
+            tp = submission.computed_total_price
+            response_data["computed_discount_amount"] = str(da) if da is not None else ""
+            response_data["computed_total_price"] = str(tp) if tp is not None else ""
+        if "managed_support_amount" in save_fields:
+            msa = submission.managed_support_amount
+            response_data["managed_support_amount"] = str(msa) if msa is not None else ""
+        if "reviewed_at" in save_fields:
+            rat = submission.reviewed_at
+            rat_manila = rat.astimezone(MANILA_TZ) if rat else None
+            response_data["reviewed_at"] = rat_manila.strftime("%b %d, %Y") if rat_manila else ""
+        if "validity_due_date" in save_fields:
+            vdd = submission.validity_due_date
+            response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""
+        if "assigned_pm" in save_fields:
+            pm = submission.assigned_pm
+            response_data["assigned_pm_pk"] = pm.pk if pm else ""
+            response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
+        if field == "assigned_sse" or "assigned_sse" in save_fields:
+            sse = submission.assigned_sse
+            response_data["assigned_sse_name"] = (sse.get_full_name() or sse.username) if sse else ""
+        if field == "linked_request" or "linked_request" in save_fields:
+            req = submission.linked_request
+            response_data["rq_pk"] = req.pk if req else ""
+            response_data["rq_code"] = req.reference_code if req else ""
+
+        if field == "delivery_completion_signed_date" or "delivery_completion_signed_date" in save_fields:
+            response_data["post_svc_warranty_end_date"] = cls._fmt_date_display(submission.computed_post_svc_warranty_end_date)
+            response_data["support_start_date"] = cls._fmt_date_display(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = cls._fmt_date_display(submission.computed_managed_support_end_date)
+        if field in ("project_details", "customer_company", "managed_support_start_date", "managed_support_amount") or save_fields.intersection({"project_details", "customer_company", "managed_support_start_date", "managed_support_amount"}):
+            response_data["support_start_date"] = cls._fmt_date_display(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = cls._fmt_date_display(submission.computed_managed_support_end_date)
+        return response_data
 
     def post(self, request, pk):
-        if request.user.role == User.Roles.ADMIN:
-            allowed = self._ADMIN_ALLOWED
-        elif request.user.role == User.Roles.PM_ESG:
-            allowed = self._PM_ESG_ALLOWED
-        else:
+        allowed = self._allowed_fields_for_user(request.user)
+        if allowed is None:
             return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
 
         try:
@@ -3236,6 +3370,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             SqrSubmission.objects.select_related("engineer"), pk=pk
         )
         old_status = submission.status
+        original_submission = SqrSubmission.objects.get(pk=pk)
 
         if (
             submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
@@ -3335,7 +3470,18 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 if "reviewed_by" not in save_fields:
                     save_fields.append("reviewed_by")
 
-        submission.save(update_fields=save_fields)
+        tracked_fields = self._tracked_fields_for_change(field, save_fields)
+        old_values = self._snapshot_values(original_submission, tracked_fields)
+        with transaction.atomic():
+            submission.save(update_fields=save_fields)
+            change = SqrSubmissionChange.objects.create(
+                submission=submission,
+                changed_by=request.user,
+                field=field,
+                old_values=old_values,
+                new_values=self._snapshot_values(submission, tracked_fields),
+                expires_at=timezone.now() + self._UNDO_RETENTION,
+            )
 
         # Email engineer when status changed to For Revision via inline edit
         if (
@@ -3351,72 +3497,95 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             )
 
         # When status → Approved: launch the user's default email app with the draft.
-        _approval_email_draft_url = None
-        _approval_email_eml_url = None
+        approval_urls = {}
         if (
             field == "status"
             and coerced == SqrSubmission.Status.APPROVED
             and old_status != SqrSubmission.Status.APPROVED
         ):
-            _approval_email_draft_url = _build_sqr_approval_mailto_url(_get_sqr_approval_email_context(submission))
-            _approval_email_eml_url = reverse("hub:sqr-approval-email-eml", args=[submission.pk])
+            approval_urls["draft"] = _build_sqr_approval_mailto_url(_get_sqr_approval_email_context(submission))
+            approval_urls["eml"] = reverse("hub:sqr-approval-email-eml", args=[submission.pk])
 
-        response_data = {"ok": True}
-        if _approval_email_draft_url:
-            response_data["approval_email_draft_url"] = _approval_email_draft_url
-        if _approval_email_eml_url:
-            response_data["approval_email_eml_url"] = _approval_email_eml_url
-        if "pm_amount" in save_fields:
-            response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
-        if "pm_manhrs" in save_fields:
-            response_data["pm_manhrs"] = str(int(submission.pm_manhrs)) if submission.pm_manhrs is not None else ""
-        if "sse_amount" in save_fields:
-            response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
-        # Return recomputed discount amount and total price whenever any component changes
-        _PRICE_TRIGGERS = frozenset(["pm_amount", "sse_amount", "managed_support_amount", "discount_rate"])
-        if any(f in save_fields for f in _PRICE_TRIGGERS) or field in _PRICE_TRIGGERS:
-            da = submission.computed_discount_amount
-            tp = submission.computed_total_price
-            response_data["computed_discount_amount"] = str(da) if da is not None else ""
-            response_data["computed_total_price"] = str(tp) if tp is not None else ""
-        if "managed_support_amount" in save_fields:
-            msa = submission.managed_support_amount
-            response_data["managed_support_amount"] = str(msa) if msa is not None else ""
-        if "reviewed_at" in save_fields:
-            rat = submission.reviewed_at
-            rat_manila = rat.astimezone(MANILA_TZ) if rat else None
-            response_data["reviewed_at"] = rat_manila.strftime("%b %d, %Y") if rat_manila else ""
-        if "validity_due_date" in save_fields:
-            vdd = submission.validity_due_date
-            response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""
-        if "assigned_pm" in save_fields:
-            pm = submission.assigned_pm
-            response_data["assigned_pm_pk"] = pm.pk if pm else ""
-            response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
-        if field == "assigned_sse":
-            sse = submission.assigned_sse
-            response_data["assigned_sse_name"] = (sse.get_full_name() or sse.username) if sse else ""
-        if field == "linked_request":
-            req = submission.linked_request
-            response_data["rq_pk"] = req.pk if req else ""
-            response_data["rq_code"] = req.reference_code if req else ""
-        def _fmt(d):
-            return d.strftime("%b %d, %Y") if d else ""
+        response_data = self._build_inline_response(
+            submission,
+            field,
+            tracked_fields,
+            request=request,
+            change=change,
+            approval_urls=approval_urls,
+        )
+        return JsonResponse(response_data)
 
-        if field == "delivery_completion_signed_date":
-            response_data["post_svc_warranty_end_date"] = _fmt(submission.computed_post_svc_warranty_end_date)
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        if field in ("project_details", "customer_company"):
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        # Return updated AK when AJ (managed_support_start_date) changes
-        if field == "managed_support_start_date":
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        if field == "managed_support_amount":
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+
+class SqrInlineFieldUndoView(SqrInlineFieldUpdateView):
+    """AJAX endpoint that reverts a previously saved inline SQR field change."""
+
+    def post(self, request, pk, change_id):
+        allowed = self._allowed_fields_for_user(request.user)
+        if allowed is None:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        with transaction.atomic():
+            change = get_object_or_404(
+                SqrSubmissionChange.objects.select_for_update().select_related("submission"),
+                pk=change_id,
+                submission_id=pk,
+            )
+            if change.field not in allowed:
+                return JsonResponse({"ok": False, "error": "Field not allowed"}, status=400)
+            if change.is_undone:
+                return JsonResponse({"ok": False, "error": "This change was already undone."}, status=400)
+            if change.is_expired:
+                return JsonResponse({"ok": False, "error": "Undo expired for this change."}, status=400)
+
+            submission = SqrSubmission.objects.select_for_update().get(pk=pk)
+            if (
+                submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+                and change.field != "proposal_status"
+                and any(field in self._CLOSED_LOST_LOCKED_FIELDS for field in change.old_values)
+            ):
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Delivery and revenue fields are locked when Proposal Status is Closed Lost",
+                    },
+                    status=400,
+                )
+
+            current_values = self._snapshot_values(submission, change.new_values.keys())
+            if current_values != change.new_values:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Undo skipped because this SQR was changed again after the saved edit.",
+                    },
+                    status=409,
+                )
+
+            restore_fields = list(change.old_values.keys())
+            for restore_field, restore_value in change.old_values.items():
+                self._apply_serialized_field_value(submission, restore_field, restore_value)
+            update_values = {}
+            for restore_field in restore_fields:
+                if restore_field in self._SERIALIZED_FK_FIELDS:
+                    update_values[f"{restore_field}_id"] = getattr(submission, f"{restore_field}_id")
+                else:
+                    update_values[restore_field] = getattr(submission, restore_field)
+            SqrSubmission.objects.filter(pk=submission.pk).update(**update_values)
+            change.undone_at = timezone.now()
+            change.undone_by = request.user
+            change.save(update_fields=["undone_at", "undone_by"])
+            submission = SqrSubmission.objects.select_related(
+                "assigned_pm", "assigned_sse", "linked_request"
+            ).get(pk=pk)
+
+        response_data = self._build_inline_response(
+            submission,
+            change.field,
+            restore_fields,
+            request=request,
+            undone=True,
+        )
         return JsonResponse(response_data)
 
 

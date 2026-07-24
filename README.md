@@ -22,10 +22,10 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v46.8`
-- **App version shown in profile:** `v46.8`
+- **Current image tag:** `lloydismael12/request-hub:v47.0`
+- **App version shown in profile:** `v47.0`
 - **Latest update included:**
-      - Restored the compact floating AI chatbot popup while keeping the current chat embed and file upload support.
+      - Added a server-backed Undo safety net for PM/Admin inline edits on the SQR tracker.
 
 ---
 

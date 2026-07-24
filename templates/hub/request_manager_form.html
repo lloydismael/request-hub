@@ -362,29 +362,43 @@
                         <table class="table table-sm align-middle mb-0 request-activity-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Engineer</th>
-                                    <th>Activity</th>
-                                    <th>Hours</th>
-                                    <th>Billing</th>
-                                    <th>Details</th>
+                                    <th class="request-activity-col request-activity-col--date">Date</th>
+                                    <th class="request-activity-col request-activity-col--engineer">Engineer</th>
+                                    <th class="request-activity-col request-activity-col--activity">Activity</th>
+                                    <th class="request-activity-col request-activity-col--hours">Hours</th>
+                                    <th class="request-activity-col request-activity-col--billing">Billing</th>
+                                    <th class="request-activity-col request-activity-col--details">Details</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for activity_log in related_activity_logs %}
                                     <tr>
-                                        <td>{{ activity_log.request_date|date:"M d, Y" }}</td>
-                                        <td>{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}</td>
-                                        <td>{{ activity_log.get_activity_type_display }}</td>
-                                        <td>{{ activity_log.actual_hours|floatformat:1 }}</td>
-                                        <td>
+                                        <td class="request-activity-col request-activity-col--date">{{ activity_log.request_date|date:"M d, Y" }}</td>
+                                        <td class="request-activity-col request-activity-col--engineer">
+                                            <span class="request-activity-cell-text" title="{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}">
+                                                {{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}
+                                            </span>
+                                        </td>
+                                        <td class="request-activity-col request-activity-col--activity">
+                                            <span class="request-activity-cell-text" title="{{ activity_log.get_activity_type_display }}">
+                                                {{ activity_log.get_activity_type_display }}
+                                            </span>
+                                        </td>
+                                        <td class="request-activity-col request-activity-col--hours">{{ activity_log.actual_hours|floatformat:1 }}</td>
+                                        <td class="request-activity-col request-activity-col--billing">
                                             {% if activity_log.is_billable %}
                                                 <span class="badge text-bg-success">Billable</span>
                                             {% else %}
                                                 <span class="badge text-bg-secondary">Not Billable</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ activity_log.details|default:"—" }}</td>
+                                        <td class="request-activity-col request-activity-col--details">
+                                            {% if activity_log.details %}
+                                                <span class="request-activity-detail-preview" title="{{ activity_log.details }}">{{ activity_log.details }}</span>
+                                            {% else %}
+                                                <span class="request-activity-detail-preview request-activity-detail-preview--empty">—</span>
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>

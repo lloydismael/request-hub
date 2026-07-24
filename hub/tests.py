@@ -1,4 +1,6 @@
+import json
 from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.messages import get_messages
@@ -10,7 +12,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from hub.forms import RequestForm
-from hub.models import Account, Request, RequestCommunication
+from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange
 from hub.views import (
     AssignmentEmailResult,
     DashboardView,
@@ -383,3 +385,139 @@ class OnHoldRoleTests(TestCase):
         view.kwargs = {"pk": request_obj.pk}
 
         self.assertEqual(view.get_object(), request_obj)
+
+
+class SqrInlineUndoTests(TestCase):
+    def setUp(self):
+        self.engineer = User.objects.create_user(
+            username="sqr_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.engineer@example.com",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.pm@example.com",
+            first_name="SQR",
+            last_name="PM",
+        )
+        self.requestor = User.objects.create_user(
+            username="sqr_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="sqr.requestor@example.com",
+        )
+        self.account = Account.objects.create(name="SQR Undo Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="SQR Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+        )
+        self.submission = SqrSubmission.objects.create(
+            linked_request=self.request_obj,
+            engineer=self.engineer,
+            pm_esg_reviewer=self.pm,
+            customer_name="Undo Customer",
+            customer_company="ESS",
+            customer_contact="Undo Contact",
+            project_title="Undo Project",
+            project_details="Implementation",
+            sse_manhrs=Decimal("20"),
+            documentation_links="https://example.com/doc",
+            sqr_folder_link="https://example.com/sqr",
+        )
+        self.client.force_login(self.pm)
+
+    def _inline_update(self, field, value):
+        return self.client.post(
+            reverse("hub:sqr-inline-update", args=[self.submission.pk]),
+            data=json.dumps({"field": field, "value": value}),
+            content_type="application/json",
+        )
+
+    def _undo(self, change):
+        return self.client.post(reverse("hub:sqr-inline-undo", args=[self.submission.pk, change.pk]))
+
+    def test_inline_update_creates_undo_change(self):
+        response = self._inline_update("pm_manhrs", "16")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertIn("undo_url", data)
+        change = SqrSubmissionChange.objects.get(pk=data["change_id"])
+        self.assertEqual(change.field, "pm_manhrs")
+        self.assertEqual(change.old_values["pm_manhrs"], "8")
+        self.assertEqual(change.new_values["pm_manhrs"], "16")
+        self.assertEqual(change.old_values["pm_amount"], "24000")
+        self.assertEqual(change.new_values["pm_amount"], "48000")
+
+    def test_undo_restores_dependent_sse_values(self):
+        response = self._inline_update("sse_manhrs", "50")
+        self.assertEqual(response.status_code, 200)
+        change = SqrSubmissionChange.objects.get(pk=response.json()["change_id"])
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.sse_manhrs, Decimal("50"))
+        self.assertEqual(self.submission.pm_manhrs, Decimal("24"))
+
+        undo_response = self._undo(change)
+
+        self.assertEqual(undo_response.status_code, 200)
+        undo_data = undo_response.json()
+        self.assertTrue(undo_data["ok"])
+        self.assertTrue(undo_data["undone"])
+        self.submission.refresh_from_db()
+        change.refresh_from_db()
+        self.assertEqual(self.submission.sse_manhrs, Decimal("20"))
+        self.assertEqual(self.submission.sse_amount, Decimal("40000.00"))
+        self.assertEqual(self.submission.pm_manhrs, Decimal("8"))
+        self.assertEqual(self.submission.pm_amount, Decimal("24000.00"))
+        self.assertIsNotNone(change.undone_at)
+        self.assertEqual(change.undone_by, self.pm)
+
+    def test_status_undo_restores_status_metadata_with_warning(self):
+        response = self._inline_update("status", SqrSubmission.Status.APPROVED)
+        self.assertEqual(response.status_code, 200)
+        change = SqrSubmissionChange.objects.get(pk=response.json()["change_id"])
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.status, SqrSubmission.Status.APPROVED)
+        self.assertIsNotNone(self.submission.reviewed_at)
+        self.assertIsNotNone(self.submission.validity_due_date)
+
+        undo_response = self._undo(change)
+
+        self.assertEqual(undo_response.status_code, 200)
+        undo_data = undo_response.json()
+        self.assertTrue(undo_data["workflow_side_effect_warning"])
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.status, SqrSubmission.Status.FOR_PROCESSING)
+        self.assertIsNone(self.submission.reviewed_at)
+        self.assertIsNone(self.submission.validity_due_date)
+
+    def test_stale_undo_is_rejected(self):
+        response = self._inline_update("pm_manhrs", "16")
+        self.assertEqual(response.status_code, 200)
+        change = SqrSubmissionChange.objects.get(pk=response.json()["change_id"])
+        SqrSubmission.objects.filter(pk=self.submission.pk).update(
+            pm_manhrs=Decimal("24"),
+            pm_amount=Decimal("72000.00"),
+        )
+
+        undo_response = self._undo(change)
+
+        self.assertEqual(undo_response.status_code, 409)
+        self.assertFalse(undo_response.json()["ok"])
+
+    def test_non_pm_admin_cannot_inline_update(self):
+        self.client.force_login(self.engineer)
+
+        response = self._inline_update("pm_manhrs", "16")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(SqrSubmissionChange.objects.count(), 0)

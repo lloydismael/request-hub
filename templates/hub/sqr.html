@@ -2076,6 +2076,22 @@ body:not(.dark-mode) .sqr-report-badge {
     </div>
 </div>
 
+<div id="sqr-undo-toast" class="position-fixed bottom-0 end-0 m-4 p-3 rounded-4 shadow-lg border bg-body text-body d-none" role="status" aria-live="polite" style="z-index:1085; max-width:380px;">
+    <div class="d-flex align-items-start gap-3">
+        <div class="text-primary fs-5"><i class="bi bi-shield-check"></i></div>
+        <div class="flex-grow-1">
+            <div class="fw-semibold" data-sqr-undo-message>Saved.</div>
+            <div class="small text-warning-emphasis mt-1 d-none" data-sqr-undo-warning></div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn btn-sm btn-primary" data-sqr-undo-action>
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-sqr-undo-close>Dismiss</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="sqr-approval-choice-modal" id="sqr-approval-choice-modal" aria-hidden="true">
     <div class="sqr-approval-choice-modal__backdrop" data-sqr-approval-close="true"></div>
     <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-approval-choice-title">
@@ -3088,6 +3104,23 @@ body:not(.dark-mode) .sqr-report-badge {
         } catch(e) { return iso; }
     }
 
+    function fieldLabel(field) {
+        var labels = {
+            customer_name: 'Customer Name', customer_company: 'Group', customer_contact: 'Member',
+            project_title: 'Project Title', project_details: 'Scope', linked_request: 'RQ ID',
+            sse_manhrs: 'SSE Man-hrs', pm_manhrs: 'PM Man-hrs', managed_support_amount: 'Managed Support Amount',
+            discount_rate: 'Discount', status: 'Status', proposal_status: 'Proposal Status',
+            po_pnl_date: 'PO/PNL Date', assigned_pm: 'Assigned PM', assigned_sse: 'Assigned SSE',
+            delivery_start_date: 'Delivery Start', delivery_target_finish_date: 'Target Finish',
+            overall_status: 'Overall Status', delivery_health: 'Delivery Health', delivery_progress: 'Delivery Progress',
+            key_updates_risks: 'Updates/Risks', delivery_actual_finish_date: 'Actual Finish',
+            delivery_completion_signed_date: 'Completion Signed', managed_support_start_date: 'Support Start',
+            revenue_date: 'SI/Revenue Date', revenue_source: 'Revenue Source', revenue_reference_no: 'Reference No.',
+            revenue_remarks: 'Revenue Remarks', revenue_declaration: 'Revenue Declaration'
+        };
+        return labels[field] || String(field || 'field').replace(/_/g, ' ');
+    }
+
     function getDisplay(field, value) {
         if (!value && value !== 0) return '\u2013';
         if (field === 'status') {
@@ -3306,6 +3339,227 @@ body:not(.dark-mode) .sqr-report-badge {
         return w;
     }
 
+    // Helper: format a number as ₱X,XXX.XX
+    function pesoFmt(raw) {
+        if (!raw && raw !== 0) return '\u2013';
+        var n = parseFloat(raw);
+        return isNaN(n) ? String(raw) : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+
+    function applyInlineUpdateResponse(pk, field, value, cell, displayEl, data, options) {
+        options = options || {};
+        var normalizedValue = ('field_value' in data) ? data.field_value : value;
+        if (field === 'discount_rate' && (normalizedValue === '' || normalizedValue === null || normalizedValue === undefined)) {
+            normalizedValue = '0';
+        }
+        if (normalizedValue === null || normalizedValue === undefined) normalizedValue = '';
+        normalizedValue = String(normalizedValue);
+        cell.dataset.sqrValue = normalizedValue;
+        displayEl.innerHTML = getDisplay(field, normalizedValue, cell);
+        cell.classList.add('sqr-saved');
+        setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
+        var row = cell.closest('tr');
+
+        if (field === 'proposal_status' && row) {
+            row.classList.toggle('sqr-row--closed-lost', normalizedValue === 'closed_lost');
+            row.dataset.sqrProposalStatus = normalizedValue;
+        }
+        if (field === 'status' && row) {
+            row.classList.toggle('sqr-row--revision', normalizedValue === 'for_revision');
+            var dateCell = row.querySelector('td.col-sticky-0');
+            if (dateCell) {
+                var dateText = dateCell.textContent.trim();
+                if (normalizedValue === 'for_revision') {
+                    dateCell.innerHTML = '<span class="d-flex align-items-center gap-1">'
+                        + '<i class="bi bi-exclamation-triangle-fill text-danger" title="Action required: For Revision"></i>'
+                        + dateText + '</span>';
+                } else {
+                    dateCell.textContent = dateText;
+                }
+            }
+        }
+        if ('pm_manhrs' in data) {
+            var pmCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : null;
+            if (pmCell) {
+                pmCell.dataset.sqrValue = data.pm_manhrs;
+                var pmDisp = pmCell.querySelector('.sqr-display');
+                if (pmDisp) pmDisp.innerHTML = getDisplay('pm_manhrs', data.pm_manhrs, pmCell);
+            }
+        }
+        if ('pm_amount' in data) {
+            var pmSourceCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : cell;
+            var pmAmtCell = pmSourceCell ? pmSourceCell.nextElementSibling : null;
+            if (pmAmtCell) pmAmtCell.textContent = pesoFmt(data.pm_amount);
+        }
+        if ('sse_amount' in data) {
+            var sseSourceCell = row ? row.querySelector('[data-sqr-field="sse_manhrs"]') : cell;
+            var sseAmtCell = sseSourceCell ? sseSourceCell.nextElementSibling : null;
+            if (sseAmtCell) sseAmtCell.textContent = pesoFmt(data.sse_amount);
+        }
+        if ('computed_discount_amount' in data || 'computed_total_price' in data) {
+            var rowEl = cell.closest('tr');
+            if (rowEl) {
+                if ('computed_discount_amount' in data) {
+                    var daCell = rowEl.querySelector('[data-sqr-computed="discount_amount"]');
+                    if (daCell) daCell.textContent = pesoFmt(data.computed_discount_amount);
+                }
+                if ('computed_total_price' in data) {
+                    var tpCell = rowEl.querySelector('[data-sqr-computed="total_price"]');
+                    if (tpCell) tpCell.textContent = pesoFmt(data.computed_total_price);
+                }
+            }
+        }
+        if ('managed_support_amount' in data && row) {
+            var msaCell = row.querySelector('[data-sqr-field="managed_support_amount"]');
+            if (msaCell) {
+                var msaVal = data.managed_support_amount;
+                msaCell.dataset.sqrValue = msaVal;
+                var msaDisp = msaCell.querySelector('.sqr-display');
+                if (msaDisp) msaDisp.innerHTML = pesoFmt(msaVal);
+            }
+        }
+        if ('support_start_date' in data && row) {
+            var ajCellComputed = row.querySelector('[data-sqr-computed="support_start_date"]');
+            if (ajCellComputed) ajCellComputed.querySelector('.sqr-display').innerHTML = data.support_start_date || '<span class="text-muted fst-italic">NA</span>';
+        }
+        if ('managed_support_end_date' in data && row) {
+            var akCellComputed = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+            if (akCellComputed) akCellComputed.innerHTML = data.managed_support_end_date || '<span class="text-muted fst-italic">NA</span>';
+        }
+        if (('reviewed_at' in data || 'validity_due_date' in data) && row) {
+            if ('reviewed_at' in data) {
+                var raCell = row.querySelector('[data-sqr-computed="reviewed_at"]');
+                if (raCell) raCell.textContent = data.reviewed_at || '\u2013';
+            }
+            if ('validity_due_date' in data) {
+                var vddCell = row.querySelector('[data-sqr-computed="validity_due_date"]');
+                if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
+            }
+        }
+        if (field === 'revenue_date' && row) {
+            var anCell = row.querySelector('[data-sqr-field="revenue_reference_no"]');
+            if (anCell && anCell.nextElementSibling) {
+                anCell.nextElementSibling.innerHTML = normalizedValue
+                    ? '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>'
+                    : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>';
+            }
+        }
+        if ('assigned_pm_pk' in data && row) {
+            var assignedPmCell = row.querySelector('[data-sqr-field="assigned_pm"]');
+            if (assignedPmCell) {
+                var pmPk = data.assigned_pm_pk ? String(data.assigned_pm_pk) : '';
+                var pmName = data.assigned_pm_name || '\u2013';
+                assignedPmCell.dataset.sqrValue = pmPk;
+                var assignedPmDisp = assignedPmCell.querySelector('.sqr-display');
+                if (assignedPmDisp) assignedPmDisp.innerHTML = pmName;
+            }
+        }
+        if ('assigned_sse_name' in data && row) {
+            var assignedSseCell = row.querySelector('[data-sqr-field="assigned_sse"]');
+            if (assignedSseCell) {
+                var assignedSseDisp = assignedSseCell.querySelector('.sqr-display');
+                if (assignedSseDisp) assignedSseDisp.innerHTML = data.assigned_sse_name || '\u2013';
+            }
+        }
+        if ((field === 'linked_request' || 'rq_pk' in data) && row) {
+            var rqPk = data.rq_pk;
+            var rqCode = data.rq_code || '';
+            var rqCell = row.querySelector('[data-sqr-field="linked_request"]') || cell;
+            var rqDisp = rqCell.querySelector('.sqr-display');
+            if (rqDisp) {
+                rqDisp.innerHTML = (rqPk && rqCode)
+                    ? '<a href="/requests/' + rqPk + '/manage/collab/" class="text-info" target="_blank">' + rqCode + '</a>'
+                    : '\u2013';
+            }
+        }
+        if (field === 'status' && normalizedValue === 'reviewed' && !data.undone && (data.approval_email_draft_url || data.approval_email_eml_url)) {
+            var chosenApprovalUrl = options.approvalEmailAction === 'eml'
+                ? data.approval_email_eml_url
+                : data.approval_email_draft_url;
+            if (options.approvalEmailAction && chosenApprovalUrl) {
+                window.location.href = chosenApprovalUrl;
+            } else {
+                cell.title = 'Choose how to open the approved SQR quotation email.';
+                openApprovalChoiceModal(data.approval_email_draft_url, data.approval_email_eml_url);
+            }
+        }
+        if (field === 'delivery_completion_signed_date' && row) {
+            var naHtml = '<span class="text-muted fst-italic">NA</span>';
+            var aiCell = row.querySelector('[data-sqr-computed="post_svc_warranty_end_date"]');
+            if (aiCell) aiCell.innerHTML = data.post_svc_warranty_end_date || naHtml;
+            var ajCell = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
+            if (ajCell) ajCell.innerHTML = data.support_start_date || naHtml;
+            var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+            if (akCell) akCell.innerHTML = data.managed_support_end_date || naHtml;
+        }
+        if (field === 'managed_support_start_date' && row) {
+            var naHtml2 = '<span class="text-muted fst-italic">NA</span>';
+            var ajCell2 = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
+            if (ajCell2) ajCell2.innerHTML = data.support_start_date || naHtml2;
+            var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
+            if (akCell2) akCell2.innerHTML = data.managed_support_end_date || naHtml2;
+        }
+        if (typeof window.refreshSqrReports === 'function') {
+            window.refreshSqrReports();
+        }
+    }
+
+    var undoToastTimer = null;
+    function showUndoToast(context) {
+        var toast = document.getElementById('sqr-undo-toast');
+        if (!toast || !context || !context.data || !context.data.undo_url) return;
+        var message = toast.querySelector('[data-sqr-undo-message]');
+        var warning = toast.querySelector('[data-sqr-undo-warning]');
+        var undoBtn = toast.querySelector('[data-sqr-undo-action]');
+        var closeBtn = toast.querySelector('[data-sqr-undo-close]');
+        if (message) message.textContent = 'Saved ' + fieldLabel(context.field) + '.';
+        if (warning) {
+            warning.textContent = context.data.workflow_side_effect_message || '';
+            warning.classList.toggle('d-none', !context.data.workflow_side_effect_warning);
+        }
+        function hideToast() {
+            toast.classList.add('d-none');
+            if (undoToastTimer) window.clearTimeout(undoToastTimer);
+            undoToastTimer = null;
+        }
+        if (closeBtn) closeBtn.onclick = hideToast;
+        if (undoBtn) {
+            undoBtn.disabled = false;
+            undoBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>Undo';
+            undoBtn.onclick = function () {
+                undoBtn.disabled = true;
+                undoBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Undoing...';
+                fetch(context.data.undo_url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
+                .then(function(result) {
+                    if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'Unable to undo this change.');
+                    applyInlineUpdateResponse(context.pk, context.field, result.data.field_value, context.cell, context.displayEl, result.data, {});
+                    if (message) message.textContent = 'Change undone.';
+                    if (warning) {
+                        warning.textContent = result.data.workflow_side_effect_message || '';
+                        warning.classList.toggle('d-none', !result.data.workflow_side_effect_warning);
+                    }
+                    undoBtn.classList.add('d-none');
+                    window.setTimeout(hideToast, 3500);
+                })
+                .catch(function(error) {
+                    if (message) message.textContent = error && error.message ? error.message : 'Unable to undo this change.';
+                    if (warning) warning.classList.add('d-none');
+                    undoBtn.disabled = false;
+                    undoBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>Undo';
+                });
+            };
+            undoBtn.classList.remove('d-none');
+        }
+        toast.classList.remove('d-none');
+        if (undoToastTimer) window.clearTimeout(undoToastTimer);
+        undoToastTimer = window.setTimeout(hideToast, 10000);
+    }
+
     function saveField(pk, field, value, cell, displayEl, reviewNotes, options) {
         var url = '/sqr/' + pk + '/inline-update/';
         cell.classList.add('sqr-saving');
@@ -3316,207 +3570,14 @@ body:not(.dark-mode) .sqr-report-badge {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify(payload),
+            credentials: 'same-origin'
         })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
+        .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
+        .then(function(result) {
             cell.classList.remove('sqr-saving');
-            if (data.ok) {
-                var normalizedValue = value;
-                if (field === 'discount_rate' && (value === '' || value === null || value === undefined)) {
-                    normalizedValue = '0';
-                }
-                cell.dataset.sqrValue = normalizedValue;
-                displayEl.innerHTML = getDisplay(field, normalizedValue, cell);
-                cell.classList.add('sqr-saved');
-                setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
-                var row = cell.closest('tr');
-                // Sync Closed Lost NA on delivery/revenue cells after proposal_status change
-                if (field === 'proposal_status' && row) {
-                    if (value === 'closed_lost') {
-                        row.classList.add('sqr-row--closed-lost');
-                    } else {
-                        row.classList.remove('sqr-row--closed-lost');
-                    }
-                    row.dataset.sqrProposalStatus = value;
-                }
-                // Sync revision row highlighting and date-cell icon after status change
-                if (field === 'status' && row) {
-                    if (value === 'for_revision') {
-                        row.classList.add('sqr-row--revision');
-                    } else {
-                        row.classList.remove('sqr-row--revision');
-                    }
-                    // Update the date cell (col A) to show/hide the action-required icon
-                    var dateCell = row.querySelector('td.col-sticky-0');
-                    if (dateCell) {
-                        var dateText = dateCell.textContent.trim();
-                        if (value === 'for_revision') {
-                            dateCell.innerHTML = '<span class="d-flex align-items-center gap-1">'
-                                + '<i class="bi bi-exclamation-triangle-fill text-danger" title="Action required: For Revision"></i>'
-                                + dateText + '</span>';
-                        } else {
-                            dateCell.textContent = dateText;
-                        }
-                    }
-                }
-                // Helper: format a number as ₱X,XXX.XX
-                function pesoFmt(raw) {
-                    if (!raw && raw !== 0) return '\u2013';
-                    var n = parseFloat(raw);
-                    return isNaN(n) ? String(raw) : '\u20b1' + n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
-                }
-                // Refresh PM Man-hrs (col N) when sse_manhrs (col L) changes
-                if ('pm_manhrs' in data) {
-                    var pmCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : null;
-                    if (pmCell) {
-                        pmCell.dataset.sqrValue = data.pm_manhrs;
-                        var pmDisp = pmCell.querySelector('.sqr-display');
-                        if (pmDisp) pmDisp.innerHTML = getDisplay('pm_manhrs', data.pm_manhrs, pmCell);
-                    }
-                }
-                // Refresh PM Amount (col O) when pm_manhrs (col N) changes
-                if ('pm_amount' in data) {
-                    var pmSourceCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : cell;
-                    var pmAmtCell = pmSourceCell ? pmSourceCell.nextElementSibling : null;
-                    if (pmAmtCell) pmAmtCell.textContent = pesoFmt(data.pm_amount);
-                }
-                // Refresh SSE Amount (col M) when sse_manhrs (col L) changes
-                if ('sse_amount' in data) {
-                    var sseSourceCell = row ? row.querySelector('[data-sqr-field="sse_manhrs"]') : cell;
-                    var sseAmtCell = sseSourceCell ? sseSourceCell.nextElementSibling : null;
-                    if (sseAmtCell) sseAmtCell.textContent = pesoFmt(data.sse_amount);
-                }
-                // Refresh Discount Amount (col R) and Total Price (col S) when any component changes
-                if ('computed_discount_amount' in data || 'computed_total_price' in data) {
-                    var rowEl = cell.closest('tr');
-                    if (rowEl) {
-                        var pk = String(cell.dataset.sqrPk || (cell.closest('[data-sqr-pk]') ? cell.closest('[data-sqr-pk]').dataset.sqrPk : ''));
-                        if ('computed_discount_amount' in data) {
-                            var daCell = rowEl.querySelector('[data-sqr-computed="discount_amount"]');
-                            if (daCell) daCell.textContent = pesoFmt(data.computed_discount_amount);
-                        }
-                        if ('computed_total_price' in data) {
-                            var tpCell = rowEl.querySelector('[data-sqr-computed="total_price"]');
-                            if (tpCell) tpCell.textContent = pesoFmt(data.computed_total_price);
-                        }
-                    }
-                }
-                // Refresh Managed Support Svc. Amt. (col P) when scope or group changes
-                if ('managed_support_amount' in data) {
-                    if (row) {
-                        var msaCell = row.querySelector('[data-sqr-field="managed_support_amount"]');
-                        if (msaCell) {
-                            var msaVal = data.managed_support_amount;
-                            msaCell.dataset.sqrValue = msaVal;
-                            var msaDisp = msaCell.querySelector('.sqr-display');
-                            if (msaDisp) msaDisp.innerHTML = pesoFmt(msaVal);
-                        }
-                    }
-                }
-                if ('support_start_date' in data && row) {
-                    var ajCellComputed = row.querySelector('[data-sqr-computed="support_start_date"]');
-                    if (ajCellComputed) {
-                        ajCellComputed.querySelector('.sqr-display').innerHTML = data.support_start_date || '<span class="text-muted fst-italic">NA</span>';
-                    }
-                }
-                if ('managed_support_end_date' in data && row) {
-                    var akCellComputed = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
-                    if (akCellComputed) {
-                        akCellComputed.innerHTML = data.managed_support_end_date || '<span class="text-muted fst-italic">NA</span>';
-                    }
-                }
-                // Refresh Approval Date (col U) and Validity Due Date (col V) when status changes
-                if (('reviewed_at' in data || 'validity_due_date' in data) && row) {
-                    if ('reviewed_at' in data) {
-                        var raCell = row.querySelector('[data-sqr-computed="reviewed_at"]');
-                        if (raCell) raCell.textContent = data.reviewed_at || '\u2013';
-                    }
-                    if ('validity_due_date' in data) {
-                        var vddCell = row.querySelector('[data-sqr-computed="validity_due_date"]');
-                        if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
-                    }
-                }
-                // Refresh AO Revenue Status badge when revenue_date changes
-                if (field === 'revenue_date' && row) {
-                    var aoCell = row.querySelector('[data-sqr-field="revenue_date"]');
-                    if (aoCell) {
-                        var aoRow = aoCell.closest('tr');
-                        if (aoRow) {
-                            var tds = aoRow.querySelectorAll('td');
-                            // AO is the next non-editable td after AN (revenue_reference_no)
-                            var anCell = aoRow.querySelector('[data-sqr-field="revenue_reference_no"]');
-                            if (anCell && anCell.nextElementSibling) {
-                                var aoStatusCell = anCell.nextElementSibling;
-                                if (value) {
-                                    aoStatusCell.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>';
-                                } else {
-                                    aoStatusCell.innerHTML = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>';
-                                }
-                            }
-                        }
-                    }
-                }
-                // Refresh Assigned PM (col Y) when status → Approved auto-sets it
-                if ('assigned_pm_pk' in data && row) {
-                    var pmCell = row.querySelector('[data-sqr-field="assigned_pm"]');
-                    if (pmCell) {
-                        var pmPk = data.assigned_pm_pk ? String(data.assigned_pm_pk) : '';
-                        var pmName = data.assigned_pm_name || '\u2013';
-                        pmCell.dataset.sqrValue = pmPk;
-                        var pmDisp = pmCell.querySelector('.sqr-display');
-                        if (pmDisp) pmDisp.innerHTML = pmName;
-                    }
-                }
-                // For linked_request: update display with clickable REQ link
-                if (field === 'linked_request' && 'rq_pk' in data) {
-                    var rqPk = data.rq_pk;
-                    var rqCode = data.rq_code || '';
-                    var rqDisp = cell.querySelector('.sqr-display');
-                    if (rqDisp) {
-                        if (rqPk && rqCode) {
-                            rqDisp.innerHTML = '<a href="/requests/' + rqPk + '/manage/collab/" class="text-info" target="_blank">' + rqCode + '</a>';
-                        } else {
-                            rqDisp.innerHTML = '\u2013';
-                        }
-                    }
-                }
-                // Prompt the user to choose the approval email output after Approval.
-                if (field === 'status' && value === 'reviewed' && (data.approval_email_draft_url || data.approval_email_eml_url)) {
-                    var chosenApprovalUrl = options.approvalEmailAction === 'eml'
-                        ? data.approval_email_eml_url
-                        : data.approval_email_draft_url;
-                    if (options.approvalEmailAction && chosenApprovalUrl) {
-                        window.location.href = chosenApprovalUrl;
-                    } else {
-                        cell.title = 'Choose how to open the approved SQR quotation email.';
-                        openApprovalChoiceModal(data.approval_email_draft_url, data.approval_email_eml_url);
-                    }
-                }
-                // Refresh computed cols AI/AJ/AK when delivery_completion_signed_date changes
-                if (field === 'delivery_completion_signed_date' && row) {
-                    var _naHtml = '<span class="text-muted fst-italic">NA</span>';
-                    var aiCell = row.querySelector('[data-sqr-computed="post_svc_warranty_end_date"]');
-                    if (aiCell) aiCell.innerHTML = data.post_svc_warranty_end_date || _naHtml;
-                    var ajCell = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
-                    if (ajCell) ajCell.innerHTML = data.support_start_date || _naHtml;
-                    var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
-                    if (akCell) akCell.innerHTML = data.managed_support_end_date || _naHtml;
-                }
-                // Refresh AJ/AK when AJ (managed_support_start_date) is manually changed
-                if (field === 'managed_support_start_date' && row) {
-                    var _naHtml2 = '<span class="text-muted fst-italic">NA</span>';
-                    var ajCell2 = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
-                    if (ajCell2) ajCell2.innerHTML = data.support_start_date || _naHtml2;
-                    var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
-                    if (akCell2) akCell2.innerHTML = data.managed_support_end_date || _naHtml2;
-                }
-                if (typeof window.refreshSqrReports === 'function') {
-                    window.refreshSqrReports();
-                }
-            } else {
-                cell.classList.add('sqr-error');
-                setTimeout(function() { cell.classList.remove('sqr-error'); }, 2500);
-            }
+            if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'Unable to save this change.');
+            applyInlineUpdateResponse(pk, field, value, cell, displayEl, result.data, options);
+            showUndoToast({pk: pk, field: field, cell: cell, displayEl: displayEl, data: result.data});
         })
         .catch(function() {
             cell.classList.remove('sqr-saving');
