@@ -18,15 +18,16 @@ If you have changes locally, rebuild and push the image:
 $env:DOCKER_BUILDKIT=1
 # Inspect existing tags to avoid duplicates
 docker images lloydismael12/request-hub --format "{{.Tag}}" | sort
-# Update this to the next unused version (e.g., v9.2 if v9.1 already exists)
-$nextVersion = "v9.2"
+# Update this to the next unused version.
+# Patch tags are single digit only: v47.0 through v47.9, then v48.0.
+$nextVersion = "v47.1"
 $tag = "lloydismael12/request-hub:$nextVersion"
 docker build -t $tag -t lloydismael12/request-hub:latest .
 docker push $tag
 docker push lloydismael12/request-hub:latest
 ```
 
-> App Service will pull the tagged image directly from Docker Hub. Replace the registry path if you use Azure Container Registry (ACR).
+> App Service will pull the tagged image directly from Docker Hub. Replace the registry path if you use Azure Container Registry (ACR). Do not create tags such as `v47.10`; after `v47.9`, roll over to `v48.0`.
 
 ## 2. Azure Resource Setup
 
@@ -102,7 +103,7 @@ az webapp log tail --name $APP --resource-group $RESOURCE_GROUP
 
 ## 6. Ongoing Updates
 
-1. Rebuild and push the Docker image with the next tag in sequence (increment `$nextVersion`, e.g., `v9.3`).
+1. Rebuild and push the Docker image with the next tag in sequence (for example, `v47.0` → `v47.1`).
 2. Point App Service to the new tag:
 
 ```powershell
@@ -113,7 +114,7 @@ az webapp config container set ^
 az webapp restart --name $APP --resource-group $RESOURCE_GROUP
 ```
 
-3. Continue incrementing patch versions up to `v9.9`; after that, bump to `v10.0` and repeat the cycle.
+3. Continue incrementing patch versions only up to `.9` for each major/minor cycle; for example, `v47.9` rolls over to `v48.0`. Do not use `v47.10` or higher.
 4. Consider enabling continuous deployment via GitHub Actions or Azure Container Registry Webhooks for automated updates.
 
 ## Notes on Database Connectivity
