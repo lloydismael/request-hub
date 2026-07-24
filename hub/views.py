@@ -2600,6 +2600,11 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             _refresh_sqr_request_account_map(form)
 
         all_submissions = list(self.get_queryset())
+        default_assigned_scope = user.role == User.Roles.PM_ESG
+        assigned_scope_count = (
+            sum(1 for s in all_submissions if (s.assigned_pm_id or s.pm_esg_reviewer_id) == user.pk)
+            if default_assigned_scope else 0
+        )
 
         # ── Proposal Stage ──────────────────────────────────────────────────
         proposal_counts = {
@@ -2957,6 +2962,9 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "active_sqr_tab": active_tab,
                 "proposal_submissions": all_submissions,
                 "proposal_counts": proposal_counts,
+                "sqr_default_assigned_scope": default_assigned_scope,
+                "sqr_current_user_id": user.pk,
+                "sqr_assigned_scope_count": assigned_scope_count,
                 "delivery_submissions": delivery_submissions,
                 "delivery_health_counts": delivery_health_counts,
                 "revenue_data": revenue_data,

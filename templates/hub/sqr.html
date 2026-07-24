@@ -1247,6 +1247,11 @@ body:not(.dark-mode) .sqr-report-badge {
             {% endif %}
             {# Summary badges — clickable filters #}
             <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters">
+                {% if sqr_default_assigned_scope %}
+                <span class="badge bg-dark-subtle text-dark border border-dark-subtle sqr-assigned-scope-filter" data-sqr-assigned-scope="mine" style="cursor:pointer;">
+                    <i class="bi bi-person-check me-1"></i>My Assigned SQR: {{ sqr_assigned_scope_count }}
+                </span>
+                {% endif %}
                 <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="" style="cursor:pointer;">Total: {{ proposal_counts.total }}</span>
                 <span class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted" style="cursor:pointer;">
                     <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
@@ -1688,6 +1693,7 @@ body:not(.dark-mode) .sqr-report-badge {
                             data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
                             data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
                             data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-assigned-pm-id="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"
                             data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
                             data-sqr-overall-status="{{ item.overall_status|default:'' }}"
                             data-sqr-health="{{ item.delivery_health|default:'' }}"
@@ -3634,8 +3640,11 @@ body:not(.dark-mode) .sqr-report-badge {
                 var pmPk = data.assigned_pm_pk ? String(data.assigned_pm_pk) : '';
                 var pmName = data.assigned_pm_name || '\u2013';
                 assignedPmCell.dataset.sqrValue = pmPk;
+                row.dataset.sqrAssignedPmId = pmPk;
+                row.dataset.sqrAssignedPm = data.assigned_pm_name || '';
                 var assignedPmDisp = assignedPmCell.querySelector('.sqr-display');
                 if (assignedPmDisp) assignedPmDisp.innerHTML = pmName;
+                if (typeof window.applySqrTableFilter === 'function') window.applySqrTableFilter();
             }
         }
         if ('assigned_sse_name' in data && row) {
@@ -4032,6 +4041,9 @@ body:not(.dark-mode) .sqr-report-badge {
     var billedOnlyCheckbox = document.getElementById('sqr-table-filter-billed-only');
     var resetButton = document.getElementById('sqr-table-filter-reset');
     var resultsMeta = document.getElementById('sqr-filter-results-meta');
+    var defaultAssignedScopeEnabled = {% if sqr_default_assigned_scope %}true{% else %}false{% endif %};
+    var currentUserId = '{{ sqr_current_user_id|default:"" }}';
+    var assignedScopeActive = defaultAssignedScopeEnabled;
 
     function normalizeText(value) {
         return (value || '').toString().trim().toLowerCase();
@@ -4081,7 +4093,16 @@ body:not(.dark-mode) .sqr-report-badge {
 
     function updateBadgeState() {
         document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
-            if (badge.dataset.sqrFilter === activeFilter) {
+            if (!assignedScopeActive && badge.dataset.sqrFilter === activeFilter) {
+                badge.style.outline = '2px solid currentColor';
+                badge.style.outlineOffset = '2px';
+            } else {
+                badge.style.outline = '';
+                badge.style.outlineOffset = '';
+            }
+        });
+        document.querySelectorAll('.sqr-assigned-scope-filter').forEach(function (badge) {
+            if (assignedScopeActive) {
                 badge.style.outline = '2px solid currentColor';
                 badge.style.outlineOffset = '2px';
             } else {
@@ -4139,6 +4160,7 @@ body:not(.dark-mode) .sqr-report-badge {
             var matchesLinkedRequest = !linkedRequestOnly || (row.dataset.sqrLinkedRequest || '') === 'yes';
             var matchesAssignedSse = !assignedSseOnly || !!normalizeText(row.dataset.sqrAssignedSse || '');
             var matchesBilled = !billedOnly || (row.dataset.sqrRevenueStatus || '') === 'billed';
+            var matchesAssignedScope = !assignedScopeActive || !currentUserId || String(row.dataset.sqrAssignedPmId || '') === String(currentUserId);
             var rowText = [
                 row.dataset.sqrRef,
                 row.dataset.sqrCustomer,
@@ -4163,6 +4185,7 @@ body:not(.dark-mode) .sqr-report-badge {
                 && matchesLinkedRequest
                 && matchesAssignedSse
                 && matchesBilled
+                && matchesAssignedScope
                 && matchesQuery;
 
             row.style.display = isVisible ? '' : 'none';
@@ -4171,7 +4194,9 @@ body:not(.dark-mode) .sqr-report-badge {
 
         if (resultsMeta) {
             var activeFilterCount = countActiveFilters();
-            if (visibleCount === rows.length && activeFilterCount === 0) {
+            if (assignedScopeActive) {
+                resultsMeta.textContent = 'Showing my assigned SQR: ' + visibleCount + ' of ' + rows.length + ' rows';
+            } else if (visibleCount === rows.length && activeFilterCount === 0) {
                 resultsMeta.textContent = 'Showing all rows';
             } else {
                 resultsMeta.textContent = 'Showing ' + visibleCount + ' of ' + rows.length + ' rows' + (activeFilterCount ? ' • ' + activeFilterCount + ' active filter' + (activeFilterCount === 1 ? '' : 's') : '');
@@ -4182,6 +4207,7 @@ body:not(.dark-mode) .sqr-report-badge {
     document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
         badge.addEventListener('click', function () {
             var filter = badge.dataset.sqrFilter;
+            assignedScopeActive = false;
             if (activeFilter === filter) {
                 // clicking the same badge again clears the filter
                 activeFilter = '';
@@ -4194,9 +4220,21 @@ body:not(.dark-mode) .sqr-report-badge {
         });
     });
 
+    document.querySelectorAll('.sqr-assigned-scope-filter').forEach(function (badge) {
+        badge.addEventListener('click', function () {
+            assignedScopeActive = true;
+            activeFilter = '';
+            syncPresetControls(activeFilter);
+            updateBadgeState();
+            applyFilter();
+        });
+    });
+
     [searchInput, overallStatusSelect, healthSelect, revenueDeclarationSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
         if (!control) return;
         control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', function () {
+            assignedScopeActive = false;
+            updateBadgeState();
             applyFilter();
         });
     });
@@ -4204,12 +4242,15 @@ body:not(.dark-mode) .sqr-report-badge {
     [linkedRequestCheckbox, assignedSseCheckbox, billedOnlyCheckbox].forEach(function (control) {
         if (!control) return;
         control.addEventListener('change', function () {
+            assignedScopeActive = false;
+            updateBadgeState();
             applyFilter();
         });
     });
 
     if (statusSelect) {
         statusSelect.addEventListener('change', function () {
+            assignedScopeActive = false;
             syncActiveBadgeFromControls();
             updateBadgeState();
             applyFilter();
@@ -4218,6 +4259,7 @@ body:not(.dark-mode) .sqr-report-badge {
 
     if (proposalStatusSelect) {
         proposalStatusSelect.addEventListener('change', function () {
+            assignedScopeActive = false;
             syncActiveBadgeFromControls();
             updateBadgeState();
             applyFilter();
@@ -4227,6 +4269,7 @@ body:not(.dark-mode) .sqr-report-badge {
     if (resetButton) {
         resetButton.addEventListener('click', function () {
             activeFilter = '';
+            assignedScopeActive = defaultAssignedScopeEnabled;
             if (searchInput) searchInput.value = '';
             if (statusSelect) statusSelect.value = '';
             if (proposalStatusSelect) proposalStatusSelect.value = '';
@@ -4247,6 +4290,7 @@ body:not(.dark-mode) .sqr-report-badge {
         });
     }
 
+    window.applySqrTableFilter = applyFilter;
     updateBadgeState();
     applyFilter();
 })();
