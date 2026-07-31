@@ -78,18 +78,13 @@ main.container {
 .sqr-stage-delivery { background-color: #162616; color: #86efac; }
 .sqr-stage-revenue  { background-color: #27162b; color: #d8b4fe; }
 .sqr-stage-action   { background-color: #111827; color: #94a3b8; }
-/* White text on column-letter and column-name rows for all stage-coloured headers */
-.sqr-col-letter th.sqr-stage-proposal,
-.sqr-col-letter th.sqr-stage-delivery,
-.sqr-col-letter th.sqr-stage-revenue,
-.sqr-col-name   th.sqr-stage-proposal,
-.sqr-col-name   th.sqr-stage-delivery,
-.sqr-col-name   th.sqr-stage-revenue { color: #ffffff !important; }
+/* White text on column-name row for all stage-coloured headers */
+.sqr-col-name th.sqr-stage-proposal,
+.sqr-col-name th.sqr-stage-delivery,
+.sqr-col-name th.sqr-stage-revenue { color: #ffffff !important; }
 
-/* Column letter row */
-.sqr-col-letter { background-color: #0d1117; color: #4b5563; font-size: 0.67rem; text-align: center; }
 /* Column name row */
-.sqr-col-name   { background-color: #1a1f2e; color: #e2e8f0; }
+.sqr-col-name { background-color: #1a1f2e; color: #e2e8f0; }
 
 /* Divider shadow after last frozen column (E) — mimics Excel frozen-pane separator */
 .sqr-tracker .col-sticky-border {
@@ -1707,25 +1702,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { backgro
                             {# Action col #}
                             <th class="sqr-stage-action text-center">Action</th>
                         </tr>
-                        {# Row 2: Column letters #}
-                        <tr class="sqr-col-letter">
-                            <th class="col-sticky-0">A</th>
-                            <th class="col-sticky-1">B</th>
-                            <th class="col-sticky-2">C</th>
-                            <th class="col-sticky-3">D</th>
-                            <th class="col-sticky-4 col-sticky-border">E</th>
-                            <th class="sqr-stage-proposal">F</th>
-                            <th class="sqr-stage-proposal">G</th><th class="sqr-stage-proposal">H</th><th class="sqr-stage-proposal">I</th><th class="sqr-stage-proposal">J</th><th class="sqr-stage-proposal">K</th>
-                            <th class="sqr-stage-proposal">L</th><th class="sqr-stage-proposal">M</th><th class="sqr-stage-proposal">N</th><th class="sqr-stage-proposal">O</th><th class="sqr-stage-proposal">P</th>
-                            <th class="sqr-stage-proposal">Q</th><th class="sqr-stage-proposal">R</th><th class="sqr-stage-proposal">S</th><th class="sqr-stage-proposal">T</th><th class="sqr-stage-proposal">U</th>
-                            <th class="sqr-stage-proposal">V</th><th class="sqr-stage-proposal">W</th>
-                            <th class="sqr-stage-delivery">X</th><th class="sqr-stage-delivery">Y</th><th class="sqr-stage-delivery">Z</th><th class="sqr-stage-delivery">AA</th><th class="sqr-stage-delivery">AB</th>
-                            <th class="sqr-stage-delivery">AC</th><th class="sqr-stage-delivery">AD</th><th class="sqr-stage-delivery">AE</th><th class="sqr-stage-delivery">AF</th><th class="sqr-stage-delivery">AG</th>
-                            <th class="sqr-stage-delivery">AH</th><th class="sqr-stage-delivery">AI</th><th class="sqr-stage-delivery">AJ</th><th class="sqr-stage-delivery">AK</th>
-                            <th class="sqr-stage-revenue">AL</th><th class="sqr-stage-revenue">AM</th><th class="sqr-stage-revenue">AN</th><th class="sqr-stage-revenue">AO</th><th class="sqr-stage-revenue">AP</th><th class="sqr-stage-revenue">AQ</th>
-                            <th>&mdash;</th>
-                        </tr>
-                        {# Row 3: Column names #}
+                        {# Row 2: Column names #}
                         <tr class="sqr-col-name">
                             <th class="col-sticky-0">SQR Date</th>
                             <th class="col-sticky-1">SQR ID</th>
