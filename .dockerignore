@@ -3,6 +3,12 @@
 .gitignore
 .vscode
 
+# Assistant/editor customization artifacts not required at runtime
+.agents/
+.claude/
+.cline/
+.cursor/
+
 # Python caches and local virtual envs
 __pycache__/
 *.py[cod]
@@ -21,10 +27,16 @@ venv/
 .mypy_cache/
 .coverage
 htmlcov/
+_inspect_*.py
+views_diff.patch
 
 # Collected/static artifacts generated locally
 staticfiles/
 media/
+
+# Deployment/docs not needed in the runtime image
+docs/
+README.md
 
 # OS noise
 .DS_Store

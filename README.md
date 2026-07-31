@@ -11,7 +11,7 @@
 Coordinate engineering work, enforce SLA timelines, and gain operational visibility — all from a single web portal.
 
 [![Docker](https://img.shields.io/badge/Docker-lloydismael12%2Frequest--hub-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/lloydismael12/request-hub)
-[![Latest Tag](https://img.shields.io/badge/Latest-v43.7-0ea5e9)](https://hub.docker.com/r/lloydismael12/request-hub/tags)
+[![Latest Tag](https://img.shields.io/badge/Latest-v48.3-0ea5e9)](https://hub.docker.com/r/lloydismael12/request-hub/tags)
 [![Django](https://img.shields.io/badge/Django-4.2-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Azure-336791?logo=postgresql&logoColor=white)](https://azure.microsoft.com/en-us/products/postgresql/)
@@ -22,10 +22,10 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v48.1`
-- **App version shown in profile:** `v48.1`
+- **Current image tag:** `lloydismael12/request-hub:v48.3`
+- **App version shown in profile:** `v48.3`
 - **Latest update included:**
-      - Added PM-ESG default SQR view for assigned records while preserving Total/filter access to all SQR.
+      - Hardened container supply chain with a pinned Python Alpine base image, locked Python dependencies, reduced Docker context, CI vulnerability scanning, and SBOM generation.
 
 ---
 
@@ -366,22 +366,26 @@ Open `http://127.0.0.1:8000/`
 ### Pull and run from Docker Hub
 
 ```powershell
-docker run --rm -p 8000:8000 --env-file .env lloydismael12/request-hub:latest
+docker run --rm -p 8000:8000 --env-file .env lloydismael12/request-hub:v48.3
 ```
 
 ### Build locally
 
 ```powershell
+$nextVersion = "v48.3"
 $containers = docker ps --format "{{.ID}} {{.Ports}}" | Where-Object { $_ -match "0\.0\.0\.0:8000->8000/tcp|:::8000->8000/tcp" }
 $containers | ForEach-Object { docker rm -f (($_ -split ' ')[0]) }
-docker build -t lloydismael12/request-hub:v46.8 -t lloydismael12/request-hub:latest .
-docker run --rm -p 8000:8000 --env-file .env -e APP_VERSION=v46.8 lloydismael12/request-hub:v46.8
+docker build --pull --no-cache --build-arg APP_VERSION=$nextVersion -t lloydismael12/request-hub:$nextVersion .
+docker run --rm -p 8000:8000 --env-file .env -e APP_VERSION=$nextVersion lloydismael12/request-hub:$nextVersion
 ```
 
-### Push to Docker Hub
+### Scan and push to Docker Hub
 
 ```powershell
-docker push lloydismael12/request-hub:v43.7
+$nextVersion = "v48.3"
+docker scout cves lloydismael12/request-hub:$nextVersion
+docker push lloydismael12/request-hub:$nextVersion
+docker tag lloydismael12/request-hub:$nextVersion lloydismael12/request-hub:latest
 docker push lloydismael12/request-hub:latest
 ```
 
