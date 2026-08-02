@@ -1091,6 +1091,86 @@ body:not(.dark-mode) .sqr-report-badge {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Alternate ESG Performance Tracker View ──────────────────────────── */
+.sqr-view-panel[hidden] { display: none !important; }
+.sqr-view-toggle {
+    display: inline-flex;
+    gap: 0.35rem;
+    padding: 0.25rem;
+    border: 1px solid rgba(148,163,184,0.18);
+    border-radius: 999px;
+    background: rgba(15,23,42,0.22);
+}
+.sqr-view-toggle .btn {
+    border-radius: 999px;
+    padding-inline: 0.85rem;
+}
+.sqr-esg-note {
+    border: 1px solid rgba(14,165,233,0.24);
+    background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(99,102,241,0.08));
+    border-radius: 0.85rem;
+    padding: 0.75rem 0.9rem;
+    color: rgba(226,232,240,0.84);
+}
+.sqr-esg-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.78rem;
+    min-width: max-content;
+    table-layout: auto;
+}
+.sqr-esg-table th,
+.sqr-esg-table td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.4rem 0.65rem;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    vertical-align: middle;
+}
+.sqr-esg-table th:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; white-space: nowrap; }
+.sqr-esg-table td:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; }
+.sqr-esg-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background-color: #1a1f2e !important;
+    color: #e2e8f0;
+    font-weight: 700;
+}
+.sqr-esg-table .sqr-esg-sticky-0 { position: sticky; left: 0px; z-index: 3; width: 110px; min-width: 110px; max-width: 110px; }
+.sqr-esg-table .sqr-esg-sticky-1 { position: sticky; left: 110px; z-index: 3; width: 130px; min-width: 130px; max-width: 130px; }
+.sqr-esg-table .sqr-esg-sticky-2 { position: sticky; left: 240px; z-index: 3; width: 144px; min-width: 144px; max-width: 144px; }
+.sqr-esg-table thead .sqr-esg-sticky-0,
+.sqr-esg-table thead .sqr-esg-sticky-1,
+.sqr-esg-table thead .sqr-esg-sticky-2 { z-index: 5; background-color: #1a1f2e !important; }
+.sqr-esg-table tbody td.sqr-esg-sticky-0,
+.sqr-esg-table tbody td.sqr-esg-sticky-1,
+.sqr-esg-table tbody td.sqr-esg-sticky-2 { background-color: #151929 !important; }
+.sqr-esg-table tbody tr:hover td.sqr-esg-sticky-0,
+.sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1,
+.sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { background-color: #1d2236 !important; }
+.sqr-esg-table .sqr-esg-sticky-border {
+    border-right: 2px solid #38bdf8 !important;
+    box-shadow: 4px 0 8px -2px rgba(0,0,0,0.6) !important;
+}
+.sqr-esg-table .sqr-esg-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.sqr-esg-money { text-align: right; font-variant-numeric: tabular-nums; }
+.sqr-esg-status { font-weight: 700; letter-spacing: 0.02em; }
+body:not(.dark-mode) .sqr-view-toggle { background: rgba(241,245,249,0.86); border-color: rgba(148,163,184,0.35); }
+body:not(.dark-mode) .sqr-esg-note { color: #334155; background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(99,102,241,0.06)); }
+body:not(.dark-mode) .sqr-esg-table thead th { background-color: #1a1f2e !important; color: #e2e8f0; border-color: rgba(255,255,255,0.08); }
+body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-0,
+body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-1,
+body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-2 { background-color: #1a1f2e !important; }
+body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-0,
+body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-1,
+body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-2 { background-color: #f0f4f8 !important; }
+body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-0,
+body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1,
+body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { background-color: #e2e8f0 !important; }
 </style>
 
 <div class="row g-4">
@@ -1110,9 +1190,9 @@ body:not(.dark-mode) .sqr-report-badge {
                             <i class="bi bi-funnel-fill me-1"></i>Filter
                         </button>
                         {% endif %}
-                        <a href="{% url 'hub:sqr-export' %}" class="btn btn-sm btn-outline-success">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="sqr-export-choice-btn">
                             <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
-                        </a>
+                        </button>
                     {% endif %}
                     {% if is_admin and sqr_import_form %}
                         <button type="button" class="btn btn-sm btn-outline-info" id="import-sqr-btn">
@@ -1127,6 +1207,16 @@ body:not(.dark-mode) .sqr-report-badge {
                 </div>
             </div>
             {% if active_sqr_tab != 'reports' %}
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                <div class="sqr-view-toggle" role="group" aria-label="SQR table view selector">
+                    <button type="button" class="btn btn-sm btn-primary" data-sqr-view-button="tracker" aria-pressed="true">
+                        <i class="bi bi-table me-1"></i>SQR Tracker
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-sqr-view-button="esg" aria-pressed="false">
+                        <i class="bi bi-kanban me-1"></i>ESG Performance Tracker <span class="badge rounded-pill text-bg-warning ms-1">Prototype</span>
+                    </button>
+                </div>
+            </div>
             <div class="collapse" id="sqr-table-filter-panel">
                 <div class="sqr-filter-toolbar">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
@@ -1585,7 +1675,7 @@ body:not(.dark-mode) .sqr-report-badge {
             </script>
         {% else %}
         {# ── Main Tracker Table ────────────────────────────────────────────── #}
-        <div class="glass-card p-2">
+        <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="tracker">
             <div class="sqr-tracker-wrap">
                 <table class="sqr-tracker table-hover">
                     <thead>
@@ -2084,6 +2174,147 @@ body:not(.dark-mode) .sqr-report-badge {
                 </table>
             </div>
         </div>
+
+        <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="esg" hidden>
+            <div class="sqr-esg-note small mb-2">
+                <i class="bi bi-info-circle me-1"></i>
+                Display-only ESG Performance Tracker layout. Dash values represent columns from the reference tracker that are not stored in the current SQR schema.
+            </div>
+            <div class="sqr-tracker-wrap">
+                <table class="sqr-esg-table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="sqr-esg-sticky-0">Account Name</th>
+                            <th class="sqr-esg-sticky-1">Service Description</th>
+                            <th class="sqr-esg-sticky-2 sqr-esg-sticky-border">Project Name</th>
+                            <th>SSE1</th>
+                            <th>SSE2</th>
+                            <th>SSE3</th>
+                            <th>Project?</th>
+                            <th>PM</th>
+                            <th>Status</th>
+                            <th>Start and Finish Dates</th>
+                            <th>% Complete</th>
+                            <th>Key Updates</th>
+                            <th>Active Risks/Issues</th>
+                            <th>Scope Status</th>
+                            <th>Schedule Status</th>
+                            <th>Budget Status</th>
+                            <th>Folder</th>
+                            <th>Quoted SSE hrs</th>
+                            <th>Billed SSE hrs</th>
+                            <th>Quoted PM hrs</th>
+                            <th>Billed PM hrs</th>
+                            <th>Project Management</th>
+                            <th>Deployment</th>
+                            <th>On-Call</th>
+                            <th>Total Revenue</th>
+                            <th>Revenue?</th>
+                            <th>SI Type</th>
+                            <th>SI Reference</th>
+                            <th>SI Date</th>
+                            <th>Remarks</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in proposal_submissions %}
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}"
+                            data-sqr-status="{{ item.status }}"
+                            data-sqr-proposal-status="{{ item.proposal_status|default:'' }}"
+                            data-sqr-ref="{{ item.reference_code|default:'' }}"
+                            data-sqr-customer="{{ item.customer_name|default:''|escapejs }}"
+                            data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
+                            data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
+                            data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-assigned-pm-id="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"
+                            data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-overall-status="{{ item.overall_status|default:'' }}"
+                            data-sqr-health="{{ item.delivery_health|default:'' }}"
+                            data-sqr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
+                            data-sqr-revenue-source="{{ item.revenue_source|default:'' }}"
+                            data-sqr-revenue-status="{% if item.revenue_date %}billed{% else %}for_billing{% endif %}"
+                            data-sqr-created-at="{{ item.created_at|date:'Y-m-d' }}"
+                            data-sqr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
+                            data-engineer-email="{{ item.engineer.email|default:'' }}"
+                            data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}"
+                            data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
+                            <td class="sqr-esg-sticky-0 fw-semibold">{{ item.customer_name|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-sticky-1">{{ item.project_title|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-sticky-2 sqr-esg-sticky-border">{{ item.customer_name|default:"" }}{% if item.customer_name and item.project_title %} - {% endif %}{{ item.project_title|default:"&ndash;" }}</td>
+                            <td>{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% elif item.engineer %}{{ item.engineer.get_full_name|default:item.engineer.username }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-muted">&ndash;</td>
+                            <td class="text-muted">&ndash;</td>
+                            <td>{% if item.assigned_pm or item.pm_esg_reviewer or item.delivery_start_date %}Yes{% else %}No{% endif %}</td>
+                            <td>{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-status">
+                                {% if item.overall_status == 'on_hold' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">ON HOLD</span>
+                                {% elif item.overall_status == 'completed' or item.delivery_health == 'completed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">COMPLETED</span>
+                                {% elif item.delivery_start_date or item.overall_status == 'in_progress' or item.proposal_status == 'closed_won' %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">ONGOING</span>
+                                {% elif item.status == 'for_revision' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">FOR REVISION</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark border">NOT STARTED</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.delivery_start_date or item.delivery_target_finish_date or item.delivery_actual_finish_date %}
+                                    {{ item.delivery_start_date|date:"n/j/y"|default:"TBD" }}-{% if item.delivery_actual_finish_date %}{{ item.delivery_actual_finish_date|date:"n/j/y" }}{% elif item.delivery_target_finish_date %}{{ item.delivery_target_finish_date|date:"n/j/y" }}{% else %}TBD{% endif %}
+                                {% else %}&ndash;{% endif %}
+                            </td>
+                            <td style="min-width:120px;">
+                                {% if item.delivery_progress is not None %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:6px;min-width:58px;">
+                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}" style="width:{{ item.delivery_progress }}%"></div>
+                                        </div>
+                                        <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
+                                    </div>
+                                {% else %}&ndash;{% endif %}
+                            </td>
+                            <td class="sqr-esg-wrap">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-wrap">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td>{% if item.project_details %}{{ item.project_details|truncatechars:35 }}{% else %}&ndash;{% endif %}</td>
+                            <td>{% if item.delivery_target_finish_date %}{{ item.delivery_target_finish_date|date:"n/j/y" }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-muted">&ndash;</td>
+                            <td>{% if item.sqr_folder_link %}<a href="{{ item.sqr_folder_link }}" target="_blank" rel="noopener" class="text-info">Folder</a>{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end">{% if item.sse_manhrs != None %}{{ item.sse_manhrs|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-muted text-end">&ndash;</td>
+                            <td class="text-end">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-muted text-end">&ndash;</td>
+                            <td class="sqr-esg-money">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money fw-semibold">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td>{% if item.revenue_date or item.revenue_declaration == 'declared' %}Yes{% else %}No{% endif %}</td>
+                            <td>{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</td>
+                            <td>{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
+                            <td>{{ item.revenue_date|date:"j-M-y"|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-wrap">{{ item.revenue_remarks|default:item.remarks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="text-center" style="min-width:110px;">
+                                {% if is_pm %}
+                                    <button type="button" class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn" data-history-url="{% url 'hub:sqr-history' item.pk %}" data-sqr-ref="{{ item.reference_code|default:'' }}" title="View History">
+                                        <i class="bi bi-clock-history me-1"></i>History
+                                    </button>
+                                {% else %}
+                                    <span class="text-muted">&ndash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="31" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No SQR submissions yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
         {% endif %}
 
     </div>
@@ -2134,6 +2365,40 @@ body:not(.dark-mode) .sqr-report-badge {
     </div>
 </div>
 
+{% if is_pm %}
+<div class="sqr-approval-choice-modal" id="sqr-export-choice-modal" aria-hidden="true">
+    <div class="sqr-approval-choice-modal__backdrop" data-sqr-export-close="true"></div>
+    <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-export-choice-title">
+        <span class="sqr-approval-choice-modal__eyebrow"><i class="bi bi-file-earmark-excel"></i> Export Excel</span>
+        <h3 class="h4 mt-3 mb-2" id="sqr-export-choice-title">What report do you want to export?</h3>
+        <p class="text-muted mb-0">Choose the Excel report format to download.</p>
+        <div class="sqr-approval-choice-modal__actions">
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--draft" id="sqr-export-tracker-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-clipboard-data"></i></span>
+                <span>
+                    <span class="sqr-approval-option__label">SQR Tracker</span>
+                    <span class="sqr-approval-option__hint">Download the standard SQR tracker Excel file.</span>
+                </span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-download"></i></span>
+            </button>
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--eml" id="sqr-export-esg-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-graph-up-arrow"></i></span>
+                <span>
+                    <span class="sqr-approval-option__label">ESG Performance Tracker</span>
+                    <span class="sqr-approval-option__hint">Download the ESG performance tracker Excel file.</span>
+                </span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-download"></i></span>
+            </button>
+        </div>
+        <div class="sqr-approval-choice-modal__footer">
+            <button type="button" class="btn btn-outline-secondary" id="sqr-export-cancel-btn">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="sqr-approval-choice-modal" id="sqr-approval-choice-modal" aria-hidden="true">
     <div class="sqr-approval-choice-modal__backdrop" data-sqr-approval-close="true"></div>
     <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-approval-choice-title">
@@ -2165,6 +2430,58 @@ body:not(.dark-mode) .sqr-report-badge {
         </div>
     </div>
 </div>
+
+{% if is_pm %}
+<script>
+(function () {
+    'use strict';
+    var exportBtn = document.getElementById('sqr-export-choice-btn');
+    var exportModal = document.getElementById('sqr-export-choice-modal');
+    var sqrTrackerBtn = document.getElementById('sqr-export-tracker-btn');
+    var esgTrackerBtn = document.getElementById('sqr-export-esg-btn');
+    var cancelBtn = document.getElementById('sqr-export-cancel-btn');
+    var exportBaseUrl = '{% url "hub:sqr-export" %}';
+
+    function setExportChoiceVisibility(isVisible) {
+        if (!exportModal) return;
+        exportModal.classList.toggle('is-visible', !!isVisible);
+        exportModal.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    function openExportChoiceModal() {
+        setExportChoiceVisibility(true);
+    }
+
+    function closeExportChoiceModal() {
+        setExportChoiceVisibility(false);
+    }
+
+    function downloadReport(reportType) {
+        closeExportChoiceModal();
+        window.location.href = exportBaseUrl + '?report=' + encodeURIComponent(reportType);
+    }
+
+    if (exportBtn) exportBtn.addEventListener('click', openExportChoiceModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeExportChoiceModal);
+    if (sqrTrackerBtn) sqrTrackerBtn.addEventListener('click', function () { downloadReport('sqr'); });
+    if (esgTrackerBtn) esgTrackerBtn.addEventListener('click', function () { downloadReport('esg'); });
+
+    if (exportModal) {
+        exportModal.addEventListener('click', function (event) {
+            if (event.target && event.target.getAttribute('data-sqr-export-close') === 'true') {
+                closeExportChoiceModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && exportModal && exportModal.classList.contains('is-visible')) {
+            closeExportChoiceModal();
+        }
+    });
+})();
+</script>
+{% endif %}
 
 {% if is_admin and sqr_import_form %}
 <div class="requestor-modal" id="import-sqr-modal" aria-hidden="true">
@@ -3990,7 +4307,7 @@ body:not(.dark-mode) .sqr-report-badge {
         activeCell = null;
     }
 
-    document.querySelectorAll('.sqr-tracker td').forEach(function(td) {
+    document.querySelectorAll('.sqr-tracker td, .sqr-esg-table td').forEach(function(td) {
         td.addEventListener('mouseenter', function(e) {
             if (td.classList.contains('sqr-editing')) return;
             if (!isClipped(td)) return;
@@ -4008,6 +4325,43 @@ body:not(.dark-mode) .sqr-report-badge {
             hidePreview();
         });
     });
+})();
+</script>
+
+<script>
+// ── SQR table view toggle ────────────────────────────────────────────────
+(function () {
+    var storageKey = 'requestHub.sqr.tableView';
+    var buttons = document.querySelectorAll('[data-sqr-view-button]');
+    var panels = document.querySelectorAll('[data-sqr-view-panel]');
+    if (!buttons.length || !panels.length) return;
+
+    function setView(viewName) {
+        var activeView = viewName === 'esg' ? 'esg' : 'tracker';
+        buttons.forEach(function (button) {
+            var isActive = button.dataset.sqrViewButton === activeView;
+            button.classList.toggle('btn-primary', isActive);
+            button.classList.toggle('btn-outline-primary', !isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+        panels.forEach(function (panel) {
+            panel.hidden = panel.dataset.sqrViewPanel !== activeView;
+        });
+        try { window.localStorage.setItem(storageKey, activeView); } catch (error) {}
+    }
+
+    buttons.forEach(function (button) {
+        button.addEventListener('click', function () {
+            setView(button.dataset.sqrViewButton);
+            if (typeof window.applySqrTableFilter === 'function') {
+                window.applySqrTableFilter();
+            }
+        });
+    });
+
+    var savedView = 'tracker';
+    try { savedView = window.localStorage.getItem(storageKey) || 'tracker'; } catch (error) {}
+    setView(savedView);
 })();
 </script>
 
@@ -4105,7 +4459,7 @@ body:not(.dark-mode) .sqr-report-badge {
     }
 
     function applyFilter() {
-        var rows = document.querySelectorAll('.sqr-tracker tbody tr');
+        var rows = document.querySelectorAll('.sqr-tracker tbody tr, .sqr-esg-table tbody tr');
         var query = normalizeText(searchInput && searchInput.value ? searchInput.value : '');
         var statusValue = statusSelect ? statusSelect.value : '';
         var proposalValue = proposalStatusSelect ? proposalStatusSelect.value : '';

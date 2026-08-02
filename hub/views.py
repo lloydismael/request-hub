@@ -5136,9 +5136,24 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             "assigned_pm", "assigned_sse", "linked_request",
         ).order_by("-created_at")
 
+        report_type = request.GET.get("report", "sqr")
+        if report_type not in {"sqr", "esg"}:
+            report_type = "sqr"
+
+        report_config = {
+            "sqr": {
+                "worksheet_title": "SQR",
+                "filename_prefix": "sqr-export",
+            },
+            "esg": {
+                "worksheet_title": "ESG Performance Tracker",
+                "filename_prefix": "esg-performance-tracker",
+            },
+        }[report_type]
+
         wb = Workbook()
         ws = wb.active
-        ws.title = "SQR"
+        ws.title = report_config["worksheet_title"]
 
         # ── Styles ──────────────────────────────────────────────
         hdr_font  = Font(bold=True, color="FFFFFF", size=9)
@@ -5192,7 +5207,8 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             buf.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        response["Content-Disposition"] = f'attachment; filename="sqr-export-{timestamp}.xlsx"'
+        filename_prefix = report_config["filename_prefix"]
+        response["Content-Disposition"] = f'attachment; filename="{filename_prefix}-{timestamp}.xlsx"'
         return response
 
 

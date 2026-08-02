@@ -22,8 +22,8 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v48.0`
-- **App version shown in profile:** `v48.0`
+- **Current image tag:** `lloydismael12/request-hub:v48.4`
+- **App version shown in profile:** `v48.4`
 - **Latest update included:**
       - Added PM/Admin SQR View History with permanent change tracking and safe per-change restore.
 
