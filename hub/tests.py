@@ -191,6 +191,46 @@ class OutlookThreadingTests(TestCase):
         return parse_qs(urlparse(mailto_url).query)
 
 
+class RequestTeamsUrlTests(TestCase):
+    def test_teams_url_includes_only_requestor_assigned_and_backup(self):
+        requestor = User.objects.create_user(
+            username="teams_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="teams.requestor@example.com",
+        )
+        engineer = User.objects.create_user(
+            username="teams_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="teams.engineer@example.com",
+        )
+        backup_engineer = User.objects.create_user(
+            username="teams_backup",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="teams.backup@example.com",
+        )
+        request_obj = Request.objects.create(
+            requestor=requestor,
+            account=Account.objects.create(name="Teams Account"),
+            account_manager="Teams Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=engineer,
+            backup_engineer=backup_engineer,
+        )
+
+        participants = set(parse_qs(urlparse(request_obj.teams_chat_url).query)["users"][0].split(","))
+
+        self.assertEqual(
+            participants,
+            {"teams.requestor@example.com", "teams.engineer@example.com", "teams.backup@example.com"},
+        )
+        self.assertNotIn("JeanM@phildata.com", participants)
+
+
 class DashboardViewTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()

@@ -303,7 +303,7 @@ class Request(models.Model):
         )
         if not engineer_email or not manager_email:
             return ""
-        participant_set = {engineer_email, manager_email, "JeanM@phildata.com"}
+        participant_set = {engineer_email, manager_email}
         if backup_email:
             participant_set.add(backup_email)
         participants = ",".join(sorted(email for email in participant_set if email))
