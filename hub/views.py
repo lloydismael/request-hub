@@ -2480,6 +2480,96 @@ def _get_sqr_export_columns():
     ]
 
 
+def _get_sqr_esg_export_columns():
+    def _name(u):
+        return (u.get_full_name() or u.username) if u else ""
+
+    def _date_short(d):
+        return f"{d.month}/{d.day}/{str(d.year)[-2:]}" if d else ""
+
+    def _date_medium_safe(d):
+        return f"{d.day}-{d.strftime('%b')}-{str(d.year)[-2:]}" if d else ""
+
+    def _project_name(s):
+        if s.customer_name and s.project_title:
+            return f"{s.customer_name} - {s.project_title}"
+        return s.customer_name or s.project_title or ""
+
+    def _sse1(s):
+        return _name(s.assigned_sse) or _name(s.engineer)
+
+    def _pm(s):
+        return _name(s.assigned_pm) or _name(s.pm_esg_reviewer)
+
+    def _project_flag(s):
+        return "Yes" if s.assigned_pm or s.pm_esg_reviewer or s.delivery_start_date else "No"
+
+    def _status(s):
+        if s.overall_status == "on_hold":
+            return "ON HOLD"
+        if s.overall_status == "completed" or s.delivery_health == "completed":
+            return "COMPLETED"
+        if s.delivery_start_date or s.overall_status == "in_progress" or s.proposal_status == "closed_won":
+            return "ONGOING"
+        if s.status == "for_revision":
+            return "FOR REVISION"
+        return "NOT STARTED"
+
+    def _start_finish_dates(s):
+        if not (s.delivery_start_date or s.delivery_target_finish_date or s.delivery_actual_finish_date):
+            return ""
+        start = _date_short(s.delivery_start_date) or "TBD"
+        finish = _date_short(s.delivery_actual_finish_date) or _date_short(s.delivery_target_finish_date) or "TBD"
+        return f"{start}-{finish}"
+
+    def _money(value):
+        return float(value) if value is not None else ""
+
+    def _total_revenue(s):
+        return _money(s.computed_total_price if s.computed_total_price is not None else s.quotation_total_price)
+
+    def _revenue_source(s):
+        if s.revenue_source == "internal":
+            return "Internal"
+        if s.revenue_source == "invoiced":
+            return "Invoiced"
+        return ""
+
+    return [
+        ("Account Name", lambda s: s.customer_name or ""),
+        ("Service Description", lambda s: s.project_title or ""),
+        ("Project Name", _project_name),
+        ("SSE1", _sse1),
+        ("SSE2", lambda s: ""),
+        ("SSE3", lambda s: ""),
+        ("Project?", _project_flag),
+        ("PM", _pm),
+        ("Status", _status),
+        ("Start and Finish Dates", _start_finish_dates),
+        ("% Complete", lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
+        ("Key Updates", lambda s: s.key_updates_risks or ""),
+        ("Active Risks/Issues", lambda s: s.key_updates_risks or ""),
+        ("Scope Status", lambda s: s.project_details or ""),
+        ("Schedule Status", lambda s: _date_short(s.delivery_target_finish_date)),
+        ("Budget Status", lambda s: ""),
+        ("Folder", lambda s: s.sqr_folder_link or ""),
+        ("Quoted SSE hrs", lambda s: float(s.sse_manhrs) if s.sse_manhrs is not None else ""),
+        ("Billed SSE hrs", lambda s: ""),
+        ("Quoted PM hrs", lambda s: float(s.effective_pm_manhrs) if s.effective_pm_manhrs is not None else ""),
+        ("Billed PM hrs", lambda s: ""),
+        ("Project Management", lambda s: _money(s.effective_pm_amount)),
+        ("Deployment", lambda s: _money(s.sse_amount)),
+        ("On-Call", lambda s: _money(s.managed_support_amount)),
+        ("Total Revenue", _total_revenue),
+        ("Revenue?", lambda s: "Yes" if s.revenue_date or s.revenue_declaration == "declared" else "No"),
+        ("SI Type", _revenue_source),
+        ("SI Reference", lambda s: (s.revenue_reference_no or "").upper()),
+        ("SI Date", lambda s: _date_medium_safe(s.revenue_date)),
+        ("Remarks", lambda s: s.revenue_remarks or s.remarks or ""),
+        ("Action", lambda s: "History"),
+    ]
+
+
 def _normalize_import_text(value) -> str:
     return " ".join(
         str(value or "")
@@ -5142,7 +5232,7 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         qs = SqrSubmission.objects.select_related(
             "engineer", "pm_esg_reviewer", "reviewed_by",
             "assigned_pm", "assigned_sse", "linked_request",
-        ).order_by("-created_at")
+        ).order_by("-created_at", "-pk")
 
         report_type = request.GET.get("report", "sqr")
         if report_type not in {"sqr", "esg"}:
@@ -5152,10 +5242,12 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             "sqr": {
                 "worksheet_title": "SQR",
                 "filename_prefix": "sqr-export",
+                "columns": _get_sqr_export_columns,
             },
             "esg": {
                 "worksheet_title": "ESG Performance Tracker",
                 "filename_prefix": "esg-performance-tracker",
+                "columns": _get_sqr_esg_export_columns,
             },
         }[report_type]
 
@@ -5170,7 +5262,7 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         cell_align = Alignment(vertical="center")
         thin = Side(style="thin", color="CCCCCC")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        columns = _get_sqr_export_columns()
+        columns = report_config["columns"]()
 
         # ── Header row ──────────────────────────────────────────
         ws.row_dimensions[1].height = 36

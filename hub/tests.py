@@ -1,5 +1,6 @@
+import io
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -11,6 +12,7 @@ from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from openpyxl import load_workbook
 
 from accounts.models import User
 from hub.forms import RequestForm
@@ -859,3 +861,216 @@ class SqrHistoryTests(TestCase):
 
         self.assertEqual(restore_response.status_code, 409)
         self.assertFalse(restore_response.json()["ok"])
+
+
+class SqrExportTests(TestCase):
+    ESG_HEADERS = [
+        "Account Name",
+        "Service Description",
+        "Project Name",
+        "SSE1",
+        "SSE2",
+        "SSE3",
+        "Project?",
+        "PM",
+        "Status",
+        "Start and Finish Dates",
+        "% Complete",
+        "Key Updates",
+        "Active Risks/Issues",
+        "Scope Status",
+        "Schedule Status",
+        "Budget Status",
+        "Folder",
+        "Quoted SSE hrs",
+        "Billed SSE hrs",
+        "Quoted PM hrs",
+        "Billed PM hrs",
+        "Project Management",
+        "Deployment",
+        "On-Call",
+        "Total Revenue",
+        "Revenue?",
+        "SI Type",
+        "SI Reference",
+        "SI Date",
+        "Remarks",
+        "Action",
+    ]
+
+    SQR_HEADERS = [
+        "SQR Date",
+        "SQR ID",
+        "Account Name",
+        "Service Description",
+        "Scope of Services",
+        "RQ ID",
+        "Group Name",
+        "Account Manager",
+        "Requester Name",
+        "Approver Name",
+        "SQR Doc. Ref. Link",
+        "SSE Man-hrs",
+        "SSE Amount",
+        "PM Man-hrs",
+        "PM Amount",
+        "Managed Support Svc. Amt.",
+        "Discount Rate (%)",
+        "Discount Amount",
+        "Total Price",
+        "SQR Status",
+        "Approval Date",
+        "Validity Due Date",
+        "Proposal Status",
+        "PO / PNL Date",
+        "Assigned PM",
+        "Assigned SSE",
+        "Start Date",
+        "Target Finish Date",
+        "Overall Status",
+        "Health Status",
+        "Overall Progress %",
+        "Key Updates / Risks",
+        "Actual Finish Date",
+        "Completion Signed Date",
+        "Post-svc Warranty End Date",
+        "Support Start Date",
+        "Support End Date",
+        "SI / Revenue Date",
+        "Source",
+        "Reference No.",
+        "Revenue Status",
+        "Remarks",
+        "Revenue Declaration",
+    ]
+
+    def setUp(self):
+        self.engineer = User.objects.create_user(
+            username="sqr_export_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.export.engineer@example.com",
+            first_name="Export",
+            last_name="Engineer",
+        )
+        self.sse = User.objects.create_user(
+            username="sqr_export_sse",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.export.sse@example.com",
+            first_name="Assigned",
+            last_name="SSE",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_export_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.export.pm@example.com",
+            first_name="Export",
+            last_name="PM",
+        )
+        self.assigned_pm = User.objects.create_user(
+            username="sqr_export_assigned_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.export.assigned.pm@example.com",
+            first_name="Assigned",
+            last_name="PM",
+        )
+        self.client.force_login(self.pm)
+
+    def test_esg_export_headers_and_row_match_esg_tracker_table(self):
+        older = self._create_submission(customer_name="Older Account", project_title="Older Service")
+        target = self._create_submission(
+            customer_name="Acme Corp",
+            project_title="Cloud Migration",
+            project_details="Implementation",
+            assigned_pm=self.assigned_pm,
+            assigned_sse=self.sse,
+            delivery_start_date=date(2026, 7, 1),
+            delivery_target_finish_date=date(2026, 7, 31),
+            delivery_progress=75,
+            overall_status=SqrSubmission.OverallStatus.IN_PROGRESS,
+            key_updates_risks="Migration is on track.",
+            sse_manhrs=Decimal("12"),
+            pm_manhrs=Decimal("8"),
+            managed_support_amount=Decimal("5000.00"),
+            revenue_date=date(2026, 8, 3),
+            revenue_source="invoiced",
+            revenue_reference_no="si-001",
+            revenue_remarks="Ready for billing.",
+            revenue_declaration=SqrSubmission.RevenueDeclaration.DECLARED,
+            sqr_folder_link="https://example.com/folder",
+        )
+        SqrSubmission.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=1))
+        SqrSubmission.objects.filter(pk=target.pk).update(created_at=timezone.now())
+
+        response = self.client.get(f"{reverse('hub:sqr-export')}?report=esg")
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(io.BytesIO(response.content), data_only=True)
+        sheet = workbook.active
+        assert sheet is not None
+        self.assertEqual(sheet.title, "ESG Performance Tracker")
+        self.assertEqual([cell.value for cell in sheet[1]], self.ESG_HEADERS)
+        self.assertEqual([sheet.cell(row=2, column=idx).value for idx in range(1, 32)], [
+            "Acme Corp",
+            "Cloud Migration",
+            "Acme Corp - Cloud Migration",
+            "Assigned SSE",
+            None,
+            None,
+            "Yes",
+            "Assigned PM",
+            "ONGOING",
+            "7/1/26-7/31/26",
+            75,
+            "Migration is on track.",
+            "Migration is on track.",
+            "Implementation",
+            "7/31/26",
+            None,
+            "https://example.com/folder",
+            12,
+            None,
+            8,
+            None,
+            24000,
+            24000,
+            5000,
+            53000,
+            "Yes",
+            "Invoiced",
+            "SI-001",
+            "3-Aug-26",
+            "Ready for billing.",
+            "History",
+        ])
+
+    def test_sqr_export_keeps_original_headers(self):
+        self._create_submission(customer_name="SQR Account", project_title="SQR Service")
+
+        response = self.client.get(f"{reverse('hub:sqr-export')}?report=sqr")
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(io.BytesIO(response.content), data_only=True)
+        sheet = workbook.active
+        assert sheet is not None
+        self.assertEqual(sheet.title, "SQR")
+        self.assertEqual([cell.value for cell in sheet[1]], self.SQR_HEADERS)
+
+    def _create_submission(self, **overrides):
+        data = {
+            "engineer": self.engineer,
+            "pm_esg_reviewer": self.pm,
+            "customer_name": "Export Account",
+            "customer_company": "ESS",
+            "customer_contact": "Export Contact",
+            "project_title": "Export Service",
+            "project_details": "Implementation",
+            "sse_manhrs": Decimal("20"),
+            "documentation_links": "https://example.com/doc",
+            "sqr_folder_link": "https://example.com/sqr",
+        }
+        data.update(overrides)
+        return SqrSubmission.objects.create(**data)
