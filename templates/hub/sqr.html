@@ -1140,18 +1140,15 @@ body:not(.dark-mode) .sqr-report-badge {
     color: #e2e8f0;
     font-weight: 700;
 }
-.sqr-esg-table .sqr-esg-sticky-0 { position: sticky; left: 0px; z-index: 3; width: 110px; min-width: 110px; max-width: 110px; }
-.sqr-esg-table .sqr-esg-sticky-1 { position: sticky; left: 110px; z-index: 3; width: 130px; min-width: 130px; max-width: 130px; }
-.sqr-esg-table .sqr-esg-sticky-2 { position: sticky; left: 240px; z-index: 3; width: 144px; min-width: 144px; max-width: 144px; }
+/* Match the corresponding SQR Tracker columns: Account Name=144px, Service Description=160px. */
+.sqr-esg-table .sqr-esg-sticky-0 { position: sticky; left: 0px;   z-index: 3; width: 144px; min-width: 144px; max-width: 144px; }
+.sqr-esg-table .sqr-esg-sticky-1 { position: sticky; left: 144px; z-index: 3; width: 160px; min-width: 160px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sqr-esg-table thead .sqr-esg-sticky-0,
-.sqr-esg-table thead .sqr-esg-sticky-1,
-.sqr-esg-table thead .sqr-esg-sticky-2 { z-index: 5; background-color: #1a1f2e !important; }
+.sqr-esg-table thead .sqr-esg-sticky-1 { z-index: 5; background-color: #1a1f2e !important; }
 .sqr-esg-table tbody td.sqr-esg-sticky-0,
-.sqr-esg-table tbody td.sqr-esg-sticky-1,
-.sqr-esg-table tbody td.sqr-esg-sticky-2 { background-color: #151929 !important; }
+.sqr-esg-table tbody td.sqr-esg-sticky-1 { background-color: #151929 !important; }
 .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-0,
-.sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1,
-.sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { background-color: #1d2236 !important; }
+.sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { background-color: #1d2236 !important; }
 .sqr-esg-table .sqr-esg-sticky-border {
     border-right: 2px solid #38bdf8 !important;
     box-shadow: 4px 0 8px -2px rgba(0,0,0,0.6) !important;
@@ -1163,14 +1160,11 @@ body:not(.dark-mode) .sqr-view-toggle { background: rgba(241,245,249,0.86); bord
 body:not(.dark-mode) .sqr-esg-note { color: #334155; background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(99,102,241,0.06)); }
 body:not(.dark-mode) .sqr-esg-table thead th { background-color: #1a1f2e !important; color: #e2e8f0; border-color: rgba(255,255,255,0.08); }
 body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-0,
-body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-1,
-body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-2 { background-color: #1a1f2e !important; }
+body:not(.dark-mode) .sqr-esg-table thead .sqr-esg-sticky-1 { background-color: #1a1f2e !important; }
 body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-0,
-body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-1,
-body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-2 { background-color: #f0f4f8 !important; }
+body:not(.dark-mode) .sqr-esg-table tbody td.sqr-esg-sticky-1 { background-color: #f0f4f8 !important; }
 body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-0,
-body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1,
-body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { background-color: #e2e8f0 !important; }
+body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { background-color: #e2e8f0 !important; }
 </style>
 
 <div class="row g-4">
@@ -2167,8 +2161,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { backgro
                     <thead>
                         <tr>
                             <th class="sqr-esg-sticky-0">Account Name</th>
-                            <th class="sqr-esg-sticky-1">Service Description</th>
-                            <th class="sqr-esg-sticky-2 sqr-esg-sticky-border">Project Name</th>
+                            <th class="sqr-esg-sticky-1 sqr-esg-sticky-border">Service Description</th>
+                            <th>Project Name</th>
                             <th>SSE1</th>
                             <th>SSE2</th>
                             <th>SSE3</th>
@@ -2222,8 +2216,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { backgro
                             data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}"
                             data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
                             <td class="sqr-esg-sticky-0 fw-semibold">{{ item.customer_name|default:"&ndash;" }}</td>
-                            <td class="sqr-esg-sticky-1">{{ item.project_title|default:"&ndash;" }}</td>
-                            <td class="sqr-esg-sticky-2 sqr-esg-sticky-border">{{ item.customer_name|default:"" }}{% if item.customer_name and item.project_title %} - {% endif %}{{ item.project_title|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-sticky-1 sqr-esg-sticky-border">{{ item.project_title|default:"&ndash;" }}</td>
+                            <td>{{ item.customer_name|default:"" }}{% if item.customer_name and item.project_title %} - {% endif %}{{ item.project_title|default:"&ndash;" }}</td>
                             <td>{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% elif item.engineer %}{{ item.engineer.get_full_name|default:item.engineer.username }}{% else %}&ndash;{% endif %}</td>
                             <td class="text-muted">&ndash;</td>
                             <td class="text-muted">&ndash;</td>
@@ -2250,7 +2244,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { backgro
                             <td style="min-width:120px;">
                                 {% if item.delivery_progress is not None %}
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="progress flex-grow-1" style="height:6px;min-width:58px;">
+                                        <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
                                             <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}" style="width:{{ item.delivery_progress }}%"></div>
                                         </div>
                                         <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
@@ -2276,7 +2270,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-2 { backgro
                             <td>{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
                             <td>{{ item.revenue_date|date:"j-M-y"|default:"&ndash;" }}</td>
                             <td class="sqr-esg-wrap">{{ item.revenue_remarks|default:item.remarks|truncatechars:80|default:"&ndash;" }}</td>
-                            <td class="text-center" style="min-width:110px;">
+                            <td class="text-center" style="min-width:135px;">
                                 {% if is_pm %}
                                     <button type="button" class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn" data-history-url="{% url 'hub:sqr-history' item.pk %}" data-sqr-ref="{{ item.reference_code|default:'' }}" title="View History">
                                         <i class="bi bi-clock-history me-1"></i>History
