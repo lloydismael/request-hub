@@ -2499,15 +2499,11 @@ def _build_choice_import_map(choices) -> dict[str, str]:
 
 
 def _make_sqr_edit_form(user):
-    """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests.
-
-    Excludes requests already linked to ANY SQR; the current submission's linked
-    request is injected dynamically by the modal JS so the engineer can keep it.
-    """
+    """Return a SqrSubmissionForm for the edit modal scoped to engineer-accessible requests."""
     used_req_ids = SqrSubmission.objects.exclude(linked_request_id=None).values_list("linked_request_id", flat=True)
     form = SqrSubmissionForm(auto_id="edit_%s")
     form.fields["linked_request"].queryset = (
-        Request.objects.filter(engineer=user)
+        Request.objects.filter(Q(engineer=user) | Q(backup_engineer=user))
         .exclude(id__in=used_req_ids)
         .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
     )
@@ -3123,7 +3119,11 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
         else:
             qs = (
                 Request.objects
-                .filter(engineer=self.request.user)
+                .filter(
+                    Q(engineer=self.request.user)
+                    | Q(backup_engineer=self.request.user)
+                    | Q(pk=obj.linked_request_id)
+                )
                 .exclude(id__in=others_used_ids)
                 .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
             )
@@ -4477,8 +4477,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             # Requestors can only see their own requests
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role in ENGINEER_ACCESS_ROLES:
-            # Engineers can only see requests they are assigned to (primary or backup)
-            queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
+            # Engineers can see requests they are assigned to directly, or requests
+            # linked to SQR submissions they own. The linked-SQR case handles
+            # historical rows where the SQR requester and request assignee differ.
+            queryset = queryset.filter(pk=pk).filter(
+                Q(engineer=user) | Q(backup_engineer=user) | Q(sqr_links__engineer=user)
+            ).distinct()
         else:
             raise Http404
 

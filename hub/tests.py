@@ -387,6 +387,91 @@ class OnHoldRoleTests(TestCase):
         self.assertEqual(view.get_object(), request_obj)
 
 
+class SqrEngineerLinkedRequestAccessTests(TestCase):
+    def setUp(self):
+        self.engineer = User.objects.create_user(
+            username="sqr_link_owner",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.link.owner@example.com",
+        )
+        self.other_engineer = User.objects.create_user(
+            username="sqr_link_request_assignee",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.link.assignee@example.com",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_link_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.link.pm@example.com",
+            first_name="Linked",
+            last_name="PM",
+        )
+        self.requestor = User.objects.create_user(
+            username="sqr_link_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="sqr.link.requestor@example.com",
+        )
+        self.account = Account.objects.create(name="SQR Linked Request Account")
+        self.linked_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="SQR Link Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.other_engineer,
+        )
+        self.submission = SqrSubmission.objects.create(
+            linked_request=self.linked_request,
+            engineer=self.engineer,
+            pm_esg_reviewer=self.pm,
+            customer_name="Linked Customer",
+            customer_company="ESS",
+            customer_contact="Linked Contact",
+            project_title="Linked Project",
+            project_details="Implementation",
+            sse_manhrs=Decimal("20"),
+            documentation_links="https://example.com/doc",
+            sqr_folder_link="https://example.com/sqr",
+        )
+
+    def test_engineer_can_open_request_linked_to_owned_sqr(self):
+        request = RequestFactory().get(reverse("hub:request-manage-collab", args=[self.linked_request.pk]))
+        request.user = self.engineer
+        view = RequestCollaborativeManageView()
+        view.setup(request, pk=self.linked_request.pk)
+        view.kwargs = {"pk": self.linked_request.pk}
+
+        self.assertEqual(view.get_object(), self.linked_request)
+
+    def test_engineer_can_save_own_sqr_with_preserved_linked_request(self):
+        self.client.force_login(self.engineer)
+
+        response = self.client.post(
+            reverse("hub:sqr-edit", args=[self.submission.pk]),
+            data={
+                "linked_request": str(self.linked_request.pk),
+                "customer_company": "ESS",
+                "customer_contact": "Linked Contact",
+                "pm_esg_reviewer": str(self.pm.pk),
+                "customer_name": "Linked Customer Updated",
+                "project_title": "Linked Project Updated",
+                "project_details": "Implementation",
+                "sse_manhrs": "20",
+                "sqr_folder_link": "https://example.com/sqr",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.linked_request, self.linked_request)
+        self.assertEqual(self.submission.customer_name, "Linked Customer Updated")
+
+
 class SqrInlineUndoTests(TestCase):
     def setUp(self):
         self.engineer = User.objects.create_user(
