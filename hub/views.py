@@ -4924,14 +4924,17 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
 
         to_addresses = {manager_email, engineer_email}
         cc_addresses = {"ESGRequestHub@phildata.com"}
+        if request_obj.requestor and request_obj.requestor.role == User.Roles.REQUESTOR_ESS:
+            cc_addresses.add("JoanI@phildata.com")
         if backup_email:
             cc_addresses.add(backup_email)
 
         recipients = ",".join(sorted(addr for addr in to_addresses if addr))
         cc_field = ",".join(sorted(cc_addresses))
 
-        # Use the same subject pattern as the acknowledgement so Outlook threads replies together, but add advisory notice.
-        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name} · Advisory Only (Do Not Reply)"
+        # Match the acknowledgement subject exactly so Outlook can group the request emails together.
+        account_name = request_obj.account.name if request_obj.account else "Request"
+        ack_subject = f"Re: {request_obj.reference_code} · {account_name}"
         subject = quote(ack_subject)
 
         requestor = request_obj.requestor
@@ -4951,6 +4954,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         body_template = (
             "Hello {requestor_name},\n\n"
             "Following up on our earlier acknowledgement for {reference}, this is to confirm the request has been fulfilled and is now marked as closed.\n\n"
+            "Advisory Only: Please do not reply to this closed request thread for new support needs.\n\n"
             "View request details: {detail_url}\n\n"
             "If you believe further action is required or have additional questions, please submit a new one via Request Hub.\n\n"
             "Thank you for your cooperation."

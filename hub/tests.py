@@ -2,10 +2,12 @@ import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -102,6 +104,91 @@ class AssignmentEmailTests(TestCase):
 
     def _create_account_id(self, name: str) -> int:
         return Account.objects.create(name=name).pk
+
+
+class OutlookThreadingTests(TestCase):
+    def setUp(self):
+        self.requestor = User.objects.create_user(
+            username="thread_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR_ESS,
+            email="thread.requestor@example.com",
+            first_name="Thread",
+            last_name="Requestor",
+        )
+        self.engineer = User.objects.create_user(
+            username="thread_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="thread.engineer@example.com",
+            first_name="Thread",
+            last_name="Engineer",
+        )
+        self.backup_engineer = User.objects.create_user(
+            username="thread_backup",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="thread.backup@example.com",
+        )
+        self.account = Account.objects.create(name="Thread Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Thread Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            backup_engineer=self.backup_engineer,
+            status=Request.Status.COMPLETED,
+            description="Threading support request.",
+        )
+
+    def test_closing_draft_reuses_acknowledgement_subject(self):
+        contexts = self._post_acknowledgement_and_closing_with_captured_contexts()
+        acknowledgement_query = self._mailto_query(contexts[0]["mailto_url"])
+        closing_query = self._mailto_query(contexts[1]["mailto_url"])
+
+        self.assertEqual(acknowledgement_query["subject"], [f"Re: {self.request_obj.reference_code} · Thread Account"])
+        self.assertEqual(closing_query["subject"], acknowledgement_query["subject"])
+        self.assertNotIn("Advisory Only", closing_query["subject"][0])
+        self.assertIn("Advisory Only", closing_query["body"][0])
+
+    def test_closing_draft_keeps_requestor_ess_cc_consistent_with_acknowledgement(self):
+        contexts = self._post_acknowledgement_and_closing_with_captured_contexts()
+        acknowledgement_cc = set(self._mailto_query(contexts[0]["mailto_url"])["cc"][0].split(","))
+        closing_cc = set(self._mailto_query(contexts[1]["mailto_url"])["cc"][0].split(","))
+
+        self.assertIn("JoanI@phildata.com", acknowledgement_cc)
+        self.assertIn("JoanI@phildata.com", closing_cc)
+        self.assertEqual(closing_cc, acknowledgement_cc)
+
+    def _post_acknowledgement_and_closing_with_captured_contexts(self) -> list[dict]:
+        self.client.force_login(self.engineer)
+        contexts = []
+
+        def capture_render(request, template_name, context=None, *args, **kwargs):
+            contexts.append(context or {})
+            return HttpResponse("OK")
+
+        with patch("hub.views.render", side_effect=capture_render):
+            acknowledgement_response = self.client.post(
+                reverse("hub:request-outlook", args=[self.request_obj.pk]),
+                HTTP_REFERER=reverse("hub:dashboard"),
+            )
+            closing_response = self.client.post(
+                reverse("hub:request-outlook-closing", args=[self.request_obj.pk]),
+                HTTP_REFERER=reverse("hub:request-manage-collab", args=[self.request_obj.pk]),
+            )
+
+        self.assertEqual(acknowledgement_response.status_code, 200)
+        self.assertEqual(closing_response.status_code, 200)
+        self.assertEqual(len(contexts), 2)
+        return contexts
+
+    @staticmethod
+    def _mailto_query(mailto_url: str) -> dict[str, list[str]]:
+        return parse_qs(urlparse(mailto_url).query)
 
 
 class DashboardViewTests(TestCase):
