@@ -22,7 +22,8 @@ main.container {
     -ms-overflow-style: none;     /* IE / Edge */
 }
 .sqr-tracker-wrap::-webkit-scrollbar { display: none; } /* Chrome / Safari / Opera */
-.sqr-tracker {
+.sqr-tracker,
+.sqr-esg-table {
     border-collapse: separate;
     border-spacing: 0;
     font-size: 0.78rem;
@@ -30,7 +31,9 @@ main.container {
     table-layout: auto; /* Columns size to header text; data capped by max-width */
 }
 .sqr-tracker th,
-.sqr-tracker td {
+.sqr-tracker td,
+.sqr-esg-table th,
+.sqr-esg-table td {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -99,15 +102,24 @@ main.container {
 
 /* Non-fixed-width cells that may wrap (used outside frozen area) */
 .sqr-tracker .cell-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* ESG text-heavy columns keep SQR row height by using the same single-line ellipsis cell model. */
+.sqr-esg-table .sqr-esg-wrap { white-space: nowrap; min-width: 70px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 /* Scrollable columns — auto-size to header text; cap data cells so they don't blow up columns */
-.sqr-tracker th:not([class*="col-sticky"]) { min-width: 70px; max-width: 220px; white-space: nowrap; }
-.sqr-tracker td:not([class*="col-sticky"]) { min-width: 70px; max-width: 220px; }
+.sqr-tracker th:not([class*="col-sticky"]),
+.sqr-esg-table th:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; white-space: nowrap; }
+.sqr-tracker td:not([class*="col-sticky"]),
+.sqr-esg-table td:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; }
 /* sqr-col-wide no longer used on th — kept for any legacy td references */
 .sqr-tracker td.sqr-col-wide { min-width: 140px; max-width: 220px; }
 /* AN (col 40 = Reference No.) and AP (col 42 = Remarks): pin to header text width */
-.sqr-tracker tr > :nth-child(40) { max-width: 130px; min-width: 0; }
-.sqr-tracker tr > :nth-child(42) { max-width: 100px; min-width: 0; }
-.sqr-tracker tr > :nth-child(43) { max-width: 150px; min-width: 0; }
+.sqr-tracker tr > :nth-child(40),
+.sqr-esg-table tr > :nth-child(28) { max-width: 130px; min-width: 0; }
+.sqr-tracker tr > :nth-child(42),
+.sqr-esg-table tr > :nth-child(30) { max-width: 100px; min-width: 0; }
+.sqr-tracker tr > :nth-child(43),
+.sqr-esg-table tr > :nth-child(29) { max-width: 150px; min-width: 0; }
+.sqr-esg-table tr > :nth-child(11) { min-width: 120px; }
+.sqr-esg-table tr > :nth-child(31) { min-width: 135px; max-width: 220px; }
 
 /* ── Light-mode overrides: sticky body cells must be light so dark text is readable ── */
 body:not(.dark-mode) .sqr-tracker tbody tr td.col-sticky-0,
@@ -1113,28 +1125,7 @@ body:not(.dark-mode) .sqr-report-badge {
     padding: 0.75rem 0.9rem;
     color: rgba(226,232,240,0.84);
 }
-.sqr-esg-table {
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 0.78rem;
-    min-width: max-content;
-    table-layout: auto;
-}
-.sqr-esg-table th,
-.sqr-esg-table td {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 0.4rem 0.65rem;
-    border-right: 1px solid rgba(255,255,255,0.08);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    vertical-align: middle;
-}
-.sqr-esg-table th:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; white-space: nowrap; }
-.sqr-esg-table td:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; }
 .sqr-esg-table thead th {
-    position: sticky;
-    top: 0;
     z-index: 4;
     background-color: #1a1f2e !important;
     color: #e2e8f0;
@@ -1153,7 +1144,6 @@ body:not(.dark-mode) .sqr-report-badge {
     border-right: 2px solid #38bdf8 !important;
     box-shadow: 4px 0 8px -2px rgba(0,0,0,0.6) !important;
 }
-.sqr-esg-table .sqr-esg-wrap { white-space: normal; min-width: 140px; max-width: 200px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
 .sqr-esg-money { text-align: right; font-variant-numeric: tabular-nums; }
 .sqr-esg-status { font-weight: 700; letter-spacing: 0.02em; }
 body:not(.dark-mode) .sqr-view-toggle { background: rgba(241,245,249,0.86); border-color: rgba(148,163,184,0.35); }
