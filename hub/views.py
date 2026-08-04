@@ -3030,12 +3030,22 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 },
             ]
 
+        my_assigned_sqr_count = sum(
+            1 for submission in all_submissions if submission.pm_esg_reviewer_id == user.id
+        )
+        # Approvers (PM-ESG) default to "My Assigned SQR"; Total still shows the full list.
+        default_my_assigned_filter = user.role == PM_ESG_ROLE
+
         context.update(
             {
                 "can_create_sqr": can_create,
                 "can_review_sqr": can_review,
                 "is_pm": is_pm,
                 "is_admin": is_admin,
+                "is_pm_esg": user.role == PM_ESG_ROLE,
+                "my_assigned_sqr_count": my_assigned_sqr_count,
+                "default_my_assigned_filter": default_my_assigned_filter,
+                "sqr_current_user_id": user.pk,
                 "sqr_form": form,
                 "sqr_import_form": SqrImportForm() if is_admin else None,
                 "sqr_edit_form": _make_sqr_edit_form(user) if can_create else None,

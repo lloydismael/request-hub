@@ -21,6 +21,7 @@ from hub.views import (
     AssignmentEmailResult,
     DashboardView,
     RequestCollaborativeManageView,
+    SqrListView,
     clear_engineer_outlook_lock_on_reassignment,
     notify_engineer_assignment_email,
 )
@@ -1074,3 +1075,85 @@ class SqrExportTests(TestCase):
         }
         data.update(overrides)
         return SqrSubmission.objects.create(**data)
+
+
+class SqrMyAssignedFilterTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.engineer = User.objects.create_user(
+            username="sqr_assigned_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.assigned.engineer@example.com",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_assigned_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.assigned.pm@example.com",
+            first_name="Assigned",
+            last_name="Approver",
+        )
+        self.other_pm = User.objects.create_user(
+            username="sqr_other_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.other.pm@example.com",
+            first_name="Other",
+            last_name="Approver",
+        )
+        self.admin = User.objects.create_user(
+            username="sqr_assigned_admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="sqr.assigned.admin@example.com",
+        )
+        self.mine = SqrSubmission.objects.create(
+            engineer=self.engineer,
+            pm_esg_reviewer=self.pm,
+            customer_name="Mine Account",
+            customer_company="ESS",
+            customer_contact="Mine Contact",
+            project_title="Mine Service",
+            project_details="Implementation",
+            sse_manhrs=Decimal("10"),
+            documentation_links="https://example.com/doc",
+            sqr_folder_link="https://example.com/sqr-mine",
+        )
+        self.other = SqrSubmission.objects.create(
+            engineer=self.engineer,
+            pm_esg_reviewer=self.other_pm,
+            customer_name="Other Account",
+            customer_company="ESG",
+            customer_contact="Other Contact",
+            project_title="Other Service",
+            project_details="Implementation",
+            sse_manhrs=Decimal("12"),
+            documentation_links="https://example.com/doc",
+            sqr_folder_link="https://example.com/sqr-other",
+        )
+
+    def _context_for(self, user):
+        request = self.factory.get(reverse("hub:sqr"))
+        request.user = user
+        view = SqrListView()
+        view.setup(request)
+        return view.get_context_data()
+
+    def test_pm_esg_defaults_to_my_assigned_filter_but_keeps_all_rows(self):
+        context = self._context_for(self.pm)
+
+        self.assertTrue(context["default_my_assigned_filter"])
+        self.assertTrue(context["is_pm_esg"])
+        self.assertEqual(context["my_assigned_sqr_count"], 1)
+        self.assertEqual(context["sqr_current_user_id"], self.pm.pk)
+        # Full report access remains: both assigned and unassigned rows are still in the page.
+        self.assertEqual(len(context["proposal_submissions"]), 2)
+        self.assertEqual(context["proposal_counts"]["total"], 2)
+
+    def test_admin_does_not_default_to_my_assigned_filter(self):
+        context = self._context_for(self.admin)
+
+        self.assertFalse(context["default_my_assigned_filter"])
+        self.assertFalse(context["is_pm_esg"])
+        self.assertEqual(len(context["proposal_submissions"]), 2)

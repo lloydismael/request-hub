@@ -2,10 +2,10 @@ version: "3.9"
 
 services:
   web:
-    image: lloydismael12/request-hub:v49.0
+    image: lloydismael12/request-hub:v49.3
     ports:
       - "8000:8000"
     environment:
-      - APP_VERSION=v49.0
+      - APP_VERSION=v49.3
     env_file:
       - .env

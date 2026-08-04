@@ -1309,6 +1309,12 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                                     <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-assigned-sse">
                                     <label class="form-check-label" for="sqr-table-filter-assigned-sse">Assigned SSE only</label>
                                 </div>
+                                {% if is_pm_esg %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-my-assigned"{% if default_my_assigned_filter %} checked{% endif %}>
+                                    <label class="form-check-label" for="sqr-table-filter-my-assigned">My Assigned SQR only</label>
+                                </div>
+                                {% endif %}
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-billed-only">
                                     <label class="form-check-label" for="sqr-table-filter-billed-only">Billed only</label>
@@ -1320,8 +1326,15 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             </div>
             {% endif %}
             {# Summary badges — clickable filters #}
-            <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters">
+            <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters"
+                 data-default-my-assigned="{% if default_my_assigned_filter %}1{% else %}0{% endif %}"
+                 data-current-user-id="{{ sqr_current_user_id|default:'' }}">
                 <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="" style="cursor:pointer;">Total: {{ proposal_counts.total }}</span>
+                {% if is_pm_esg %}
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="my_assigned" style="cursor:pointer;" title="Show SQRs assigned to you as Approver">
+                    <i class="bi bi-person-check-fill me-1"></i>My Assigned SQR: {{ my_assigned_sqr_count }}
+                </span>
+                {% endif %}
                 <span class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted" style="cursor:pointer;">
                     <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
                 </span>
@@ -1743,6 +1756,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             data-sqr-customer="{{ item.customer_name|default:''|escapejs }}"
                             data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
                             data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
+                            data-sqr-approver-id="{{ item.pm_esg_reviewer_id|default:'' }}"
                             data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
                             data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
                             data-sqr-overall-status="{{ item.overall_status|default:'' }}"
@@ -2192,6 +2206,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             data-sqr-customer="{{ item.customer_name|default:''|escapejs }}"
                             data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
                             data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
+                            data-sqr-approver-id="{{ item.pm_esg_reviewer_id|default:'' }}"
                             data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
                             data-sqr-assigned-pm-id="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"
                             data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
@@ -4334,7 +4349,10 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
 <script>
 // ── Badge filter ──────────────────────────────────────────────────────────
 (function () {
-    var activeFilter = '';   // '' = show all
+    var badgeRoot = document.getElementById('sqr-badge-filters');
+    var defaultMyAssigned = !!(badgeRoot && badgeRoot.dataset.defaultMyAssigned === '1');
+    var currentUserId = badgeRoot ? String(badgeRoot.dataset.currentUserId || '') : '';
+    var activeFilter = defaultMyAssigned ? 'my_assigned' : '';   // '' = show all
     var searchInput = document.getElementById('sqr-table-filter-search');
     var statusSelect = document.getElementById('sqr-table-filter-status');
     var proposalStatusSelect = document.getElementById('sqr-table-filter-proposal-status');
@@ -4349,6 +4367,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
     var amountMaxInput = document.getElementById('sqr-table-filter-amount-max');
     var linkedRequestCheckbox = document.getElementById('sqr-table-filter-linked-request');
     var assignedSseCheckbox = document.getElementById('sqr-table-filter-assigned-sse');
+    var myAssignedCheckbox = document.getElementById('sqr-table-filter-my-assigned');
     var billedOnlyCheckbox = document.getElementById('sqr-table-filter-billed-only');
     var resetButton = document.getElementById('sqr-table-filter-reset');
     var resultsMeta = document.getElementById('sqr-filter-results-meta');
@@ -4363,6 +4382,14 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         if (!normalized) return null;
         var amount = Number(normalized);
         return Number.isFinite(amount) ? amount : null;
+    }
+
+    function isMyAssignedActive() {
+        return activeFilter === 'my_assigned' || !!(myAssignedCheckbox && myAssignedCheckbox.checked);
+    }
+
+    function setMyAssignedChecked(checked) {
+        if (myAssignedCheckbox) myAssignedCheckbox.checked = !!checked;
     }
 
     function countActiveFilters() {
@@ -4381,6 +4408,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             amountMaxInput && amountMaxInput.value,
             linkedRequestCheckbox && linkedRequestCheckbox.checked,
             assignedSseCheckbox && assignedSseCheckbox.checked,
+            isMyAssignedActive(),
             billedOnlyCheckbox && billedOnlyCheckbox.checked
         ];
 
@@ -4390,18 +4418,31 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
     }
 
     function syncActiveBadgeFromControls() {
+        if (myAssignedCheckbox && myAssignedCheckbox.checked && !statusSelect.value && !proposalStatusSelect.value) {
+            activeFilter = 'my_assigned';
+            return;
+        }
         if (statusSelect && statusSelect.value && (!proposalStatusSelect || !proposalStatusSelect.value)) {
             activeFilter = 'status:' + statusSelect.value;
         } else if (proposalStatusSelect && proposalStatusSelect.value && (!statusSelect || !statusSelect.value)) {
             activeFilter = 'proposal_status:' + proposalStatusSelect.value;
-        } else {
+        } else if (activeFilter === 'my_assigned' && !(myAssignedCheckbox && myAssignedCheckbox.checked)) {
+            activeFilter = '';
+        } else if (activeFilter !== 'my_assigned') {
             activeFilter = '';
         }
     }
 
     function updateBadgeState() {
         document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
-            if (badge.dataset.sqrFilter === activeFilter) {
+            var badgeFilter = badge.dataset.sqrFilter || '';
+            var isActive = false;
+            if (badgeFilter === 'my_assigned') {
+                isActive = isMyAssignedActive();
+            } else {
+                isActive = badgeFilter === activeFilter;
+            }
+            if (isActive) {
                 badge.style.outline = '2px solid currentColor';
                 badge.style.outlineOffset = '2px';
             } else {
@@ -4412,14 +4453,21 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
     }
 
     function syncPresetControls(filter) {
-        if (!statusSelect || !proposalStatusSelect) return;
-        statusSelect.value = '';
-        proposalStatusSelect.value = '';
-        if (!filter) return;
+        if (statusSelect) statusSelect.value = '';
+        if (proposalStatusSelect) proposalStatusSelect.value = '';
+        if (!filter) {
+            setMyAssignedChecked(false);
+            return;
+        }
+        if (filter === 'my_assigned') {
+            setMyAssignedChecked(true);
+            return;
+        }
+        setMyAssignedChecked(false);
         var parts = filter.split(':');
-        if (parts[0] === 'status') {
+        if (parts[0] === 'status' && statusSelect) {
             statusSelect.value = parts[1] || '';
-        } else if (parts[0] === 'proposal_status') {
+        } else if (parts[0] === 'proposal_status' && proposalStatusSelect) {
             proposalStatusSelect.value = parts[1] || '';
         }
     }
@@ -4440,6 +4488,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         var amountMax = parseAmount(amountMaxInput ? amountMaxInput.value : '');
         var linkedRequestOnly = !!(linkedRequestCheckbox && linkedRequestCheckbox.checked);
         var assignedSseOnly = !!(assignedSseCheckbox && assignedSseCheckbox.checked);
+        var myAssignedOnly = isMyAssignedActive();
         var billedOnly = !!(billedOnlyCheckbox && billedOnlyCheckbox.checked);
         var visibleCount = 0;
         rows.forEach(function (row) {
@@ -4458,6 +4507,9 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             var matchesAmountMax = amountMax === null || ((totalPrice || 0) <= amountMax);
             var matchesLinkedRequest = !linkedRequestOnly || (row.dataset.sqrLinkedRequest || '') === 'yes';
             var matchesAssignedSse = !assignedSseOnly || !!normalizeText(row.dataset.sqrAssignedSse || '');
+            var matchesMyAssigned = !myAssignedOnly || (
+                !!currentUserId && String(row.dataset.sqrApproverId || '') === currentUserId
+            );
             var matchesBilled = !billedOnly || (row.dataset.sqrRevenueStatus || '') === 'billed';
             var rowText = [
                 row.dataset.sqrRef,
@@ -4482,6 +4534,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                 && matchesAmountMax
                 && matchesLinkedRequest
                 && matchesAssignedSse
+                && matchesMyAssigned
                 && matchesBilled
                 && matchesQuery;
 
@@ -4501,7 +4554,15 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
 
     document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
         badge.addEventListener('click', function () {
-            var filter = badge.dataset.sqrFilter;
+            var filter = badge.dataset.sqrFilter || '';
+            // Total badge always shows full list (clears My Assigned + status presets).
+            if (filter === '') {
+                activeFilter = '';
+                syncPresetControls('');
+                updateBadgeState();
+                applyFilter();
+                return;
+            }
             if (activeFilter === filter) {
                 // clicking the same badge again clears the filter
                 activeFilter = '';
@@ -4528,8 +4589,23 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         });
     });
 
+    if (myAssignedCheckbox) {
+        myAssignedCheckbox.addEventListener('change', function () {
+            if (myAssignedCheckbox.checked) {
+                activeFilter = 'my_assigned';
+                if (statusSelect) statusSelect.value = '';
+                if (proposalStatusSelect) proposalStatusSelect.value = '';
+            } else if (activeFilter === 'my_assigned') {
+                activeFilter = '';
+            }
+            updateBadgeState();
+            applyFilter();
+        });
+    }
+
     if (statusSelect) {
         statusSelect.addEventListener('change', function () {
+            if (statusSelect.value) setMyAssignedChecked(false);
             syncActiveBadgeFromControls();
             updateBadgeState();
             applyFilter();
@@ -4538,6 +4614,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
 
     if (proposalStatusSelect) {
         proposalStatusSelect.addEventListener('change', function () {
+            if (proposalStatusSelect.value) setMyAssignedChecked(false);
             syncActiveBadgeFromControls();
             updateBadgeState();
             applyFilter();
@@ -4546,7 +4623,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
 
     if (resetButton) {
         resetButton.addEventListener('click', function () {
-            activeFilter = '';
+            // Reset returns approvers to their default My Assigned view.
+            activeFilter = defaultMyAssigned ? 'my_assigned' : '';
             if (searchInput) searchInput.value = '';
             if (statusSelect) statusSelect.value = '';
             if (proposalStatusSelect) proposalStatusSelect.value = '';
@@ -4561,12 +4639,14 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             if (amountMaxInput) amountMaxInput.value = '';
             if (linkedRequestCheckbox) linkedRequestCheckbox.checked = false;
             if (assignedSseCheckbox) assignedSseCheckbox.checked = false;
+            setMyAssignedChecked(defaultMyAssigned);
             if (billedOnlyCheckbox) billedOnlyCheckbox.checked = false;
             updateBadgeState();
             applyFilter();
         });
     }
 
+    setMyAssignedChecked(defaultMyAssigned);
     updateBadgeState();
     applyFilter();
 })();
