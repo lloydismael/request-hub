@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from .views import (
+    DashboardLiveDataView,
     DashboardView,
     EngineerActivityLogView,
     NotificationListView,
@@ -52,6 +53,7 @@ app_name = "hub"
 
 urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
+    path("dashboard/live/", DashboardLiveDataView.as_view(), name="dashboard-live"),
     path("activity-logs/", EngineerActivityLogView.as_view(), name="activity-logs"),
     path("activity-logs/<int:pk>/delete/", EngineerActivityLogDeleteView.as_view(), name="activity-log-delete"),
     path("requests/export/csv/", RequestExportCSVView.as_view(), name="request-export"),

@@ -1,0 +1,339 @@
+{% load tz %}
+                        {% for item in requests %}
+                            <tr class="{% if not is_requestor_ui and item.engagement_type != 'deployment' and item.is_overdue or not is_requestor_ui and item.engagement_type != 'deployment' and item.sla_overrun or not is_requestor_ui and item.engagement_type != 'deployment' and item.missed_sla %}table-danger{% endif %}" data-engineer-id="{{ item.engineer.pk|default:'' }}">
+                                {% if role == 'admin' %}
+                                    <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
+                                        <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
+                                    </td>
+                                {% elif role == 'engineer' %}
+                                    <td class="engineer-id-cell{% if item.ack_sla_status %} request-id-cell request-id-cell--{{ item.ack_sla_status }}{% endif %}">
+                                        <a href="{% url 'hub:request-manage-collab' item.pk %}" class="text-reset text-decoration-none fw-bold" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>
+                                        <div class="engineer-id-cell__meta d-flex flex-wrap align-items-center gap-1 mt-1">
+                                            {% if item.status_log_count and item.status_log_count > 0 %}
+                                                <span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle d-inline-flex align-items-center gap-1"
+                                                      data-bs-toggle="tooltip"
+                                                      title="{{ item.latest_status_log_tooltip|default:'Status log updated' }}">
+                                                    <i class="bi bi-chat-left-text"></i>
+                                                    <span>{{ item.status_log_count }}</span>
+                                                </span>
+                                            {% endif %}
+                                            {% if item.has_recent_changes %}
+                                                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle d-inline-flex align-items-center gap-1"
+                                                      data-bs-toggle="tooltip"
+                                                      title="{{ item.recent_change_tooltip|default:'Request details were updated' }}">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                    <span>Edited</span>
+                                                </span>
+                                            {% endif %}
+                                            {% if item.ack_start_iso and item.status != 'completed' %}
+                                                {% if item.is_acknowledged %}
+                                                    <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle d-inline-flex align-items-center gap-1"
+                                                          data-bs-toggle="tooltip"
+                                                          title="{{ item.ack_sla_tooltip }}">
+                                                        <i class="bi bi-check2-circle"></i>
+                                                        <span>Ack</span>
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge rounded-pill engineer-ack-timer engineer-ack-timer--{{ item.ack_sla_status|default:'neutral' }} d-inline-flex align-items-center gap-1"
+                                                          data-ack-timer
+                                                          data-ack-start="{{ item.ack_start_iso }}"
+                                                          data-bs-toggle="tooltip"
+                                                          title="{{ item.ack_sla_tooltip }}">
+                                                        <i class="bi bi-stopwatch"></i>
+                                                        <span class="engineer-ack-timer__label">Ack pending</span>
+                                                        <span class="engineer-ack-timer__value">…</span>
+                                                    </span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                {% else %}
+                                    <td title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</td>
+                                {% endif %}
+                                <td>{{ item.account.name }}</td>
+                                {% if role == 'admin' %}
+                                    <td class="text-nowrap">
+                                        {% with manager=item.requestor %}
+                                            {% if manager %}
+                                                {% with manager_name=manager.get_full_name|default:manager.username %}
+                                                    <div class="table-cell-nowrap">
+                                                        {% if manager.profile_photo %}
+                                                            <img src="{{ manager.profile_photo.url }}" alt="{{ manager_name }}" class="table-avatar">
+                                                        {% else %}
+                                                            <span class="table-avatar table-avatar--placeholder">{{ manager_name|slice:":1"|upper }}</span>
+                                                        {% endif %}
+                                                        <span>{{ manager_name }}</span>
+                                                    </div>
+                                                {% endwith %}
+                                            {% else %}
+                                                <span class="text-muted text-nowrap">Unknown</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                    <td class="text-nowrap">
+                                        {% if item.engineer %}
+                                            {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
+                                                {% with first=item.engineer.first_name last=item.engineer.last_name %}
+                                                <div class="table-cell-nowrap engineer-filter-cell" data-engineer-id="{{ item.engineer.pk }}" title="Click to highlight all requests for this engineer" style="cursor:pointer;">
+                                                    {% if item.engineer.profile_photo %}
+                                                        <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
+                                                    {% else %}
+                                                        <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
+                                                    {% endif %}
+                                                        <span class="engineer-filter-name">
+                                                            {% if first or last %}
+                                                                {{ first|default_if_none:"" }}{% if last %} {{ last|default_if_none:"" }}{% endif %}
+                                                            {% else %}
+                                                                {{ engineer_name }}
+                                                            {% endif %}
+                                                        </span>
+                                                </div>
+                                                {% endwith %}
+                                            {% endwith %}
+                                        {% else %}
+                                            <span class="text-muted text-nowrap">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-nowrap">
+                                        {% if item.backup_engineer %}
+                                            {% with be_name=item.backup_engineer.get_full_name|default:item.backup_engineer.username %}
+                                            <div class="table-cell-nowrap">
+                                                {% if item.backup_engineer.profile_photo %}
+                                                    <img src="{{ item.backup_engineer.profile_photo.url }}" alt="{{ be_name }}" class="table-avatar">
+                                                {% else %}
+                                                    <span class="table-avatar table-avatar--placeholder">{{ be_name|slice:":1"|upper }}</span>
+                                                {% endif %}
+                                                <span>{{ be_name }}</span>
+                                            </div>
+                                            {% endwith %}
+                                        {% else %}
+                                            <span class="text-muted text-nowrap">&ndash;</span>
+                                        {% endif %}
+                                    </td>
+                                    {% elif role == 'engineer' %}
+                                        <td>
+                                            {% with manager_user=item.requestor %}
+                                                {% if manager_user %}
+                                                    {% with fallback_name=manager_user.get_full_name|default:manager_user.username %}
+                                                        {% with manager_name=item.account_manager|default:fallback_name %}
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                {% if manager_user.profile_photo %}
+                                                                    <img src="{{ manager_user.profile_photo.url }}" alt="{{ manager_name }}" class="table-avatar">
+                                                                {% else %}
+                                                                    <span class="table-avatar table-avatar--placeholder">{{ manager_name|slice:":1"|upper }}</span>
+                                                                {% endif %}
+                                                                <span>{{ manager_name }}</span>
+                                                            </div>
+                                                        {% endwith %}
+                                                    {% endwith %}
+                                                {% elif item.account_manager %}
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <span class="table-avatar table-avatar--placeholder">{{ item.account_manager|slice:":1"|upper }}</span>
+                                                        <span>{{ item.account_manager }}</span>
+                                                    </div>
+                                                {% else %}
+                                                    <span class="text-muted">Unknown</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                    {% elif is_requestor_ui %}
+                                        {% if is_pm_ess %}
+                                            <td>
+                                                {% with manager_user=item.requestor %}
+                                                    {% if manager_user %}
+                                                        {% with fallback_name=manager_user.get_full_name|default:manager_user.username %}
+                                                            {% with manager_name=item.account_manager|default:fallback_name %}
+                                                                <div class="d-flex align-items-center gap-2">
+                                                                    {% if manager_user.profile_photo %}
+                                                                        <img src="{{ manager_user.profile_photo.url }}" alt="{{ manager_name }}" class="table-avatar">
+                                                                    {% else %}
+                                                                        <span class="table-avatar table-avatar--placeholder">{{ manager_name|slice:":1"|upper }}</span>
+                                                                    {% endif %}
+                                                                    <span>{{ manager_name }}</span>
+                                                                </div>
+                                                            {% endwith %}
+                                                        {% endwith %}
+                                                    {% elif item.account_manager %}
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <span class="table-avatar table-avatar--placeholder">{{ item.account_manager|slice:":1"|upper }}</span>
+                                                            <span>{{ item.account_manager }}</span>
+                                                        </div>
+                                                    {% else %}
+                                                        <span class="text-muted">Unknown</span>
+                                                    {% endif %}
+                                                {% endwith %}
+                                            </td>
+                                        {% endif %}
+                                        <td>
+                                            {% if item.engineer %}
+                                                {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
+                                                    {% with first=item.engineer.first_name last=item.engineer.last_name %}
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        {% if item.engineer.profile_photo %}
+                                                            <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
+                                                        {% else %}
+                                                            <span class="table-avatar table-avatar--placeholder">{{ engineer_name|slice:":1"|upper }}</span>
+                                                        {% endif %}
+                                                            <span>
+                                                                {% if first or last %}
+                                                                    {{ first|default_if_none:"" }}{% if last %} {{ last|default_if_none:"" }}{% endif %}
+                                                                {% else %}
+                                                                    {{ engineer_name }}
+                                                                {% endif %}
+                                                            </span>
+                                                    </div>
+                                                    {% endwith %}
+                                                {% endwith %}
+                                            {% else %}
+                                                <span class="text-muted">Unassigned</span>
+                                            {% endif %}
+                                        </td>
+                                {% endif %}
+                                {% if not is_requestor_ui %}
+                                    {% if role == 'admin' %}
+                                        <td class="text-capitalize">{{ item.get_engagement_type_display }}</td>
+                                        <td class="text-capitalize">{{ item.get_product_category_display|default:item.product_category }}</td>
+                                    {% else %}
+                                        <td class="text-capitalize">{{ item.get_priority_display }}</td>
+                                    {% endif %}
+                                {% endif %}
+                                <td>
+                                    {% if is_requestor_ui %}
+                                        {% if item.status == 'ongoing' %}
+                                            <span class="status-badge status-badge--ongoing">{{ item.get_status_display }}</span>
+                                        {% elif item.status == 'completed' %}
+                                            <span class="status-badge status-badge--completed">{{ item.get_status_display }}</span>
+                                        {% else %}
+                                            <span class="status-badge">{{ item.get_status_display }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-capitalize">{{ item.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                {% if role == 'admin' %}
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ item.created_at|timezone:"Asia/Manila"|date:"M d, Y h:i A" }}</span>
+                                    </td>
+                                {% endif %}
+                                {% if not role == 'admin' or active_metric_filter != 'open' %}
+                                    <td class="{% if not is_requestor_ui and item.missed_sla %}table-danger{% endif %} text-nowrap">
+                                        {% if item.end_date %}
+                                            <span class="badge {% if not is_requestor_ui and item.missed_sla %}bg-danger text-white{% elif item.due_date and not item.missed_sla %}bg-success-subtle text-success border border-success-subtle{% else %}bg-light text-dark border{% endif %}">{{ item.end_date|date:"M d, Y" }}</span>
+                                        {% else %}
+                                            <span class="text-muted">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
+                                <td>
+                                    {% if role == 'admin' %}
+                                        <span class="badge {{ item.admin_days_badge_classes }}">
+                                            {{ item.days_since_creation }}
+                                        </span>
+                                    {% else %}
+                                        {% if is_requestor_ui %}
+                                            <span class="badge bg-light text-dark border">
+                                                {{ item.days_since_creation }}
+                                            </span>
+                                        {% else %}
+                                            {% with exceeded=item.sla_overrun %}
+                                                <span class="badge {% if exceeded %}bg-danger text-white{% else %}bg-primary-subtle text-primary border border-primary-subtle{% endif %}">
+                                                    {{ item.days_since_creation }}
+                                                </span>
+                                            {% endwith %}
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                {% if not is_requestor_ui %}
+                                    <td>
+                                        {% if item.engagement_type == 'deployment' or item.engagement_type == 'certification' %}
+                                            <span class="text-muted">&mdash;</span>
+                                        {% elif is_pm_ess %}
+                                            {% if item.due_date %}
+                                                <span class="badge bg-light text-dark border">
+                                                    {{ item.due_date|date:"M d, Y" }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">&mdash;</span>
+                                            {% endif %}
+                                        {% elif role == 'admin' %}
+                                            {% if item.due_date %}
+                                                {% if item.is_overdue or item.missed_sla %}
+                                                    <span class="badge bg-danger text-white">
+                                                        {{ item.due_date|date:"M d, Y" }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-light text-dark border">
+                                                        {{ item.due_date|date:"M d, Y" }}
+                                                    </span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">&mdash;</span>
+                                            {% endif %}
+                                        {% else %}
+                                            {% if item.due_date %}
+                                                <span class="badge {% if item.is_overdue %}bg-danger text-white{% else %}bg-light text-dark border{% endif %}">
+                                                    {{ item.due_date|date:"M d, Y" }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">&mdash;</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
+                                <td class="text-end">
+                                    <div class="d-inline-flex gap-2">
+                                        {% if role == 'admin' %}
+                                            <a class="btn btn-sm btn-primary" href="{% url 'hub:request-manage' item.pk %}">Manage</a>
+                                            {% if item.is_acknowledged %}
+                                                <button class="btn btn-sm btn-outline-success" type="button" disabled title="Request has already been acknowledged">Outlook</button>
+                                            {% else %}
+                                                <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button class="btn btn-sm btn-outline-success" type="submit">Outlook</button>
+                                                </form>
+                                            {% endif %}
+                                            {% if item.teams_chat_url %}
+                                                <a class="btn btn-sm btn-outline-info" href="{{ item.teams_chat_url }}" target="_blank" rel="noopener">Teams</a>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-outline-info" type="button" disabled title="Add requestor and engineer emails to start a chat">Teams</button>
+                                            {% endif %}
+                                            <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
+                                        {% elif is_pm_ess %}
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
+                                            <form method="post" action="{% url 'hub:request-teams' item.pk %}" class="d-inline" target="_blank">
+                                                {% csrf_token %}
+                                                <button class="btn btn-sm btn-outline-info" type="submit"{% if not item.engineer or not item.engineer.email or not item.requestor or not item.requestor.email %} disabled title="Assign an engineer and ensure requestor email is set to start a chat."{% endif %}>Teams</button>
+                                            </form>
+                                            {% if item.requestor_id == request.user.id %}
+                                                <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
+                                            {% endif %}
+                                        {% elif is_requestor_ui %}
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
+                                            <a class="btn btn-sm btn-outline-danger" href="{% url 'hub:request-delete' item.pk %}">Delete</a>
+                                        {% else %}
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'hub:request-manage-collab' item.pk %}">Manage</a>
+                                            {% if item.is_acknowledged %}
+                                                <button class="btn btn-sm btn-outline-success" type="button" disabled title="Request has already been acknowledged">Outlook</button>
+                                            {% else %}
+                                                <form method="post" action="{% url 'hub:request-outlook' item.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button class="btn btn-sm btn-outline-success" type="submit"{% if item.outlook_limit_reached %} disabled title="Outlook draft already launched for this request."{% endif %}>Outlook</button>
+                                                </form>
+                                            {% endif %}
+                                            {% if item.teams_chat_url %}
+                                                <form method="post" action="{% url 'hub:request-teams' item.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button class="btn btn-sm btn-outline-info" type="submit"{% if item.teams_limit_reached %} disabled title="Teams chat already launched for this request."{% endif %}>Teams</button>
+                                                </form>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-outline-info" type="button" disabled title="Add requestor and engineer emails to start a chat">Teams</button>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="{% if role == 'admin' %}12{% elif role == 'engineer' %}9{% elif is_pm_ess %}8{% elif is_requestor_ui %}7{% else %}8{% endif %}" class="text-center text-muted py-4">No requests yet.</td>
+                            </tr>
+                        {% endfor %}

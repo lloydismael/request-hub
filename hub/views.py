@@ -33,7 +33,7 @@ from django.core.cache import cache
 from django.db import close_old_connections
 from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
-from django.db.models import Count, Min, Q, Sum
+from django.db.models import Count, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
@@ -1945,155 +1945,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 source__icontains="assignment",
             ).count()
         else:
-            metric_keys = [
-                "open",
-                "overdue",
-                "due_soon",
-                "completed",
-                "new_this_week",
-            ]
-            metric_filter = self.request.GET.get("metric_filter")
-            if not metric_filter or metric_filter not in metric_keys:
-                metric_filter = "open"
-
-            pm_esg_tab = ""
-            if user.role == PM_ESG_ROLE:
-                pm_esg_tab = (self.request.GET.get("pm_esg_tab") or "all").strip().lower()
-                if pm_esg_tab not in {"all", "assigned", "my_requests"}:
-                    pm_esg_tab = "all"
-
-            queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
-            if pm_esg_tab == "assigned":
-                queryset = queryset.filter(engineer=user)
-            elif pm_esg_tab == "my_requests":
-                queryset = queryset.filter(requestor=user)
-            filter_form = AdminRequestFilterForm(self.request.GET or None)
-            filtered_queryset = filter_form.filter_queryset(queryset)
-            requests = filter_form.filter_sequence(filtered_queryset)
-            filters_active = filter_form.has_active_filters()
-            show_filters = self.request.GET.get("show_filters") == "1"
-
-            if not isinstance(requests, list):
-                requests = list(requests)
-
-            sort_map = {
-                "reference_code": lambda req: (req.reference_code or "").lower(),
-                "account": lambda req: (req.account.name.lower() if req.account else ""),
-                "account_manager": _admin_sort_account_manager_key,
-                "engineer": _admin_sort_engineer_key,
-                "backup_engineer": _admin_sort_backup_engineer_key,
-                "engagement": lambda req: req.engagement_type or "",
-                "product_category": lambda req: req.product_category or "",
-                "status": lambda req: req.status or "",
-                "created": lambda req: req.created_at,
-                "end_date": lambda req: _admin_sort_date_key(req.end_date),
-                "days": lambda req: req.days_since_creation,
-                "due": lambda req: _admin_sort_date_key(req.due_date),
-            }
-
-            default_sort = "created"
-            default_direction = "desc"
-            sort_key = self.request.GET.get("sort", default_sort)
-            direction = self.request.GET.get("direction", default_direction)
-            if sort_key not in sort_map:
-                sort_key = default_sort
-            if direction not in {"asc", "desc"}:
-                direction = default_direction
-            reverse = direction == "desc"
-
-            key_fn = sort_map[sort_key]
-            requests.sort(key=key_fn, reverse=reverse)
-
-            null_field_map = {"end_date": "end_date", "due": "due_date"}
-            if sort_key in null_field_map:
-                field_name = null_field_map[sort_key]
-                ordered = [req for req in requests if getattr(req, field_name) is not None]
-                ordered.extend(req for req in requests if getattr(req, field_name) is None)
-                requests = ordered
-
-            self._annotate_acknowledgement_status(requests)
-
-            today = timezone.now().astimezone(MANILA_TZ).date()
-            all_requests = list(requests)
-            filtered_requests = self._filter_requests_by_metric(all_requests, metric_filter, today)
-
-            overdue_count = sum(1 for req in all_requests if req.admin_days_overdue)
-            status_counts = {
-                "all": len(all_requests),
-                "ongoing": sum(1 for req in all_requests if req.status == Request.Status.ONGOING),
-                "completed": sum(1 for req in all_requests if req.status == Request.Status.COMPLETED),
-            }
-
-            columns = list(sort_map.keys())
-            next_directions = {}
-            for column in columns:
-                if column == sort_key:
-                    next_directions[column] = "asc" if direction == "desc" else "desc"
-                else:
-                    next_directions[column] = "asc"
-
-            base_params = self.request.GET.copy()
-            base_params.pop("sort", None)
-            base_params.pop("direction", None)
-            sort_links = {}
-            for column in columns:
-                params = base_params.copy()
-                params["sort"] = column
-                params["direction"] = next_directions[column]
-                encoded = params.urlencode()
-                sort_links[column] = f"?{encoded}" if encoded else "?"
-
-            toggle_params = self.request.GET.copy()
-            if show_filters:
-                toggle_params.pop("show_filters", None)
-            else:
-                toggle_params["show_filters"] = "1"
-            toggle_encoded = toggle_params.urlencode()
-            filter_toggle_link = f"?{toggle_encoded}" if toggle_encoded else ("?" if show_filters else "?show_filters=1")
-
-            metric_links = {}
-            metric_buckets = {}
-            for key in metric_keys:
-                params = self.request.GET.copy()
-                if params.get("metric_filter") == key:
-                    params.pop("metric_filter", None)
-                else:
-                    params["metric_filter"] = key
-                encoded_params = params.urlencode()
-                metric_links[key] = f"?{encoded_params}" if encoded_params else "?"
-                metric_buckets[key] = self._filter_requests_by_metric(all_requests, key, today)
-
-            context["requests"] = filtered_requests
-            context["overdue_count"] = overdue_count
-            context["status_counts"] = status_counts
-            context["new_ticket_count"] = user.notifications.filter(
-                is_read=False,
-                source__icontains="new request",
-            ).count()
-            context["current_sort"] = sort_key
-            context["current_direction"] = direction
-            context["sort_next"] = next_directions
-            context["sort_links"] = sort_links
-            context["filter_form"] = filter_form
-            context["filters_active"] = filters_active or (metric_filter and metric_filter != "open")
-            context["show_filters"] = show_filters
-            context["filter_toggle_link"] = filter_toggle_link
-            context["metrics"] = {key: len(metric_buckets[key]) for key in metric_keys}
-            context["metric_links"] = metric_links
-            context["active_metric_filter"] = metric_filter
-
-            pm_esg_tab_links = {}
-            if user.role == PM_ESG_ROLE:
-                for key in ("all", "assigned", "my_requests"):
-                    params = self.request.GET.copy()
-                    if key == "all":
-                        params.pop("pm_esg_tab", None)
-                    else:
-                        params["pm_esg_tab"] = key
-                    encoded = params.urlencode()
-                    pm_esg_tab_links[key] = f"?{encoded}" if encoded else "?"
-            context["pm_esg_tab"] = pm_esg_tab
-            context["pm_esg_tab_links"] = pm_esg_tab_links
+            context.update(self._build_admin_dashboard_context(user))
 
         if context.get("can_create_request") and "form" not in context:
             form = kwargs.get("form")
@@ -2296,6 +2148,193 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req.ack_start_iso = start_anchor.isoformat() if start_anchor else ""
             req.ack_first_iso = ack_time.isoformat() if ack_time else ""
             req.is_acknowledged = bool(ack_time)
+
+    def _build_admin_dashboard_context(self, user) -> dict:
+        """Shared admin/PM-ESG dashboard table + metrics context (full page + live poll)."""
+        metric_keys = [
+            "open",
+            "overdue",
+            "due_soon",
+            "completed",
+            "new_this_week",
+        ]
+        metric_filter = self.request.GET.get("metric_filter")
+        if not metric_filter or metric_filter not in metric_keys:
+            metric_filter = "open"
+
+        pm_esg_tab = ""
+        if user.role == PM_ESG_ROLE:
+            pm_esg_tab = (self.request.GET.get("pm_esg_tab") or "all").strip().lower()
+            if pm_esg_tab not in {"all", "assigned", "my_requests"}:
+                pm_esg_tab = "all"
+
+        queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
+        if pm_esg_tab == "assigned":
+            queryset = queryset.filter(engineer=user)
+        elif pm_esg_tab == "my_requests":
+            queryset = queryset.filter(requestor=user)
+        filter_form = AdminRequestFilterForm(self.request.GET or None)
+        filtered_queryset = filter_form.filter_queryset(queryset)
+        requests = filter_form.filter_sequence(filtered_queryset)
+        filters_active = filter_form.has_active_filters()
+        show_filters = self.request.GET.get("show_filters") == "1"
+
+        if not isinstance(requests, list):
+            requests = list(requests)
+
+        sort_map = {
+            "reference_code": lambda req: (req.reference_code or "").lower(),
+            "account": lambda req: (req.account.name.lower() if req.account else ""),
+            "account_manager": _admin_sort_account_manager_key,
+            "engineer": _admin_sort_engineer_key,
+            "backup_engineer": _admin_sort_backup_engineer_key,
+            "engagement": lambda req: req.engagement_type or "",
+            "product_category": lambda req: req.product_category or "",
+            "status": lambda req: req.status or "",
+            "created": lambda req: req.created_at,
+            "end_date": lambda req: _admin_sort_date_key(req.end_date),
+            "days": lambda req: req.days_since_creation,
+            "due": lambda req: _admin_sort_date_key(req.due_date),
+        }
+
+        default_sort = "created"
+        default_direction = "desc"
+        sort_key = self.request.GET.get("sort", default_sort)
+        direction = self.request.GET.get("direction", default_direction)
+        if sort_key not in sort_map:
+            sort_key = default_sort
+        if direction not in {"asc", "desc"}:
+            direction = default_direction
+        reverse = direction == "desc"
+
+        key_fn = sort_map[sort_key]
+        requests.sort(key=key_fn, reverse=reverse)
+
+        null_field_map = {"end_date": "end_date", "due": "due_date"}
+        if sort_key in null_field_map:
+            field_name = null_field_map[sort_key]
+            ordered = [req for req in requests if getattr(req, field_name) is not None]
+            ordered.extend(req for req in requests if getattr(req, field_name) is None)
+            requests = ordered
+
+        self._annotate_acknowledgement_status(requests)
+
+        today = timezone.now().astimezone(MANILA_TZ).date()
+        all_requests = list(requests)
+        filtered_requests = self._filter_requests_by_metric(all_requests, metric_filter, today)
+
+        overdue_count = sum(1 for req in all_requests if req.admin_days_overdue)
+        status_counts = {
+            "all": len(all_requests),
+            "ongoing": sum(1 for req in all_requests if req.status == Request.Status.ONGOING),
+            "completed": sum(1 for req in all_requests if req.status == Request.Status.COMPLETED),
+        }
+
+        columns = list(sort_map.keys())
+        next_directions = {}
+        for column in columns:
+            if column == sort_key:
+                next_directions[column] = "asc" if direction == "desc" else "desc"
+            else:
+                next_directions[column] = "asc"
+
+        base_params = self.request.GET.copy()
+        base_params.pop("sort", None)
+        base_params.pop("direction", None)
+        base_params.pop("version", None)
+        sort_links = {}
+        for column in columns:
+            params = base_params.copy()
+            params["sort"] = column
+            params["direction"] = next_directions[column]
+            encoded = params.urlencode()
+            sort_links[column] = f"?{encoded}" if encoded else "?"
+
+        toggle_params = self.request.GET.copy()
+        toggle_params.pop("version", None)
+        if show_filters:
+            toggle_params.pop("show_filters", None)
+        else:
+            toggle_params["show_filters"] = "1"
+        toggle_encoded = toggle_params.urlencode()
+        filter_toggle_link = f"?{toggle_encoded}" if toggle_encoded else ("?" if show_filters else "?show_filters=1")
+
+        metric_links = {}
+        metric_buckets = {}
+        for key in metric_keys:
+            params = self.request.GET.copy()
+            params.pop("version", None)
+            if params.get("metric_filter") == key:
+                params.pop("metric_filter", None)
+            else:
+                params["metric_filter"] = key
+            encoded_params = params.urlencode()
+            metric_links[key] = f"?{encoded_params}" if encoded_params else "?"
+            metric_buckets[key] = self._filter_requests_by_metric(all_requests, key, today)
+
+        pm_esg_tab_links = {}
+        if user.role == PM_ESG_ROLE:
+            for key in ("all", "assigned", "my_requests"):
+                params = self.request.GET.copy()
+                params.pop("version", None)
+                if key == "all":
+                    params.pop("pm_esg_tab", None)
+                else:
+                    params["pm_esg_tab"] = key
+                encoded = params.urlencode()
+                pm_esg_tab_links[key] = f"?{encoded}" if encoded else "?"
+
+        live_version = self._admin_dashboard_live_version(user)
+
+        return {
+            "role": User.Roles.ADMIN,
+            "is_admin_ui": True,
+            "is_pm_esg": user.role == PM_ESG_ROLE,
+            "requests": filtered_requests,
+            "overdue_count": overdue_count,
+            "status_counts": status_counts,
+            "new_ticket_count": user.notifications.filter(
+                is_read=False,
+                source__icontains="new request",
+            ).count(),
+            "current_sort": sort_key,
+            "current_direction": direction,
+            "sort_next": next_directions,
+            "sort_links": sort_links,
+            "filter_form": filter_form,
+            "filters_active": filters_active or (metric_filter and metric_filter != "open"),
+            "show_filters": show_filters,
+            "filter_toggle_link": filter_toggle_link,
+            "metrics": {key: len(metric_buckets[key]) for key in metric_keys},
+            "metric_links": metric_links,
+            "active_metric_filter": metric_filter,
+            "pm_esg_tab": pm_esg_tab,
+            "pm_esg_tab_links": pm_esg_tab_links,
+            "dashboard_live_version": live_version,
+        }
+
+    @staticmethod
+    def _admin_dashboard_live_version(user) -> str:
+        """Fingerprint active + deleted request watermarks so soft-delete/restore poll correctly."""
+
+        def _iso(value) -> str:
+            return value.isoformat() if value else ""
+
+        active_stats = Request.objects.aggregate(max_updated=Max("updated_at"), total=Count("id"))
+        deleted_stats = Request.all_objects.filter(is_deleted=True).aggregate(
+            max_deleted=Max("deleted_at"),
+            max_updated=Max("updated_at"),
+            total=Count("id"),
+        )
+        parts = [
+            str(active_stats.get("total") or 0),
+            _iso(active_stats.get("max_updated")),
+            str(deleted_stats.get("total") or 0),
+            _iso(deleted_stats.get("max_deleted")),
+            _iso(deleted_stats.get("max_updated")),
+            str(getattr(user, "pk", "") or ""),
+        ]
+        return "|".join(parts)
 
     def _annotate_engineer_activity(self, requests: list[Request]) -> None:
         """Attach status-log and recent-change hints used by the engineer dashboard."""
@@ -3166,6 +3205,64 @@ class SqrListView(LoginRequiredMixin, TemplateView):
 
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
+
+
+class DashboardLiveDataView(LoginRequiredMixin, View):
+    """AJAX endpoint: admin dashboard table rows + metrics partials for polling."""
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        client_version = (request.GET.get("version") or "").strip()
+        live_version = DashboardView._admin_dashboard_live_version(request.user)
+        if client_version and client_version == live_version:
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "changed": False,
+                    "version": live_version,
+                }
+            )
+
+        dashboard = DashboardView()
+        dashboard.request = request
+        dashboard.args = args
+        dashboard.kwargs = kwargs
+        context = dashboard._build_admin_dashboard_context(request.user)
+        context.setdefault("role", User.Roles.ADMIN)
+        context.setdefault("is_admin_ui", True)
+        context.setdefault("is_requestor_ui", False)
+        context.setdefault("is_pm_ess", False)
+        context.setdefault("is_pm_esg", request.user.role == PM_ESG_ROLE)
+        context.setdefault("can_create_request", request.user.role in REQUEST_CREATOR_ROLES)
+
+        html_metrics = render_to_string(
+            "hub/partials/dashboard_admin_metrics.html",
+            context,
+            request=request,
+        )
+        html_status_pills = render_to_string(
+            "hub/partials/dashboard_admin_status_pills.html",
+            context,
+            request=request,
+        )
+        html_rows = render_to_string(
+            "hub/partials/dashboard_admin_rows.html",
+            context,
+            request=request,
+        )
+        return JsonResponse(
+            {
+                "ok": True,
+                "changed": True,
+                "version": context.get("dashboard_live_version") or live_version,
+                "request_count": len(context.get("requests") or []),
+                "html_metrics": html_metrics,
+                "html_status_pills": html_status_pills,
+                "html_rows": html_rows,
+            }
+        )
 
 
 class SqrReportsDataView(LoginRequiredMixin, View):
@@ -4842,7 +4939,12 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
 
     def delete(self, request, *args, **kwargs):
         obj = self.get_object()
-        Request.objects.filter(pk=obj.pk).update(is_deleted=True, deleted_at=timezone.now())
+        now = timezone.now()
+        Request.objects.filter(pk=obj.pk).update(
+            is_deleted=True,
+            deleted_at=now,
+            updated_at=now,
+        )
         messages.success(request, f"Request {obj.reference_code} deleted. You can restore it from Profile → Backup &amp; Restore.")
         return redirect(self.success_url)
 
@@ -4854,8 +4956,11 @@ class RequestRestoreView(LoginRequiredMixin, View):
         if request.user.role != User.Roles.ADMIN:
             messages.error(request, "Access denied.")
             return redirect("accounts:update")
+        now = timezone.now()
         updated = Request.all_objects.filter(pk=pk, is_deleted=True).update(
-            is_deleted=False, deleted_at=None
+            is_deleted=False,
+            deleted_at=None,
+            updated_at=now,
         )
         if updated:
             ref = Request.all_objects.filter(pk=pk).values_list("reference_code", flat=True).first()

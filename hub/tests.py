@@ -19,6 +19,7 @@ from hub.forms import RequestForm
 from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange, SqrSubmissionHistory
 from hub.views import (
     AssignmentEmailResult,
+    DashboardLiveDataView,
     DashboardView,
     RequestCollaborativeManageView,
     SqrListView,
@@ -414,8 +415,99 @@ class DashboardViewTests(TestCase):
         self.assertEqual(request_ids, [newer_request.pk, older_request.pk])
 
 
+class DashboardLiveDataViewTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.admin = User.objects.create_user(
+            username="admin_live",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="admin.live@example.com",
+        )
+        self.engineer = User.objects.create_user(
+            username="engineer_live",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.live@example.com",
+        )
+        self.requestor = User.objects.create_user(
+            username="requestor_live",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="requestor.live@example.com",
+        )
+        self.account = Account.objects.create(name="Live Dashboard Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Live Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            description="live dashboard request",
+        )
 
+    def test_non_admin_denied(self):
+        request = self.factory.get(reverse("hub:dashboard-live"))
+        request.user = self.engineer
+        response = DashboardLiveDataView.as_view()(request)
+        self.assertEqual(response.status_code, 403)
+        payload = json.loads(response.content)
+        self.assertFalse(payload["ok"])
 
+    def test_admin_receives_rows_and_metrics(self):
+        request = self.factory.get(reverse("hub:dashboard-live"))
+        request.user = self.admin
+        response = DashboardLiveDataView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["changed"])
+        self.assertIn(self.request_obj.reference_code, payload["html_rows"])
+        self.assertIn("dashboard-live-metrics", payload["html_metrics"])
+        self.assertIn("dashboard-live-status-pills", payload["html_status_pills"])
+        self.assertTrue(payload["version"])
+
+    def test_unchanged_version_short_circuits(self):
+        version = DashboardView._admin_dashboard_live_version(self.admin)
+        request = self.factory.get(reverse("hub:dashboard-live"), data={"version": version})
+        request.user = self.admin
+        response = DashboardLiveDataView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["changed"])
+        self.assertEqual(payload["version"], version)
+        self.assertNotIn("html_rows", payload)
+
+    def test_soft_delete_removes_row_from_live_payload(self):
+        Request.objects.filter(pk=self.request_obj.pk).update(
+            is_deleted=True,
+            deleted_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        request = self.factory.get(reverse("hub:dashboard-live"))
+        request.user = self.admin
+        response = DashboardLiveDataView.as_view()(request)
+        payload = json.loads(response.content)
+        self.assertTrue(payload["ok"])
+        self.assertNotIn(self.request_obj.reference_code, payload["html_rows"])
+
+    def test_completed_metric_filter_applied(self):
+        self.request_obj.status = Request.Status.COMPLETED
+        self.request_obj.end_date = timezone.now().date()
+        self.request_obj.save(update_fields=["status", "end_date", "updated_at"])
+        request = self.factory.get(
+            reverse("hub:dashboard-live"),
+            data={"metric_filter": "completed"},
+        )
+        request.user = self.admin
+        response = DashboardLiveDataView.as_view()(request)
+        payload = json.loads(response.content)
+        self.assertTrue(payload["ok"])
+        self.assertIn(self.request_obj.reference_code, payload["html_rows"])
+        self.assertGreaterEqual(payload["request_count"], 1)
 
 
 class OnHoldRoleTests(TestCase):

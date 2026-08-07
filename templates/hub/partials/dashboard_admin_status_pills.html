@@ -1,0 +1,6 @@
+<div id="dashboard-live-status-pills" class="d-inline-flex align-items-center gap-2 flex-wrap">
+                        <span class="dbd-stat-pill dbd-stat-pill--blue"><i class="bi bi-layers-fill"></i><span class="dbd-stat-pill__label">All</span><span class="dbd-stat-pill__value">{{ status_counts.all }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--amber"><i class="bi bi-hourglass-split"></i><span class="dbd-stat-pill__label">Ongoing</span><span class="dbd-stat-pill__value">{{ status_counts.ongoing }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--green"><i class="bi bi-check-circle-fill"></i><span class="dbd-stat-pill__label">Completed</span><span class="dbd-stat-pill__value">{{ status_counts.completed }}</span></span>
+                        <span class="dbd-stat-pill dbd-stat-pill--red"><i class="bi bi-exclamation-triangle-fill"></i><span class="dbd-stat-pill__label">Overdue</span><span class="dbd-stat-pill__value">{{ overdue_count }}</span></span>
+</div>
