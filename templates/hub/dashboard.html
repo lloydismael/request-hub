@@ -1015,14 +1015,28 @@
             }
 
             table.classList.add("table--resizable");
+            // Fixed layout after first measure so drag widths stick cleanly.
+            const lockTableLayout = () => {
+                if (table.dataset.layoutLocked === "1") {
+                    return;
+                }
+                Array.from(headerRow.cells).forEach((th) => {
+                    const w = Math.ceil(th.getBoundingClientRect().width);
+                    th.style.width = `${w}px`;
+                    th.style.maxWidth = `${w}px`;
+                });
+                table.style.tableLayout = "fixed";
+                table.dataset.layoutLocked = "1";
+            };
 
-            const minWidth = 120;
+            const minWidth = 96;
             const headers = Array.from(headerRow.cells);
 
             const applyWidth = (cellIndex, width) => {
                 const selector = `tr th:nth-child(${cellIndex}), tr td:nth-child(${cellIndex})`;
                 table.querySelectorAll(selector).forEach((cell) => {
                     cell.style.width = `${width}px`;
+                    cell.style.minWidth = `${width}px`;
                     cell.style.maxWidth = `${width}px`;
                 });
             };
@@ -1034,10 +1048,16 @@
 
                 const handle = document.createElement("span");
                 handle.className = "column-resize-handle";
+                handle.title = "Drag to resize column";
+                handle.setAttribute("role", "separator");
+                handle.setAttribute("aria-orientation", "vertical");
+                handle.setAttribute("aria-label", "Resize column");
                 th.appendChild(handle);
 
                 const startDrag = (event) => {
                     event.preventDefault();
+                    event.stopPropagation();
+                    lockTableLayout();
 
                     const startX = event.touches ? event.touches[0].pageX : event.pageX;
                     const startWidth = th.getBoundingClientRect().width;
@@ -1047,6 +1067,9 @@
                     document.body.classList.add("is-column-resizing");
 
                     const handleMove = (moveEvent) => {
+                        if (moveEvent.cancelable) {
+                            moveEvent.preventDefault();
+                        }
                         const clientX = moveEvent.touches ? moveEvent.touches[0].pageX : moveEvent.pageX;
                         const delta = clientX - startX;
                         const newWidth = Math.max(minWidth, startWidth + delta);
@@ -1653,7 +1676,16 @@
                     scales: {
                         x: {
                             beginAtZero: true,
-                            grid: { color: 'rgba(148, 163, 184, 0.15)', drawBorder: false },
+                            // Vertical grid lines (always on) — help align bars to tick values / categories.
+                            grid: {
+                                display: true,
+                                drawOnChartArea: true,
+                                drawTicks: false,
+                                color: 'rgba(100, 116, 139, 0.35)',
+                                lineWidth: 1,
+                                borderDash: horizontal ? [] : [4, 4],
+                            },
+                            border: { display: false },
                             ticks: {
                                 stepSize: horizontal ? undefined : 1,
                                 precision: 0,
@@ -1664,7 +1696,16 @@
                         },
                         y: {
                             beginAtZero: true,
-                            grid: { color: 'rgba(148, 163, 184, 0.15)', drawBorder: false, display: !horizontal },
+                            // Horizontal grid stays for value axis; light category guides when horizontal bars.
+                            grid: {
+                                display: true,
+                                drawOnChartArea: true,
+                                drawTicks: false,
+                                color: horizontal ? 'rgba(100, 116, 139, 0.28)' : 'rgba(148, 163, 184, 0.22)',
+                                lineWidth: 1,
+                                borderDash: horizontal ? [4, 4] : [],
+                            },
+                            border: { display: false },
                             ticks: {
                                 stepSize: horizontal ? undefined : 1,
                                 precision: 0,
