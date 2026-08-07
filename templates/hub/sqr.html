@@ -1687,12 +1687,12 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <th colspan="18" class="sqr-stage-proposal text-center">
                                 <i class="bi bi-file-earmark-text me-1"></i>Opportunity Stage
                             </th>
-                            {# X-AK = cols 24-37 = 14 cols, Service Delivery Stage #}
-                            <th colspan="14" class="sqr-stage-delivery text-center">
+                            {# X-AJ = cols 24-36 = 13 cols, Service Delivery Stage #}
+                            <th colspan="13" class="sqr-stage-delivery text-center">
                                 <i class="bi bi-tools me-1"></i>Service Delivery Stage
                             </th>
-                            {# AL-AQ = cols 38-43 = 6 cols, Billing Stage #}
-                            <th colspan="6" class="sqr-stage-revenue text-center">
+                            {# AK-AQ = cols 37-43 = 7 cols, Billing Stage #}
+                            <th colspan="7" class="sqr-stage-revenue text-center">
                                 <i class="bi bi-bar-chart-line-fill me-1"></i>Billing Stage
                             </th>
                             {# Action col #}
@@ -1715,7 +1715,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <th class="sqr-stage-proposal">SSE Amount</th>
                             <th class="sqr-stage-proposal">PM Man-hrs</th>
                             <th class="sqr-stage-proposal">PM Amount</th>
-                            <th class="sqr-stage-proposal">Managed Support Svc. Amt.</th>
+                            <th class="sqr-stage-proposal">Maintenance Amt.</th>
                             <th class="sqr-stage-proposal">Discount Rate</th>
                             <th class="sqr-stage-proposal">Discount Amount</th>
                             <th class="sqr-stage-proposal">Total Price</th>
@@ -1723,7 +1723,6 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <th class="sqr-stage-proposal">Approval Date</th>
                             <th class="sqr-stage-proposal">Validity Due Date</th>
                             <th class="sqr-stage-proposal">Proposal Status</th>
-                            <th class="sqr-stage-delivery">PO / PNL Date</th>
                             <th class="sqr-stage-delivery">Assigned PM</th>
                             <th class="sqr-stage-delivery">Assigned SSE</th>
                             <th class="sqr-stage-delivery">Start Date</th>
@@ -1737,6 +1736,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <th class="sqr-stage-delivery">Completion Warranty End Date</th>
                             <th class="sqr-stage-delivery">Maintenance Start Date</th>
                             <th class="sqr-stage-delivery">Maintenance End Date</th>
+                            <th class="sqr-stage-revenue">PO / PNL Date</th>
                             <th class="sqr-stage-revenue">PO Remarks</th>
                             <th class="sqr-stage-revenue">Billing Type</th>
                             <th class="sqr-stage-revenue">Billed Date</th>
@@ -1842,7 +1842,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sqr-display">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
                             {# O: PM Amount #}
                             <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                            {# P: Managed Support Service Amount #}
+                            {# P: Maintenance Amt. #}
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</span></td>
                             {# Q: Discount Rate #}
                             <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="discount_rate" data-sqr-type="number" data-sqr-value="{{ item.discount_rate|default:'0' }}"{% endif %}><span class="sqr-display">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</span></td>
@@ -1886,9 +1886,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                                 {% endif %}
                                 </span>
                             </td>
-                            {# X: PO/PNL Date — delivery stage, PM only #}
+                            {# Delivery stage starts with Assigned PM (PO/PNL Date moved to Billing) #}
                             {% if is_pm %}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# Y: Assigned PM — defaults to col J (pm_esg_reviewer) on Approval; editable #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# Z: Assigned SSE — inline-editable by PM/Admin #}
@@ -1993,6 +1992,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                                     <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
+                            {# AK: PO/PNL Date — first billing-stage column #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AL: PO Remarks — multi-line text #}
                             <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|linebreaksbr|default:"&ndash;" }}</span></td>
                             {# AM: Billing Type — Internal / Invoiced / Unbilled #}
@@ -2017,8 +2018,6 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_overview" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_overview|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_overview|linebreaksbr|default:"&ndash;" }}</span></td>
                             {% else %}
                             {# Non-PM/Engineer: read-only view of delivery + revenue columns #}
-                            {# X: PO/PNL Date #}
-                            <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# Y: Assigned PM #}
                             <td class="small">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
                             {# Z: Assigned SSE #}
@@ -2076,8 +2075,10 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <td class="small">{% if item.computed_post_svc_warranty_end_date %}{{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
                             {# AJ: Maintenance Start Date #}
                             <td class="small">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
-                            {# AK: Maintenance End Date #}
+                            {# AJ: Maintenance End Date #}
                             <td class="small">{% if item.computed_managed_support_end_date %}{{ item.computed_managed_support_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
+                            {# AK: PO/PNL Date #}
+                            <td class="small">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# AL: PO Remarks #}
                             <td class="cell-wrap small">{{ item.revenue_remarks|linebreaksbr|default:"&ndash;" }}</td>
                             {# AM: Billing Type #}
@@ -3601,9 +3602,9 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         var labels = {
             customer_name: 'Customer Name', customer_company: 'Group', customer_contact: 'Member',
             project_title: 'Project Title', project_details: 'Scope', linked_request: 'RQ ID',
-            sse_manhrs: 'SSE Man-hrs', pm_manhrs: 'PM Man-hrs', managed_support_amount: 'Managed Support Amount',
+            sse_manhrs: 'SSE Man-hrs', pm_manhrs: 'PM Man-hrs', managed_support_amount: 'Maintenance Amt.',
             discount_rate: 'Discount', status: 'Status', proposal_status: 'Proposal Status',
-            po_pnl_date: 'PO/PNL Date', assigned_pm: 'Assigned PM', assigned_sse: 'Assigned SSE',
+            po_pnl_date: 'PO / PNL Date', assigned_pm: 'Assigned PM', assigned_sse: 'Assigned SSE',
             delivery_start_date: 'Delivery Start', delivery_target_finish_date: 'Target Finish',
             overall_status: 'Overall Status', delivery_health: 'Delivery Health', delivery_progress: 'Delivery Progress',
             key_updates_risks: 'Updates/Risks', delivery_actual_finish_date: 'Actual Finish',
@@ -4506,8 +4507,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         var proposalValue = proposalStatusSelect ? proposalStatusSelect.value : '';
         var overallStatusValue = overallStatusSelect ? overallStatusSelect.value : '';
         var healthValue = healthSelect ? healthSelect.value : '';
-        var revenueDeclarationValue = revenueDeclarationSelect ? revenueDeclarationSelect.value : '';
-        var revenuelue = normalizeText(groupInput && groupInput.value ? groupInput.value : '');
+        var revenueSourceValue = revenueSourceSelect ? revenueSourceSelect.value : '';
+        var groupValue = normalizeText(groupInput && groupInput.value ? groupInput.value : '');
         var sqrDateFrom = sqrDateFromInput ? sqrDateFromInput.value : '';
         var sqrDateTo = sqrDateToInput ? sqrDateToInput.value : '';
         var amountMin = parseAmount(amountMinInput ? amountMinInput.value : '');
@@ -4522,9 +4523,9 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             var matchesProposal = !proposalValue || (row.dataset.sqrProposalStatus || '') === proposalValue;
             var matchesOverallStatus = !overallStatusValue || (row.dataset.sqrOverallStatus || '') === overallStatusValue;
             var matchesHealth = !healthValue || (row.dataset.sqrHealth || '') === healthValue;
-            var matchesRevenueDeclaration = !revenueDeclarationValue || (row.dataset.sqrRevenueDeclaration || '') === revenueDeclarationValue;
             var matchesRevenueSource = !revenueSourceValue || (row.dataset.sqrRevenueSource || '') === revenueSourceValue;
-            var matchesGroup =w.dataset.sqrCreatedAt || '';
+            var matchesGroup = !groupValue || normalizeText(row.dataset.sqrGroup || '').indexOf(groupValue) !== -1;
+            var createdAt = row.dataset.sqrCreatedAt || '';
             var matchesDateFrom = !sqrDateFrom || (createdAt && createdAt >= sqrDateFrom);
             var matchesDateTo = !sqrDateTo || (createdAt && createdAt <= sqrDateTo);
             var totalPrice = parseAmount(row.dataset.sqrTotalPrice || '0');
@@ -4550,9 +4551,9 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                 && matchesProposal
                 && matchesOverallStatus
                 && matchesHealth
-                && matchesRevenueDeclaration
                 && matchesRevenueSource
-                && matchesGroupm
+                && matchesGroup
+                && matchesDateFrom
                 && matchesDateTo
                 && matchesAmountMin
                 && matchesAmountMax
@@ -4575,7 +4576,6 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             }
         }
     }
-
     document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
         badge.addEventListener('click', function () {
             var filter = badge.dataset.sqrFilter || '';
@@ -4599,7 +4599,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         });
     });
 
-    [searchInput, overallStatusSelect, healthSelect, revenueDeclarationSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
+    [searchInput, overallStatusSelect, healthSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
         if (!control) return;
         control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', function () {
             applyFilter();
@@ -4654,10 +4654,10 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             if (proposalStatusSelect) proposalStatusSelect.value = '';
             if (overallStatusSelect) overallStatusSelect.value = '';
             if (healthSelect) healthSelect.value = '';
-            if (revenueDeclarationSelect) revenueDeclarationSelect.value = '';
             if (revenueSourceSelect) revenueSourceSelect.value = '';
             if (sqrDateFromInput) sqrDateFromInput.value = '';
-            if (sqrDateput) groupInput.value = '';
+            if (sqrDateToInput) sqrDateToInput.value = '';
+            if (groupInput) groupInput.value = '';
             if (amountMinInput) amountMinInput.value = '';
             if (amountMaxInput) amountMaxInput.value = '';
             if (linkedRequestCheckbox) linkedRequestCheckbox.checked = false;

@@ -1059,7 +1059,7 @@ class SqrProposalStatusForm(forms.ModelForm):
             "sse_amount": "SSE Amount (PHP)",
             "pm_manhrs": "PM Manhours",
             "pm_amount": "PM Amount (PHP)",
-            "managed_support_amount": "Managed Support Service Amount (PHP)",
+            "managed_support_amount": "Maintenance Amt. (PHP)",
             "discount_rate": "Discount Rate",
             "quotation_total_price": "Total Price (PHP)",
             "validity_due_date": "Validity Due Date",
