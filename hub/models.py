@@ -431,10 +431,11 @@ class SqrSubmission(models.Model):
         APPROVED = "reviewed", "Approved"
 
     class ProposalStatus(models.TextChoices):
-        SUBMITTED_PENDING = "submitted_pending", "Submitted \u2013 Pending"
-        NEGOTIATION_REVIEW = "negotiation_review", "Negotiation / Review"
-        CLOSED_WON = "closed_won", "Closed Won"
-        CLOSED_LOST = "closed_lost", "Closed Lost"
+        SUBMITTED_PENDING = "submitted_pending", "Submitted"
+        NEGOTIATION_REVIEW = "negotiation_review", "On Review"
+        CLOSED_WON = "closed_won", "Closed-Won"
+        CLOSED_LOST = "closed_lost", "Closed-Lost"
+        CLOSED_CANCELED = "closed_canceled", "Closed-Canceled"
 
     class DeliveryHealth(models.TextChoices):
         ON_TRACK = "on_track", "On Track"
@@ -451,9 +452,8 @@ class SqrSubmission(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     class RevenueStatus(models.TextChoices):
-        INVOICED = "invoiced", "Invoiced"
-        PARTIAL = "partial", "Partial"
-        PENDING = "pending", "Pending"
+        BILLED = "billed", "Billed"
+        NOT_YET_BILLED = "not_yet_billed", "Not Yet Billed"
 
     class RevenueDeclaration(models.TextChoices):
         DECLARED = "declared", "Declared"
@@ -530,7 +530,7 @@ class SqrSubmission(models.Model):
     validity_due_date = models.DateField(blank=True, null=True)
     po_attachment_link = models.URLField(blank=True)
     po_attached_at = models.DateTimeField(blank=True, null=True)
-    revenue_overview = models.TextField(blank=True)
+    revenue_overview = models.TextField(blank=True, verbose_name="Billing Remarks")
     # Proposal Stage – deal tracking (set by PM after internal approval)
     proposal_status = models.CharField(
         max_length=25, choices=ProposalStatus.choices, blank=True, default=""
@@ -566,17 +566,26 @@ class SqrSubmission(models.Model):
         max_length=20, choices=OverallStatus.choices, blank=True, default=""
     )
     key_updates_risks = models.TextField(blank=True)
-    warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Post-service Warranty End Date")
-    managed_support_start_date = models.DateField(blank=True, null=True)
-    managed_support_end_date = models.DateField(blank=True, null=True)
-    # Revenue Stage – columns (AL–AQ in Excel)
-    revenue_date = models.DateField(blank=True, null=True, verbose_name="SI/Revenue Date")
-    revenue_source = models.CharField(max_length=100, blank=True)
-    revenue_reference_no = models.CharField(max_length=100, blank=True)
-    revenue_status = models.CharField(
-        max_length=20, choices=RevenueStatus.choices, blank=True, default=""
+    warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Completion Warranty End Date")
+    managed_support_start_date = models.DateField(blank=True, null=True, verbose_name="Maintenance Start Date")
+    managed_support_end_date = models.DateField(blank=True, null=True, verbose_name="Maintenance End Date")
+    # Billing Stage – columns (AL–AQ in Excel)
+    revenue_date = models.DateField(blank=True, null=True, verbose_name="Billed Date")
+    revenue_source = models.CharField(
+        max_length=100,
+        blank=True,
+        choices=[
+            ("internal", "Internal"),
+            ("invoiced", "Invoiced"),
+            ("unbilled", "Unbilled"),
+        ],
+        verbose_name="Billing Type",
     )
-    revenue_remarks = models.TextField(blank=True)
+    revenue_reference_no = models.CharField(max_length=100, blank=True, verbose_name="Billing Reference")
+    revenue_status = models.CharField(
+        max_length=20, choices=RevenueStatus.choices, blank=True, default="", verbose_name="Billing Status"
+    )
+    revenue_remarks = models.TextField(blank=True, verbose_name="PO Remarks")
     revenue_declaration = models.CharField(
         max_length=20, choices=RevenueDeclaration.choices, blank=True, default=""
     )
@@ -672,11 +681,23 @@ class SqrSubmission(models.Model):
         discount = Decimal(self.discount_rate or 0) / Decimal("100")
         return (gross * (Decimal("1") - discount)).quantize(Decimal("0.01"))
 
-    _IMPL_SCOPES = frozenset(["Implementation", "Implementation and Project Management"])
+    _IMPL_SCOPES = frozenset([
+        "Deployment Only",
+        "Deployment and Project Management",
+        # Legacy values kept for existing rows until remapped.
+        "Implementation",
+        "Implementation and Project Management",
+    ])
     _WARRANTY_SCOPES = frozenset([
+        "Deployment Only",
+        "Deployment and Project Management",
+        "Maintenance",
+        "On-Call Services",
+        # Legacy values kept for existing rows until remapped.
         "Implementation",
         "Implementation and Project Management",
         "Managed Support and Maintenance Service",
+        "Support",
     ])
     _PM_MANHOUR_BUCKETS = frozenset([
         Decimal("8"),

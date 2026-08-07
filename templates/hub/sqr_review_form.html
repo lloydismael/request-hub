@@ -81,13 +81,14 @@
                 </span>
                 <i class="bi bi-chevron-right text-muted small"></i>
                 {# Step 2: Deal Stage #}
-                <span class="badge {% if object.proposal_status == 'closed_won' %}bg-success{% elif object.proposal_status == 'closed_lost' %}bg-danger{% elif object.proposal_status %}bg-info{% elif object.status == 'reviewed' %}bg-secondary{% else %}bg-light text-dark border{% endif %}">
+                <span class="badge {% if object.proposal_status == 'closed_won' %}bg-success{% elif object.proposal_status == 'closed_lost' or object.proposal_status == 'closed_canceled' %}bg-danger{% elif object.proposal_status %}bg-info{% elif object.status == 'reviewed' %}bg-secondary{% else %}bg-light text-dark border{% endif %}">
                     <i class="bi bi-2-circle me-1"></i>
                     Deal:
-                    {% if object.proposal_status == 'submitted_pending' %}Submitted&ndash;Pending
-                    {% elif object.proposal_status == 'negotiation_review' %}Negotiation / Review
-                    {% elif object.proposal_status == 'closed_won' %}Closed Won
-                    {% elif object.proposal_status == 'closed_lost' %}Closed Lost
+                    {% if object.proposal_status == 'submitted_pending' %}Submitted
+                    {% elif object.proposal_status == 'negotiation_review' %}On Review
+                    {% elif object.proposal_status == 'closed_won' %}Closed-Won
+                    {% elif object.proposal_status == 'closed_lost' %}Closed-Lost
+                    {% elif object.proposal_status == 'closed_canceled' %}Closed-Canceled
                     {% else %}&ndash;{% endif %}
                 </span>
                 <i class="bi bi-chevron-right text-muted small"></i>
@@ -478,7 +479,7 @@
             <div class="alert border border-success-subtle small mb-3 d-flex gap-2 align-items-center bg-success-subtle">
                 <i class="bi bi-check2-circle text-success fs-5"></i>
                 <div>
-                    Revenue Status: <strong>{{ object.get_revenue_status_display }}</strong>
+                    Billing Status: <strong>{{ object.get_revenue_status_display }}</strong>
                     {% if object.revenue_date %}&middot; Date: {{ object.revenue_date|date:"M d, Y" }}{% endif %}
                     {% if object.revenue_reference_no %}&middot; Ref: {{ object.revenue_reference_no }}{% endif %}
                 </div>
@@ -489,15 +490,8 @@
                 {% csrf_token %}
                 <fieldset{% if not revenue_unlocked %} disabled{% endif %}>
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        {% with field=revenue_form.revenue_date %}
-                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
-                        {% endwith %}
-                    </div>
-                    <div class="col-md-6">
-                        {% with field=revenue_form.revenue_status %}
+                    <div class="col-12">
+                        {% with field=revenue_form.revenue_remarks %}
                         <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
@@ -511,14 +505,28 @@
                         {% endwith %}
                     </div>
                     <div class="col-md-6">
+                        {% with field=revenue_form.revenue_date %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
                         {% with field=revenue_form.revenue_reference_no %}
                         <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
                         {% endwith %}
                     </div>
+                    <div class="col-md-6">
+                        {% with field=revenue_form.revenue_status %}
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        {% endwith %}
+                    </div>
                     <div class="col-12">
-                        {% with field=revenue_form.revenue_remarks %}
+                        {% with field=revenue_form.revenue_overview %}
                         <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
@@ -608,6 +616,11 @@
         const SCOPE = "{{ object.project_details|escapejs }}";
 
         const QUALIFYING_SCOPES = [
+            "Deployment Only",
+            "Deployment and Project Management",
+            "Maintenance",
+            "On-Call Services",
+            // Legacy values kept for existing rows.
             "Implementation",
             "Implementation and Project Management",
             "Managed Support and Maintenance Service",

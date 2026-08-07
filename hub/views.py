@@ -2468,15 +2468,29 @@ def _get_sqr_export_columns():
         ("Key Updates / Risks", lambda s: s.key_updates_risks or ""),
         ("Actual Finish Date", lambda s: _date(s.delivery_actual_finish_date)),
         ("Completion Signed Date", lambda s: _date(s.delivery_completion_signed_date)),
-        ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
-        ("Support Start Date", lambda s: _date(s.computed_support_start_date)),
-        ("Support End Date", lambda s: _date(s.computed_managed_support_end_date)),
-        ("SI / Revenue Date", lambda s: _date(s.revenue_date)),
-        ("Source", lambda s: s.revenue_source or ""),
-        ("Reference No.", lambda s: (s.revenue_reference_no or "").upper()),
-        ("Revenue Status", lambda s: "Billed" if s.revenue_date else "For Billing"),
-        ("Remarks", lambda s: s.revenue_remarks or ""),
-        ("Revenue Declaration", lambda s: s.get_revenue_declaration_display() if s.revenue_declaration else ""),
+        ("Completion Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
+        ("Maintenance Start Date", lambda s: _date(s.computed_support_start_date)),
+        ("Maintenance End Date", lambda s: _date(s.computed_managed_support_end_date)),
+        ("PO Remarks", lambda s: s.revenue_remarks or ""),
+        (
+            "Billing Type",
+            lambda s: (
+                {"internal": "Internal", "invoiced": "Invoiced", "unbilled": "Unbilled"}.get(
+                    s.revenue_source, s.revenue_source or ""
+                )
+            ),
+        ),
+        ("Billed Date", lambda s: _date(s.revenue_date)),
+        ("Billing Reference", lambda s: (s.revenue_reference_no or "").upper()),
+        (
+            "Billing Status",
+            lambda s: (
+                s.get_revenue_status_display()
+                if s.revenue_status
+                else ("Billed" if s.revenue_date else "Not Yet Billed")
+            ),
+        ),
+        ("Billing Remarks", lambda s: s.revenue_overview or ""),
     ]
 
 
@@ -2533,8 +2547,9 @@ def _get_sqr_esg_export_columns():
             return "Internal"
         if s.revenue_source == "invoiced":
             return "Invoiced"
+        if s.revenue_source == "unbilled":
+            return "Unbilled"
         return ""
-
     return [
         ("Account Name", lambda s: s.customer_name or ""),
         ("Service Description", lambda s: s.project_title or ""),
@@ -2709,6 +2724,10 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 1 for s in all_submissions
                 if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
             ),
+            "closed_canceled": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_CANCELED
+            ),
         }
 
         # ── Service Delivery Stage ───────────────────────────────────────────
@@ -2811,10 +2830,11 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             }
 
             deal_rows = [
-                ("Submitted–Pending", proposal_counts["submitted_pending"]),
-                ("Negotiation", proposal_counts["negotiation"]),
-                ("Closed Won", proposal_counts["closed_won"]),
-                ("Closed Lost", proposal_counts["closed_lost"]),
+                ("Submitted", proposal_counts["submitted_pending"]),
+                ("On Review", proposal_counts["negotiation"]),
+                ("Closed-Won", proposal_counts["closed_won"]),
+                ("Closed-Lost", proposal_counts["closed_lost"]),
+                ("Closed-Canceled", proposal_counts.get("closed_canceled", 0)),
             ]
             sqr_reports_deal_chart = {
                 "labels": [label for label, total in deal_rows if total],
@@ -3119,9 +3139,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                     submission.status = SqrSubmission.Status.FOR_PROCESSING
                     # Auto-compute Managed Support Service Amount (col P) per business rules
                     _MANAGED_SCOPES = frozenset([
-                        "Implementation",
-                        "Implementation and Project Management",
-                        "Managed Support and Maintenance Service",
+                        "Deployment Only", "Deployment and Project Management", "Maintenance", "On-Call Services", "Implementation", "Implementation and Project Management", "Managed Support and Maintenance Service",
                     ])
                     scope = form.cleaned_data.get("project_details", "") or ""
                     group = form.cleaned_data.get("customer_company", "") or ""
@@ -3322,12 +3340,14 @@ SQR_HISTORY_FIELD_LABELS = {
     "key_updates_risks": "Key Updates / Risks / Issues",
     "delivery_actual_finish_date": "Actual Finish Date",
     "delivery_completion_signed_date": "Completion Signed Date",
-    "warranty_end_date": "Post-svc Warranty End Date",
-    "managed_support_start_date": "Support Start Date",
-    "revenue_date": "SI / Revenue Date",
-    "revenue_source": "Revenue Source",
-    "revenue_reference_no": "Reference No.",
-    "revenue_remarks": "Revenue Remarks",
+    "warranty_end_date": "Completion Warranty End Date",
+    "managed_support_start_date": "Maintenance Start Date",
+    "revenue_date": "Billed Date",
+    "revenue_source": "Billing Type",
+    "revenue_reference_no": "Billing Reference",
+    "revenue_status": "Billing Status",
+    "revenue_remarks": "PO Remarks",
+    "revenue_overview": "Billing Remarks",
     "revenue_declaration": "Revenue Declaration",
 }
 
@@ -3337,7 +3357,15 @@ SQR_HISTORY_CHOICE_LABELS = {
     "delivery_health": dict(SqrSubmission.DeliveryHealth.choices),
     "overall_status": dict(SqrSubmission.OverallStatus.choices),
     "revenue_declaration": dict(SqrSubmission.RevenueDeclaration.choices),
-    "revenue_source": {"internal": "Internal", "invoiced": "Invoiced"},
+    "revenue_status": dict(SqrSubmission.RevenueStatus.choices),
+    "revenue_source": {"internal": "Internal", "invoiced": "Invoiced", "unbilled": "Unbilled"},
+    "project_details": {
+        "Deployment Only": "Deployment Only",
+        "On-Call Services": "On-Call Services",
+        "Maintenance": "Maintenance",
+        "Project Management": "Project Management",
+        "Deployment and Project Management": "Deployment and Project Management",
+    },
 }
 
 
@@ -3418,15 +3446,17 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
-        "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
+        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no",
+        "revenue_status", "revenue_remarks", "revenue_overview", "revenue_declaration",
+        "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
         "project_details", "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source",
+        "revenue_reference_no", "revenue_status", "revenue_remarks", "revenue_overview",
         "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _DATE_FIELDS = frozenset([
@@ -3442,8 +3472,8 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_target_finish_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_actual_finish_date",
         "delivery_completion_signed_date", "managed_support_start_date",
-        "revenue_date", "revenue_source", "revenue_reference_no",
-        "revenue_remarks", "revenue_declaration",
+        "revenue_date", "revenue_source", "revenue_reference_no", "revenue_status",
+        "revenue_remarks", "revenue_overview", "revenue_declaration",
     ])
     _SERIALIZED_FK_FIELDS = _FK_FIELDS | frozenset(["reviewed_by"])
     _UNDO_RETENTION = timedelta(hours=24)
@@ -3606,13 +3636,16 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         original_submission = SqrSubmission.objects.get(pk=pk)
 
         if (
-            submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+            submission.proposal_status in (
+                SqrSubmission.ProposalStatus.CLOSED_LOST,
+                SqrSubmission.ProposalStatus.CLOSED_CANCELED,
+            )
             and field in self._CLOSED_LOST_LOCKED_FIELDS
         ):
             return JsonResponse(
                 {
                     "ok": False,
-                    "error": "Delivery and revenue fields are locked when Proposal Status is Closed Lost",
+                    "error": "Delivery and billing fields are locked when Proposal Status is Closed-Lost or Closed-Canceled",
                 },
                 status=400,
             )
@@ -3665,9 +3698,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
 
         # Auto-recompute Managed Support Svc. Amt. (col P) when scope or group changes
         _MANAGED_SCOPES = frozenset([
-            "Implementation",
-            "Implementation and Project Management",
-            "Managed Support and Maintenance Service",
+            "Deployment Only", "Deployment and Project Management", "Maintenance", "On-Call Services", "Implementation", "Implementation and Project Management", "Managed Support and Maintenance Service",
         ])
         if field in ("project_details", "customer_company"):
             scope = coerced if field == "project_details" else submission.project_details
@@ -3783,14 +3814,17 @@ class SqrInlineFieldUndoView(SqrInlineFieldUpdateView):
 
             submission = SqrSubmission.objects.select_for_update().get(pk=pk)
             if (
-                submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+                submission.proposal_status in (
+                    SqrSubmission.ProposalStatus.CLOSED_LOST,
+                    SqrSubmission.ProposalStatus.CLOSED_CANCELED,
+                )
                 and change.field != "proposal_status"
                 and any(field in self._CLOSED_LOST_LOCKED_FIELDS for field in change.old_values)
             ):
                 return JsonResponse(
                     {
                         "ok": False,
-                        "error": "Delivery and revenue fields are locked when Proposal Status is Closed Lost",
+                        "error": "Delivery and billing fields are locked when Proposal Status is Closed-Lost or Closed-Canceled",
                     },
                     status=400,
                 )
@@ -5333,9 +5367,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
     REVENUE_DECLARATION_MAP = _build_choice_import_map(SqrSubmission.RevenueDeclaration.choices)
     IMPORT_STATUS_TIMEOUT = 60 * 60
     MANAGED_SCOPES = frozenset([
-        "Implementation",
-        "Implementation and Project Management",
-        "Managed Support and Maintenance Service",
+        "Deployment Only", "Deployment and Project Management", "Maintenance", "On-Call Services", "Implementation", "Implementation and Project Management", "Managed Support and Maintenance Service",
     ])
 
     def post(self, request, *args, **kwargs):
@@ -5835,10 +5867,27 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
             "key_updates_risks": self._stringify(row_data.get("Key Updates / Risks")),
             "delivery_actual_finish_date": self._parse_date_lenient(row_data.get("Actual Finish Date"), "Actual Finish Date"),
             "delivery_completion_signed_date": self._parse_date_lenient(row_data.get("Completion Signed Date"), "Completion Signed Date"),
-            "revenue_date": self._parse_date_lenient(row_data.get("SI / Revenue Date"), "SI / Revenue Date"),
-            "revenue_source": self._stringify(row_data.get("Source")),
-            "revenue_reference_no": self._stringify(row_data.get("Reference No.")),
-            "revenue_remarks": self._stringify(row_data.get("Remarks")),
+            "revenue_date": self._parse_date_lenient(
+                row_data.get("Billed Date")
+                or row_data.get("Date")
+                or row_data.get("SI / Revenue Date"),
+                "Billed Date",
+            ),
+            "revenue_source": self._stringify(
+                row_data.get("Billing Type") or row_data.get("Source")
+            ),
+            "revenue_reference_no": self._stringify(
+                row_data.get("Billing Reference") or row_data.get("Reference No.")
+            ),
+            "revenue_status": self._stringify(
+                row_data.get("Billing Status") or row_data.get("Revenue Status")
+            ),
+            "revenue_remarks": self._stringify(
+                row_data.get("PO Remarks") or row_data.get("Remarks")
+            ),
+            "revenue_overview": self._stringify(
+                row_data.get("Billing Remarks") or row_data.get("Revenue Declaration")
+            ),
             "revenue_declaration": revenue_declaration,
             "status": status,
             "documentation_links": "",

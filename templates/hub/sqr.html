@@ -111,7 +111,7 @@ main.container {
 .sqr-esg-table td:not([class*="sqr-esg-sticky"]) { min-width: 70px; max-width: 220px; }
 /* sqr-col-wide no longer used on th — kept for any legacy td references */
 .sqr-tracker td.sqr-col-wide { min-width: 140px; max-width: 220px; }
-/* AN (col 40 = Reference No.) and AP (col 42 = Remarks): pin to header text width */
+/* AN (col 40 = Billing Reference) and AP (col 42 = Remarks): pin to header text width */
 .sqr-tracker tr > :nth-child(40),
 .sqr-esg-table tr > :nth-child(28) { max-width: 130px; min-width: 0; }
 .sqr-tracker tr > :nth-child(42),
@@ -1228,10 +1228,11 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <label for="sqr-table-filter-proposal-status" class="form-label">Proposal Status</label>
                             <select class="form-select" id="sqr-table-filter-proposal-status">
                                 <option value="">All proposal statuses</option>
-                                <option value="submitted_pending">Submitted–Pending</option>
-                                <option value="negotiation_review">Negotiation</option>
-                                <option value="closed_won">Closed Won</option>
-                                <option value="closed_lost">Closed Lost</option>
+                                <option value="submitted_pending">Submitted</option>
+                                <option value="negotiation_review">On Review</option>
+                                <option value="closed_won">Closed-Won</option>
+                                <option value="closed_lost">Closed-Lost</option>
+                                <option value="closed_canceled">Closed-Canceled</option>
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
@@ -1262,19 +1263,12 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sqr-table-filter-revenue-declaration" class="form-label">Revenue Declaration</label>
-                            <select class="form-select" id="sqr-table-filter-revenue-declaration">
-                                <option value="">All declarations</option>
-                                <option value="declared">Declared</option>
-                                <option value="not_yet">Not Yet</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sqr-table-filter-revenue-source" class="form-label">Revenue Source</label>
+                            <label for="sqr-table-filter-revenue-source" class="form-label">Billing Type</label>
                             <select class="form-select" id="sqr-table-filter-revenue-source">
-                                <option value="">All sources</option>
+                                <option value="">All billing types</option>
                                 <option value="internal">Internal</option>
                                 <option value="invoiced">Invoiced</option>
+                                <option value="unbilled">Unbilled</option>
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
@@ -1346,22 +1340,27 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                 </span>
                 {% if proposal_counts.submitted_pending %}
                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:submitted_pending" style="cursor:pointer;">
-                    <i class="bi bi-send me-1"></i>Submitted&ndash;Pending: {{ proposal_counts.submitted_pending }}
+                    <i class="bi bi-send me-1"></i>Submitted: {{ proposal_counts.submitted_pending }}
                 </span>
                 {% endif %}
                 {% if proposal_counts.negotiation %}
                 <span class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sqr-filter="proposal_status:negotiation_review" style="cursor:pointer;">
-                    <i class="bi bi-chat-dots me-1"></i>Negotiation: {{ proposal_counts.negotiation }}
+                    <i class="bi bi-chat-dots me-1"></i>On Review: {{ proposal_counts.negotiation }}
                 </span>
                 {% endif %}
                 {% if proposal_counts.closed_won %}
                 <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_won" style="cursor:pointer;">
-                    <i class="bi bi-trophy me-1"></i>Closed Won: {{ proposal_counts.closed_won }}
+                    <i class="bi bi-trophy me-1"></i>Closed-Won: {{ proposal_counts.closed_won }}
                 </span>
                 {% endif %}
                 {% if proposal_counts.closed_lost %}
                 <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_lost" style="cursor:pointer;">
-                    <i class="bi bi-x-circle me-1"></i>Closed Lost: {{ proposal_counts.closed_lost }}
+                    <i class="bi bi-x-circle me-1"></i>Closed-Lost: {{ proposal_counts.closed_lost }}
+                </span>
+                {% endif %}
+                {% if proposal_counts.closed_canceled %}
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_canceled" style="cursor:pointer;">
+                    <i class="bi bi-slash-circle me-1"></i>Closed-Canceled: {{ proposal_counts.closed_canceled }}
                 </span>
                 {% endif %}
             </div>
@@ -1684,17 +1683,17 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <th class="sqr-stage-frozen col-sticky-2"></th>
                             <th class="sqr-stage-frozen col-sticky-3"></th>
                             <th class="sqr-stage-frozen col-sticky-4 col-sticky-border"></th>
-                            {# F(RQ ID) + G-W = 18 cols, Proposal Stage #}
+                            {# F(RQ ID) + G-W = 18 cols, Opportunity Stage #}
                             <th colspan="18" class="sqr-stage-proposal text-center">
-                                <i class="bi bi-file-earmark-text me-1"></i>Proposal Stage
+                                <i class="bi bi-file-earmark-text me-1"></i>Opportunity Stage
                             </th>
                             {# X-AK = cols 24-37 = 14 cols, Service Delivery Stage #}
                             <th colspan="14" class="sqr-stage-delivery text-center">
                                 <i class="bi bi-tools me-1"></i>Service Delivery Stage
                             </th>
-                            {# AL-AQ = cols 38-43 = 6 cols, Revenue Stage #}
+                            {# AL-AQ = cols 38-43 = 6 cols, Billing Stage #}
                             <th colspan="6" class="sqr-stage-revenue text-center">
-                                <i class="bi bi-bar-chart-line-fill me-1"></i>Revenue Stage
+                                <i class="bi bi-bar-chart-line-fill me-1"></i>Billing Stage
                             </th>
                             {# Action col #}
                             <th class="sqr-stage-action text-center">Action</th>
@@ -1735,21 +1734,21 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <th class="sqr-stage-delivery">Key Updates / Risks / Issues</th>
                             <th class="sqr-stage-delivery">Actual Finish Date</th>
                             <th class="sqr-stage-delivery">Completion Signed Date</th>
-                            <th class="sqr-stage-delivery">Post-svc Warranty End Date</th>
-                            <th class="sqr-stage-delivery">Support Start Date</th>
-                            <th class="sqr-stage-delivery">Support End Date</th>
-                            <th class="sqr-stage-revenue">SI / Revenue Date</th>
-                            <th class="sqr-stage-revenue">Source</th>
-                            <th class="sqr-stage-revenue">Reference No.</th>
-                            <th class="sqr-stage-revenue">Revenue Status</th>
-                            <th class="sqr-stage-revenue">Remarks</th>
-                            <th class="sqr-stage-revenue">Revenue Declaration</th>
+                            <th class="sqr-stage-delivery">Completion Warranty End Date</th>
+                            <th class="sqr-stage-delivery">Maintenance Start Date</th>
+                            <th class="sqr-stage-delivery">Maintenance End Date</th>
+                            <th class="sqr-stage-revenue">PO Remarks</th>
+                            <th class="sqr-stage-revenue">Billing Type</th>
+                            <th class="sqr-stage-revenue">Billed Date</th>
+                            <th class="sqr-stage-revenue">Billing Reference</th>
+                            <th class="sqr-stage-revenue">Billing Status</th>
+                            <th class="sqr-stage-revenue">Billing Remarks</th>
                             <th class="text-center" style="min-width:135px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}"
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' or item.proposal_status == 'closed_canceled' %}sqr-row--closed-lost{% endif %}"
                             data-sqr-status="{{ item.status }}"
                             data-sqr-proposal-status="{{ item.proposal_status|default:'' }}"
                             data-sqr-ref="{{ item.reference_code|default:'' }}"
@@ -1763,7 +1762,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             data-sqr-health="{{ item.delivery_health|default:'' }}"
                             data-sqr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
                             data-sqr-revenue-source="{{ item.revenue_source|default:'' }}"
-                            data-sqr-revenue-status="{% if item.revenue_date %}billed{% else %}for_billing{% endif %}"
+                            data-sqr-revenue-status="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}"
                             data-sqr-created-at="{{ item.created_at|date:'Y-m-d' }}"
                             data-sqr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
                             data-engineer-email="{{ item.engineer.email|default:'' }}"
@@ -1873,13 +1872,15 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="proposal_status" data-sqr-type="select" data-sqr-value="{{ item.proposal_status|default:'' }}"{% endif %}>
                                 <span class="sqr-display">
                                 {% if item.proposal_status == 'submitted_pending' %}
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted&ndash;Pending</span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted</span>
                                 {% elif item.proposal_status == 'negotiation_review' %}
-                                    <span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">On Review</span>
                                 {% elif item.proposal_status == 'closed_won' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed-Won</span>
                                 {% elif item.proposal_status == 'closed_lost' %}
-                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed Lost</span>
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed-Lost</span>
+                                {% elif item.proposal_status == 'closed_canceled' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Closed-Canceled</span>
                                 {% else %}
                                     <span class="text-muted small">&ndash;</span>
                                 {% endif %}
@@ -1974,7 +1975,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             </td>
                             {# AH: Completion Signed Date #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {# AI: Post-svc Warranty End Date — computed: Completion Signed Date + 30 days (Implementation / Impl+PM only) #}
+                            {# AI: Completion Warranty End Date — computed: Completion Signed Date + 30 days (Deployment scopes) #}
                             <td class="small" data-sqr-computed="post_svc_warranty_end_date">
                                 {% if item.computed_post_svc_warranty_end_date %}
                                     {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
@@ -1982,9 +1983,9 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                                     <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
-                            {# AJ: Support Start Date — scope + managed support amount required #}
+                            {# AJ: Maintenance Start Date — scope + managed support amount required #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_start_date" data-sqr-type="date" data-sqr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}" data-sqr-computed="support_start_date"><span class="sqr-display">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
-                            {# AK: Managed Support End Date — computed: Col AJ + 365 days #}
+                            {# AK: Maintenance End Date — computed: Col AJ + 365 days #}
                             <td class="small" data-sqr-computed="managed_support_end_date">
                                 {% if item.computed_managed_support_end_date %}
                                     {{ item.computed_managed_support_end_date|date:"M d, Y" }}
@@ -1992,24 +1993,28 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                                     <span class="text-muted fst-italic">NA</span>
                                 {% endif %}
                             </td>
-                            {# AL: SI/Revenue Date — inline calendar date input #}
+                            {# AL: PO Remarks — multi-line text #}
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|linebreaksbr|default:"&ndash;" }}</span></td>
+                            {# AM: Billing Type — Internal / Invoiced / Unbilled #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="select" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% elif item.revenue_source == 'unbilled' %}Unbilled{% else %}&ndash;{% endif %}</span></td>
+                            {# AN: Billed Date — inline calendar date input #}
                             <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_date" data-sqr-type="date" data-sqr-value="{{ item.revenue_date|date:'Y-m-d'|default:'' }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
-                            {# AM: Source — dropdown: Internal / Invoiced #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="select" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</span></td>
-                            {# AN: Reference No. — alphanumeric uppercase #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="{{ item.revenue_reference_no|upper|default:'' }}"><span class="sqr-display">{{ item.revenue_reference_no|upper|truncatechars:30|default:"&ndash;" }}</span></td>
-                            {# AO: Revenue Status — computed: "Billed" if revenue_date set, else "For Billing" #}
-                            <td class="small">
-                                {% if item.revenue_date %}
+                            {# AO: Billing Reference — single-line SI/PNL/CFDM number #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="{{ item.revenue_reference_no|upper|default:'SI / PNL / CFDM number' }}"><span class="sqr-display">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</span></td>
+                            {# AP: Billing Status — Billed / Not Yet Billed #}
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_status" data-sqr-type="select" data-sqr-value="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}" title="Click to edit">
+                                <span class="sqr-display">
+                                {% if item.revenue_status == 'billed' or not item.revenue_status and item.revenue_date %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% elif item.revenue_status == 'not_yet_billed' or not item.revenue_status %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Not Yet Billed</span>
                                 {% else %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>
+                                    &ndash;
                                 {% endif %}
+                                </span>
                             </td>
-                            {# AP: Remarks — short text input #}
-                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="text" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</span></td>
-                            {# AQ: Revenue Declaration — dropdown: Declared / Not Yet #}
-                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_declaration" data-sqr-type="select" data-sqr-value="{{ item.revenue_declaration|default:'' }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</span></td>
+                            {# AQ: Billing Remarks — multi-line text #}
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_overview" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_overview|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_overview|linebreaksbr|default:"&ndash;" }}</span></td>
                             {% else %}
                             {# Non-PM/Engineer: read-only view of delivery + revenue columns #}
                             {# X: PO/PNL Date #}
@@ -2067,27 +2072,28 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             </td>
                             {# AH: Completion Signed Date #}
                             <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            {# AI: Post-svc Warranty End Date #}
+                            {# AI: Completion Warranty End Date #}
                             <td class="small">{% if item.computed_post_svc_warranty_end_date %}{{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
-                            {# AJ: Support Start Date #}
+                            {# AJ: Maintenance Start Date #}
                             <td class="small">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
-                            {# AK: Managed Support End Date #}
+                            {# AK: Maintenance End Date #}
                             <td class="small">{% if item.computed_managed_support_end_date %}{{ item.computed_managed_support_end_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</td>
-                            {# AL: SI/Revenue Date #}
+                            {# AL: PO Remarks #}
+                            <td class="cell-wrap small">{{ item.revenue_remarks|linebreaksbr|default:"&ndash;" }}</td>
+                            {# AM: Billing Type #}
+                            <td class="small">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% elif item.revenue_source == 'unbilled' %}Unbilled{% else %}&ndash;{% endif %}</td>
+                            {# AN: Billed Date #}
                             <td class="small">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</td>
-                            {# AM: Source #}
-                            <td class="small">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</td>
-                            {# AN: Reference No. #}
-                            <td class="small" title="{{ item.revenue_reference_no|upper|default:'' }}">{{ item.revenue_reference_no|upper|truncatechars:30|default:"&ndash;" }}</td>
-                            {# AO: Revenue Status #}
+                            {# AO: Billing Reference #}
+                            <td class="small" title="{{ item.revenue_reference_no|upper|default:'' }}">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
+                            {# AP: Billing Status #}
                             <td class="small">
-                                {% if item.revenue_date %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
-                                {% else %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>{% endif %}
+                                {% if item.revenue_status == 'billed' or not item.revenue_status and item.revenue_date %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% elif item.revenue_status == 'not_yet_billed' or not item.revenue_status %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Not Yet Billed</span>
+                                {% else %}&ndash;{% endif %}
                             </td>
-                            {# AP: Remarks #}
-                            <td class="cell-wrap small">{{ item.revenue_remarks|truncatechars:60|default:"&ndash;" }}</td>
-                            {# AQ: Revenue Declaration #}
-                            <td class="small">{% if item.revenue_declaration == 'declared' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>{% elif item.revenue_declaration == 'not_yet' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>{% else %}&ndash;{% endif %}</td>
+                            {# AQ: Billing Remarks #}
+                            <td class="cell-wrap small">{{ item.revenue_overview|linebreaksbr|default:"&ndash;" }}</td>
                             {% endif %}
                             {# Action col #}
                             <td class="text-center" style="min-width:135px;">
@@ -2199,7 +2205,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' %}sqr-row--closed-lost{% endif %}"
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' or item.proposal_status == 'closed_canceled' %}sqr-row--closed-lost{% endif %}"
                             data-sqr-status="{{ item.status }}"
                             data-sqr-proposal-status="{{ item.proposal_status|default:'' }}"
                             data-sqr-ref="{{ item.reference_code|default:'' }}"
@@ -2214,7 +2220,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                             data-sqr-health="{{ item.delivery_health|default:'' }}"
                             data-sqr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
                             data-sqr-revenue-source="{{ item.revenue_source|default:'' }}"
-                            data-sqr-revenue-status="{% if item.revenue_date %}billed{% else %}for_billing{% endif %}"
+                            data-sqr-revenue-status="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}"
                             data-sqr-created-at="{{ item.created_at|date:'Y-m-d' }}"
                             data-sqr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
                             data-engineer-email="{{ item.engineer.email|default:'' }}"
@@ -3056,7 +3062,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         if (!deptSel) return;
 
         // Managed Support Service Amount preview
-        var MANAGED_SCOPES_NEW = ['Implementation', 'Implementation and Project Management', 'Managed Support and Maintenance Service'];
+        var MANAGED_SCOPES_NEW = ['Deployment Only', 'Deployment and Project Management', 'Maintenance', 'On-Call Services'];
         function updateManagedSupportPreview() {
             var scope = scopeSel ? scopeSel.value : '';
             var dept  = deptSel  ? deptSel.value  : '';
@@ -3078,6 +3084,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
 
         var hiddenSseManhrsScopes = [
             'Project Management',
+            'Maintenance',
             'Managed Support and Maintenance Service',
             'Managed Support and Service'
         ];
@@ -3418,8 +3425,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         'delivery_target_finish_date', 'overall_status', 'delivery_health',
         'delivery_progress', 'key_updates_risks', 'delivery_actual_finish_date',
         'delivery_completion_signed_date', 'managed_support_start_date',
-        'revenue_date', 'revenue_source', 'revenue_reference_no',
-        'revenue_remarks', 'revenue_declaration'
+        'revenue_date', 'revenue_source', 'revenue_reference_no', 'revenue_status',
+        'revenue_remarks', 'revenue_overview', 'revenue_declaration'
     ]);
 
     function setApprovalChoiceVisibility(isVisible) {
@@ -3520,7 +3527,9 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
     function isClosedLostLockedCell(cell) {
         if (!cell) return false;
         var row = cell.closest('tr');
-        if (!row || row.dataset.sqrProposalStatus !== 'closed_lost') return false;
+        if (!row) return false;
+        var status = row.dataset.sqrProposalStatus || '';
+        if (status !== 'closed_lost' && status !== 'closed_canceled') return false;
         return CLOSED_LOST_LOCKED_FIELDS.has(cell.dataset.sqrField || '');
     }
 
@@ -3556,22 +3565,24 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
     /* Choice maps — value → label (for display after save) */
     var LABELS = {
         status: {submitted:'For Processing', for_revision:'For Revision', reviewed:'Approved'},
-        proposal_status: {submitted_pending:'Submitted\u2013Pending', negotiation_review:'Negotiation / Review', closed_won:'Closed Won', closed_lost:'Closed Lost'},
+        proposal_status: {submitted_pending:'Submitted', negotiation_review:'On Review', closed_won:'Closed-Won', closed_lost:'Closed-Lost', closed_canceled:'Closed-Canceled'},
         overall_status: {on_hold:'On Hold', planning:'Planning', in_progress:'In Progress', completed:'Completed', cancelled:'Cancelled'},
         delivery_health: {on_track:'On Track', off_track:'Off Track', at_risk:'At Risk', completed:'Completed', cancelled:'Cancelled'},
-        project_details: {'Training':'Training','Support':'Support','Implementation':'Implementation','Project Management':'Project Management','Implementation and Project Management':'Implementation and Project Management','Demonstration':'Demonstration','Managed Support and Maintenance Service':'Managed Support and Maintenance Service','Other':'Other'},
+        project_details: {'Deployment Only':'Deployment Only','On-Call Services':'On-Call Services','Maintenance':'Maintenance','Project Management':'Project Management','Deployment and Project Management':'Deployment and Project Management'},
         customer_company: {ESS:'ESS', HP:'HP', Dell:'Dell', ENS:'ENS', ESG:'ESG', Other:'Other'},
-        revenue_source: {internal:'Internal', invoiced:'Invoiced'},
+        revenue_source: {internal:'Internal', invoiced:'Invoiced', unbilled:'Unbilled'},
+        revenue_status: {billed:'Billed', not_yet_billed:'Not Yet Billed'},
         revenue_declaration: {declared:'Declared', not_yet:'Not Yet'},
     };
     var CHOICES = {
         status: [['','—'],['submitted','For Processing'],['for_revision','For Revision'],['reviewed','Approved']],
-        proposal_status: [['','—'],['submitted_pending','Submitted\u2013Pending'],['negotiation_review','Negotiation / Review'],['closed_won','Closed Won'],['closed_lost','Closed Lost']],
+        proposal_status: [['','—'],['submitted_pending','Submitted'],['negotiation_review','On Review'],['closed_won','Closed-Won'],['closed_lost','Closed-Lost'],['closed_canceled','Closed-Canceled']],
         overall_status: [['','—'],['on_hold','On Hold'],['planning','Planning'],['in_progress','In Progress'],['completed','Completed'],['cancelled','Cancelled']],
         delivery_health: [['','—'],['on_track','On Track'],['off_track','Off Track'],['at_risk','At Risk'],['completed','Completed'],['cancelled','Cancelled']],
-        project_details: [['','— Select Scope —'],['Training','Training'],['Support','Support'],['Implementation','Implementation'],['Project Management','Project Management'],['Implementation and Project Management','Implementation and Project Management'],['Demonstration','Demonstration'],['Managed Support and Maintenance Service','Managed Support and Maintenance Service'],['Other','Other']],
+        project_details: [['','— Select Scope —'],['Deployment Only','Deployment Only'],['On-Call Services','On-Call Services'],['Maintenance','Maintenance'],['Project Management','Project Management'],['Deployment and Project Management','Deployment and Project Management']],
         customer_company: [['','— Select —'],['ESS','ESS'],['HP','HP'],['Dell','Dell'],['ENS','ENS'],['ESG','ESG'],['Other','Other']],
-        revenue_source: [['','— Select —'],['internal','Internal'],['invoiced','Invoiced']],
+        revenue_source: [['','— Select —'],['internal','Internal'],['invoiced','Invoiced'],['unbilled','Unbilled']],
+        revenue_status: [['','— Select —'],['billed','Billed'],['not_yet_billed','Not Yet Billed']],
         revenue_declaration: [['','— Select —'],['declared','Declared'],['not_yet','Not Yet']],
         assigned_pm: PM_USER_CHOICES,
         assigned_sse: SSE_USER_CHOICES,
@@ -3596,9 +3607,10 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             delivery_start_date: 'Delivery Start', delivery_target_finish_date: 'Target Finish',
             overall_status: 'Overall Status', delivery_health: 'Delivery Health', delivery_progress: 'Delivery Progress',
             key_updates_risks: 'Updates/Risks', delivery_actual_finish_date: 'Actual Finish',
-            delivery_completion_signed_date: 'Completion Signed', managed_support_start_date: 'Support Start',
-            revenue_date: 'SI/Revenue Date', revenue_source: 'Revenue Source', revenue_reference_no: 'Reference No.',
-            revenue_remarks: 'Revenue Remarks', revenue_declaration: 'Revenue Declaration'
+            delivery_completion_signed_date: 'Completion Signed', managed_support_start_date: 'Maintenance Start',
+            revenue_date: 'Billed Date', revenue_source: 'Billing Type', revenue_reference_no: 'Billing Reference',
+            revenue_status: 'Billing Status', revenue_remarks: 'PO Remarks', revenue_overview: 'Billing Remarks',
+            revenue_declaration: 'Revenue Declaration'
         };
         return labels[field] || String(field || 'field').replace(/_/g, ' ');
     }
@@ -3611,10 +3623,11 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>';
         }
         if (field === 'proposal_status') {
-            if (value === 'submitted_pending')  return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted\u2013Pending</span>';
-            if (value === 'negotiation_review') return '<span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>';
-            if (value === 'closed_won')         return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed Won</span>';
-            if (value === 'closed_lost')        return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed Lost</span>';
+            if (value === 'submitted_pending')  return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted</span>';
+            if (value === 'negotiation_review') return '<span class="badge bg-info-subtle text-info border border-info-subtle">On Review</span>';
+            if (value === 'closed_won')         return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-trophy me-1"></i>Closed-Won</span>';
+            if (value === 'closed_lost')        return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-x-circle me-1"></i>Closed-Lost</span>';
+            if (value === 'closed_canceled')    return '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><i class="bi bi-slash-circle me-1"></i>Closed-Canceled</span>';
             return '<span class="text-muted small">\u2013</span>';
         }
         if (field === 'overall_status') {
@@ -3637,6 +3650,14 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             if (value === 'declared') return '<span class="badge bg-success-subtle text-success border border-success-subtle">Declared</span>';
             if (value === 'not_yet') return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Not Yet</span>';
             return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'revenue_status') {
+            if (value === 'billed') return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>';
+            if (value === 'not_yet_billed') return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Not Yet Billed</span>';
+            return '<span class="text-muted small">\u2013</span>';
+        }
+        if (field === 'revenue_remarks' || field === 'revenue_overview' || field === 'key_updates_risks') {
+            return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
         }
         if (field === 'assigned_pm') return PM_USER_MAP[String(value)] || '\u2013';
         if (field === 'assigned_sse') return SSE_USER_MAP[String(value)] || '\u2013';
@@ -3707,9 +3728,19 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
             w.type = 'text'; w.value = (currentValue || '').toUpperCase();
-            w.maxLength = 50;
-            w.style.minWidth = '120px'; w.style.textTransform = 'uppercase';
+            w.maxLength = 100;
+            w.placeholder = 'SI / PNL / CFDM number';
+            w.style.minWidth = '140px'; w.style.textTransform = 'uppercase';
             w.addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+        } else if (field === 'revenue_remarks' || field === 'revenue_overview' || field === 'key_updates_risks') {
+            w = document.createElement('textarea');
+            w.className = 'sqr-inline-input';
+            w.rows = 3;
+            w.value = currentValue || '';
+            w.style.minWidth = '180px';
+            w.style.minHeight = '64px';
+            w.style.resize = 'vertical';
+            w.style.whiteSpace = 'pre-wrap';
         } else if (field === 'managed_support_amount') {
             w = document.createElement('input');
             w.className = 'sqr-inline-input';
@@ -3843,7 +3874,10 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         var row = cell.closest('tr');
 
         if (field === 'proposal_status' && row) {
-            row.classList.toggle('sqr-row--closed-lost', normalizedValue === 'closed_lost');
+            row.classList.toggle(
+                'sqr-row--closed-lost',
+                normalizedValue === 'closed_lost' || normalizedValue === 'closed_canceled'
+            );
             row.dataset.sqrProposalStatus = normalizedValue;
         }
         if (field === 'status' && row) {
@@ -3918,13 +3952,8 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                 if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
             }
         }
-        if (field === 'revenue_date' && row) {
-            var anCell = row.querySelector('[data-sqr-field="revenue_reference_no"]');
-            if (anCell && anCell.nextElementSibling) {
-                anCell.nextElementSibling.innerHTML = normalizedValue
-                    ? '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>'
-                    : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>For Billing</span>';
-            }
+        if (field === 'revenue_status' && row) {
+            row.dataset.sqrRevenueStatus = normalizedValue || (row.querySelector('[data-sqr-field="revenue_date"]') && row.querySelector('[data-sqr-field="revenue_date"]').dataset.sqrValue ? 'billed' : 'not_yet_billed');
         }
         if ('assigned_pm_pk' in data && row) {
             var assignedPmCell = row.querySelector('[data-sqr-field="assigned_pm"]');
@@ -4358,7 +4387,6 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
     var proposalStatusSelect = document.getElementById('sqr-table-filter-proposal-status');
     var overallStatusSelect = document.getElementById('sqr-table-filter-overall-status');
     var healthSelect = document.getElementById('sqr-table-filter-health');
-    var revenueDeclarationSelect = document.getElementById('sqr-table-filter-revenue-declaration');
     var revenueSourceSelect = document.getElementById('sqr-table-filter-revenue-source');
     var sqrDateFromInput = document.getElementById('sqr-table-filter-date-from');
     var sqrDateToInput = document.getElementById('sqr-table-filter-date-to');
@@ -4399,7 +4427,6 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             proposalStatusSelect && proposalStatusSelect.value,
             overallStatusSelect && overallStatusSelect.value,
             healthSelect && healthSelect.value,
-            revenueDeclarationSelect && revenueDeclarationSelect.value,
             revenueSourceSelect && revenueSourceSelect.value,
             sqrDateFromInput && sqrDateFromInput.value,
             sqrDateToInput && sqrDateToInput.value,
@@ -4480,8 +4507,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
         var overallStatusValue = overallStatusSelect ? overallStatusSelect.value : '';
         var healthValue = healthSelect ? healthSelect.value : '';
         var revenueDeclarationValue = revenueDeclarationSelect ? revenueDeclarationSelect.value : '';
-        var revenueSourceValue = revenueSourceSelect ? revenueSourceSelect.value : '';
-        var groupValue = normalizeText(groupInput && groupInput.value ? groupInput.value : '');
+        var revenuelue = normalizeText(groupInput && groupInput.value ? groupInput.value : '');
         var sqrDateFrom = sqrDateFromInput ? sqrDateFromInput.value : '';
         var sqrDateTo = sqrDateToInput ? sqrDateToInput.value : '';
         var amountMin = parseAmount(amountMinInput ? amountMinInput.value : '');
@@ -4498,8 +4524,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             var matchesHealth = !healthValue || (row.dataset.sqrHealth || '') === healthValue;
             var matchesRevenueDeclaration = !revenueDeclarationValue || (row.dataset.sqrRevenueDeclaration || '') === revenueDeclarationValue;
             var matchesRevenueSource = !revenueSourceValue || (row.dataset.sqrRevenueSource || '') === revenueSourceValue;
-            var matchesGroup = !groupValue || normalizeText(row.dataset.sqrGroup || '').indexOf(groupValue) !== -1;
-            var createdAt = row.dataset.sqrCreatedAt || '';
+            var matchesGroup =w.dataset.sqrCreatedAt || '';
             var matchesDateFrom = !sqrDateFrom || (createdAt && createdAt >= sqrDateFrom);
             var matchesDateTo = !sqrDateTo || (createdAt && createdAt <= sqrDateTo);
             var totalPrice = parseAmount(row.dataset.sqrTotalPrice || '0');
@@ -4527,8 +4552,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
                 && matchesHealth
                 && matchesRevenueDeclaration
                 && matchesRevenueSource
-                && matchesGroup
-                && matchesDateFrom
+                && matchesGroupm
                 && matchesDateTo
                 && matchesAmountMin
                 && matchesAmountMax
@@ -4633,8 +4657,7 @@ body:not(.dark-mode) .sqr-esg-table tbody tr:hover td.sqr-esg-sticky-1 { backgro
             if (revenueDeclarationSelect) revenueDeclarationSelect.value = '';
             if (revenueSourceSelect) revenueSourceSelect.value = '';
             if (sqrDateFromInput) sqrDateFromInput.value = '';
-            if (sqrDateToInput) sqrDateToInput.value = '';
-            if (groupInput) groupInput.value = '';
+            if (sqrDateput) groupInput.value = '';
             if (amountMinInput) amountMinInput.value = '';
             if (amountMaxInput) amountMaxInput.value = '';
             if (linkedRequestCheckbox) linkedRequestCheckbox.checked = false;

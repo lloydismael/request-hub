@@ -589,6 +589,10 @@ class SqrSubmissionForm(forms.ModelForm):
     }
 
     SSE_MANHRS_SCOPES = frozenset([
+        "Deployment Only",
+        "On-Call Services",
+        "Deployment and Project Management",
+        # Legacy values kept for existing rows.
         "Training",
         "Support",
         "Implementation",
@@ -598,20 +602,19 @@ class SqrSubmissionForm(forms.ModelForm):
     ])
     HIDE_SSE_MANHRS_SCOPES = frozenset([
         "Project Management",
+        "Maintenance",
+        # Legacy values kept for existing rows.
         "Managed Support and Maintenance Service",
         "Managed Support and Service",
     ])
 
     SCOPE_CHOICES = (
         ("", "— Select Scope —"),
-        ("Training", "Training"),
-        ("Support", "Support"),
-        ("Implementation", "Implementation"),
+        ("Deployment Only", "Deployment Only"),
+        ("On-Call Services", "On-Call Services"),
+        ("Maintenance", "Maintenance"),
         ("Project Management", "Project Management"),
-        ("Implementation and Project Management", "Implementation and Project Management"),
-        ("Demonstration", "Demonstration"),
-        ("Managed Support and Maintenance Service", "Managed Support and Maintenance Service"),
-        ("Other", "Other"),
+        ("Deployment and Project Management", "Deployment and Project Management"),
     )
 
     customer_company = forms.ChoiceField(
@@ -883,7 +886,7 @@ class SqrTrackerEditForm(forms.ModelForm):
             "delivery_completion_signed_date": "Completion Signed Date (AH)",
             "warranty_end_date": "Warranty End Date (AI)",
             "revenue_source": "Source (AM)",
-            "revenue_reference_no": "Reference No. (AN)",
+            "revenue_reference_no": "Billing Reference (AN)",
             "revenue_remarks": "Remarks (AP)",
             "revenue_declaration": "Revenue Declaration (AQ)",
         }
@@ -1176,37 +1179,41 @@ class SqrRevenueForm(forms.ModelForm):
     class Meta:
         model = SqrSubmission
         fields = [
-            "revenue_date",
+            "revenue_remarks",
             "revenue_source",
+            "revenue_date",
             "revenue_reference_no",
             "revenue_status",
-            "revenue_remarks",
-            "revenue_declaration",
+            "revenue_overview",
         ]
         labels = {
-            "revenue_date": "SI / Revenue Date",
-            "revenue_source": "Source",
-            "revenue_reference_no": "Reference No.",
-            "revenue_status": "Revenue Status",
-            "revenue_remarks": "Remarks",
-            "revenue_declaration": "Revenue Declaration",
+            "revenue_remarks": "PO Remarks",
+            "revenue_source": "Billing Type",
+            "revenue_date": "Billed Date",
+            "revenue_reference_no": "Billing Reference",
+            "revenue_status": "Billing Status",
+            "revenue_overview": "Billing Remarks",
         }
         widgets = {
-            "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. Invoiced"}),
-            "revenue_reference_no": forms.TextInput(attrs={"class": "form-control"}),
-            "revenue_status": forms.Select(attrs={"class": "form-select"}),
             "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
-            "revenue_declaration": forms.Select(attrs={"class": "form-select"}),
+            "revenue_source": forms.Select(attrs={"class": "form-select"}),
+            "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "revenue_reference_no": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "SI / PNL / CFDM number"}
+            ),
+            "revenue_status": forms.Select(attrs={"class": "form-select"}),
+            "revenue_overview": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["revenue_source"].choices = [("", "\u2014 Not set \u2014")] + [
+            ("internal", "Internal"),
+            ("invoiced", "Invoiced"),
+            ("unbilled", "Unbilled"),
+        ]
         self.fields["revenue_status"].choices = [("", "\u2014 Not set \u2014")] + list(
             SqrSubmission.RevenueStatus.choices
-        )
-        self.fields["revenue_declaration"].choices = [("", "\u2014 Not set \u2014")] + list(
-            SqrSubmission.RevenueDeclaration.choices
         )
         for f in self.fields.values():
             f.required = False
