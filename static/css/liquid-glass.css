@@ -44,6 +44,19 @@
     --lg-accent-deep: #0060df;
     --lg-danger: #ff3b30;
 
+    /* Semantic data colours (iOS system palette) */
+    --lg-ok: #30d158;
+    --lg-warn: #ff9f0a;
+    --lg-crit: #ff453a;
+    --lg-info: #64d2ff;
+    --lg-violet: #bf5af0;
+    --lg-teal: #40c8e0;
+
+    /* Table */
+    --lg-row-hover: rgba(10, 132, 255, 0.07);
+    --lg-thead-bg: rgba(255, 255, 255, 0.55);
+    --lg-divider: rgba(11, 18, 32, 0.09);
+
     /* Shadow ladder — ambient + key light */
     --lg-shadow-card:
         0 1px 1px rgba(6, 18, 46, 0.05),
@@ -75,6 +88,17 @@ body.dark-mode {
     --lg-ink-faint: rgba(242, 245, 251, 0.44);
     --lg-accent: #4aa3ff;
     --lg-accent-deep: #1f7ae0;
+
+    --lg-ok: #32d74b;
+    --lg-warn: #ffb340;
+    --lg-crit: #ff6961;
+    --lg-info: #6ad3ff;
+    --lg-violet: #d08bf5;
+    --lg-teal: #55d6ec;
+
+    --lg-row-hover: rgba(120, 170, 255, 0.09);
+    --lg-thead-bg: rgba(20, 26, 44, 0.62);
+    --lg-divider: rgba(255, 255, 255, 0.09);
 
     --lg-shadow-card:
         0 1px 1px rgba(0, 0, 0, 0.35),
@@ -1007,8 +1031,7 @@ body.dark-mode.page-login img.login-card__logo {
     }
 
     .login-card__sheen {
-        display: none;
-    }
+        display: none;    }
 
     .lg-tile:hover,
     .lg-tile:focus-within,

@@ -1,0 +1,955 @@
+/* ==========================================================================
+   Liquid Glass — dashboard + global chrome
+   Loaded AFTER app.css and liquid-glass.css. Inherits --lg-* tokens.
+   Motion uses transform/opacity only. Reduced motion honoured at bottom.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Surface variants
+   -------------------------------------------------------------------------- */
+
+.lg-surface--sunken {
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+    border-radius: var(--lg-radius-md);
+    box-shadow: inset 0 1px 2px rgba(6, 18, 46, 0.07);
+}
+
+.lg-divider {
+    height: 1px;
+    background: var(--lg-divider);
+    border: none;
+    margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   2. Global glass navbar (all authenticated pages except login)
+   -------------------------------------------------------------------------- */
+
+body:not(.page-login) .navbar,
+body.dark-mode:not(.page-login) .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    padding-block: 0.75rem;
+    background: linear-gradient(180deg, rgba(14, 20, 38, 0.72), rgba(14, 20, 38, 0.58)) !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px -18px rgba(0, 0, 0, 0.8) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(var(--lg-saturate));
+    backdrop-filter: blur(24px) saturate(var(--lg-saturate));
+}
+
+body:not(.page-login) .navbar-brand {
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    color: #f5f8ff !important;
+}
+
+body:not(.page-login) .navbar .nav-link {
+    position: relative;
+    padding: 0.45rem 0.85rem;
+    border-radius: var(--lg-radius-sm);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: rgba(245, 248, 255, 0.72) !important;
+    transition:
+        background-color var(--lg-dur-xs) var(--ease-ios),
+        color var(--lg-dur-xs) var(--ease-ios),
+        transform var(--lg-dur-sm) var(--ease-ios-spring);
+}
+
+body:not(.page-login) .navbar .nav-link:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff !important;
+}
+
+body:not(.page-login) .navbar .nav-link:active {
+    transform: scale(0.96);
+}
+
+body:not(.page-login) .navbar .nav-link.active {
+    background: color-mix(in srgb, var(--lg-accent) 30%, transparent);
+    color: #ffffff !important;
+}
+
+body:not(.page-login) .navbar .nav-link:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--lg-accent) 60%, transparent);
+    outline-offset: 2px;
+}
+
+/* Avatar dropdown as a glass popover */
+body:not(.page-login) .nav-avatar-menu {
+    border-radius: var(--lg-radius-md) !important;
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    box-shadow: var(--lg-shadow-card) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    color: var(--lg-ink);
+}
+
+body:not(.page-login) .nav-avatar-menu__item {
+    border-radius: 10px;
+    color: var(--lg-ink);
+    transition: background-color var(--lg-dur-xs) var(--ease-ios);
+}
+
+body:not(.page-login) .nav-avatar-menu__item:hover {
+    background: var(--lg-tint);
+}
+
+body:not(.page-login) .nav-avatar-menu__divider {
+    background: var(--lg-divider);
+}
+
+body:not(.page-login) .nav-avatar {
+    border: 1px solid var(--lg-hairline);
+    box-shadow: 0 2px 10px rgba(6, 18, 46, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   3. Dashboard shell — static mesh background (no drift)
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard,
+body.requestor-dashboard,
+body.engineer-dashboard {
+    font-family: var(--lg-font);
+    background-color: #0a1740 !important;
+    background-image:
+        radial-gradient(44% 42% at 12% 8%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 64%),
+        radial-gradient(40% 40% at 88% 10%, rgba(150, 120, 255, 0.72) 0%, rgba(150, 120, 255, 0) 62%),
+        radial-gradient(36% 36% at 80% 84%, rgba(255, 122, 190, 0.5) 0%, rgba(255, 122, 190, 0) 62%),
+        radial-gradient(30% 32% at 8% 78%, rgba(64, 226, 210, 0.45) 0%, rgba(64, 226, 210, 0) 60%),
+        radial-gradient(58% 50% at 44% 104%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%) !important;
+    background-attachment: fixed !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    color: var(--lg-ink);
+}
+
+body.dark-mode.admin-dashboard,
+body.dark-mode.requestor-dashboard,
+body.dark-mode.engineer-dashboard {
+    background-color: #05070f !important;
+    background-image:
+        radial-gradient(44% 40% at 12% 8%, rgba(58, 120, 220, 0.34) 0%, rgba(58, 120, 220, 0) 62%),
+        radial-gradient(40% 38% at 88% 12%, rgba(96, 72, 190, 0.32) 0%, rgba(96, 72, 190, 0) 60%),
+        radial-gradient(38% 36% at 78% 82%, rgba(168, 66, 128, 0.22) 0%, rgba(168, 66, 128, 0) 62%),
+        radial-gradient(56% 48% at 40% 100%, rgba(12, 34, 96, 0.66) 0%, rgba(12, 34, 96, 0) 66%) !important;
+}
+
+/* Panels */
+body.admin-dashboard .glass-card,
+body.requestor-dashboard .glass-card,
+body.engineer-dashboard .glass-card,
+body.dark-mode.admin-dashboard .glass-card,
+body.dark-mode.requestor-dashboard .glass-card,
+body.dark-mode.engineer-dashboard .glass-card {
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    border-radius: var(--lg-radius-xl);
+    box-shadow: var(--lg-shadow-card) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    color: var(--lg-ink);
+}
+
+body.admin-dashboard h1, body.admin-dashboard h2, body.admin-dashboard h3,
+body.requestor-dashboard h1, body.requestor-dashboard h2, body.requestor-dashboard h3,
+body.engineer-dashboard h1, body.engineer-dashboard h2, body.engineer-dashboard h3 {
+    letter-spacing: -0.022em;
+    color: var(--lg-ink);
+}
+
+body.admin-dashboard .text-muted,
+body.requestor-dashboard .text-muted,
+body.engineer-dashboard .text-muted,
+body.admin-dashboard .text-secondary,
+body.requestor-dashboard .text-secondary,
+body.engineer-dashboard .text-secondary {
+    color: var(--lg-ink-soft) !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Segmented tab strips (nav-pills)
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard .nav-pills,
+body.requestor-dashboard .nav-pills,
+body.engineer-dashboard .nav-pills {
+    gap: 0.25rem;
+    padding: 4px;
+    border-radius: var(--lg-radius-sm);
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+}
+
+body.admin-dashboard .nav-pills .nav-link,
+body.requestor-dashboard .nav-pills .nav-link,
+body.engineer-dashboard .nav-pills .nav-link {
+    border-radius: 9px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.9375rem;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+    color: var(--lg-ink-soft);
+    background: transparent;
+    transition:
+        background-color var(--lg-dur-xs) var(--ease-ios),
+        color var(--lg-dur-xs) var(--ease-ios),
+        transform var(--lg-dur-sm) var(--ease-ios-spring);
+}
+
+body.admin-dashboard .nav-pills .nav-link:hover,
+body.requestor-dashboard .nav-pills .nav-link:hover,
+body.engineer-dashboard .nav-pills .nav-link:hover {
+    color: var(--lg-ink);
+    background: var(--lg-tint);
+}
+
+body.admin-dashboard .nav-pills .nav-link.active,
+body.requestor-dashboard .nav-pills .nav-link.active,
+body.engineer-dashboard .nav-pills .nav-link.active {
+    color: #fff;
+    background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 12px -4px color-mix(in srgb, var(--lg-accent) 60%, transparent);
+}
+
+body.admin-dashboard .nav-pills .nav-link:active,
+body.requestor-dashboard .nav-pills .nav-link:active,
+body.engineer-dashboard .nav-pills .nav-link:active {
+    transform: scale(0.97);
+}
+
+/* --------------------------------------------------------------------------
+   5. Buttons
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard .btn,
+body.requestor-dashboard .btn,
+body.engineer-dashboard .btn {
+    border-radius: 10px;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+}
+
+body.admin-dashboard .btn:hover:not(:disabled),
+body.requestor-dashboard .btn:hover:not(:disabled),
+body.engineer-dashboard .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px -8px rgba(6, 18, 46, 0.6);
+}
+
+body.admin-dashboard .btn:active:not(:disabled),
+body.requestor-dashboard .btn:active:not(:disabled),
+body.engineer-dashboard .btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+body.admin-dashboard .btn-primary,
+body.requestor-dashboard .btn-primary,
+body.engineer-dashboard .btn-primary {
+    border: none;
+    background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+body.admin-dashboard .btn-outline-light,
+body.admin-dashboard .btn-outline-secondary,
+body.requestor-dashboard .btn-outline-light,
+body.requestor-dashboard .btn-outline-secondary,
+body.engineer-dashboard .btn-outline-light,
+body.engineer-dashboard .btn-outline-secondary {
+    color: var(--lg-ink);
+    border-color: var(--lg-hairline);
+    background: var(--lg-tint);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+
+body.admin-dashboard .btn-outline-light:hover,
+body.admin-dashboard .btn-outline-secondary:hover,
+body.requestor-dashboard .btn-outline-light:hover,
+body.requestor-dashboard .btn-outline-secondary:hover,
+body.engineer-dashboard .btn-outline-light:hover,
+body.engineer-dashboard .btn-outline-secondary:hover {
+    color: var(--lg-ink);
+    background: var(--lg-tint-strong);
+    border-color: var(--lg-hairline);
+}
+
+/* --------------------------------------------------------------------------
+   6. Metric cards
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard .dashboard-metric-card,
+body.requestor-dashboard .dashboard-metric-card,
+body.dark-mode.admin-dashboard .dashboard-metric-card,
+body.dark-mode.requestor-dashboard .dashboard-metric-card {
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    padding: 1.1rem 1.15rem !important;
+    border-radius: var(--lg-radius-lg) !important;
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    box-shadow: var(--lg-shadow-tile) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    color: var(--lg-ink) !important;
+    transition:
+        transform var(--lg-dur-md) var(--ease-ios-out),
+        box-shadow var(--lg-dur-md) var(--ease-ios-out);
+}
+
+body.admin-dashboard .dashboard-metric-card::after,
+body.requestor-dashboard .dashboard-metric-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 45%;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: skewX(-18deg);
+    opacity: 0;
+}
+
+body.admin-dashboard .dashboard-metric-card-link:hover .dashboard-metric-card,
+body.requestor-dashboard .dashboard-metric-card-link:hover .dashboard-metric-card {
+    transform: translateY(-4px);
+    box-shadow: var(--lg-shadow-lift) !important;
+}
+
+body.admin-dashboard .dashboard-metric-card-link:hover .dashboard-metric-card::after,
+body.requestor-dashboard .dashboard-metric-card-link:hover .dashboard-metric-card::after {
+    animation: lg-sheen-sweep var(--lg-dur-xl) var(--ease-ios) forwards;
+}
+
+body.admin-dashboard .dashboard-metric-card-link:focus-visible .dashboard-metric-card,
+body.requestor-dashboard .dashboard-metric-card-link:focus-visible .dashboard-metric-card {
+    outline: 2px solid color-mix(in srgb, var(--lg-accent) 60%, transparent);
+    outline-offset: 3px;
+}
+
+body.admin-dashboard .dashboard-metric-card--active,
+body.requestor-dashboard .dashboard-metric-card--active,
+body.dark-mode.admin-dashboard .dashboard-metric-card--active,
+body.dark-mode.requestor-dashboard .dashboard-metric-card--active {
+    background: linear-gradient(155deg,
+        color-mix(in srgb, var(--lg-accent) 26%, transparent),
+        color-mix(in srgb, var(--lg-accent) 12%, transparent)) !important;
+    border-color: color-mix(in srgb, var(--lg-accent) 55%, transparent) !important;
+    box-shadow:
+        var(--lg-shadow-tile),
+        0 0 0 3px color-mix(in srgb, var(--lg-accent) 22%, transparent) !important;
+}
+
+body.admin-dashboard .dashboard-metric-card__label,
+body.requestor-dashboard .dashboard-metric-card__label,
+body.dark-mode.admin-dashboard .dashboard-metric-card .dashboard-metric-card__label,
+body.dark-mode.requestor-dashboard .dashboard-metric-card .dashboard-metric-card__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-ink-soft) !important;
+}
+
+body.admin-dashboard .dashboard-metric-card__value,
+body.requestor-dashboard .dashboard-metric-card__value,
+body.dark-mode.admin-dashboard .dashboard-metric-card .dashboard-metric-card__value,
+body.dark-mode.requestor-dashboard .dashboard-metric-card .dashboard-metric-card__value {
+    font-size: 2.125rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--lg-ink) !important;
+}
+
+body.admin-dashboard .dashboard-metric-card__hint,
+body.requestor-dashboard .dashboard-metric-card__hint {
+    font-size: 0.75rem;
+    letter-spacing: -0.005em;
+    color: var(--lg-ink-faint) !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Status pills / badges / ack timers
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard .dbd-stat-pill,
+body.requestor-dashboard .dbd-stat-pill,
+body.engineer-dashboard .dbd-stat-pill,
+body.dark-mode .dbd-stat-pill {
+    border-radius: var(--lg-radius-pill);
+    padding: 0.3rem 0.75rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border: 1px solid transparent;
+    -webkit-backdrop-filter: blur(12px) saturate(var(--lg-saturate));
+    backdrop-filter: blur(12px) saturate(var(--lg-saturate));
+}
+
+body.admin-dashboard .dbd-stat-pill__label,
+body.requestor-dashboard .dbd-stat-pill__label,
+body.engineer-dashboard .dbd-stat-pill__label {
+    font-size: 0.6875rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+body.admin-dashboard .dbd-stat-pill__value,
+body.requestor-dashboard .dbd-stat-pill__value,
+body.engineer-dashboard .dbd-stat-pill__value {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+body.admin-dashboard .dbd-stat-pill--blue,
+body.dark-mode .dbd-stat-pill--blue {
+    background: color-mix(in srgb, var(--lg-info) 22%, transparent);
+    border-color: color-mix(in srgb, var(--lg-info) 45%, transparent);
+    color: color-mix(in srgb, var(--lg-info) 55%, #06263a);
+}
+
+body.admin-dashboard .dbd-stat-pill--amber,
+body.dark-mode .dbd-stat-pill--amber {
+    background: color-mix(in srgb, var(--lg-warn) 22%, transparent);
+    border-color: color-mix(in srgb, var(--lg-warn) 45%, transparent);
+    color: color-mix(in srgb, var(--lg-warn) 55%, #3a2200);
+}
+
+body.admin-dashboard .dbd-stat-pill--green,
+body.dark-mode .dbd-stat-pill--green {
+    background: color-mix(in srgb, var(--lg-ok) 22%, transparent);
+    border-color: color-mix(in srgb, var(--lg-ok) 45%, transparent);
+    color: color-mix(in srgb, var(--lg-ok) 55%, #052a12);
+}
+
+body.admin-dashboard .dbd-stat-pill--red,
+body.dark-mode .dbd-stat-pill--red {
+    background: color-mix(in srgb, var(--lg-crit) 22%, transparent);
+    border-color: color-mix(in srgb, var(--lg-crit) 45%, transparent);
+    color: color-mix(in srgb, var(--lg-crit) 55%, #3a0906);
+}
+
+body.dark-mode.admin-dashboard .dbd-stat-pill--blue,
+body.dark-mode .dbd-stat-pill--blue {
+    color: color-mix(in srgb, var(--lg-info) 78%, #ffffff);
+}
+
+body.dark-mode.admin-dashboard .dbd-stat-pill--amber,
+body.dark-mode .dbd-stat-pill--amber {
+    color: color-mix(in srgb, var(--lg-warn) 78%, #ffffff);
+}
+
+body.dark-mode.admin-dashboard .dbd-stat-pill--green,
+body.dark-mode .dbd-stat-pill--green {
+    color: color-mix(in srgb, var(--lg-ok) 78%, #ffffff);
+}
+
+body.dark-mode.admin-dashboard .dbd-stat-pill--red,
+body.dark-mode .dbd-stat-pill--red {
+    color: color-mix(in srgb, var(--lg-crit) 78%, #ffffff);
+}
+
+body.admin-dashboard .status-badge,
+body.requestor-dashboard .status-badge,
+body.engineer-dashboard .status-badge {
+    border-radius: var(--lg-radius-pill);
+    padding: 0.22rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    border: 1px solid transparent;
+}
+
+body.admin-dashboard .status-badge--ongoing,
+body.requestor-dashboard .status-badge--ongoing,
+body.engineer-dashboard .status-badge--ongoing {
+    background: color-mix(in srgb, var(--lg-warn) 18%, transparent);
+    border-color: color-mix(in srgb, var(--lg-warn) 40%, transparent);
+    color: color-mix(in srgb, var(--lg-warn) 80%, var(--lg-ink));
+}
+
+body.admin-dashboard .status-badge--completed,
+body.requestor-dashboard .status-badge--completed,
+body.engineer-dashboard .status-badge--completed {
+    background: color-mix(in srgb, var(--lg-ok) 18%, transparent);
+    border-color: color-mix(in srgb, var(--lg-ok) 40%, transparent);
+    color: color-mix(in srgb, var(--lg-ok) 80%, var(--lg-ink));
+}
+
+/* Request id + ack timer capsules — JS swaps the modifier class, keep names */
+body.admin-dashboard .request-id-cell,
+body.engineer-dashboard .request-id-cell,
+body.requestor-dashboard .request-id-cell {
+    border-radius: 8px;
+    padding: 0.12rem 0.45rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+body.admin-dashboard .request-id-cell--green,
+body.engineer-dashboard .request-id-cell--green,
+body.dark-mode .request-id-cell--green {
+    background: color-mix(in srgb, var(--lg-ok) 18%, transparent);
+    color: color-mix(in srgb, var(--lg-ok) 82%, var(--lg-ink));
+}
+
+body.admin-dashboard .request-id-cell--amber,
+body.engineer-dashboard .request-id-cell--amber,
+body.dark-mode .request-id-cell--amber {
+    background: color-mix(in srgb, var(--lg-warn) 18%, transparent);
+    color: color-mix(in srgb, var(--lg-warn) 82%, var(--lg-ink));
+}
+
+body.admin-dashboard .request-id-cell--red,
+body.engineer-dashboard .request-id-cell--red,
+body.dark-mode .request-id-cell--red {
+    background: color-mix(in srgb, var(--lg-crit) 18%, transparent);
+    color: color-mix(in srgb, var(--lg-crit) 82%, var(--lg-ink));
+}
+
+body.engineer-dashboard .engineer-ack-timer,
+body.admin-dashboard .engineer-ack-timer {
+    border-radius: var(--lg-radius-pill);
+    padding: 0.15rem 0.55rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    transition: background-color var(--lg-dur-sm) var(--ease-ios), color var(--lg-dur-sm) var(--ease-ios);
+}
+
+/* --------------------------------------------------------------------------
+   8. Requestor summary
+   -------------------------------------------------------------------------- */
+
+body.requestor-dashboard .requestor-summary {
+    padding: 1.25rem 1.4rem;
+    border-radius: var(--lg-radius-lg);
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+}
+
+body.requestor-dashboard .requestor-summary__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-ink-soft);
+}
+
+body.requestor-dashboard .requestor-summary__value {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--lg-ink);
+}
+
+body.requestor-dashboard .requestor-summary__value--ongoing {
+    color: var(--lg-warn);
+}
+
+body.requestor-dashboard .requestor-summary__value--completed {
+    color: var(--lg-ok);
+}
+
+/* --------------------------------------------------------------------------
+   9. Filter panel
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard .dashboard-filter-form {
+    margin-inline: 0;
+    padding: 1.25rem 1.1rem 1.1rem;
+    border-radius: var(--lg-radius-lg);
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+}
+
+body.admin-dashboard .dashboard-filter-form .form-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--lg-ink-soft) !important;
+}
+
+body.admin-dashboard .form-control,
+body.admin-dashboard .form-select,
+body.requestor-dashboard .form-control,
+body.requestor-dashboard .form-select,
+body.engineer-dashboard .form-control,
+body.engineer-dashboard .form-select,
+body.dark-mode.admin-dashboard .form-control,
+body.dark-mode.admin-dashboard .form-select {
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9375rem;
+    color: var(--lg-ink);
+    background-color: var(--lg-tint);
+    border: 1px solid var(--lg-hairline-soft);
+    box-shadow: none;
+    transition: border-color var(--lg-dur-xs) var(--ease-ios), box-shadow var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.admin-dashboard .form-control:focus,
+body.admin-dashboard .form-select:focus,
+body.requestor-dashboard .form-control:focus,
+body.requestor-dashboard .form-select:focus,
+body.engineer-dashboard .form-control:focus,
+body.engineer-dashboard .form-select:focus {
+    border-color: color-mix(in srgb, var(--lg-accent) 60%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent);
+    background-color: var(--lg-tint-strong);
+    color: var(--lg-ink);
+}
+
+body.dark-mode.admin-dashboard .form-select option,
+body.dark-mode.requestor-dashboard .form-select option,
+body.dark-mode.engineer-dashboard .form-select option {
+    background-color: #141a2c;
+    color: var(--lg-ink);
+}
+
+/* --------------------------------------------------------------------------
+   10. Table
+   -------------------------------------------------------------------------- */
+
+body.admin-dashboard .dashboard-table-wrapper,
+body.requestor-dashboard .dashboard-table-wrapper,
+body.engineer-dashboard .dashboard-table-wrapper,
+body.dark-mode .dashboard-table-wrapper {
+    border-radius: var(--lg-radius-lg);
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint));
+    border: 1px solid var(--lg-hairline-soft);
+    box-shadow: inset 0 1px 2px rgba(6, 18, 46, 0.06);
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    overflow: auto;
+}
+
+body.admin-dashboard .dashboard-table-wrapper table,
+body.requestor-dashboard .dashboard-table-wrapper table,
+body.engineer-dashboard .dashboard-table-wrapper table,
+body.dark-mode.admin-dashboard .dashboard-table-wrapper table,
+body.admin-dashboard.dark-mode .dashboard-table-wrapper table {
+    margin-bottom: 0;
+    color: var(--lg-ink) !important;
+    background: transparent !important;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--lg-ink);
+    --bs-table-striped-bg: transparent;
+    --bs-table-hover-bg: transparent;
+    border-color: var(--lg-divider) !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper thead th,
+body.requestor-dashboard .dashboard-table-wrapper thead th,
+body.engineer-dashboard .dashboard-table-wrapper thead th,
+body.dark-mode.admin-dashboard .dashboard-table-wrapper table.table--resizable thead th,
+body.admin-dashboard.dark-mode .dashboard-table-wrapper th {
+    position: sticky !important;
+    top: 0;
+    z-index: 2;
+    padding: 0.7rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 650;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--lg-ink-soft) !important;
+    background: var(--lg-thead-bg) !important;
+    border-bottom: 1px solid var(--lg-divider) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(var(--lg-saturate));
+    backdrop-filter: blur(18px) saturate(var(--lg-saturate));
+}
+
+body.admin-dashboard .dashboard-table-wrapper tbody td,
+body.requestor-dashboard .dashboard-table-wrapper tbody td,
+body.engineer-dashboard .dashboard-table-wrapper tbody td,
+body.admin-dashboard.dark-mode .dashboard-table-wrapper td {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.875rem;
+    letter-spacing: -0.005em;
+    color: var(--lg-ink) !important;
+    background: transparent !important;
+    border-top: none !important;
+    border-bottom: 1px solid var(--lg-divider) !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper tbody tr,
+body.requestor-dashboard .dashboard-table-wrapper tbody tr,
+body.engineer-dashboard .dashboard-table-wrapper tbody tr {
+    transition: background-color var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.admin-dashboard .dashboard-table-wrapper tbody tr:hover,
+body.requestor-dashboard .dashboard-table-wrapper tbody tr:hover,
+body.engineer-dashboard .dashboard-table-wrapper tbody tr:hover {
+    background: var(--lg-row-hover) !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper tbody tr:last-child td,
+body.requestor-dashboard .dashboard-table-wrapper tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+body.admin-dashboard .table-sort-link,
+body.requestor-dashboard .table-sort-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    color: var(--lg-ink-soft);
+    text-decoration: none;
+    transition: color var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.admin-dashboard .table-sort-link:hover {
+    color: var(--lg-ink);
+}
+
+body.admin-dashboard .table-sort-link--active {
+    color: var(--lg-accent);
+}
+
+body.admin-dashboard .table-sort-link:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--lg-accent) 60%, transparent);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* Column resize handle stays hairline — JS writes inline widths, never override */
+body.admin-dashboard .column-resize-handle {
+    background: transparent;
+    transition: background-color var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.admin-dashboard .column-resize-handle:hover,
+body.admin-dashboard.is-column-resizing .column-resize-handle {
+    background: color-mix(in srgb, var(--lg-accent) 55%, transparent);
+}
+
+body.admin-dashboard .table-avatar,
+body.requestor-dashboard .table-avatar,
+body.engineer-dashboard .table-avatar,
+body.dark-mode .table-avatar {
+    border: 1px solid var(--lg-hairline);
+    box-shadow: 0 2px 8px rgba(6, 18, 46, 0.22);
+}
+
+body.dark-mode.admin-dashboard .table-cell-nowrap,
+body.dark-mode.requestor-dashboard .table-cell-nowrap,
+body.dark-mode.engineer-dashboard .table-cell-nowrap {
+    color: var(--lg-ink) !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. Create-request modal
+   -------------------------------------------------------------------------- */
+
+.requestor-modal__backdrop {
+    background: color-mix(in srgb, #050b1c 55%, transparent) !important;
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    backdrop-filter: blur(30px) saturate(160%);
+}
+
+.requestor-modal__dialog,
+body.dark-mode .requestor-modal__dialog {
+    border-radius: var(--lg-radius-xl) !important;
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    box-shadow: var(--lg-shadow-card) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur-strong)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur-strong)) saturate(var(--lg-saturate));
+    color: var(--lg-ink) !important;
+    font-family: var(--lg-font);
+}
+
+.requestor-modal--visible .requestor-modal__dialog {
+    animation: lg-sheet-in var(--lg-dur-lg) var(--ease-ios-out) forwards;
+}
+
+@keyframes lg-sheet-in {
+    0%   { opacity: 0; transform: translateY(28px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.requestor-modal__header,
+body.dark-mode .requestor-modal__header {
+    background: transparent !important;
+    border-bottom: 1px solid var(--lg-divider) !important;
+}
+
+.requestor-modal__header h2,
+.requestor-modal__header .h5,
+body.dark-mode .requestor-modal__header h2,
+body.dark-mode .requestor-modal__header .h5 {
+    letter-spacing: -0.022em;
+    color: var(--lg-ink) !important;
+}
+
+.requestor-modal__body .form-label,
+.requestor-modal__body .form-text,
+.requestor-modal__body .text-muted,
+body.dark-mode .requestor-modal__body .form-label,
+body.dark-mode .requestor-modal__body .form-text,
+body.dark-mode .requestor-modal__body .text-muted {
+    color: var(--lg-ink-soft) !important;
+}
+
+.requestor-modal__body .form-control,
+.requestor-modal__body .form-select,
+body.dark-mode .requestor-modal__body .form-control,
+body.dark-mode .requestor-modal__body .form-select {
+    border-radius: 10px !important;
+    color: var(--lg-ink) !important;
+    background-color: var(--lg-tint) !important;
+    border: 1px solid var(--lg-hairline-soft) !important;
+}
+
+.requestor-modal__body .form-control:focus,
+.requestor-modal__body .form-select:focus {
+    border-color: color-mix(in srgb, var(--lg-accent) 60%, transparent) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent) !important;
+}
+
+body.dark-mode .requestor-modal__body .form-select option {
+    background-color: #141a2c;
+    color: var(--lg-ink);
+}
+
+.deployment-calendar,
+.acct-dropdown,
+body.dark-mode .acct-dropdown {
+    border-radius: var(--lg-radius-md) !important;
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    box-shadow: var(--lg-shadow-tile) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    color: var(--lg-ink) !important;
+}
+
+.acct-dropdown__item,
+body.dark-mode .acct-dropdown__item {
+    border-radius: 8px;
+    color: var(--lg-ink) !important;
+}
+
+.acct-dropdown__item:hover,
+.acct-dropdown__item.is-active,
+body.dark-mode .acct-dropdown__item:hover,
+body.dark-mode .acct-dropdown__item.is-active {
+    background: var(--lg-tint-strong) !important;
+    color: var(--lg-ink) !important;
+}
+
+/* Placeholders + thin scrollbars across dashboard surfaces */
+body.admin-dashboard ::placeholder,
+body.requestor-dashboard ::placeholder,
+body.engineer-dashboard ::placeholder,
+.requestor-modal__body ::placeholder,
+body.dark-mode .requestor-modal__body .form-control::placeholder {
+    color: var(--lg-ink-faint) !important;
+    opacity: 1;
+}
+
+body.admin-dashboard .dashboard-table-wrapper,
+body.requestor-dashboard .dashboard-table-wrapper,
+body.engineer-dashboard .dashboard-table-wrapper,
+.requestor-modal__body {
+    scrollbar-width: thin;
+    scrollbar-color: var(--lg-hairline) transparent;
+}
+
+body.admin-dashboard .dashboard-table-wrapper::-webkit-scrollbar,
+body.requestor-dashboard .dashboard-table-wrapper::-webkit-scrollbar,
+body.engineer-dashboard .dashboard-table-wrapper::-webkit-scrollbar,
+.requestor-modal__body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+}
+
+body.admin-dashboard .dashboard-table-wrapper::-webkit-scrollbar-track,
+body.requestor-dashboard .dashboard-table-wrapper::-webkit-scrollbar-track,
+body.engineer-dashboard .dashboard-table-wrapper::-webkit-scrollbar-track,
+.requestor-modal__body::-webkit-scrollbar-track {
+    background: transparent;
+    border: none;
+}
+
+body.admin-dashboard .dashboard-table-wrapper::-webkit-scrollbar-thumb,
+body.requestor-dashboard .dashboard-table-wrapper::-webkit-scrollbar-thumb,
+body.engineer-dashboard .dashboard-table-wrapper::-webkit-scrollbar-thumb,
+.requestor-modal__body::-webkit-scrollbar-thumb {
+    border-radius: var(--lg-radius-pill);
+    background-color: color-mix(in srgb, var(--lg-ink) 25%, transparent);
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* --------------------------------------------------------------------------
+   12. Chart panels
+   -------------------------------------------------------------------------- */
+body.requestor-dashboard .activity-chart-wrap,
+body.engineer-dashboard .activity-chart-wrap {
+    border-radius: var(--lg-radius-lg);
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+    padding: 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   13. Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+    body.admin-dashboard .glass-card,
+    body.requestor-dashboard .glass-card,
+    body.engineer-dashboard .glass-card {
+        border-radius: var(--lg-radius-lg);
+        padding: 1.1rem !important;
+    }
+
+    body.admin-dashboard .nav-pills,
+    body.requestor-dashboard .nav-pills,
+    body.engineer-dashboard .nav-pills {
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    body.admin-dashboard .dashboard-metric-card__value,
+    body.requestor-dashboard .dashboard-metric-card__value {
+        font-size: 1.75rem;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   14. Reduced motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    body.admin-dashboard .dashboard-metric-card::after,
+    body.requestor-dashboard .dashboard-metric-card::after,
+    .requestor-modal--visible .requestor-modal__dialog {
+        animation: none !important;
+    }
+
+    body.admin-dashboard .dashboard-metric-card-link:hover .dashboard-metric-card,
+    body.requestor-dashboard .dashboard-metric-card-link:hover .dashboard-metric-card,
+    body.admin-dashboard .btn:hover:not(:disabled),
+    body.requestor-dashboard .btn:hover:not(:disabled),
+    body.engineer-dashboard .btn:hover:not(:disabled),
+    body:not(.page-login) .navbar .nav-link:active {
+        transform: none !important;
+    }
+}
