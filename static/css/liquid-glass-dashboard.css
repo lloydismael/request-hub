@@ -1193,7 +1193,727 @@ body.engineer-dashboard .activity-chart-wrap {
 }
 
 /* --------------------------------------------------------------------------
-   13. Responsive
+   13. Management page (body.management-page)
+   Reuses dashboard mesh / glass / table / button language without broadening
+   admin-dashboard selectors. Overrides legacy app.css .mgmt-* styles.
+   -------------------------------------------------------------------------- */
+
+body.management-page {
+    font-family: var(--lg-font);
+    background-color: #0a1740 !important;
+    background-image:
+        radial-gradient(44% 42% at 12% 8%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 64%),
+        radial-gradient(40% 40% at 88% 10%, rgba(150, 120, 255, 0.72) 0%, rgba(150, 120, 255, 0) 62%),
+        radial-gradient(36% 36% at 80% 84%, rgba(255, 122, 190, 0.5) 0%, rgba(255, 122, 190, 0) 62%),
+        radial-gradient(30% 32% at 8% 78%, rgba(64, 226, 210, 0.45) 0%, rgba(64, 226, 210, 0) 60%),
+        radial-gradient(58% 50% at 44% 104%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%) !important;
+    background-attachment: fixed !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    color: var(--lg-ink);
+}
+
+body.dark-mode.management-page {
+    background-color: #05070f !important;
+    background-image:
+        radial-gradient(44% 40% at 12% 8%, rgba(58, 120, 220, 0.34) 0%, rgba(58, 120, 220, 0) 62%),
+        radial-gradient(40% 38% at 88% 12%, rgba(96, 72, 190, 0.32) 0%, rgba(96, 72, 190, 0) 60%),
+        radial-gradient(38% 36% at 78% 82%, rgba(168, 66, 128, 0.22) 0%, rgba(168, 66, 128, 0) 62%),
+        radial-gradient(56% 48% at 40% 100%, rgba(12, 34, 96, 0.66) 0%, rgba(12, 34, 96, 0) 66%) !important;
+}
+
+body.management-page .glass-card,
+body.dark-mode.management-page .glass-card {
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    border-radius: var(--lg-radius-xl);
+    box-shadow: var(--lg-shadow-card) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    color: var(--lg-ink);
+}
+
+body.management-page h1,
+body.management-page h2,
+body.management-page h3,
+body.management-page .h3,
+body.management-page .h5 {
+    letter-spacing: -0.022em;
+    color: var(--lg-ink);
+}
+
+body.management-page .text-muted,
+body.management-page .text-secondary {
+    color: var(--lg-ink-soft) !important;
+}
+
+body.management-page .text-primary {
+    color: var(--lg-accent) !important;
+}
+
+/* Segmented tabs */
+body.management-page .mgmt-tabs.nav-pills {
+    gap: 0.25rem;
+    padding: 4px;
+    border-radius: var(--lg-radius-sm);
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+    -webkit-backdrop-filter: blur(16px) saturate(1.7);
+    backdrop-filter: blur(16px) saturate(1.7);
+}
+
+body.management-page .mgmt-tabs .nav-link {
+    border-radius: 9px;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.875rem;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+    color: var(--lg-ink-soft) !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition:
+        background var(--lg-dur-xs) var(--ease-ios),
+        color var(--lg-dur-xs) var(--ease-ios),
+        box-shadow var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.management-page .mgmt-tabs .nav-link:hover {
+    background: var(--lg-tint) !important;
+    color: var(--lg-ink) !important;
+    transform: none !important;
+}
+
+body.management-page .mgmt-tabs .nav-link.active {
+    color: #fff !important;
+    font-weight: 650;
+    background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep)) !important;
+    border-color: transparent !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        0 6px 14px -8px color-mix(in srgb, var(--lg-accent) 70%, transparent) !important;
+}
+
+/* Stat chips — readable light + dark
+   Specificity must beat app.css: body.dark-mode .d-flex.align-items-center span */
+body.management-page span.mgmt-stat-chip,
+body.dark-mode.management-page span.mgmt-stat-chip,
+body.dark-mode.management-page .d-flex.align-items-center span.mgmt-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        0 6px 14px -12px rgba(6, 18, 46, 0.35);
+    -webkit-backdrop-filter: blur(16px) saturate(1.8);
+    backdrop-filter: blur(16px) saturate(1.8);
+}
+
+body.management-page span.mgmt-stat-chip.mgmt-stat-chip--users,
+body.dark-mode.management-page .d-flex.align-items-center span.mgmt-stat-chip.mgmt-stat-chip--users {
+    color: color-mix(in srgb, var(--lg-info) 72%, #06263a) !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-info) 28%, rgba(255, 255, 255, 0.78)),
+            color-mix(in srgb, var(--lg-info) 14%, rgba(255, 255, 255, 0.45))) !important;
+    border-color: color-mix(in srgb, var(--lg-info) 35%, rgba(255, 255, 255, 0.4)) !important;
+}
+
+body.management-page span.mgmt-stat-chip.mgmt-stat-chip--accounts,
+body.dark-mode.management-page .d-flex.align-items-center span.mgmt-stat-chip.mgmt-stat-chip--accounts {
+    color: color-mix(in srgb, var(--lg-ok) 68%, #06301a) !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-ok) 26%, rgba(255, 255, 255, 0.78)),
+            color-mix(in srgb, var(--lg-ok) 12%, rgba(255, 255, 255, 0.45))) !important;
+    border-color: color-mix(in srgb, var(--lg-ok) 32%, rgba(255, 255, 255, 0.4)) !important;
+}
+
+body.dark-mode.management-page span.mgmt-stat-chip,
+body.dark-mode.management-page .d-flex.align-items-center span.mgmt-stat-chip {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 8px 18px -14px rgba(0, 0, 0, 0.55);
+}
+
+body.dark-mode.management-page span.mgmt-stat-chip.mgmt-stat-chip--users,
+body.dark-mode.management-page .d-flex.align-items-center span.mgmt-stat-chip.mgmt-stat-chip--users {
+    color: #cfe7ff !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-info) 34%, rgba(22, 30, 52, 0.72)),
+            color-mix(in srgb, var(--lg-info) 18%, rgba(14, 20, 36, 0.55))) !important;
+}
+
+body.dark-mode.management-page span.mgmt-stat-chip.mgmt-stat-chip--accounts,
+body.dark-mode.management-page .d-flex.align-items-center span.mgmt-stat-chip.mgmt-stat-chip--accounts {
+    color: #c8f5dc !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-ok) 30%, rgba(22, 30, 52, 0.72)),
+            color-mix(in srgb, var(--lg-ok) 14%, rgba(14, 20, 36, 0.55))) !important;
+}
+
+/* Toolbar + search */
+body.management-page .mgmt-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.95rem 1.15rem;
+    border-bottom: 1px solid var(--lg-divider) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16));
+}
+
+body.dark-mode.management-page .mgmt-toolbar {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.management-page .mgmt-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 1;
+    min-width: 180px;
+    max-width: 460px;
+    padding: 0.42rem 0.85rem;
+    border-radius: 12px;
+    background: var(--lg-tint-sunken) !important;
+    border: 1px solid var(--lg-hairline-soft) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6);
+    backdrop-filter: blur(14px) saturate(1.6);
+    transition:
+        border-color var(--lg-dur-xs) var(--ease-ios),
+        box-shadow var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.management-page .mgmt-search-box:focus-within {
+    border-color: color-mix(in srgb, var(--lg-accent) 55%, transparent) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent) !important;
+}
+
+body.management-page .mgmt-search-icon {
+    color: var(--lg-ink-faint) !important;
+    font-size: 0.85rem;
+}
+
+body.management-page .mgmt-search-input {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    color: var(--lg-ink) !important;
+    box-shadow: none !important;
+}
+
+body.management-page .mgmt-search-input::placeholder {
+    color: var(--lg-ink-faint) !important;
+    opacity: 1;
+}
+
+body.management-page .mgmt-result-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    color: var(--lg-ink-soft) !important;
+    background: var(--lg-tint) !important;
+    border: 1px solid var(--lg-hairline-soft);
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+}
+
+/* Frosted buttons on management */
+body.management-page .btn {
+    border-radius: 10px;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+}
+
+body.management-page .lg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+    padding: 0.35rem 0.85rem !important;
+    border-radius: 999px !important;
+    font-size: 0.8125rem !important;
+    font-weight: 650 !important;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    text-decoration: none !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.85);
+    backdrop-filter: blur(18px) saturate(1.85);
+    transition:
+        transform var(--lg-dur-sm) var(--ease-ios-spring),
+        background var(--lg-dur-xs) var(--ease-ios),
+        border-color var(--lg-dur-xs) var(--ease-ios),
+        box-shadow var(--lg-dur-xs) var(--ease-ios),
+        color var(--lg-dur-xs) var(--ease-ios),
+        filter var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.management-page .lg-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+body.management-page .lg-btn--accent,
+body.management-page .btn-primary.lg-btn {
+    color: #fff !important;
+    border: 1px solid color-mix(in srgb, var(--lg-accent) 55%, rgba(255, 255, 255, 0.35)) !important;
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--lg-accent) 88%, #ffffff),
+            color-mix(in srgb, var(--lg-accent-deep) 92%, #0b3a7a)) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.42),
+        0 6px 16px -8px color-mix(in srgb, var(--lg-accent) 70%, transparent) !important;
+}
+
+body.management-page .lg-btn--accent:hover,
+body.management-page .btn-primary.lg-btn:hover {
+    color: #fff !important;
+    filter: brightness(1.05);
+}
+
+body.management-page .lg-btn--ghost,
+body.management-page .btn-outline-secondary.lg-btn {
+    color: var(--lg-ink) !important;
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        0 6px 16px -12px rgba(6, 18, 46, 0.35) !important;
+}
+
+body.management-page .lg-btn--ghost:hover,
+body.management-page .btn-outline-secondary.lg-btn:hover {
+    color: var(--lg-ink) !important;
+    border-color: rgba(255, 255, 255, 0.72) !important;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.55)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+}
+
+body.management-page .lg-btn--ok,
+body.management-page .btn-success.lg-btn {
+    color: #fff !important;
+    border: 1px solid color-mix(in srgb, var(--lg-ok) 50%, rgba(255, 255, 255, 0.35)) !important;
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--lg-ok) 86%, #ffffff),
+            color-mix(in srgb, var(--lg-ok) 92%, #0a4a2a)) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        0 6px 16px -8px color-mix(in srgb, var(--lg-ok) 65%, transparent) !important;
+}
+
+body.management-page .lg-btn--danger,
+body.management-page .btn-outline-danger.lg-btn {
+    color: color-mix(in srgb, var(--lg-danger, #dc2626) 82%, #3b0a0a) !important;
+    border: 1px solid color-mix(in srgb, var(--lg-danger, #dc2626) 42%, rgba(255, 255, 255, 0.35)) !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-danger, #dc2626) 16%, rgba(255, 255, 255, 0.78)),
+            color-mix(in srgb, var(--lg-danger, #dc2626) 8%, rgba(255, 255, 255, 0.45))) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+}
+
+body.management-page .lg-btn--warn,
+body.management-page .btn-outline-warning.lg-btn {
+    color: color-mix(in srgb, var(--lg-warn) 78%, #3b2200) !important;
+    border: 1px solid color-mix(in srgb, var(--lg-warn) 45%, rgba(255, 255, 255, 0.35)) !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-warn) 22%, rgba(255, 255, 255, 0.8)),
+            color-mix(in srgb, var(--lg-warn) 10%, rgba(255, 255, 255, 0.48))) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
+body.dark-mode.management-page .lg-btn--ghost,
+body.dark-mode.management-page .btn-outline-secondary.lg-btn {
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode.management-page .lg-btn--danger,
+body.dark-mode.management-page .btn-outline-danger.lg-btn {
+    color: #fecaca !important;
+    border-color: rgba(248, 113, 113, 0.45) !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, #ef4444 28%, rgba(22, 30, 52, 0.7)),
+            color-mix(in srgb, #ef4444 14%, rgba(14, 20, 36, 0.55))) !important;
+}
+
+body.dark-mode.management-page .lg-btn--warn,
+body.dark-mode.management-page .btn-outline-warning.lg-btn {
+    color: #ffe8a3 !important;
+    border-color: rgba(251, 191, 36, 0.45) !important;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--lg-warn) 30%, rgba(22, 30, 52, 0.7)),
+            color-mix(in srgb, var(--lg-warn) 14%, rgba(14, 20, 36, 0.55))) !important;
+}
+
+/* Table wrapper + cells */
+body.management-page .mgmt-table-wrapper,
+body.management-page .dashboard-table-wrapper {
+    border-radius: 0;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint));
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: blur(30px) saturate(1.85);
+    backdrop-filter: blur(30px) saturate(1.85);
+    overflow: auto;
+}
+
+body.dark-mode.management-page .mgmt-table-wrapper,
+body.dark-mode.management-page .dashboard-table-wrapper {
+    background:
+        linear-gradient(180deg, rgba(22, 30, 52, 0.82), rgba(14, 20, 36, 0.7)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint));
+    border-top-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.management-page .mgmt-table,
+body.dark-mode.management-page .mgmt-table {
+    margin-bottom: 0;
+    color: var(--lg-ink) !important;
+    background: transparent !important;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--lg-ink);
+    --bs-table-striped-bg: transparent;
+    --bs-table-hover-bg: transparent;
+    border-color: var(--lg-divider) !important;
+}
+
+body.management-page .mgmt-th,
+body.management-page .mgmt-thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0.75rem 1rem !important;
+    font-size: 0.6875rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--lg-ink) 82%, transparent) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.72)),
+        var(--lg-thead-bg) !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.1) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.9);
+    backdrop-filter: blur(22px) saturate(1.9);
+}
+
+body.dark-mode.management-page .mgmt-th,
+body.dark-mode.management-page .mgmt-thead th {
+    color: rgba(245, 248, 255, 0.88) !important;
+    background:
+        linear-gradient(180deg, rgba(30, 40, 66, 0.92), rgba(22, 30, 52, 0.84)),
+        var(--lg-thead-bg) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.management-page .mgmt-th--name { min-width: 220px; }
+body.management-page .mgmt-th--username { min-width: 140px; }
+body.management-page .mgmt-th--email { min-width: 200px; }
+body.management-page .mgmt-th--department { min-width: 120px; }
+body.management-page .mgmt-th--role { min-width: 160px; }
+body.management-page .mgmt-th--login { min-width: 160px; }
+body.management-page .mgmt-th--actions { min-width: 160px; }
+body.management-page .mgmt-th--account { min-width: 260px; }
+body.management-page .mgmt-th--account-actions { min-width: 180px; }
+
+body.management-page .mgmt-table td {
+    padding: 0.7rem 1rem !important;
+    font-size: 0.875rem;
+    letter-spacing: -0.005em;
+    color: var(--lg-ink) !important;
+    background: transparent !important;
+    border-top: none !important;
+    border-bottom: 1px solid var(--lg-divider) !important;
+}
+
+body.management-page .mgmt-table tbody tr {
+    transition: background-color var(--lg-dur-xs) var(--ease-ios);
+}
+
+body.management-page .mgmt-table tbody tr:hover {
+    background: var(--lg-row-hover) !important;
+}
+
+body.management-page .mgmt-table tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+body.management-page .mgmt-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid var(--lg-hairline);
+    box-shadow: 0 2px 8px rgba(6, 18, 46, 0.22);
+    background: linear-gradient(135deg, var(--lg-accent) 0%, var(--lg-accent-deep) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.management-page .mgmt-role-badge {
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    border-radius: 999px;
+    padding: 0.28em 0.7em;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+body.management-page .mgmt-role-badge--admin {
+    background: color-mix(in srgb, #7c3aed 78%, #fff);
+    color: #fff;
+}
+body.management-page .mgmt-role-badge--engineer {
+    background: color-mix(in srgb, #0891b2 78%, #fff);
+    color: #fff;
+}
+body.management-page .mgmt-role-badge--on_hold {
+    background: color-mix(in srgb, #94a3b8 78%, #fff);
+    color: #fff;
+}
+body.management-page .mgmt-role-badge--requestor {
+    background: color-mix(in srgb, #059669 78%, #fff);
+    color: #fff;
+}
+body.management-page .mgmt-role-badge--requestor_ess {
+    background: color-mix(in srgb, #10b981 78%, #fff);
+    color: #fff;
+}
+body.management-page .mgmt-role-badge--pm_ess {
+    background: color-mix(in srgb, #d97706 78%, #fff);
+    color: #fff;
+}
+body.management-page .mgmt-role-badge--pm_esg {
+    background: color-mix(in srgb, #dc2626 78%, #fff);
+    color: #fff;
+}
+
+body.management-page .form-control,
+body.management-page .form-select,
+body.dark-mode.management-page .form-control,
+body.dark-mode.management-page .form-select {
+    border-radius: 10px !important;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9375rem;
+    color: var(--lg-ink) !important;
+    background-color: var(--lg-tint) !important;
+    border: 1px solid var(--lg-hairline-soft) !important;
+    box-shadow: none !important;
+}
+
+body.management-page .form-control:focus,
+body.management-page .form-select:focus {
+    border-color: color-mix(in srgb, var(--lg-accent) 60%, transparent) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent) !important;
+}
+
+body.dark-mode.management-page .form-select option {
+    background-color: #141a2c;
+    color: var(--lg-ink);
+}
+
+body.management-page .mgmt-table .form-control,
+body.management-page .mgmt-table .form-select {
+    min-width: 12rem;
+}
+
+/* Footer + pagination */
+body.management-page .mgmt-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 0.85rem 1.15rem;
+    border-top: 1px solid var(--lg-divider) !important;
+    background: var(--lg-tint-sunken) !important;
+}
+
+body.management-page .mgmt-limit-note {
+    font-size: 0.78rem;
+    color: var(--lg-ink-soft) !important;
+}
+
+body.management-page .mgmt-pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+body.management-page .mgmt-pagination .mgmt-page-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px !important;
+    font-size: 0.75rem;
+    color: var(--lg-ink) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    background: var(--lg-tint) !important;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+
+body.management-page .mgmt-pagination .mgmt-page-btn:hover:not(:disabled) {
+    background: var(--lg-tint-strong) !important;
+}
+
+body.management-page .mgmt-pagination .mgmt-page-btn:disabled {
+    opacity: 0.45;
+}
+
+body.management-page .mgmt-pagination .mgmt-page-label {
+    font-size: 0.78rem;
+    color: var(--lg-ink-soft) !important;
+    white-space: nowrap;
+}
+
+/* Bootstrap modals — create / manage user */
+body.management-page .mgmt-modal .mgmt-modal__content,
+body.dark-mode.management-page .mgmt-modal .mgmt-modal__content {
+    border-radius: var(--lg-radius-xl) !important;
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    box-shadow: var(--lg-shadow-card) !important;
+    -webkit-backdrop-filter: blur(var(--lg-blur-strong)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur-strong)) saturate(var(--lg-saturate));
+    color: var(--lg-ink) !important;
+    font-family: var(--lg-font);
+    overflow: hidden;
+}
+
+body.management-page .mgmt-modal .mgmt-modal__header,
+body.management-page .mgmt-modal .mgmt-modal__footer,
+body.dark-mode.management-page .mgmt-modal .mgmt-modal__header,
+body.dark-mode.management-page .mgmt-modal .mgmt-modal__footer {
+    background: transparent !important;
+    border-color: var(--lg-divider) !important;
+    color: var(--lg-ink) !important;
+}
+
+body.management-page .mgmt-modal .modal-title {
+    letter-spacing: -0.022em;
+    color: var(--lg-ink) !important;
+}
+
+body.management-page .mgmt-modal .modal-body .form-label,
+body.management-page .mgmt-modal .modal-body .text-muted,
+body.management-page .mgmt-modal .modal-body .fw-semibold.text-muted {
+    color: var(--lg-ink-soft) !important;
+}
+
+body.management-page .mgmt-modal .form-control,
+body.management-page .mgmt-modal .form-select {
+    border-radius: 10px !important;
+    color: var(--lg-ink) !important;
+    background-color: var(--lg-tint) !important;
+    border: 1px solid var(--lg-hairline-soft) !important;
+}
+
+body.management-page .mgmt-modal .form-control:focus,
+body.management-page .mgmt-modal .form-select:focus {
+    border-color: color-mix(in srgb, var(--lg-accent) 60%, transparent) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent) !important;
+}
+
+body.management-page .mgmt-modal .btn-close {
+    filter: none;
+    opacity: 0.7;
+}
+
+body.dark-mode.management-page .mgmt-modal .btn-close {
+    filter: invert(1) grayscale(100%);
+    opacity: 0.8;
+}
+
+body.management-page .mgmt-code {
+    background: color-mix(in srgb, var(--lg-accent) 14%, transparent) !important;
+    color: color-mix(in srgb, var(--lg-accent) 80%, #0b1b3a) !important;
+    padding: 0.1em 0.45em;
+    border-radius: 6px;
+    font-size: 0.85em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    border: 1px solid color-mix(in srgb, var(--lg-accent) 22%, transparent);
+}
+
+body.dark-mode.management-page .mgmt-code {
+    color: #93c5fd !important;
+    background: rgba(59, 130, 246, 0.18) !important;
+}
+
+body.management-page .alert {
+    border-radius: var(--lg-radius-md);
+    border: 1px solid var(--lg-hairline-soft);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+
+body.management-page ::placeholder {
+    color: var(--lg-ink-faint) !important;
+    opacity: 1;
+}
+
+body.management-page .mgmt-table-wrapper {
+    scrollbar-width: thin;
+    scrollbar-color: var(--lg-hairline) transparent;
+}
+
+body.management-page .mgmt-table-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+}
+
+body.management-page .mgmt-table-wrapper::-webkit-scrollbar-thumb {
+    border-radius: var(--lg-radius-pill);
+    background-color: color-mix(in srgb, var(--lg-ink) 25%, transparent);
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* --------------------------------------------------------------------------
+   14. Responsive
    -------------------------------------------------------------------------- */
 
 @media (max-width: 640px) {
@@ -1204,9 +1924,14 @@ body.engineer-dashboard .activity-chart-wrap {
         padding: 1.1rem !important;
     }
 
+    body.management-page .glass-card {
+        border-radius: var(--lg-radius-lg);
+    }
+
     body.admin-dashboard .nav-pills,
     body.requestor-dashboard .nav-pills,
-    body.engineer-dashboard .nav-pills {
+    body.engineer-dashboard .nav-pills,
+    body.management-page .mgmt-tabs.nav-pills {
         width: 100%;
         overflow-x: auto;
         flex-wrap: nowrap;
@@ -1216,10 +1941,19 @@ body.engineer-dashboard .activity-chart-wrap {
     body.requestor-dashboard .dashboard-metric-card__value {
         font-size: 1.75rem;
     }
+
+    body.management-page .mgmt-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.management-page .mgmt-search-box {
+        max-width: none;
+    }
 }
 
 /* --------------------------------------------------------------------------
-   14. Reduced motion
+   15. Reduced motion
    -------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1234,6 +1968,7 @@ body.engineer-dashboard .activity-chart-wrap {
     body.admin-dashboard .btn:hover:not(:disabled),
     body.requestor-dashboard .btn:hover:not(:disabled),
     body.engineer-dashboard .btn:hover:not(:disabled),
+    body.management-page .lg-btn:active:not(:disabled),
     body:not(.page-login) .navbar .nav-link:active {
         transform: none !important;
     }
