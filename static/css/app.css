@@ -667,8 +667,8 @@ body.dark-mode .bg-primary-subtle.text-primary {
 .glass-card:hover,
 .activity-summary-card:hover {
     box-shadow: 0 20px 48px rgba(15, 23, 42, 0.28);
+    /* keep stacking stable — z-index promotion on hover forces layer thrash while scrolling */
     position: relative;
-    z-index: 10;
 }
 /* Chart cards: pre-promote GPU layer to prevent backdrop-filter re-composite flash */
 .rpt-chart-card {
@@ -706,7 +706,6 @@ body.dark-mode .bg-primary-subtle.text-primary {
 .card:hover {
     transform: translateY(-3px) scale(1.004);
     box-shadow: 0 14px 36px rgba(15, 23, 42, 0.2);
-    z-index: 10;
 }
 
 /* ── Form inputs – gentle focus spring ── */

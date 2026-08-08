@@ -1223,9 +1223,20 @@
                     }
                 });
 
-                // Reposition on scroll / resize so the dropdown tracks the input.
-                window.addEventListener("scroll", positionDropdown, { passive: true, capture: true });
-                window.addEventListener("resize", positionDropdown, { passive: true });
+                // Reposition only while open; coalesce scroll/resize to one rAF.
+                let positionRaf = 0;
+                const schedulePosition = () => {
+                    if (dropdown.style.display === "none") return;
+                    if (positionRaf) return;
+                    positionRaf = requestAnimationFrame(() => {
+                        positionRaf = 0;
+                        if (dropdown.style.display !== "none") {
+                            positionDropdown();
+                        }
+                    });
+                };
+                window.addEventListener("scroll", schedulePosition, { passive: true, capture: true });
+                window.addEventListener("resize", schedulePosition, { passive: true });
             }());
         })();
     </script>

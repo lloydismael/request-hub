@@ -3,7 +3,7 @@
 {% block title %}SQR &middot; Request Hub{% endblock %}
 {% block body_class %}sqr-page{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=5">
 {% endblock %}
 
 {% block content %}
@@ -495,9 +495,15 @@
 
                     var refreshUrl = root.dataset.refreshUrl;
                     var refreshInFlight = false;
+                    var lastHtml = '';
 
                     function refreshReports() {
-                        if (!refreshUrl || refreshInFlight) return;
+                        if (!refreshUrl || refreshInFlight || document.hidden) return;
+                        // Only poll while reports root is in the document and visible
+                        if (!document.body.contains(root)) return;
+                        var style = window.getComputedStyle(root);
+                        if (style.display === 'none' || style.visibility === 'hidden') return;
+
                         refreshInFlight = true;
                         fetch(refreshUrl, {
                             headers: {
@@ -507,6 +513,9 @@
                         .then(function (response) { return response.json(); })
                         .then(function (data) {
                             if (!data.ok || !data.html) return;
+                            // Skip identical payload to avoid full chart destroy/recreate
+                            if (data.html === lastHtml) return;
+                            lastHtml = data.html;
                             root.innerHTML = data.html;
                             if (typeof window.initSqrReportsCharts === 'function') {
                                 window.initSqrReportsCharts();
@@ -3174,23 +3183,33 @@
         activeCell = null;
     }
 
-    document.querySelectorAll('.sqr-tracker td, .sqr-esg-table td').forEach(function(td) {
-        td.addEventListener('mouseenter', function(e) {
-            if (td.classList.contains('sqr-editing')) return;
-            if (!isClipped(td)) return;
-            hoverTimer = setTimeout(function() { showPreview(td, e); }, 350);
-        });
-        td.addEventListener('mousemove', function(e) {
-            if (activeCell === td) positionPreview(e);
-        });
-        td.addEventListener('mouseleave', function() {
-            clearTimeout(hoverTimer);
-            hidePreview();
-        });
-        td.addEventListener('click', function() {
-            clearTimeout(hoverTimer);
-            hidePreview();
-        });
+    // Event delegation — avoid N listeners per cell across dual large tables
+    var previewRoot = document.querySelector('main.container') || document.body;
+    previewRoot.addEventListener('mouseover', function (e) {
+        var td = e.target.closest('.sqr-tracker td, .sqr-esg-table td');
+        if (!td || !previewRoot.contains(td)) return;
+        if (td === activeCell) return;
+        clearTimeout(hoverTimer);
+        if (td.classList.contains('sqr-editing')) return;
+        if (!isClipped(td)) return;
+        var evt = e;
+        hoverTimer = setTimeout(function () { showPreview(td, evt); }, 350);
+    });
+    previewRoot.addEventListener('mousemove', function (e) {
+        if (activeCell) positionPreview(e);
+    });
+    previewRoot.addEventListener('mouseout', function (e) {
+        var td = e.target.closest('.sqr-tracker td, .sqr-esg-table td');
+        if (!td) return;
+        var toEl = e.relatedTarget;
+        if (toEl && td.contains(toEl)) return;
+        clearTimeout(hoverTimer);
+        if (activeCell === td) hidePreview();
+    });
+    previewRoot.addEventListener('click', function (e) {
+        if (!e.target.closest('.sqr-tracker td, .sqr-esg-table td')) return;
+        clearTimeout(hoverTimer);
+        hidePreview();
     });
 })();
 </script>
@@ -3353,8 +3372,17 @@
         }
     }
 
+    function getActiveTableRows() {
+        // Prefer the visible panel only — hidden ESG/tracker still in DOM but skip it
+        var activePanel = document.querySelector('[data-sqr-view-panel]:not([hidden])');
+        if (activePanel) {
+            return activePanel.querySelectorAll('tbody tr');
+        }
+        return document.querySelectorAll('.sqr-tracker tbody tr, .sqr-esg-table tbody tr');
+    }
+
     function applyFilter() {
-        var rows = document.querySelectorAll('.sqr-tracker tbody tr, .sqr-esg-table tbody tr');
+        var rows = getActiveTableRows();
         var query = normalizeText(searchInput && searchInput.value ? searchInput.value : '');
         var statusValue = statusSelect ? statusSelect.value : '';
         var proposalValue = proposalStatusSelect ? proposalStatusSelect.value : '';
@@ -3390,16 +3418,22 @@
                 !!currentUserId && String(row.dataset.sqrApproverId || '') === currentUserId
             );
             var matchesBilled = !billedOnly || (row.dataset.sqrRevenueStatus || '') === 'billed';
-            var rowText = [
-                row.dataset.sqrRef,
-                row.dataset.sqrCustomer,
-                row.dataset.sqrGroup,
-                row.dataset.sqrAssignedPm,
-                row.dataset.sqrAssignedSse,
-                row.dataset.engineerName,
-                row.textContent || ''
-            ].join(' ').toLowerCase();
-            var matchesQuery = !query || rowText.indexOf(query) !== -1;
+            // Prefer data-* fields; fall back to textContent only when searching
+            var matchesQuery = true;
+            if (query) {
+                var dataText = [
+                    row.dataset.sqrRef,
+                    row.dataset.sqrCustomer,
+                    row.dataset.sqrGroup,
+                    row.dataset.sqrAssignedPm,
+                    row.dataset.sqrAssignedSse,
+                    row.dataset.engineerName
+                ].join(' ').toLowerCase();
+                matchesQuery = dataText.indexOf(query) !== -1;
+                if (!matchesQuery) {
+                    matchesQuery = (row.textContent || '').toLowerCase().indexOf(query) !== -1;
+                }
+            }
             var isVisible = matchesStatus
                 && matchesProposal
                 && matchesOverallStatus
@@ -3429,6 +3463,13 @@
             }
         }
     }
+    window.applySqrTableFilter = applyFilter;
+
+    var searchDebounceTimer = null;
+    function scheduleSearchFilter() {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(applyFilter, 180);
+    }
     document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
         badge.addEventListener('click', function () {
             var filter = badge.dataset.sqrFilter || '';
@@ -3452,7 +3493,10 @@
         });
     });
 
-    [searchInput, overallStatusSelect, healthSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
+    if (searchInput) {
+        searchInput.addEventListener('input', scheduleSearchFilter);
+    }
+    [overallStatusSelect, healthSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
         if (!control) return;
         control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', function () {
             applyFilter();
