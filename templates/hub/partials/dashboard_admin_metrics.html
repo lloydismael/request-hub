@@ -4,7 +4,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'open' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Open</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.open }}</span>
-                                <span class="dashboard-metric-card__hint">Tickets currently in progress</span>
                             </div>
                         </a>
                     </div>
@@ -13,7 +12,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'overdue' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Overdue</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.overdue }}</span>
-                                <span class="dashboard-metric-card__hint">Days beyond SLA threshold</span>
                             </div>
                         </a>
                     </div>
@@ -22,7 +20,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'due_soon' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Due Soon</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.due_soon }}</span>
-                                <span class="dashboard-metric-card__hint">Due within 3 days</span>
                             </div>
                         </a>
                     </div>
@@ -31,7 +28,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'completed' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Completed</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.completed }}</span>
-                                <span class="dashboard-metric-card__hint">All completed requests</span>
                             </div>
                         </a>
                     </div>
@@ -40,7 +36,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'new_this_week' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">New (7d)</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.new_this_week }}</span>
-                                <span class="dashboard-metric-card__hint">Raised during past week</span>
                             </div>
                         </a>
                     </div>

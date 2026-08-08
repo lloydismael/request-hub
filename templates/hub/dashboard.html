@@ -46,15 +46,14 @@
                     {% endif %}
                 {% endif %}
                 {% if role == 'admin' %}
-                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
+                    <div class="dashboard-toolbar d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
                         {% if can_create_request %}
-                            <button type="button" class="btn btn-sm btn-primary" id="new-request-btn">New Request</button>
+                            <button type="button" class="btn btn-sm btn-primary lg-btn lg-btn--accent" id="new-request-btn">New Request</button>
                         {% endif %}
-                        <a class="btn btn-sm {% if show_filters or filters_active %}btn-light text-primary{% else %}btn-outline-light{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
+                        <a class="btn btn-sm lg-btn lg-btn--ghost {% if show_filters or filters_active %}is-active{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
                             <i class="bi {% if show_filters or filters_active %}bi-funnel-fill{% else %}bi-funnel{% endif %}"></i>
                         </a>
-                        {% include "hub/partials/dashboard_admin_status_pills.html" %}
-                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'hub:request-export' %}"><i class="bi bi-download me-1"></i>Export CSV</a>
+                        <a class="btn btn-sm lg-btn lg-btn--ghost" href="{% url 'hub:request-export' %}"><i class="bi bi-download me-1"></i>Export CSV</a>
                     </div>
                 {% endif %}
             </div>
@@ -152,7 +151,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'ongoing' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Ongoing</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.ongoing }}</span>
-                                <span class="dashboard-metric-card__hint">Assigned tickets in progress</span>
                             </div>
                         </a>
                     </div>
@@ -161,7 +159,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'due_soon' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Due Soon</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.due_soon }}</span>
-                                <span class="dashboard-metric-card__hint">Due within 3 days</span>
                             </div>
                         </a>
                     </div>
@@ -170,7 +167,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'overdue' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Overdue</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.overdue }}</span>
-                                <span class="dashboard-metric-card__hint">Days beyond SLA threshold</span>
                             </div>
                         </a>
                     </div>
@@ -179,7 +175,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'completed' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Completed</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.completed }}</span>
-                                <span class="dashboard-metric-card__hint">Closed requests</span>
                             </div>
                         </a>
                     </div>
@@ -192,7 +187,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'ongoing' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Ongoing</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.ongoing }}</span>
-                                <span class="dashboard-metric-card__hint">Requests still in progress</span>
                             </div>
                         </a>
                     </div>
@@ -201,7 +195,6 @@
                             <div class="dashboard-metric-card {% if active_metric_filter == 'completed' %}dashboard-metric-card--active{% endif %}">
                                 <span class="dashboard-metric-card__label">Completed</span>
                                 <span class="dashboard-metric-card__value">{{ metrics.completed }}</span>
-                                <span class="dashboard-metric-card__hint">Finished requests</span>
                             </div>
                         </a>
                     </div>
@@ -282,6 +275,12 @@
                 </form>
             {% endif %}
             {% if role != 'engineer' or active_tab != 'report' %}
+            {% if requests_list_limited %}
+            <div class="alert alert-info border-0 py-2 px-3 mb-3 d-flex align-items-center gap-2 small" role="status">
+                <i class="bi bi-info-circle-fill flex-shrink-0"></i>
+                <span>Showing {{ requests_displayed_count }} of {{ requests_total_count }} matching requests (limit {{ requests_list_limit }}). Narrow filters to find older rows.</span>
+            </div>
+            {% endif %}
             <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}">
                 <table class="table align-middle table-nowrap{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
                     <thead>
@@ -669,12 +668,6 @@
                             const metricsHost = document.getElementById("dashboard-live-metrics");
                             if (metricsHost) {
                                 metricsHost.outerHTML = data.html_metrics;
-                            }
-                        }
-                        if (data.html_status_pills) {
-                            const pillsHost = document.getElementById("dashboard-live-status-pills");
-                            if (pillsHost) {
-                                pillsHost.outerHTML = data.html_status_pills;
                             }
                         }
                         if (data.html_rows) {

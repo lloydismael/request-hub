@@ -1552,6 +1552,22 @@ def _admin_sort_date_key(value):
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "hub/dashboard.html"
+    # Cap rendered table rows so heavy filters stay light in the browser.
+    # Metrics/reports still use the full filtered set before this limit.
+    LIST_ROW_LIMIT = 100
+
+    @staticmethod
+    def _limit_dashboard_rows(requests: list[Request], limit: int | None = None) -> tuple[list[Request], dict]:
+        """Return display rows capped at LIST_ROW_LIMIT plus list-meta context."""
+        row_limit = DashboardView.LIST_ROW_LIMIT if limit is None else limit
+        total = len(requests)
+        display_rows = requests[:row_limit]
+        return display_rows, {
+            "requests_total_count": total,
+            "requests_displayed_count": len(display_rows),
+            "requests_list_limited": total > row_limit,
+            "requests_list_limit": row_limit,
+        }
 
     @staticmethod
     def _build_request_report_data(requests: list[Request]) -> dict:
@@ -1752,7 +1768,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 request_tab_links[key] = f"?{encoded}" if encoded else "?"
 
-            context["requests"] = filtered_requests
+            display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+            context["requests"] = display_requests
+            context.update(list_meta)
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
@@ -1817,7 +1835,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 request_tab_links[key] = f"?{encoded}" if encoded else "?"
 
-            context["requests"] = filtered_requests
+            display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+            context["requests"] = display_requests
+            context.update(list_meta)
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
@@ -1874,11 +1894,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             teams_limited.add(comm.request_id)
             for req in requests:
                 setattr(req, "outlook_limit_reached", req.pk in outlook_limited)
-                setattr(req, "teams_limit_reached", req.pk in teams_limited)
-
-            self._annotate_acknowledgement_status(requests)
-            self._annotate_engineer_activity(requests)
-
             today = timezone.now().astimezone(MANILA_TZ).date()
             metrics = {
                 "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
@@ -1924,6 +1939,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
                 filtered_requests = sorted(filtered_requests, key=lambda req: req.created_at, reverse=True)
 
+            display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+            self._annotate_acknowledgement_status(display_requests)
+            self._annotate_engineer_activity(display_requests)
+
             metric_links = {}
             for key in ("ongoing", "due_soon", "overdue", "completed"):
                 params = self.request.GET.copy()
@@ -1935,7 +1954,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
-            context["requests"] = filtered_requests
+            context["requests"] = display_requests
+            context.update(list_meta)
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = effective_metric_filter
@@ -2217,11 +2237,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             ordered.extend(req for req in requests if getattr(req, field_name) is None)
             requests = ordered
 
-        self._annotate_acknowledgement_status(requests)
-
         today = timezone.now().astimezone(MANILA_TZ).date()
         all_requests = list(requests)
         filtered_requests = self._filter_requests_by_metric(all_requests, metric_filter, today)
+        display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+        # Annotate only rows that will render — keeps live poll/table HTML light.
+        self._annotate_acknowledgement_status(display_requests)
 
         overdue_count = sum(1 for req in all_requests if req.admin_days_overdue)
         status_counts = {
@@ -2290,7 +2311,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             "role": User.Roles.ADMIN,
             "is_admin_ui": True,
             "is_pm_esg": user.role == PM_ESG_ROLE,
-            "requests": filtered_requests,
+            "requests": display_requests,
             "overdue_count": overdue_count,
             "status_counts": status_counts,
             "new_ticket_count": user.notifications.filter(
@@ -2311,6 +2332,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             "pm_esg_tab": pm_esg_tab,
             "pm_esg_tab_links": pm_esg_tab_links,
             "dashboard_live_version": live_version,
+            **list_meta,
         }
 
     @staticmethod
@@ -3242,11 +3264,6 @@ class DashboardLiveDataView(LoginRequiredMixin, View):
             context,
             request=request,
         )
-        html_status_pills = render_to_string(
-            "hub/partials/dashboard_admin_status_pills.html",
-            context,
-            request=request,
-        )
         html_rows = render_to_string(
             "hub/partials/dashboard_admin_rows.html",
             context,
@@ -3259,7 +3276,6 @@ class DashboardLiveDataView(LoginRequiredMixin, View):
                 "version": context.get("dashboard_live_version") or live_version,
                 "request_count": len(context.get("requests") or []),
                 "html_metrics": html_metrics,
-                "html_status_pills": html_status_pills,
                 "html_rows": html_rows,
             }
         )
