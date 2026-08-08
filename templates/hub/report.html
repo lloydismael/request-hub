@@ -1,9 +1,11 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
+{% load static %}
 {% block title %}Reports · Request Hub{% endblock %}
+{% block body_class %}reports-page{% endblock %}
 {% block content %}
 
 {# ── Page Header ─────────────────────────────────────────────────────────── #}
-<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4 lg-enter" data-lg-delay="0">
     <div>
         <h1 class="h3 mb-1 fw-semibold">
             <i class="bi bi-bar-chart-line-fill me-2 text-primary"></i>Reports
@@ -21,8 +23,8 @@
                 <i class="bi bi-clipboard-data-fill"></i> Activity Logs
             </a>
         </div>
-        <a class="btn btn-sm btn-outline-secondary"
-           href="{% url 'hub:report-export' %}?report_view={{ report_view }}">
+        <a class="btn btn-sm btn-outline-secondary lg-btn lg-btn--ghost"
+           href="{% url 'hub:report-export' %}?report_view={{ report_view }}{% if report_view == 'activity' %}{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}{% endif %}">
             <i class="bi bi-download me-1"></i>Export CSV
         </a>
     </div>
@@ -30,78 +32,85 @@
 
 {% if report_view == 'activity' %}
 
-    {# ── Activity: filter + KPI row ──────────────────────────────────────── #}
-    <div class="glass-card p-4 mb-4">
-        <div class="row g-4 align-items-start">
-            <div class="col-12 col-lg-4">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-clock-history"></i></span>
-                    <h2 class="h5 mb-0 fw-bold">Engineer Activity</h2>
-                </div>
+    {# ── Activity: intro + filter ─────────────────────────────────────────── #}
+    <div class="glass-card p-4 mb-4 lg-enter" data-lg-delay="40">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-clock-history"></i></span>
+            <div>
+                <h2 class="h5 mb-0 fw-bold">Engineer Activity</h2>
                 <p class="text-muted small mb-0">Track how engineers spend time, where work happens, and which efforts are billable.</p>
             </div>
-            <div class="col-12 col-lg-8">
-                <form method="get" class="row g-2 align-items-end mb-3">
-                    <input type="hidden" name="report_view" value="activity">
-                    <div class="col-12 col-md-4">
-                        <label for="activity-start-month" class="form-label mb-1 small fw-semibold">From Month</label>
-                        <input id="activity-start-month" type="month" name="start_month"
-                               class="form-control form-control-sm" value="{{ activity_start_month }}">
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label for="activity-end-month" class="form-label mb-1 small fw-semibold">To Month</label>
-                        <input id="activity-end-month" type="month" name="end_month"
-                               class="form-control form-control-sm" value="{{ activity_end_month }}">
-                    </div>
-                    <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
-                        <button type="submit" class="btn btn-sm btn-primary">
-                            <i class="bi bi-funnel-fill me-1"></i>Apply
-                        </button>
-                        {% if activity_start_month or activity_end_month %}
-                            <a href="{% url 'hub:report' %}?report_view=activity"
-                               class="btn btn-sm btn-outline-secondary">Clear</a>
-                        {% endif %}
-                    </div>
-                </form>
-                <div class="rpt-period-badge mb-3">
-                    <i class="bi bi-calendar3"></i> {{ activity_month_filter_label }}
+        </div>
+        <div class="rpt-filter-panel mt-3">
+            <form method="get" class="row g-2 align-items-end">
+                <input type="hidden" name="report_view" value="activity">
+                <div class="col-12 col-md-4">
+                    <label for="activity-start-month" class="form-label mb-1 small">From Month</label>
+                    <input id="activity-start-month" type="month" name="start_month"
+                           class="form-control form-control-sm" value="{{ activity_start_month }}"
+                           {% if activity_end_month %}max="{{ activity_end_month }}"{% endif %}>
                 </div>
-                <div class="row g-3">
-                    <div class="col-6 col-md-3">
-                        <div class="rpt-kpi-card rpt-kpi--blue">
-                            <span class="rpt-kpi-icon"><i class="bi bi-journal-text"></i></span>
-                            <span class="rpt-kpi-label">Log Entries</span>
-                            <span class="rpt-kpi-value">{{ activity_totals.entries }}</span>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="rpt-kpi-card rpt-kpi--green">
-                            <span class="rpt-kpi-icon"><i class="bi bi-clock-fill"></i></span>
-                            <span class="rpt-kpi-label">Total Hours</span>
-                            <span class="rpt-kpi-value">{{ activity_totals.total_hours|default:0|floatformat:1 }}</span>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="rpt-kpi-card rpt-kpi--violet">
-                            <span class="rpt-kpi-icon"><i class="bi bi-cash-coin"></i></span>
-                            <span class="rpt-kpi-label">Billable Hrs</span>
-                            <span class="rpt-kpi-value">{{ activity_totals.billable_hours|default:0|floatformat:1 }}</span>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="rpt-kpi-card rpt-kpi--amber">
-                            <span class="rpt-kpi-icon"><i class="bi bi-building"></i></span>
-                            <span class="rpt-kpi-label">Accounts</span>
-                            <span class="rpt-kpi-value">{{ activity_totals.unique_accounts }}</span>
-                        </div>
-                    </div>
+                <div class="col-12 col-md-4">
+                    <label for="activity-end-month" class="form-label mb-1 small">To Month</label>
+                    <input id="activity-end-month" type="month" name="end_month"
+                           class="form-control form-control-sm" value="{{ activity_end_month }}"
+                           {% if activity_start_month %}min="{{ activity_start_month }}"{% endif %}>
                 </div>
+                <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary lg-btn lg-btn--accent">
+                        <i class="bi bi-funnel-fill me-1"></i>Apply
+                    </button>
+                    {% if activity_start_month or activity_end_month %}
+                        <a href="{% url 'hub:report' %}?report_view=activity"
+                           class="btn btn-sm btn-outline-secondary lg-btn lg-btn--ghost">Clear</a>
+                    {% endif %}
+                </div>
+                {% if activity_range_swapped %}
+                    <div class="col-12">
+                        <small class="rpt-range-hint"><i class="bi bi-arrow-left-right me-1"></i>Range was reversed; showing {{ activity_month_filter_label }}.</small>
+                    </div>
+                {% endif %}
+            </form>
+            <div class="rpt-period-badge mt-3">
+                <i class="bi bi-calendar3"></i> {{ activity_month_filter_label }}
+            </div>
+        </div>
+    </div>
+
+    {# ── Activity: KPI row ───────────────────────────────────────────────── #}
+    <div class="row g-3 mb-4 lg-enter" data-lg-delay="80">
+        <div class="col-6 col-md-3">
+            <div class="rpt-kpi-card rpt-kpi--blue">
+                <span class="rpt-kpi-icon"><i class="bi bi-journal-text"></i></span>
+                <span class="rpt-kpi-label">Log Entries</span>
+                <span class="rpt-kpi-value">{{ activity_totals.entries }}</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="rpt-kpi-card rpt-kpi--green">
+                <span class="rpt-kpi-icon"><i class="bi bi-clock-fill"></i></span>
+                <span class="rpt-kpi-label">Total Hours</span>
+                <span class="rpt-kpi-value">{{ activity_totals.total_hours|default:0|floatformat:1 }}</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="rpt-kpi-card rpt-kpi--violet">
+                <span class="rpt-kpi-icon"><i class="bi bi-cash-coin"></i></span>
+                <span class="rpt-kpi-label">Billable Hrs</span>
+                <span class="rpt-kpi-value">{{ activity_totals.billable_hours|default:0|floatformat:1 }}</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="rpt-kpi-card rpt-kpi--amber">
+                <span class="rpt-kpi-icon"><i class="bi bi-building"></i></span>
+                <span class="rpt-kpi-label">Accounts</span>
+                <span class="rpt-kpi-value">{{ activity_totals.unique_accounts }}</span>
             </div>
         </div>
     </div>
 
     {# ── Activity: Charts row 1 ──────────────────────────────────────────── #}
-    <div class="row g-4 mb-4">
+    <div class="row g-4 mb-4 lg-enter" data-lg-delay="120">
         <div class="col-12 col-xl-6">
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
@@ -110,12 +119,12 @@
                         <h3 class="rpt-chart-title">Hours by Engineer</h3>
                         <p class="rpt-chart-sub">Billable vs non-billable hours logged per engineer.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityEngineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityEngineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_engineer_chart.labels %}
                     <div class="rpt-canvas-wrap"><canvas id="activityEngineerChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No engineer activity entries available yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No engineer activity entries available yet.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -127,19 +136,19 @@
                         <h3 class="rpt-chart-title">Hours by Activity Type</h3>
                         <p class="rpt-chart-sub">Compare time across learning, customer-facing, and internal work.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityTypeChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityTypeChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_type_chart.labels %}
                     <div class="rpt-canvas-wrap"><canvas id="activityTypeChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No activity type data captured yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No activity type data captured yet.</p></div>
                 {% endif %}
             </div>
         </div>
     </div>
 
     {# ── Activity: Charts row 2 ──────────────────────────────────────────── #}
-    <div class="row g-4 mb-4">
+    <div class="row g-4 mb-4 lg-enter" data-lg-delay="160">
         <div class="col-12 col-lg-6">
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
@@ -148,12 +157,12 @@
                         <h3 class="rpt-chart-title">Work Location Mix</h3>
                         <p class="rpt-chart-sub">On-site, remote, and mixed work distribution.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityLocationChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityLocationChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_location_chart.labels %}
                     <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityLocationChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No location data logged yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-pie-chart"></i><p>No location data logged yet.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -165,19 +174,19 @@
                         <h3 class="rpt-chart-title">Billable Distribution</h3>
                         <p class="rpt-chart-sub">Ratio of billable to non-billable hours across all entries.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="activityBillableChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityBillableChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_totals.entries %}
                     <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityBillableChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">Log activity to see billable trends.</p>
+                    <div class="rpt-empty"><i class="bi bi-pie-chart"></i><p>Log activity to see billable trends.</p></div>
                 {% endif %}
             </div>
         </div>
     </div>
 
     {# ── Activity: Breakdown tables ───────────────────────────────────────── #}
-    <div class="row g-4 mb-4">
+    <div class="row g-4 mb-4 lg-enter" data-lg-delay="200">
         <div class="col-12 col-xl-6">
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
@@ -188,7 +197,7 @@
                     </div>
                 </div>
                 {% if activity_engineer_table %}
-                    <div class="table-responsive">
+                    <div class="table-responsive dashboard-table-wrapper">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="rpt-table-head">
                                 <tr>
@@ -211,7 +220,7 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">No engineer hours to summarise yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-table"></i><p>No engineer hours to summarise yet.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -225,7 +234,7 @@
                     </div>
                 </div>
                 {% if activity_type_table %}
-                    <div class="table-responsive">
+                    <div class="table-responsive dashboard-table-wrapper">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="rpt-table-head">
                                 <tr>
@@ -248,14 +257,14 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">No activity type aggregates available.</p>
+                    <div class="rpt-empty"><i class="bi bi-table"></i><p>No activity type aggregates available.</p></div>
                 {% endif %}
             </div>
         </div>
     </div>
 
     {# ── Activity: log table ─────────────────────────────────────────────── #}
-    <div class="glass-card rpt-chart-card mb-4">
+    <div class="glass-card rpt-chart-card mb-4 lg-enter" data-lg-delay="240">
         <div class="rpt-chart-head flex-wrap gap-2">
             <span class="rpt-chart-icon rpt-icon--indigo"><i class="bi bi-table"></i></span>
             <div class="flex-grow-1">
@@ -271,12 +280,6 @@
         </div>
         {% if activity_logs %}
             <div class="rpt-log-meta d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3 mb-2">
-                <span class="text-muted small">
-                    Showing
-                    <strong>{{ activity_logs_page_obj.start_index }}</strong>–<strong>{{ activity_logs_page_obj.end_index }}</strong>
-                    of <strong>{{ activity_totals.entries }}</strong>
-                    entr{{ activity_totals.entries|pluralize:"y,ies" }}
-                </span>
                 {% if activity_logs_page_obj.paginator.num_pages > 1 %}
                     <span class="text-muted small">
                         Page <strong>{{ activity_logs_page_obj.number }}</strong>
@@ -284,7 +287,7 @@
                     </span>
                 {% endif %}
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive dashboard-table-wrapper">
                 <table class="table align-middle rpt-activity-table mb-0">
                     <thead class="rpt-table-head">
                         <tr>
@@ -311,7 +314,7 @@
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="rpt-eng-avatar">{{ log.engineer.get_full_name|default:log.engineer.username|slice:":1"|upper }}</span>
-                                        <span class="text-nowrap fw-medium" style="font-size:0.85rem;">{{ log.engineer.get_full_name|default:log.engineer.username }}</span>
+                                        <span class="text-nowrap rpt-eng-name">{{ log.engineer.get_full_name|default:log.engineer.username }}</span>
                                     </div>
                                 </td>
                                 <td>
@@ -338,7 +341,7 @@
                                 </td>
                                 <td class="text-end">
                                     <a class="rpt-edit-btn"
-                                       href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&edit_activity={{ log.pk }}#activity-edit-form"
+                                       href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&edit_activity={{ log.pk }}"
                                        title="Edit this entry">
                                         <i class="bi bi-pencil-fill"></i>
                                     </a>
@@ -349,7 +352,6 @@
                 </table>
             </div>
 
-            {# ── Pagination ── #}
             {% if activity_logs_page_obj.paginator.num_pages > 1 %}
                 <nav class="rpt-log-pagination d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3"
                      aria-label="Activity log pages">
@@ -369,14 +371,21 @@
                             <span class="rpt-page-btn rpt-page-btn--disabled"><i class="bi bi-chevron-left"></i></span>
                         {% endif %}
 
-                        {% for p in activity_logs_page_obj.paginator.page_range %}
-                            {% if p == activity_logs_page_obj.number %}
-                                <span class="rpt-page-btn rpt-page-btn--active">{{ p }}</span>
-                            {% elif p >= activity_logs_page_obj.number|add:"-2" and p <= activity_logs_page_obj.number|add:"2" %}
-                                <a class="rpt-page-btn"
-                                   href="?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&activity_log_page={{ p }}">{{ p }}</a>
-                            {% endif %}
-                        {% endfor %}
+                        {% with num_pages=activity_logs_page_obj.paginator.num_pages cur=activity_logs_page_obj.number %}
+                            {% for p in activity_logs_page_obj.paginator.page_range %}
+                                {% if p == cur %}
+                                    <span class="rpt-page-btn rpt-page-btn--active">{{ p }}</span>
+                                {% elif p == 1 or p == num_pages %}
+                                    <a class="rpt-page-btn"
+                                       href="?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&activity_log_page={{ p }}">{{ p }}</a>
+                                {% elif p >= cur|add:"-2" and p <= cur|add:"2" %}
+                                    <a class="rpt-page-btn"
+                                       href="?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}&activity_log_page={{ p }}">{{ p }}</a>
+                                {% elif p == cur|add:"-3" or p == cur|add:"3" %}
+                                    <span class="rpt-page-btn rpt-page-btn--ellipsis" aria-hidden="true">&hellip;</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% endwith %}
 
                         {% if activity_logs_page_obj.has_next %}
                             <a class="rpt-page-btn" title="Next page"
@@ -394,20 +403,31 @@
                     </div>
                 </nav>
             {% endif %}
+        {% else %}
+            <div class="rpt-empty"><i class="bi bi-journal-x"></i><p>No engineer activity logs recorded yet.</p></div>
+        {% endif %}
+    </div>
 
-            {# ── Edit form ── #}
-            {% if editing_activity_log and activity_form %}
-                <div class="glass-card p-4 mt-3" id="activity-edit-form">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                        <div>
-                            <h4 class="h6 text-uppercase text-muted mb-1">Edit Engineer Activity Log</h4>
-                            <p class="text-muted small mb-0">
-                                {{ editing_activity_log.engineer.get_full_name|default:editing_activity_log.engineer.username }} &middot;
-                                {{ editing_activity_log.request_date|date:"M d, Y" }}
-                            </p>
-                        </div>
-                    </div>
-                    <form method="post" novalidate>
+    {# ── Activity edit modal ─────────────────────────────────────────────── #}
+    <div class="requestor-modal" id="activity-edit-modal" aria-hidden="true"
+         data-open-on-load="{% if editing_activity_log and activity_form %}true{% else %}false{% endif %}">
+        <div class="requestor-modal__backdrop" id="activity-edit-backdrop"></div>
+        <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="activity-edit-title">
+            <div class="requestor-modal__header">
+                <div>
+                    <h2 class="h5 mb-1" id="activity-edit-title">Edit Engineer Activity Log</h2>
+                    {% if editing_activity_log %}
+                        <p class="text-muted small mb-0">
+                            {{ editing_activity_log.engineer.get_full_name|default:editing_activity_log.engineer.username }} &middot;
+                            {{ editing_activity_log.request_date|date:"M d, Y" }}
+                        </p>
+                    {% endif %}
+                </div>
+                <button type="button" class="btn-close" id="activity-edit-close" aria-label="Close"></button>
+            </div>
+            <div class="requestor-modal__body">
+                {% if editing_activity_log and activity_form %}
+                    <form method="post" novalidate id="activity-edit-form">
                         {% csrf_token %}
                         <input type="hidden" name="report_view" value="activity">
                         <input type="hidden" name="start_month" value="{{ activity_start_month }}">
@@ -428,15 +448,13 @@
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-3">
                             <a href="{% url 'hub:report' %}?report_view=activity{% if activity_start_month %}&start_month={{ activity_start_month }}{% endif %}{% if activity_end_month %}&end_month={{ activity_end_month }}{% endif %}"
-                               class="btn btn-outline-secondary">Cancel</a>
-                            <button type="submit" class="btn btn-primary">Update Activity Log</button>
+                               class="btn btn-outline-secondary lg-btn lg-btn--ghost" id="activity-edit-cancel">Cancel</a>
+                            <button type="submit" class="btn btn-primary lg-btn lg-btn--accent">Update Activity Log</button>
                         </div>
                     </form>
-                </div>
-            {% endif %}
-        {% else %}
-            <p class="text-muted mb-0">No engineer activity logs recorded yet.</p>
-        {% endif %}
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     {{ activity_engineer_chart|json_script:"activity-engineer-data" }}
@@ -447,7 +465,7 @@
 {% else %}
 
     {# ── Operational: KPI row ────────────────────────────────────────────── #}
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-3 lg-enter" data-lg-delay="40">
         <div class="col-6 col-lg-3">
             <div class="rpt-kpi-card rpt-kpi--blue">
                 <span class="rpt-kpi-icon"><i class="bi bi-activity"></i></span>
@@ -482,8 +500,20 @@
         </div>
     </div>
 
+    {% if status_breakdown %}
+        <div class="rpt-status-strip mb-4 lg-enter" data-lg-delay="70">
+            {% for item in status_breakdown %}
+                <span class="rpt-status-chip rpt-status-chip--{{ item.status }}">
+                    <span class="rpt-status-dot" aria-hidden="true"></span>
+                    <span>{{ item.label }}</span>
+                    <span class="rpt-status-chip__count">{{ item.total }}</span>
+                </span>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     {# ── Operational: Charts row 1 ───────────────────────────────────────── #}
-    <div class="row g-4 mb-4">
+    <div class="row g-4 mb-4 lg-enter" data-lg-delay="100">
         <div class="col-12 col-xl-6">
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
@@ -492,12 +522,12 @@
                         <h3 class="rpt-chart-title">Requests by Requestor</h3>
                         <p class="rpt-chart-sub">Which requestors create the most tickets.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="accountManagerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="accountManagerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if account_manager_stats %}
                     <div class="rpt-canvas-wrap"><canvas id="accountManagerChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No requests recorded yet for requestors.</p>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No requests recorded yet for requestors.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -509,19 +539,19 @@
                         <h3 class="rpt-chart-title">Requests by Engineer</h3>
                         <p class="rpt-chart-sub">Includes unassigned requests to indicate backlog.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="engineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="engineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if engineer_stats %}
                     <div class="rpt-canvas-wrap"><canvas id="engineerChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No engineer assignments captured yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No engineer assignments captured yet.</p></div>
                 {% endif %}
             </div>
         </div>
     </div>
 
     {# ── Operational: Charts row 2 ───────────────────────────────────────── #}
-    <div class="row g-4 mb-4">
+    <div class="row g-4 mb-4 lg-enter" data-lg-delay="140">
         <div class="col-12 col-xl-6">
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
@@ -530,12 +560,12 @@
                         <h3 class="rpt-chart-title">Engagement Types</h3>
                         <p class="rpt-chart-sub">Opportunity, Support, Training, and Inquiry volumes.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="engagementChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="engagementChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if engagement_chart_has_data %}
                     <div class="rpt-canvas-wrap"><canvas id="engagementChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No engagement type data available yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No engagement type data available yet.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -545,21 +575,21 @@
                     <span class="rpt-chart-icon rpt-icon--amber"><i class="bi bi-box-seam-fill"></i></span>
                     <div>
                         <h3 class="rpt-chart-title">Product Categories</h3>
-                        <p class="rpt-chart-sub">Azure, M365, VMware, and other product volumes.</p>
+                        <p class="rpt-chart-sub">Azure, M365, and other product volumes.</p>
                     </div>
-                    <button class="rpt-expand-btn ms-auto" data-expand-chart="productChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="productChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if product_chart_has_data %}
                     <div class="rpt-canvas-wrap"><canvas id="productChart"></canvas></div>
                 {% else %}
-                    <p class="text-muted mb-0">No product category data recorded yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No product category data recorded yet.</p></div>
                 {% endif %}
             </div>
         </div>
     </div>
 
     {# ── Operational: Breakdown tables ───────────────────────────────────── #}
-    <div class="row g-4 mb-4">
+    <div class="row g-4 mb-4 lg-enter" data-lg-delay="180">
         <div class="col-12 col-xl-6">
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
@@ -570,7 +600,7 @@
                     </div>
                 </div>
                 {% if account_manager_stats %}
-                    <div class="table-responsive">
+                    <div class="table-responsive dashboard-table-wrapper">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="rpt-table-head">
                                 <tr>
@@ -593,7 +623,7 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">No requestors have created requests yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-table"></i><p>No requestors have created requests yet.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -607,7 +637,7 @@
                     </div>
                 </div>
                 {% if engineer_stats %}
-                    <div class="table-responsive">
+                    <div class="table-responsive dashboard-table-wrapper">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="rpt-table-head">
                                 <tr>
@@ -630,12 +660,11 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">No engineer workload captured yet.</p>
+                    <div class="rpt-empty"><i class="bi bi-table"></i><p>No engineer workload captured yet.</p></div>
                 {% endif %}
             </div>
         </div>
     </div>
-
 
     {{ account_manager_chart|json_script:"account-manager-data" }}
     {{ engineer_chart|json_script:"engineer-data" }}
@@ -649,7 +678,8 @@
     <div class="rpt-chart-modal__inner">
         <div class="rpt-chart-modal__header">
             <span class="rpt-chart-modal__title" id="rptChartModalTitle"></span>
-            <button class="rpt-chart-modal__close" id="rptChartModalClose" title="Close"><i class="bi bi-x-lg"></i></button>
+            <button type="button" class="rpt-chart-modal__png" id="rptChartModalPng" title="Download PNG"><i class="bi bi-download"></i></button>
+            <button type="button" class="rpt-chart-modal__close" id="rptChartModalClose" title="Close"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="rpt-chart-modal__canvas-wrap">
             <canvas id="rptModalCanvas"></canvas>
@@ -658,222 +688,308 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/chart-theme.js' %}?v=2"></script>
 <script>
 (function () {
-    // ── Theme ────────────────────────────────────────────────────────────────
-    const isDark = document.body.classList.contains('dark-mode');
-    const C = {
-        text:       isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.58)',
-        textStrong: isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.76)',
-        grid:       isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.055)',
-        border:     isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
-        tooltip: {
-            bg:     isDark ? 'rgba(15,23,42,0.97)'   : 'rgba(255,255,255,0.98)',
-            title:  isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.82)',
-            body:   isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.55)',
-            border: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-        },
-    };
+    function hexToRgba(hex, alpha) {
+        var h = (hex || '').replace('#', '').trim();
+        if (h.length === 3) {
+            h = h.split('').map(function (c) { return c + c; }).join('');
+        }
+        if (h.length !== 6) {
+            return 'rgba(10, 132, 255, ' + alpha + ')';
+        }
+        var r = parseInt(h.slice(0, 2), 16);
+        var g = parseInt(h.slice(2, 4), 16);
+        var b = parseInt(h.slice(4, 6), 16);
+        return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
 
-    Chart.defaults.color       = C.text;
-    Chart.defaults.borderColor = C.grid;
-    Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
-    Chart.defaults.font.size   = 11;
+    function token(name, fallback) {
+        var bodyVal = getComputedStyle(document.body).getPropertyValue(name).trim();
+        if (bodyVal) return bodyVal;
+        var value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return value || fallback;
+    }
 
-    // ── Shared pieces ────────────────────────────────────────────────────────
-    const tooltipCfg = {
-        backgroundColor: C.tooltip.bg,
-        titleColor:      C.tooltip.title,
-        bodyColor:       C.tooltip.body,
-        borderColor:     C.tooltip.border,
-        borderWidth: 1,
-        padding: 10,
-        cornerRadius: 10,
-        boxWidth: 10,
-        boxHeight: 10,
-    };
+    function buildPalette() {
+        var colors = (window.lgChartPalette && window.lgChartPalette.length)
+            ? window.lgChartPalette.slice()
+            : [
+                token('--lg-accent', '#0a84ff'),
+                token('--lg-ok', '#30d158'),
+                token('--lg-warn', '#ff9f0a'),
+                token('--lg-crit', '#ff453a'),
+                token('--lg-violet', '#bf5af0'),
+                token('--lg-teal', '#40c8e0')
+            ];
+        return {
+            green:  { bg: hexToRgba(colors[1] || '#30d158', 0.42), b: hexToRgba(colors[1] || '#30d158', 0.88) },
+            violet: { bg: hexToRgba(colors[4] || '#bf5af0', 0.42), b: hexToRgba(colors[4] || '#bf5af0', 0.88) },
+            blue:   { bg: hexToRgba(colors[0] || '#0a84ff', 0.42), b: hexToRgba(colors[0] || '#0a84ff', 0.88) },
+            amber:  { bg: hexToRgba(colors[2] || '#ff9f0a', 0.42), b: hexToRgba(colors[2] || '#ff9f0a', 0.88) },
+            cyan:   { bg: hexToRgba(colors[5] || '#40c8e0', 0.42), b: hexToRgba(colors[5] || '#40c8e0', 0.88) },
+            gray:   { bg: 'rgba(100,116,139,0.38)', b: 'rgba(100,116,139,0.72)' },
+            rose:   { bg: hexToRgba(colors[3] || '#ff453a', 0.42), b: hexToRgba(colors[3] || '#ff453a', 0.88) }
+        };
+    }
 
-    const axisCfg = {
-        grid:   { color: C.grid,   drawBorder: false },
-        border: { color: C.border, display: false    },
-        ticks:  { color: C.text,   padding: 6        },
-    };
+    var P = buildPalette();
+    var DONUT_BG = [P.blue.bg, P.green.bg, P.amber.bg, P.violet.bg, P.cyan.bg, P.rose.bg, P.gray.bg];
+    var DONUT_BR = [P.blue.b, P.green.b, P.amber.b, P.violet.b, P.cyan.b, P.rose.b, P.gray.b];
+    var reducedMotion = !!window.lgReducedMotion;
 
-    const legendCfg = {
-        position: 'bottom',
-        labels: { color: C.text, boxWidth: 12, boxHeight: 12, borderRadius: 4, useBorderRadius: true, padding: 16 },
-    };
+    // Live ink per draw so theme toggle refreshes plugin text.
+    var inkNow = function () { return token('--lg-ink', '#0b1220'); };
+    var inkSoftNow = function () { return token('--lg-ink-soft', 'rgba(11,18,32,0.62)'); };
 
-    // ── Palette ──────────────────────────────────────────────────────────────
-    const P = {
-        green:  { bg: 'rgba(16,185,129,0.42)',  b: 'rgba(16,185,129,0.85)'  },
-        violet: { bg: 'rgba(99,102,241,0.42)',  b: 'rgba(99,102,241,0.85)'  },
-        blue:   { bg: 'rgba(59,130,246,0.42)',  b: 'rgba(59,130,246,0.85)'  },
-        amber:  { bg: 'rgba(245,158,11,0.42)',  b: 'rgba(245,158,11,0.85)'  },
-        cyan:   { bg: 'rgba(6,182,212,0.42)',   b: 'rgba(6,182,212,0.85)'   },
-        gray:   { bg: 'rgba(100,116,139,0.38)', b: 'rgba(100,116,139,0.72)' },
-        rose:   { bg: 'rgba(244,63,94,0.42)',   b: 'rgba(244,63,94,0.85)'   },
-    };
-
-    const DONUT_BG = [P.blue.bg,  P.green.bg,  P.amber.bg,  P.violet.bg,  P.cyan.bg,  P.rose.bg,  P.gray.bg];
-    const DONUT_BR = [P.blue.b,   P.green.b,   P.amber.b,   P.violet.b,   P.cyan.b,   P.rose.b,   P.gray.b];
-
-    // ── totalLabels plugin ───────────────────────────────────────────────────
-    const totalLabelsPlugin = {
+    var totalLabelsPlugin = {
         id: 'totalLabels',
-        afterDatasetsDraw(chart) {
-            const opts = chart.options?.plugins?.totalLabels;
-            if (!opts?.display) return;
-            const totals = opts.totals || [];
-            const meta = chart.getDatasetMeta(chart.data.datasets.length - 1);
+        afterDatasetsDraw: function (chart) {
+            var opts = chart.options && chart.options.plugins && chart.options.plugins.totalLabels;
+            if (!opts || !opts.display) return;
+            var totals = opts.totals || [];
+            var meta = chart.getDatasetMeta(chart.data.datasets.length - 1);
             if (!meta) return;
-            const ctx = chart.ctx;
-            meta.data.forEach((el, i) => {
-                const val = totals[i];
+            var ctx = chart.ctx;
+            var ink = inkNow();
+            meta.data.forEach(function (el, i) {
+                var val = totals[i];
                 if (val == null) return;
-                const { x, y } = el.tooltipPosition();
-                if (!Number.isFinite(y)) return;
+                var pos = el.tooltipPosition();
+                if (!Number.isFinite(pos.y)) return;
                 ctx.save();
-                ctx.fillStyle    = C.textStrong;
-                ctx.font         = "700 11px 'Inter', sans-serif";
-                ctx.textAlign    = 'center';
+                ctx.fillStyle = ink;
+                ctx.font = '700 11px ' + (Chart.defaults.font.family || 'system-ui');
+                ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
-                ctx.fillText(val, x, y - 5);
+                ctx.fillText(val, pos.x, pos.y - 5);
                 ctx.restore();
             });
-        },
+        }
     };
 
-    const chartBuilders = {};
+    // Donut center total (sum, themed ink).
+    var donutCenterPlugin = {
+        id: 'donutCenter',
+        afterDraw: function (chart) {
+            var opts = chart.options && chart.options.plugins && chart.options.plugins.donutCenter;
+            if (!opts || !opts.display) return;
+            var meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data || !meta.data.length) return;
+            var el = meta.data[0];
+            var x = el.x, y = el.y;
+            var total = (chart.data.datasets[0].data || []).reduce(function (a, b) { return a + (Number(b) || 0); }, 0);
+            var totalTxt = opts.format ? opts.format(total) : (Math.round(total * 10) / 10);
+            var ctx = chart.ctx;
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = inkNow();
+            ctx.font = '750 20px ' + (Chart.defaults.font.family || 'system-ui');
+            ctx.fillText(totalTxt, x, y - 6);
+            ctx.fillStyle = inkSoftNow();
+            ctx.font = '600 10px ' + (Chart.defaults.font.family || 'system-ui');
+            ctx.fillText(opts.label || 'TOTAL', x, y + 14);
+            ctx.restore();
+        }
+    };
 
-    // ── Stacked bar factory ──────────────────────────────────────────────────
+    var chartBuilders = {};
+
+    function chartTitle(canvas) {
+        var card = canvas.closest('.rpt-chart-card');
+        var title = card && card.querySelector('.rpt-chart-title');
+        return title ? title.textContent.trim() : '';
+    }
+
     function makeStackedBar(canvas, payload, cA, cB) {
-        if (!canvas || !payload?.labels?.length) return;
-        const buildFn = (tgt) => new Chart(tgt, {
-            type: 'bar',
-            data: {
-                labels: payload.labels,
-                datasets: [
-                    { label: 'Completed', data: payload.completed || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'r', order: 1 },
-                    { label: 'Ongoing',   data: payload.ongoing   || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'r', order: 2 },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 650, easing: 'easeOutQuart' },
-                scales: {
-                    x: { stacked: true, ...axisCfg, ticks: { ...axisCfg.ticks, maxRotation: 35, minRotation: 0 } },
-                    y: { stacked: true, beginAtZero: true, grace: '12%', ...axisCfg, ticks: { ...axisCfg.ticks, precision: 0 } },
+        if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
+        var buildFn = function (tgt) {
+            return new Chart(tgt, {
+                type: 'bar',
+                data: {
+                    labels: payload.labels,
+                    datasets: [
+                        { label: 'Completed', data: payload.completed || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'r', order: 1 },
+                        { label: 'Ongoing', data: payload.ongoing || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'r', order: 2 }
+                    ]
                 },
-                plugins: {
-                    legend: legendCfg,
-                    tooltip: { ...tooltipCfg, callbacks: { afterBody(items) { if (!items.length) return ''; const t = (payload.totals || [])[items[0].dataIndex]; return t != null ? `Total: ${t}` : ''; } } },
-                    totalLabels: { display: true, totals: payload.totals },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: reducedMotion ? 0 : 650, easing: 'easeOutQuart' },
+                    scales: {
+                        x: { stacked: true, ticks: { maxRotation: 35, minRotation: 0, autoSkip: true, maxTicksLimit: 16 } },
+                        y: { stacked: true, beginAtZero: true, grace: '12%', maxTicksLimit: 6, ticks: { precision: 0 } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                afterBody: function (items) {
+                                    if (!items.length) return '';
+                                    var t = (payload.totals || [])[items[0].dataIndex];
+                                    return t != null ? 'Total: ' + t : '';
+                                }
+                            }
+                        },
+                        totalLabels: { display: true, totals: payload.totals }
+                    }
                 },
-            },
-            plugins: [totalLabelsPlugin],
-        });
+                plugins: [totalLabelsPlugin]
+            });
+        };
         buildFn(canvas);
-        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: canvas.closest('.rpt-chart-card')?.querySelector('.rpt-chart-title')?.textContent?.trim() || '' };
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: chartTitle(canvas) };
     }
 
-    // ── Activity hour bar factory ────────────────────────────────────────────
     function makeHourBar(canvas, payload, cA, cB) {
-        if (!canvas || !payload?.labels?.length) return;
-        const buildFn = (tgt) => new Chart(tgt, {
-            type: 'bar',
-            data: {
-                labels: payload.labels,
-                datasets: [
-                    { label: 'Billable',     data: payload.billable     || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'h' },
-                    { label: 'Not Billable', data: payload.non_billable || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 5, borderSkipped: false, stack: 'h' },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 650, easing: 'easeOutQuart' },
-                scales: {
-                    x: { stacked: true, ...axisCfg },
-                    y: { stacked: true, beginAtZero: true, ...axisCfg, ticks: { ...axisCfg.ticks, precision: 0 } },
+        if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
+        var buildFn = function (tgt) {
+            return new Chart(tgt, {
+                type: 'bar',
+                data: {
+                    labels: payload.labels,
+                    datasets: [
+                        { label: 'Billable', data: payload.billable || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'h' },
+                        { label: 'Not Billable', data: payload.non_billable || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'h' }
+                    ]
                 },
-                plugins: {
-                    legend: legendCfg,
-                    tooltip: { ...tooltipCfg, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} hrs` } },
-                },
-            },
-        });
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: reducedMotion ? 0 : 650, easing: 'easeOutQuart' },
+                    scales: {
+                        x: { stacked: true, ticks: { autoSkip: true, maxRotation: 35, maxTicksLimit: 16 } },
+                        y: { stacked: true, beginAtZero: true, maxTicksLimit: 6, ticks: { precision: 0 } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function (ctx) {
+                                    return ctx.dataset.label + ': ' + ctx.parsed.y + ' hrs';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
         buildFn(canvas);
-        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: canvas.closest('.rpt-chart-card')?.querySelector('.rpt-chart-title')?.textContent?.trim() || '' };
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: chartTitle(canvas) };
     }
 
-    // ── Doughnut factory ─────────────────────────────────────────────────────
     function makeDonut(canvas, payload, bgColors, brColors, labelFn) {
-        if (!canvas || !payload?.labels?.length) return;
-        const buildFn = (tgt) => new Chart(tgt, {
-            type: 'doughnut',
-            data: { labels: payload.labels, datasets: [{ data: payload.totals, backgroundColor: bgColors, borderColor: brColors, borderWidth: 2, hoverOffset: 10, borderRadius: 5 }] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '62%',
-                animation: { duration: 700, easing: 'easeOutQuart', animateRotate: true },
-                plugins: { legend: legendCfg, tooltip: { ...tooltipCfg, callbacks: { label: labelFn } } },
-            },
-        });
+        if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
+        var buildFn = function (tgt) {
+            return new Chart(tgt, {
+                type: 'doughnut',
+                data: {
+                    labels: payload.labels,
+                    datasets: [{
+                        data: payload.totals,
+                        backgroundColor: bgColors,
+                        borderColor: brColors,
+                        borderWidth: 2,
+                        hoverOffset: 10,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%',
+                    animation: { duration: reducedMotion ? 0 : 700, easing: 'easeOutQuart', animateRotate: !reducedMotion },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: { callbacks: { label: labelFn } },
+                        donutCenter: { display: true, label: 'HOURS' }
+                    }
+                },
+                plugins: [donutCenterPlugin]
+            });
+        };
         buildFn(canvas);
-        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: canvas.closest('.rpt-chart-card')?.querySelector('.rpt-chart-title')?.textContent?.trim() || '' };
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: chartTitle(canvas) };
     }
 
-    const rptView = '{{ report_view }}';
+    var rptView = '{{ report_view }}';
 
     if (rptView === 'operational') {
-        const amN   = document.getElementById('account-manager-data');
-        const engN  = document.getElementById('engineer-data');
-        const engtN = document.getElementById('engagement-data');
-        const prodN = document.getElementById('product-data');
+        var amN = document.getElementById('account-manager-data');
+        var engN = document.getElementById('engineer-data');
+        var engtN = document.getElementById('engagement-data');
+        var prodN = document.getElementById('product-data');
 
-        if (amN?.textContent)   makeStackedBar(document.getElementById('accountManagerChart'), JSON.parse(amN.textContent),   P.green, P.violet);
-        if (engN?.textContent)  makeStackedBar(document.getElementById('engineerChart'),       JSON.parse(engN.textContent),  P.green, P.violet);
-        if (engtN?.textContent) { const p = JSON.parse(engtN.textContent); if (p.totals?.some(v => v > 0)) makeStackedBar(document.getElementById('engagementChart'), p, P.green, P.blue); }
-        if (prodN?.textContent) { const p = JSON.parse(prodN.textContent); if (p.totals?.some(v => v > 0)) makeStackedBar(document.getElementById('productChart'),    p, P.green, P.amber); }
+        if (amN && amN.textContent) makeStackedBar(document.getElementById('accountManagerChart'), JSON.parse(amN.textContent), P.green, P.violet);
+        if (engN && engN.textContent) makeStackedBar(document.getElementById('engineerChart'), JSON.parse(engN.textContent), P.green, P.violet);
+        if (engtN && engtN.textContent) {
+            var ep = JSON.parse(engtN.textContent);
+            if ((ep.totals || []).some(function (v) { return v > 0; })) makeStackedBar(document.getElementById('engagementChart'), ep, P.green, P.blue);
+        }
+        if (prodN && prodN.textContent) {
+            var pp = JSON.parse(prodN.textContent);
+            if ((pp.totals || []).some(function (v) { return v > 0; })) makeStackedBar(document.getElementById('productChart'), pp, P.green, P.amber);
+        }
     }
 
     if (rptView === 'activity') {
-        const engN  = document.getElementById('activity-engineer-data');
-        const typeN = document.getElementById('activity-type-data');
-        const locN  = document.getElementById('activity-location-data');
-        const billN = document.getElementById('activity-billable-data');
+        var aEngN = document.getElementById('activity-engineer-data');
+        var typeN = document.getElementById('activity-type-data');
+        var locN = document.getElementById('activity-location-data');
+        var billN = document.getElementById('activity-billable-data');
 
-        if (engN?.textContent)  makeHourBar(document.getElementById('activityEngineerChart'), JSON.parse(engN.textContent),  P.green, P.gray);
-        if (typeN?.textContent) makeHourBar(document.getElementById('activityTypeChart'),      JSON.parse(typeN.textContent), P.blue,  P.amber);
-        if (locN?.textContent) {
-            const p = JSON.parse(locN.textContent);
-            makeDonut(document.getElementById('activityLocationChart'), p, DONUT_BG.slice(0, p.labels.length), DONUT_BR.slice(0, p.labels.length), ctx => { const v = ctx.raw ?? ctx.parsed; return `${ctx.label}: ${typeof v === 'number' ? v.toFixed(1) + ' hrs' : v}`; });
+        if (aEngN && aEngN.textContent) makeHourBar(document.getElementById('activityEngineerChart'), JSON.parse(aEngN.textContent), P.green, P.gray);
+        if (typeN && typeN.textContent) makeHourBar(document.getElementById('activityTypeChart'), JSON.parse(typeN.textContent), P.blue, P.amber);
+        if (locN && locN.textContent) {
+            var lp = JSON.parse(locN.textContent);
+            makeDonut(
+                document.getElementById('activityLocationChart'),
+                lp,
+                DONUT_BG.slice(0, lp.labels.length),
+                DONUT_BR.slice(0, lp.labels.length),
+                function (ctx) {
+                    var v = ctx.raw != null ? ctx.raw : ctx.parsed;
+                    return ctx.label + ': ' + (typeof v === 'number' ? v.toFixed(1) + ' hrs' : v);
+                }
+            );
         }
-        if (billN?.textContent) {
-            const p = JSON.parse(billN.textContent);
-            makeDonut(document.getElementById('activityBillableChart'), p, [P.green.bg, P.gray.bg], [P.green.b, P.gray.b], ctx => { const v = ctx.raw ?? ctx.parsed; return `${ctx.label}: ${typeof v === 'number' ? v.toFixed(1) + ' hrs' : v}`; });
+        if (billN && billN.textContent) {
+            var bp = JSON.parse(billN.textContent);
+            makeDonut(
+                document.getElementById('activityBillableChart'),
+                bp,
+                [P.green.bg, P.gray.bg],
+                [P.green.b, P.gray.b],
+                function (ctx) {
+                    var v = ctx.raw != null ? ctx.raw : ctx.parsed;
+                    return ctx.label + ': ' + (typeof v === 'number' ? v.toFixed(1) + ' hrs' : v);
+                }
+            );
         }
     }
-    // ── Chart expand modal ───────────────────────────────────────────────────
+
     (function () {
-        const modal    = document.getElementById('rptChartModal');
-        const titleEl  = document.getElementById('rptChartModalTitle');
-        const closeBtn = document.getElementById('rptChartModalClose');
+        var modal = document.getElementById('rptChartModal');
+        var titleEl = document.getElementById('rptChartModalTitle');
+        var closeBtn = document.getElementById('rptChartModalClose');
         if (!modal) return;
-        let activeChart = null;
+        var activeChart = null;
 
         function openModal(id) {
-            const entry = chartBuilders[id];
+            var entry = chartBuilders[id];
             if (!entry) return;
             titleEl.textContent = entry.title;
-            if (activeChart) { activeChart.destroy(); activeChart = null; }
+            if (activeChart) {
+                activeChart.destroy();
+                activeChart = null;
+            }
             modal.classList.add('is-open');
             document.body.style.overflow = 'hidden';
-            requestAnimationFrame(() => {
-                const mc = document.getElementById('rptModalCanvas');
+            requestAnimationFrame(function () {
+                var mc = document.getElementById('rptModalCanvas');
                 if (mc) activeChart = entry.build(mc);
             });
         }
@@ -881,14 +997,73 @@
         function closeModal() {
             modal.classList.remove('is-open');
             document.body.style.overflow = '';
+            if (activeChart) {
+                activeChart.destroy();
+                activeChart = null;
+            }
         }
 
-        document.querySelectorAll('[data-expand-chart]').forEach(btn => {
-            btn.addEventListener('click', () => openModal(btn.dataset.expandChart));
+        document.querySelectorAll('[data-expand-chart]').forEach(function (btn) {
+            btn.addEventListener('click', function () { openModal(btn.dataset.expandChart); });
         });
+        var pngBtn = document.getElementById('rptChartModalPng');
+        if (pngBtn) {
+            pngBtn.addEventListener('click', function () {
+                if (!activeChart) return;
+                var link = document.createElement('a');
+                link.download = (titleEl.textContent || 'chart').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png';
+                link.href = activeChart.toBase64Image();
+                link.click();
+            });
+        }
         if (closeBtn) closeBtn.addEventListener('click', closeModal);
-        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
-        document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal(); });
+        modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
+    })();
+
+    (function () {
+        var modal = document.getElementById('activity-edit-modal');
+        if (!modal) return;
+        var backdrop = document.getElementById('activity-edit-backdrop');
+        var closeBtn = document.getElementById('activity-edit-close');
+        var cancelBtn = document.getElementById('activity-edit-cancel');
+        var body = document.body;
+        var dialog = modal.querySelector('.requestor-modal__dialog');
+
+        function openModal() {
+            modal.classList.add('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'false');
+            body.classList.add('requestor-modal-open');
+            if (dialog) dialog.scrollTop = 0;
+        }
+
+        function closeModal() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            body.classList.remove('requestor-modal-open');
+            if (modal.dataset.openOnLoad === 'true') {
+                var params = new URLSearchParams(window.location.search);
+                params.set('report_view', 'activity');
+                params.delete('edit_activity');
+                window.location.href = window.location.pathname + '?' + params.toString();
+            }
+        }
+
+        if (modal.dataset.openOnLoad === 'true') openModal();
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (backdrop) backdrop.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', function (e) {
+            // Keep cancel as a real navigation when href is present; only prevent default when needed.
+            if (!cancelBtn.getAttribute('href')) {
+                e.preventDefault();
+                closeModal();
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('requestor-modal--visible')) closeModal();
+        });
     })();
 })();
 </script>

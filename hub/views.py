@@ -691,7 +691,17 @@ class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         return response
 
     def _export_activity_logs(self):
-        filename = f"activity-logs-{timezone.now().strftime('%Y%m%d-%H%M%S')}.csv"
+        # Reuse RequestReportView month-filter helpers so CSV matches the UI.
+        # Bind a temporary report view so instance helpers (_normalize_month_value, etc.) resolve.
+        report_view = RequestReportView()
+        report_view.request = self.request
+        month_filters = report_view._resolve_activity_month_filters()
+        start_month = month_filters.get("start_month") or ""
+        end_month = month_filters.get("end_month") or ""
+        range_slug = ""
+        if start_month or end_month:
+            range_slug = f"-{start_month or 'start'}_to_{end_month or 'end'}"
+        filename = f"activity-logs{range_slug}-{timezone.now().strftime('%Y%m%d-%H%M%S')}.csv"
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
@@ -715,6 +725,10 @@ class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             EngineerActivityLog.objects.select_related("engineer", "account", "request")
             .order_by("-request_date", "-created_at")
         )
+        if month_filters.get("start_month_date"):
+            logs = logs.filter(request_date__gte=month_filters["start_month_date"])
+        if month_filters.get("end_exclusive_date"):
+            logs = logs.filter(request_date__lt=month_filters["end_exclusive_date"])
         activity_labels = dict(EngineerActivityLog.ActivityType.choices)
         location_labels = dict(EngineerActivityLog.Location.choices)
         for log in logs:
@@ -6114,7 +6128,9 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
         start_month_date = self._month_start(start_month)
         end_month_date = self._month_start(end_month)
 
+        range_swapped = False
         if start_month_date and end_month_date and start_month_date > end_month_date:
+            range_swapped = True
             start_month, end_month = end_month, start_month
             start_month_date, end_month_date = end_month_date, start_month_date
 
@@ -6138,6 +6154,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "start_month_date": start_month_date,
             "end_exclusive_date": end_exclusive_date,
             "label": label,
+            "range_swapped": range_swapped,
         }
 
     @staticmethod
@@ -6293,6 +6310,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             {
                 "label": status_labels.get(status, status.title()),
                 "total": total,
+                "status": status,
             }
             for status, total in status_counts.items()
             if total > 0
@@ -6538,6 +6556,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "activity_start_month": month_filters["start_month"],
             "activity_end_month": month_filters["end_month"],
             "activity_month_filter_label": month_filters["label"],
+            "activity_range_swapped": month_filters.get("range_swapped", False),
             "activity_engineer_chart": engineer_chart,
             "activity_engineer_table": engineer_table,
             "activity_type_chart": activity_chart,

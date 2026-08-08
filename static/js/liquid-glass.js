@@ -8,13 +8,22 @@
     var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
     /* ---- Staggered entrance (CSS-driven, no dependency) ---- */
+    function normalizeDelaySeconds(raw, index) {
+        var delay = parseFloat(raw);
+        if (!Number.isFinite(delay)) {
+            return index * 0.06;
+        }
+        // Login uses fractional seconds (0.12). Management/Reports use ms (40, 80…).
+        if (delay > 5) {
+            delay = delay / 1000;
+        }
+        return Math.max(0, delay);
+    }
+
     function primeEntrance() {
         var items = document.querySelectorAll('.lg-enter');
         for (var i = 0; i < items.length; i += 1) {
-            var delay = parseFloat(items[i].getAttribute('data-lg-delay'));
-            if (!Number.isFinite(delay)) {
-                delay = i * 0.06;
-            }
+            var delay = normalizeDelaySeconds(items[i].getAttribute('data-lg-delay'), i);
             items[i].style.setProperty('--lg-delay', delay + 's');
         }
         requestAnimationFrame(function () {

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block body_class %}engineer-dashboard engineer-activity-logs{% endblock %}
 {% block title %}Activity Logs · Request Hub{% endblock %}
 {% block content %}
@@ -542,6 +543,7 @@
 
 {{ activity_report_data|json_script:"activity-report-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/chart-theme.js' %}?v=2"></script>
 <script>
     (function () {
         const dataNode = document.getElementById('activity-report-data');
@@ -550,8 +552,12 @@
         }
 
         const reportData = JSON.parse(dataNode.textContent || '{}');
-        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
         const chartRegistry = {};
+        const token = window.lgChartToken || ((name, fallback) => {
+            const bodyVal = getComputedStyle(document.body).getPropertyValue(name).trim();
+            return bodyVal || getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+        });
+        const reducedMotion = !!window.lgReducedMotion;
 
         // ── Transparent canvas background plugin ──────────────────────────
         // Force Chart.js to use a transparent canvas background
@@ -566,34 +572,24 @@
         };
         Chart.register(transparentBgPlugin);
 
-        // ── Theme-aware scale colours ──────────────────────────────────────
-        const isDark = () => document.body.classList.contains('dark-mode');
-        const scaleOpts = () => {
-            const dark = isDark();
-            return {
-                grid: {
-                    color: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
-                    tickColor: 'transparent',
-                },
-                ticks: {
-                    color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.42)',
-                    font: { size: 11 },
-                },
-                border: { color: 'transparent' },
-            };
-        };
+        // ── Shared glass palette + theme-aware scales ──────────────────────
+        const paletteColors = () => (window.lgChartPalette && window.lgChartPalette.length)
+            ? window.lgChartPalette.slice()
+            : ['#0a84ff', '#30d158', '#ff9f0a', '#ff453a', '#bf5af0', '#40c8e0'];
+        const scaleOpts = () => ({
+            grid: {
+                color: token('--lg-divider', 'rgba(11,18,32,0.09)'),
+                tickColor: 'transparent',
+            },
+            ticks: {
+                color: token('--lg-ink-soft', 'rgba(11,18,32,0.62)'),
+                font: { size: 11 },
+            },
+            border: { color: 'transparent' },
+        });
         const pluginOpts = () => ({
             legend: { display: false },
-            tooltip: {
-                backgroundColor: isDark() ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.95)',
-                titleColor: isDark() ? '#f1f5f9' : '#1e293b',
-                bodyColor:  isDark() ? '#cbd5e1' : '#475569',
-                borderColor: isDark() ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
-                borderWidth: 1,
-                padding: 10,
-                cornerRadius: 8,
-                boxPadding: 4,
-            },
+            // Tooltip inherits Chart.defaults from chart-theme.js
         });
 
         const upsertChart = (canvasId, config) => {
@@ -605,6 +601,8 @@
             chartRegistry[canvasId] = new Chart(canvas, config);
         };
 
+        const animDur = () => (reducedMotion ? 0 : 600);
+
         const makeBar = (canvasId, labels, values, label) => {
             if (!labels || !labels.length) return;
             const so = scaleOpts();
@@ -615,7 +613,7 @@
                     datasets: [{
                         label,
                         data: values,
-                        backgroundColor: defaultColors,
+                        backgroundColor: paletteColors(),
                         borderRadius: 8,
                         borderSkipped: false,
                     }]
@@ -625,12 +623,20 @@
                     maintainAspectRatio: false,
                     plugins: pluginOpts(),
                     scales: {
-                        x: { ...so, grid: { ...so.grid, display: false } },
-                        y: so,
+                        x: { ...so, grid: { ...so.grid, display: false }, ticks: { ...so.ticks, autoSkip: true, maxRotation: 35 } },
+                        y: { ...so, maxTicksLimit: 6 },
                     },
-                    animation: { duration: 600, easing: 'easeOutQuart' },
+                    animation: { duration: animDur(), easing: 'easeOutQuart' },
                 }
             });
+        };
+
+        const hexToRgba = (hex, alpha) => {
+            const h = (hex || '').replace('#', '').trim();
+            const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+            if (full.length !== 6) return `rgba(10,132,255,${alpha})`;
+            const r = parseInt(full.slice(0, 2), 16), g = parseInt(full.slice(2, 4), 16), b = parseInt(full.slice(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         };
 
         const makeLine = (canvasId, labels, values, label) => {
@@ -638,12 +644,12 @@
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
             const so = scaleOpts();
+            const accent = paletteColors()[0] || '#0a84ff';
             // build a gradient fill
             const ctx = canvas.getContext('2d');
             const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-            const dark = isDark();
-            gradient.addColorStop(0, dark ? 'rgba(59,130,246,0.35)' : 'rgba(59,130,246,0.25)');
-            gradient.addColorStop(1, dark ? 'rgba(59,130,246,0.02)' : 'rgba(59,130,246,0.0)');
+            gradient.addColorStop(0, hexToRgba(accent, 0.32));
+            gradient.addColorStop(1, hexToRgba(accent, 0.02));
             upsertChart(canvasId, {
                 type: 'line',
                 data: {
@@ -651,14 +657,14 @@
                     datasets: [{
                         label,
                         data: values,
-                        borderColor: dark ? '#60a5fa' : '#3b82f6',
+                        borderColor: accent,
                         backgroundColor: gradient,
                         fill: true,
                         tension: 0.42,
                         pointRadius: 4,
                         pointHoverRadius: 6,
-                        pointBackgroundColor: dark ? '#60a5fa' : '#3b82f6',
-                        pointBorderColor: dark ? 'rgba(15,23,42,0.8)' : '#ffffff',
+                        pointBackgroundColor: accent,
+                        pointBorderColor: token('--lg-tint', '#ffffff'),
                         pointBorderWidth: 2,
                         borderWidth: 2.5,
                     }]
@@ -668,10 +674,10 @@
                     maintainAspectRatio: false,
                     plugins: pluginOpts(),
                     scales: {
-                        x: { ...so, grid: { ...so.grid, display: false } },
-                        y: so,
+                        x: { ...so, grid: { ...so.grid, display: false }, ticks: { ...so.ticks, autoSkip: true } },
+                        y: { ...so, maxTicksLimit: 6 },
                     },
-                    animation: { duration: 700, easing: 'easeOutQuart' },
+                    animation: { duration: reducedMotion ? 0 : 700, easing: 'easeOutQuart' },
                 }
             });
         };
@@ -693,6 +699,15 @@
             }
         }
 
+
+        // Re-render with shared palette/scales when the theme flips.
+        if (window.lgChartOnTheme) {
+            window.lgChartOnTheme(() => {
+                if (graphTabButton && graphTabButton.dataset.rendered === 'true') {
+                    renderCharts();
+                }
+            });
+        }
         if (graphTabButton) {
             graphTabButton.addEventListener('shown.bs.tab', () => {
                 if (graphTabButton.dataset.rendered !== 'true') {

@@ -10,6 +10,11 @@
     var FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
     function token(name, fallback) {
+        // Dark-mode tokens live on body.dark-mode; :root keeps light defaults.
+        var bodyVal = getComputedStyle(document.body).getPropertyValue(name).trim();
+        if (bodyVal) {
+            return bodyVal;
+        }
         var value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         return value || fallback;
     }
@@ -74,24 +79,61 @@
 
         window.lgChartPalette = palette();
         window.lgChartInk = ink;
+        window.lgChartInkSoft = inkSoft;
     }
+
+    // Public: register a callback to re-apply theme (plugins, external charts).
+    var themeListeners = [];
+    window.lgChartOnTheme = function (fn) {
+        if (typeof fn === 'function') {
+            themeListeners.push(fn);
+        }
+    };
+    window.lgChartToken = token;
+    window.lgReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     apply();
 
-    // Re-theme existing charts when the dark-mode toggle flips the body class.
-    var toggle = document.getElementById('theme-checkbox');
-    if (toggle) {
-        toggle.addEventListener('change', function () {
-            setTimeout(function () {
-                apply();
-                var registry = Chart.instances || (Chart.registry && Chart.registry.instances);
-                Object.keys(registry || {}).forEach(function (key) {
-                    var chart = registry[key];
-                    if (chart && typeof chart.update === 'function') {
-                        chart.update('none');
-                    }
-                });
-            }, 60);
+    function eachChart(callback) {
+        // Chart.js 3/4: prefer getChart over legacy Chart.instances.
+        var seen = [];
+        var canvases = document.querySelectorAll('canvas');
+        for (var i = 0; i < canvases.length; i += 1) {
+            var chart = typeof Chart.getChart === 'function' ? Chart.getChart(canvases[i]) : null;
+            if (chart && seen.indexOf(chart) === -1) {
+                seen.push(chart);
+                callback(chart);
+            }
+        }
+        if (seen.length) {
+            return;
+        }
+        var registry = Chart.instances || (Chart.registry && Chart.registry.instances);
+        Object.keys(registry || {}).forEach(function (key) {
+            var chart = registry[key];
+            if (chart) {
+                callback(chart);
+            }
         });
     }
+
+    // Re-theme existing charts when the dark-mode toggle flips the body class.
+    var toggle = document.getElementById('theme-checkbox');
+    function refreshTheme() {
+        setTimeout(function () {
+            apply();
+            eachChart(function (chart) {
+                if (chart && typeof chart.update === 'function') {
+                    chart.update('none');
+                }
+            });
+            themeListeners.forEach(function (fn) {
+                try { fn(); } catch (_) { /* listener must not break theme */ }
+            });
+        }, 60);
+    }
+    if (toggle) {
+        toggle.addEventListener('change', refreshTheme);
+    }
+    window.lgChartRefreshTheme = refreshTheme;
 }());
