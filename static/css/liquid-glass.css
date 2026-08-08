@@ -206,52 +206,209 @@ body.page-landing.dark-mode {
     -webkit-font-smoothing: antialiased;
 }
 
-/* Mesh layer A — warm/blue anchor blobs */
-.login-hero::before {
+/*
+ * Base wash only (static). Color motion lives on independent .login-mesh__orb
+ * nodes so blobs can cross — not a rigid multi-radial sheet transform.
+ * Kill legacy app.css screen overlay on ::before under page-login.
+ */
+body.page-login .login-hero::before,
+body.dark-mode.page-login .login-hero::before {
     content: "";
     position: absolute;
-    inset: -30%;
-    z-index: -3;
+    inset: 0;
+    z-index: -4;
+    pointer-events: none;
     mix-blend-mode: normal;
+    opacity: 1;
+    animation: none !important;
+    will-change: auto;
+    filter: none;
+    transform: none;
     background:
-        radial-gradient(38% 42% at 18% 22%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 65%),
-        radial-gradient(34% 38% at 82% 18%, rgba(150, 120, 255, 0.75) 0%, rgba(150, 120, 255, 0) 62%),
-        radial-gradient(46% 48% at 50% 92%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%);
-    filter: blur(28px);
-    will-change: transform;
-    animation: lg-mesh-drift-a 34s var(--ease-ios) infinite alternate;
+        radial-gradient(120% 80% at 50% 120%, rgba(12, 40, 110, 0.55) 0%, transparent 55%),
+        radial-gradient(80% 60% at 50% -10%, rgba(40, 90, 180, 0.25) 0%, transparent 50%);
 }
 
-/* Mesh layer B — counter-drifting accents + grain */
-.login-hero::after {
-    content: "";
+body.page-login .login-hero::after,
+body.dark-mode.page-login .login-hero::after {
+    content: none;
+    display: none;
+    animation: none !important;
+}
+
+body.dark-mode.page-login .login-hero::before {
+    background:
+        radial-gradient(120% 80% at 50% 120%, rgba(6, 14, 40, 0.75) 0%, transparent 55%),
+        radial-gradient(80% 60% at 50% -10%, rgba(20, 40, 90, 0.35) 0%, transparent 50%);
+    opacity: 1;
+}
+
+/* ---- Independent liquid-glass glow orbs ---- */
+.login-mesh {
     position: absolute;
-    inset: -30%;
+    inset: 0;
     z-index: -2;
-    background:
-        radial-gradient(30% 34% at 74% 68%, rgba(255, 122, 190, 0.55) 0%, rgba(255, 122, 190, 0) 64%),
-        radial-gradient(28% 30% at 12% 74%, rgba(64, 226, 210, 0.5) 0%, rgba(64, 226, 210, 0) 62%),
-        radial-gradient(24% 26% at 56% 36%, rgba(255, 214, 140, 0.42) 0%, rgba(255, 214, 140, 0) 60%);
-    filter: blur(36px);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.login-mesh__orb {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    /* Soft edge via stops only — never animate filter */
+    filter: none;
     will-change: transform;
-    animation: lg-mesh-drift-b 47s var(--ease-ios) infinite alternate;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+    animation-iteration-count: infinite;
 }
 
-body.dark-mode .login-hero::before {
-    background:
-        radial-gradient(38% 42% at 18% 22%, rgba(58, 120, 220, 0.6) 0%, rgba(58, 120, 220, 0) 65%),
-        radial-gradient(34% 38% at 82% 18%, rgba(96, 72, 190, 0.58) 0%, rgba(96, 72, 190, 0) 62%),
-        radial-gradient(46% 48% at 50% 92%, rgba(12, 34, 96, 0.9) 0%, rgba(12, 34, 96, 0) 68%);
+/* Anchors + sizes: large enough to feel ambient, travel via keyframe % */
+.login-mesh__orb--1 {
+    width: min(72vw, 560px);
+    height: min(72vw, 560px);
+    top: -12%;
+    left: -8%;
+    background: radial-gradient(circle at 40% 40%,
+        rgba(88, 190, 255, 0.92) 0%,
+        rgba(88, 190, 255, 0.45) 32%,
+        rgba(88, 190, 255, 0) 68%);
+    animation-name: lg-orb-float-1;
+    animation-duration: 18s;
 }
 
-body.dark-mode .login-hero::after {
-    background:
-        radial-gradient(30% 34% at 74% 68%, rgba(168, 66, 128, 0.4) 0%, rgba(168, 66, 128, 0) 64%),
-        radial-gradient(28% 30% at 12% 74%, rgba(28, 132, 128, 0.36) 0%, rgba(28, 132, 128, 0) 62%),
-        radial-gradient(24% 26% at 56% 36%, rgba(150, 118, 62, 0.3) 0%, rgba(150, 118, 62, 0) 60%);
+.login-mesh__orb--2 {
+    width: min(68vw, 520px);
+    height: min(68vw, 520px);
+    top: -8%;
+    right: -10%;
+    left: auto;
+    background: radial-gradient(circle at 55% 40%,
+        rgba(150, 120, 255, 0.85) 0%,
+        rgba(150, 120, 255, 0.4) 34%,
+        rgba(150, 120, 255, 0) 68%);
+    animation-name: lg-orb-float-2;
+    animation-duration: 24s;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Film grain — breaks up banding in the gradient */
+.login-mesh__orb--3 {
+    width: min(90vw, 720px);
+    height: min(90vw, 720px);
+    bottom: -28%;
+    left: 18%;
+    top: auto;
+    background: radial-gradient(circle at 50% 35%,
+        rgba(20, 78, 210, 0.95) 0%,
+        rgba(20, 78, 210, 0.5) 36%,
+        rgba(20, 78, 210, 0) 70%);
+    animation-name: lg-orb-float-3;
+    animation-duration: 31s;
+}
+
+.login-mesh__orb--4 {
+    width: min(58vw, 440px);
+    height: min(58vw, 440px);
+    bottom: 8%;
+    right: -6%;
+    left: auto;
+    top: auto;
+    background: radial-gradient(circle at 45% 45%,
+        rgba(255, 122, 190, 0.72) 0%,
+        rgba(255, 122, 190, 0.32) 36%,
+        rgba(255, 122, 190, 0) 68%);
+    animation-name: lg-orb-float-4;
+    animation-duration: 38s;
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+.login-mesh__orb--5 {
+    width: min(52vw, 400px);
+    height: min(52vw, 400px);
+    top: 38%;
+    left: -4%;
+    background: radial-gradient(circle at 50% 50%,
+        rgba(64, 226, 210, 0.62) 0%,
+        rgba(64, 226, 210, 0.28) 38%,
+        rgba(64, 226, 210, 0) 68%);
+    animation-name: lg-orb-float-5;
+    animation-duration: 45s;
+}
+
+/* Dark: same hues, lower chroma so glass card stays readable */
+body.dark-mode.page-login .login-mesh__orb--1 {
+    background: radial-gradient(circle at 40% 40%,
+        rgba(58, 140, 255, 0.7) 0%,
+        rgba(58, 140, 255, 0.28) 34%,
+        rgba(58, 140, 255, 0) 68%);
+}
+body.dark-mode.page-login .login-mesh__orb--2 {
+    background: radial-gradient(circle at 55% 40%,
+        rgba(120, 90, 220, 0.62) 0%,
+        rgba(120, 90, 220, 0.26) 36%,
+        rgba(120, 90, 220, 0) 68%);
+}
+body.dark-mode.page-login .login-mesh__orb--3 {
+    background: radial-gradient(circle at 50% 35%,
+        rgba(24, 60, 150, 0.85) 0%,
+        rgba(24, 60, 150, 0.4) 38%,
+        rgba(24, 60, 150, 0) 70%);
+}
+body.dark-mode.page-login .login-mesh__orb--4 {
+    background: radial-gradient(circle at 45% 45%,
+        rgba(180, 70, 130, 0.5) 0%,
+        rgba(180, 70, 130, 0.22) 38%,
+        rgba(180, 70, 130, 0) 68%);
+}
+body.dark-mode.page-login .login-mesh__orb--5 {
+    background: radial-gradient(circle at 50% 50%,
+        rgba(40, 160, 150, 0.45) 0%,
+        rgba(40, 160, 150, 0.2) 40%,
+        rgba(40, 160, 150, 0) 68%);
+}
+
+/*
+ * Per-orb paths — larger travel so orbs visibly cross.
+ * 0% == 100% for seamless loops. Transform + opacity only.
+ */
+@keyframes lg-orb-float-1 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1) rotate(0deg); opacity: 0.95; }
+    25%      { transform: translate3d(18%, 12%, 0) scale(1.14) rotate(3deg); opacity: 1; }
+    50%      { transform: translate3d(8%, 22%, 0) scale(0.92) rotate(-2deg); opacity: 0.88; }
+    75%      { transform: translate3d(-10%, 8%, 0) scale(1.08) rotate(2deg); opacity: 0.96; }
+}
+
+@keyframes lg-orb-float-2 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.05) rotate(0deg); opacity: 0.92; }
+    20%      { transform: translate3d(-16%, 14%, 0) scale(0.9) rotate(-4deg); opacity: 0.85; }
+    45%      { transform: translate3d(-22%, -6%, 0) scale(1.18) rotate(2deg); opacity: 1; }
+    70%      { transform: translate3d(6%, 16%, 0) scale(1.02) rotate(-1deg); opacity: 0.9; }
+}
+
+@keyframes lg-orb-float-3 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1) rotate(0deg); opacity: 1; }
+    30%      { transform: translate3d(-14%, -12%, 0) scale(1.12) rotate(2deg); opacity: 0.95; }
+    55%      { transform: translate3d(12%, -18%, 0) scale(0.94) rotate(-3deg); opacity: 0.9; }
+    80%      { transform: translate3d(16%, 6%, 0) scale(1.08) rotate(1deg); opacity: 0.98; }
+}
+
+@keyframes lg-orb-float-4 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.08) rotate(0deg); opacity: 0.9; }
+    25%      { transform: translate3d(-18%, -14%, 0) scale(1.2) rotate(4deg); opacity: 1; }
+    50%      { transform: translate3d(-8%, 12%, 0) scale(0.88) rotate(-2deg); opacity: 0.82; }
+    75%      { transform: translate3d(10%, -8%, 0) scale(1.1) rotate(2deg); opacity: 0.94; }
+}
+
+@keyframes lg-orb-float-5 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1) rotate(0deg); opacity: 0.88; }
+    22%      { transform: translate3d(20%, -16%, 0) scale(1.16) rotate(-3deg); opacity: 0.98; }
+    48%      { transform: translate3d(14%, 14%, 0) scale(0.9) rotate(3deg); opacity: 0.84; }
+    72%      { transform: translate3d(-12%, 10%, 0) scale(1.12) rotate(-1deg); opacity: 0.95; }
+}
+
+/* Film grain — breaks up banding; stays static (cheap) */
 .login-hero__grain {
     position: absolute;
     inset: 0;
@@ -262,19 +419,7 @@ body.dark-mode .login-hero::after {
 }
 
 body.dark-mode .login-hero__grain {
-    opacity: 0.06;
-}
-
-@keyframes lg-mesh-drift-a {
-    0%   { transform: translate3d(0, 0, 0) scale(1); }
-    50%  { transform: translate3d(3%, -4%, 0) scale(1.12); }
-    100% { transform: translate3d(-4%, 3%, 0) scale(1.05); }
-}
-
-@keyframes lg-mesh-drift-b {
-    0%   { transform: translate3d(0, 0, 0) scale(1.08) rotate(0deg); }
-    50%  { transform: translate3d(-5%, 4%, 0) scale(1) rotate(4deg); }
-    100% { transform: translate3d(4%, -3%, 0) scale(1.14) rotate(-3deg); }
+    opacity: 0.055;
 }
 
 /* Float the real navbar theme toggle instead of hiding the whole navbar,
@@ -445,25 +590,37 @@ body.dark-mode .page-login .login-card__logo {
     border-top: 1px solid var(--lg-hairline-soft);
 }
 
-/* Floating label */
+/* Floating label — top/font-size (not transform) so app.css input:focus scale can't collide */
 .page-login .login-form__group > label {
     position: absolute;
     left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    transform-origin: left center;
+    right: 1rem;
+    top: 1.15rem;
+    margin: 0;
+    transform: none !important;
     font-size: 1rem;
     font-weight: 400;
+    line-height: 1.25;
     letter-spacing: -0.01em;
     color: var(--lg-ink-faint);
     pointer-events: none;
     z-index: 2;
-    transition: transform var(--lg-dur-sm) var(--ease-ios-out), color var(--lg-dur-sm) var(--ease-ios);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition:
+        top var(--lg-dur-sm) var(--ease-ios-out),
+        font-size var(--lg-dur-sm) var(--ease-ios-out),
+        color var(--lg-dur-sm) var(--ease-ios);
 }
 
+/* Floated when focused or when value present (placeholder=" " keeps :placeholder-shown working) */
 .page-login .login-form__group:focus-within > label,
-.page-login .login-form__group > input:not(:placeholder-shown) ~ label {
-    transform: translateY(-1.05rem) scale(0.75);
+.page-login .login-form__group > input:not(:placeholder-shown) ~ label,
+.page-login .login-form__group > input:focus ~ label {
+    top: 0.42rem !important;
+    font-size: 0.72rem !important;
+    line-height: 1.1;
     color: var(--lg-accent);
 }
 
@@ -472,25 +629,34 @@ body.dark-mode .page-login .login-card__logo {
 }
 
 .page-login .login-form input[type="text"],
-.page-login .login-form input[type="password"] {
+.page-login .login-form input[type="password"],
+.page-login .login-form .form-control {
     width: 100%;
     border: none;
     border-radius: 0;
     background: transparent;
-    padding: 1.6rem 1rem 0.6rem;
+    /* Extra top pad so typed text never sits under the floated label */
+    padding: 1.75rem 1rem 0.7rem !important;
+    min-height: 3.65rem;
     font-size: 1rem;
+    line-height: 1.35;
     letter-spacing: -0.01em;
     color: var(--lg-ink);
-    box-shadow: none;
+    box-shadow: none !important;
     -webkit-appearance: none;
     appearance: none;
+    /* Kill global .form-control:focus { transform: scale(...) } which causes label/text clash */
+    transform: none !important;
 }
 
 .page-login .login-form input:focus,
-.page-login .login-form input:focus-visible {
+.page-login .login-form input:focus-visible,
+.page-login .login-form .form-control:focus,
+.page-login .login-form .form-control:focus-visible {
     outline: none;
-    box-shadow: none;
+    box-shadow: none !important;
     background: transparent;
+    transform: none !important;
 }
 
 .page-login .login-form input:-webkit-autofill {
@@ -665,7 +831,8 @@ body.dark-mode.page-login .login-form__group > label {
 }
 
 body.dark-mode.page-login .login-form__group:focus-within > label,
-body.dark-mode.page-login .login-form__group > input:not(:placeholder-shown) ~ label {
+body.dark-mode.page-login .login-form__group > input:not(:placeholder-shown) ~ label,
+body.dark-mode.page-login .login-form__group > input:focus ~ label {
     color: var(--lg-accent);
 }
 
@@ -680,8 +847,9 @@ body.dark-mode.page-login .login-form .form-control:focus {
     background-color: transparent;
     background: transparent;
     border: none;
-    box-shadow: none;
+    box-shadow: none !important;
     color: var(--lg-ink);
+    transform: none !important;
 }
 
 body.dark-mode.page-login .login-form input:-webkit-autofill {
@@ -1003,6 +1171,7 @@ body.dark-mode.page-login img.login-card__logo {
 @media (prefers-reduced-motion: reduce) {
     .login-hero::before,
     .login-hero::after,
+    .login-mesh__orb,
     .lg-tile::after,
     .login-success-card,
     .login-success-card__ring::before,
@@ -1011,6 +1180,18 @@ body.dark-mode.page-login img.login-card__logo {
     .lg-enter-ready .lg-enter,
     .login-card--shake {
         animation: none !important;
+        will-change: auto !important;
+    }
+
+    .login-hero::before,
+    .login-hero::after {
+        inset: 0;
+        transform: none !important;
+    }
+
+    .login-mesh__orb {
+        transform: none !important;
+        opacity: 0.9 !important;
     }
 
     .lg-enter,
