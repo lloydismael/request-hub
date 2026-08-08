@@ -4,34 +4,44 @@
 {% block body_class %}page-login{% endblock %}
 {% block content %}
 <section class="login-hero">
-    <div class="login-card login-card--glass">
-        <div class="login-card__brand">
+    <span class="login-hero__grain" aria-hidden="true"></span>
+
+    <div class="login-card login-card--glass lg-surface lg-enter" data-lg-delay="0">
+        <span class="login-card__sheen" aria-hidden="true"></span>
+
+        <div class="login-card__brand lg-enter" data-lg-delay="0.12">
             <img src="{% static 'img/phil-data-full-logo.png' %}" alt="Phil-Data Business Systems logo" class="login-card__logo">
         </div>
+
+        <h1 class="login-card__title lg-enter" data-lg-delay="0.18">Welcome back</h1>
+        <p class="login-card__subtitle lg-enter" data-lg-delay="0.22">Sign in to continue to Request Hub</p>
+
         {% if form.non_field_errors %}
-            <div class="alert" role="alert">
+            <div class="alert lg-enter" data-lg-delay="0.26" role="alert">
                 {{ form.non_field_errors|join:" " }}
             </div>
         {% endif %}
         <form method="post" novalidate class="login-form">
             {% csrf_token %}
-            <div class="login-form__group">
-                <label for="id_username">Username</label>
-                {{ form.username }}
-                {% if form.username.errors %}
-                    <div class="invalid-feedback d-block">{{ form.username.errors|join:" " }}</div>
-                {% endif %}
+            <div class="login-form__fields lg-enter" data-lg-delay="0.28">
+                <div class="login-form__group">
+                    {{ form.username }}
+                    <label for="{{ form.username.id_for_label }}">Username</label>
+                    {% if form.username.errors %}
+                        <div class="invalid-feedback d-block">{{ form.username.errors|join:" " }}</div>
+                    {% endif %}
+                </div>
+                <div class="login-form__group">
+                    {{ form.password }}
+                    <label for="{{ form.password.id_for_label }}">Password</label>
+                    {% if form.password.errors %}
+                        <div class="invalid-feedback d-block">{{ form.password.errors|join:" " }}</div>
+                    {% endif %}
+                </div>
             </div>
-            <div class="login-form__group">
-                <label for="id_password">Password</label>
-                {{ form.password }}
-                {% if form.password.errors %}
-                    <div class="invalid-feedback d-block">{{ form.password.errors|join:" " }}</div>
-                {% endif %}
-            </div>
-            <button type="submit" class="login-card__submit">Sign in</button>
+            <button type="submit" class="login-card__submit lg-enter" data-lg-delay="0.34">Sign in</button>
         </form>
-        <p class="login-card__footer">Developed by ESG 2026</p>
+        <p class="login-card__footer lg-enter" data-lg-delay="0.4">Developed by ESG 2026</p>
     </div>
 </section>
 <script>

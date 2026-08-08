@@ -197,8 +197,14 @@ class RoleAuthenticationForm(AuthenticationForm):
 
         super().__init__(request=request, *args, **kwargs)
 
-        self.fields["username"].widget.attrs.update({"class": "form-control"})
-        self.fields["password"].widget.attrs.update({"class": "form-control"})
+        # placeholder=" " is required for the CSS floating-label rule
+        # (`input:not(:placeholder-shown) ~ label`) used on the login page.
+        self.fields["username"].widget.attrs.update(
+            {"class": "form-control", "placeholder": " ", "autocomplete": "username"}
+        )
+        self.fields["password"].widget.attrs.update(
+            {"class": "form-control", "placeholder": " ", "autocomplete": "current-password"}
+        )
 
 
 class UserManagementForm(forms.ModelForm):

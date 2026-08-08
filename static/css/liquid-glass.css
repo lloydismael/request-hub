@@ -1,0 +1,1022 @@
+/* ==========================================================================
+   Liquid Glass — iOS 26 inspired surface system
+   Loaded AFTER app.css. Scope: login page, landing page, login success overlay.
+   All motion uses transform/opacity only. Reduced-motion honoured at bottom.
+   ========================================================================== */
+
+:root {
+    /* Easing — Apple system curves */
+    --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-ios-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-ios-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Duration ladder */
+    --lg-dur-xs: 0.18s;
+    --lg-dur-sm: 0.24s;
+    --lg-dur-md: 0.38s;
+    --lg-dur-lg: 0.55s;
+    --lg-dur-xl: 0.75s;
+
+    /* Squircle radii */
+    --lg-radius-sm: 12px;
+    --lg-radius-md: 18px;
+    --lg-radius-lg: 26px;
+    --lg-radius-xl: 34px;
+    --lg-radius-pill: 980px;
+
+    /* Material */
+    --lg-blur: 32px;
+    --lg-blur-strong: 48px;
+    --lg-saturate: 180%;
+
+    --lg-tint: rgba(255, 255, 255, 0.16);
+    --lg-tint-strong: rgba(255, 255, 255, 0.28);
+    --lg-tint-sunken: rgba(255, 255, 255, 0.10);
+    --lg-hairline: rgba(255, 255, 255, 0.28);
+    --lg-hairline-soft: rgba(255, 255, 255, 0.14);
+    --lg-specular: rgba(255, 255, 255, 0.85);
+
+    /* Typography / ink */
+    --lg-ink: #0b1220;
+    --lg-ink-soft: rgba(11, 18, 32, 0.62);
+    --lg-ink-faint: rgba(11, 18, 32, 0.42);
+    --lg-accent: #0a84ff;
+    --lg-accent-deep: #0060df;
+    --lg-danger: #ff3b30;
+
+    /* Shadow ladder — ambient + key light */
+    --lg-shadow-card:
+        0 1px 1px rgba(6, 18, 46, 0.05),
+        0 8px 24px rgba(6, 18, 46, 0.12),
+        0 32px 64px -12px rgba(6, 18, 46, 0.32);
+    --lg-shadow-tile:
+        0 1px 1px rgba(6, 18, 46, 0.05),
+        0 6px 18px rgba(6, 18, 46, 0.14),
+        0 20px 44px -14px rgba(6, 18, 46, 0.28);
+    --lg-shadow-lift:
+        0 2px 3px rgba(6, 18, 46, 0.06),
+        0 14px 34px rgba(6, 18, 46, 0.18),
+        0 44px 80px -16px rgba(6, 18, 46, 0.36);
+
+    --lg-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body.dark-mode {
+    --lg-tint: rgba(120, 140, 180, 0.14);
+    --lg-tint-strong: rgba(140, 160, 200, 0.20);
+    --lg-tint-sunken: rgba(8, 12, 24, 0.34);
+    --lg-hairline: rgba(255, 255, 255, 0.16);
+    --lg-hairline-soft: rgba(255, 255, 255, 0.08);
+    --lg-specular: rgba(255, 255, 255, 0.45);
+
+    --lg-ink: #f2f5fb;
+    --lg-ink-soft: rgba(242, 245, 251, 0.68);
+    --lg-ink-faint: rgba(242, 245, 251, 0.44);
+    --lg-accent: #4aa3ff;
+    --lg-accent-deep: #1f7ae0;
+
+    --lg-shadow-card:
+        0 1px 1px rgba(0, 0, 0, 0.35),
+        0 10px 30px rgba(0, 0, 0, 0.45),
+        0 40px 80px -16px rgba(0, 0, 0, 0.65);
+    --lg-shadow-tile:
+        0 1px 1px rgba(0, 0, 0, 0.32),
+        0 8px 22px rgba(0, 0, 0, 0.40),
+        0 26px 54px -16px rgba(0, 0, 0, 0.55);
+    --lg-shadow-lift:
+        0 2px 4px rgba(0, 0, 0, 0.4),
+        0 16px 40px rgba(0, 0, 0, 0.5),
+        0 52px 92px -18px rgba(0, 0, 0, 0.7);
+}
+
+/* --------------------------------------------------------------------------
+   1. Glass surface primitive
+   -------------------------------------------------------------------------- */
+
+.lg-surface {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint));
+    border: 1px solid var(--lg-hairline);
+    border-radius: var(--lg-radius-lg);
+    box-shadow: var(--lg-shadow-card);
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+}
+
+/* Specular top-edge highlight — the defining Liquid Glass cue */
+.lg-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+        160deg,
+        var(--lg-specular) 0%,
+        rgba(255, 255, 255, 0.06) 26%,
+        rgba(255, 255, 255, 0) 52%,
+        rgba(255, 255, 255, 0.12) 100%
+    );
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* Opaque fallback where backdrop-filter is unavailable */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .lg-surface {
+        background: linear-gradient(155deg, rgba(255, 255, 255, 0.94), rgba(238, 244, 255, 0.9));
+    }
+
+    body.dark-mode .lg-surface {
+        background: linear-gradient(155deg, rgba(28, 34, 52, 0.96), rgba(16, 22, 38, 0.94));
+    }
+}
+
+/* --------------------------------------------------------------------------
+   2. Animated mesh background (login shell)
+   -------------------------------------------------------------------------- */
+
+/* !important required to beat Bootstrap's .bg-light on <body> */
+body.page-login {
+    background-color: #0a1740 !important;
+    background-image: none !important;
+    font-family: var(--lg-font);
+    min-height: 100dvh;
+    height: 100dvh;
+    overflow: hidden;
+}
+
+body.page-login.dark-mode {
+    background-color: #05070f !important;
+}
+
+body.page-landing {
+    background-color: #0a1740 !important;
+    background-image:
+        radial-gradient(42% 44% at 14% 12%, rgba(88, 190, 255, 0.5) 0%, rgba(88, 190, 255, 0) 62%),
+        radial-gradient(38% 40% at 86% 16%, rgba(150, 120, 255, 0.45) 0%, rgba(150, 120, 255, 0) 60%),
+        radial-gradient(52% 50% at 50% 96%, rgba(20, 78, 210, 0.6) 0%, rgba(20, 78, 210, 0) 66%) !important;
+    background-attachment: fixed;
+}
+
+body.page-landing.dark-mode {
+    background-color: #05070f !important;
+}
+
+.login-hero {
+    position: relative;
+    min-height: 100dvh;
+    padding: clamp(1.5rem, 5vw, 4rem);
+    isolation: isolate;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Mesh layer A — warm/blue anchor blobs */
+.login-hero::before {
+    content: "";
+    position: absolute;
+    inset: -30%;
+    z-index: -3;
+    mix-blend-mode: normal;
+    background:
+        radial-gradient(38% 42% at 18% 22%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 65%),
+        radial-gradient(34% 38% at 82% 18%, rgba(150, 120, 255, 0.75) 0%, rgba(150, 120, 255, 0) 62%),
+        radial-gradient(46% 48% at 50% 92%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%);
+    filter: blur(28px);
+    will-change: transform;
+    animation: lg-mesh-drift-a 34s var(--ease-ios) infinite alternate;
+}
+
+/* Mesh layer B — counter-drifting accents + grain */
+.login-hero::after {
+    content: "";
+    position: absolute;
+    inset: -30%;
+    z-index: -2;
+    background:
+        radial-gradient(30% 34% at 74% 68%, rgba(255, 122, 190, 0.55) 0%, rgba(255, 122, 190, 0) 64%),
+        radial-gradient(28% 30% at 12% 74%, rgba(64, 226, 210, 0.5) 0%, rgba(64, 226, 210, 0) 62%),
+        radial-gradient(24% 26% at 56% 36%, rgba(255, 214, 140, 0.42) 0%, rgba(255, 214, 140, 0) 60%);
+    filter: blur(36px);
+    will-change: transform;
+    animation: lg-mesh-drift-b 47s var(--ease-ios) infinite alternate;
+}
+
+body.dark-mode .login-hero::before {
+    background:
+        radial-gradient(38% 42% at 18% 22%, rgba(58, 120, 220, 0.6) 0%, rgba(58, 120, 220, 0) 65%),
+        radial-gradient(34% 38% at 82% 18%, rgba(96, 72, 190, 0.58) 0%, rgba(96, 72, 190, 0) 62%),
+        radial-gradient(46% 48% at 50% 92%, rgba(12, 34, 96, 0.9) 0%, rgba(12, 34, 96, 0) 68%);
+}
+
+body.dark-mode .login-hero::after {
+    background:
+        radial-gradient(30% 34% at 74% 68%, rgba(168, 66, 128, 0.4) 0%, rgba(168, 66, 128, 0) 64%),
+        radial-gradient(28% 30% at 12% 74%, rgba(28, 132, 128, 0.36) 0%, rgba(28, 132, 128, 0) 62%),
+        radial-gradient(24% 26% at 56% 36%, rgba(150, 118, 62, 0.3) 0%, rgba(150, 118, 62, 0) 60%);
+}
+
+/* Film grain — breaks up banding in the gradient */
+.login-hero__grain {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+body.dark-mode .login-hero__grain {
+    opacity: 0.06;
+}
+
+@keyframes lg-mesh-drift-a {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(3%, -4%, 0) scale(1.12); }
+    100% { transform: translate3d(-4%, 3%, 0) scale(1.05); }
+}
+
+@keyframes lg-mesh-drift-b {
+    0%   { transform: translate3d(0, 0, 0) scale(1.08) rotate(0deg); }
+    50%  { transform: translate3d(-5%, 4%, 0) scale(1) rotate(4deg); }
+    100% { transform: translate3d(4%, -3%, 0) scale(1.14) rotate(-3deg); }
+}
+
+/* Float the real navbar theme toggle instead of hiding the whole navbar,
+   so the single #theme-checkbox stays unique and the theme JS keeps working. */
+body.page-login .navbar,
+body.dark-mode.page-login .navbar {
+    display: block;
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: auto;
+    width: auto;
+    z-index: 20;
+    padding: clamp(1rem, 3vw, 1.75rem) clamp(1rem, 3vw, 2rem);
+    background: none !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    pointer-events: none;
+}
+
+.page-login .navbar .container-fluid {
+    padding: 0;
+    justify-content: flex-end;
+}
+
+.page-login .navbar-brand,
+.page-login .navbar .btn-outline-light {
+    display: none !important;
+}
+
+.page-login .navbar .theme-toggle-wrapper {
+    pointer-events: auto;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: none !important;
+    background-image: none !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Login card
+   -------------------------------------------------------------------------- */
+
+.page-login .login-card {
+    width: min(420px, 100%);
+    padding: clamp(1.75rem, 4vw, 2.5rem);
+    border-radius: var(--lg-radius-xl);
+    color: var(--lg-ink);
+    z-index: 1;
+    transform-style: preserve-3d;
+    transition:
+        transform var(--lg-dur-md) var(--ease-ios-out),
+        box-shadow var(--lg-dur-md) var(--ease-ios-out);
+}
+
+.page-login .login-card--tilt {
+    transform:
+        perspective(1200px)
+        rotateX(var(--lg-tilt-x, 0deg))
+        rotateY(var(--lg-tilt-y, 0deg));
+    transition: transform 0.12s linear, box-shadow var(--lg-dur-md) var(--ease-ios-out);
+}
+
+/* Cursor-tracking specular sheen */
+.login-card__sheen {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    background: radial-gradient(
+        22rem 22rem at var(--lg-sheen-x, 50%) var(--lg-sheen-y, 0%),
+        rgba(255, 255, 255, 0.42) 0%,
+        rgba(255, 255, 255, 0.08) 38%,
+        rgba(255, 255, 255, 0) 70%
+    );
+    transition: opacity var(--lg-dur-md) var(--ease-ios-out);
+}
+
+.page-login .login-card:hover .login-card__sheen,
+.page-login .login-card:focus-within .login-card__sheen {
+    opacity: 1;
+}
+
+.page-login .login-card > * {
+    position: relative;
+    z-index: 3;
+}
+
+.page-login .login-card__brand {
+    margin-bottom: 1.75rem;
+    padding: 0;
+    border-radius: 0;
+    overflow: visible;
+}
+
+.page-login .login-card__brand::before {
+    display: none;
+}
+
+.page-login .login-card__logo {
+    width: min(380px, 100%) !important;
+    margin: 0 auto;
+    border-radius: 20px;
+    overflow: hidden;
+    filter: drop-shadow(0 10px 26px rgba(6, 18, 46, 0.28));
+}
+
+body.dark-mode .page-login .login-card__logo {
+    filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.45)) brightness(0.96) contrast(1.02);
+}
+
+.login-card__title {
+    margin: 0 0 0.25rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    text-align: center;
+    color: var(--lg-ink);
+}
+
+.login-card__subtitle {
+    margin: 0 0 1.5rem;
+    font-size: 0.9375rem;
+    letter-spacing: -0.01em;
+    text-align: center;
+    color: var(--lg-ink-soft);
+}
+
+/* -- Grouped inset field list (iOS Settings style) -- */
+
+.page-login .login-form {
+    gap: 1.25rem;
+}
+
+.login-form__fields {
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--lg-radius-md);
+    background: var(--lg-tint-sunken);
+    border: 1px solid var(--lg-hairline-soft);
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(6, 18, 46, 0.08);
+    transition: border-color var(--lg-dur-sm) var(--ease-ios), box-shadow var(--lg-dur-sm) var(--ease-ios);
+}
+
+.login-form__fields:focus-within {
+    border-color: color-mix(in srgb, var(--lg-accent) 55%, transparent);
+    box-shadow:
+        inset 0 1px 2px rgba(6, 18, 46, 0.08),
+        0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent);
+}
+
+.page-login .login-form__group {
+    position: relative;
+    gap: 0;
+    padding: 0;
+}
+
+.page-login .login-form__group + .login-form__group {
+    border-top: 1px solid var(--lg-hairline-soft);
+}
+
+/* Floating label */
+.page-login .login-form__group > label {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    transform-origin: left center;
+    font-size: 1rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--lg-ink-faint);
+    pointer-events: none;
+    z-index: 2;
+    transition: transform var(--lg-dur-sm) var(--ease-ios-out), color var(--lg-dur-sm) var(--ease-ios);
+}
+
+.page-login .login-form__group:focus-within > label,
+.page-login .login-form__group > input:not(:placeholder-shown) ~ label {
+    transform: translateY(-1.05rem) scale(0.75);
+    color: var(--lg-accent);
+}
+
+.page-login .login-form__group > input:not(:placeholder-shown):not(:focus) ~ label {
+    color: var(--lg-ink-faint);
+}
+
+.page-login .login-form input[type="text"],
+.page-login .login-form input[type="password"] {
+    width: 100%;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 1.6rem 1rem 0.6rem;
+    font-size: 1rem;
+    letter-spacing: -0.01em;
+    color: var(--lg-ink);
+    box-shadow: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.page-login .login-form input:focus,
+.page-login .login-form input:focus-visible {
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+.page-login .login-form input:-webkit-autofill {
+    -webkit-text-fill-color: var(--lg-ink);
+    transition: background-color 100000s ease-in-out 0s;
+}
+
+/* -- Submit button -- */
+
+.page-login .login-card__submit {
+    position: relative;
+    width: 100%;
+    padding: 0.95rem 1.25rem;
+    border-radius: var(--lg-radius-sm);
+    border: none;
+    font-family: var(--lg-font);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #fff;
+    background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        0 6px 18px color-mix(in srgb, var(--lg-accent) 38%, transparent);
+    overflow: hidden;
+    transition:
+        transform var(--lg-dur-sm) var(--ease-ios-spring),
+        box-shadow var(--lg-dur-sm) var(--ease-ios),
+        filter var(--lg-dur-xs) var(--ease-ios);
+}
+
+.page-login .login-card__submit:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        0 10px 26px color-mix(in srgb, var(--lg-accent) 46%, transparent);
+}
+
+.page-login .login-card__submit:active {
+    transform: scale(0.97);
+    filter: brightness(0.94);
+    transition-duration: 0.08s;
+}
+
+.page-login .login-card__submit:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--lg-accent) 55%, transparent);
+    outline-offset: 3px;
+}
+
+.login-card__submit[data-loading="true"] {
+    pointer-events: none;
+    color: transparent;
+}
+
+.login-card__submit[data-loading="true"]::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    animation: lg-spin 0.7s linear infinite;
+}
+
+@keyframes lg-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* -- Footer + errors -- */
+
+.page-login .login-card__footer {
+    margin-top: 1.5rem;
+    font-size: 0.8125rem;
+    letter-spacing: -0.005em;
+    color: var(--lg-ink-faint);
+}
+
+.page-login .alert {
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--lg-radius-sm);
+    border: 1px solid color-mix(in srgb, var(--lg-danger) 40%, transparent);
+    background: color-mix(in srgb, var(--lg-danger) 14%, transparent);
+    color: color-mix(in srgb, var(--lg-danger) 80%, var(--lg-ink));
+    font-size: 0.9375rem;
+    letter-spacing: -0.01em;
+}
+
+.page-login .invalid-feedback {
+    padding: 0 1rem 0.6rem;
+    font-size: 0.8125rem;
+    color: var(--lg-danger);
+}
+
+.login-card--shake {
+    animation: lg-shake 0.5s var(--ease-ios);
+}
+
+@keyframes lg-shake {
+    0%, 100% { transform: translateX(0); }
+    15%      { transform: translateX(-9px); }
+    30%      { transform: translateX(8px); }
+    45%      { transform: translateX(-6px); }
+    60%      { transform: translateX(4px); }
+    80%      { transform: translateX(-2px); }
+}
+
+/* -- Entrance (CSS baseline; Motion One enhances when available) -- */
+
+.lg-enter {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+}
+
+.lg-enter-ready .lg-enter {
+    animation: lg-rise var(--lg-dur-lg) var(--ease-ios-out) forwards;
+    animation-delay: var(--lg-delay, 0s);
+}
+
+@keyframes lg-rise {
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Card itself gets a slightly richer arrival */
+.lg-enter-ready .login-card.lg-enter {
+    animation-name: lg-card-arrive;
+    animation-duration: var(--lg-dur-xl);
+}
+
+@keyframes lg-card-arrive {
+    0% {
+        opacity: 0;
+        transform: translateY(24px) scale(0.94);
+        filter: blur(6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+/* --------------------------------------------------------------------------
+   3b. Dark-mode overrides
+   app.css ships aggressive `body.dark-mode` login rules (some !important).
+   These reinstate the glass material without touching that legacy block.
+   -------------------------------------------------------------------------- */
+
+body.dark-mode.page-login .login-card {
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline);
+    box-shadow: var(--lg-shadow-card);
+    color: var(--lg-ink);
+}
+
+body.dark-mode.page-login .login-card__title {
+    color: var(--lg-ink);
+}
+
+body.dark-mode.page-login .login-card__subtitle {
+    color: var(--lg-ink-soft);
+}
+
+body.dark-mode.page-login .login-form__group > label {
+    color: var(--lg-ink-faint);
+}
+
+body.dark-mode.page-login .login-form__group:focus-within > label,
+body.dark-mode.page-login .login-form__group > input:not(:placeholder-shown) ~ label {
+    color: var(--lg-accent);
+}
+
+body.dark-mode.page-login .login-form__group > input:not(:placeholder-shown):not(:focus) ~ label {
+    color: var(--lg-ink-faint);
+}
+
+body.dark-mode.page-login .login-form input[type="text"],
+body.dark-mode.page-login .login-form input[type="password"],
+body.dark-mode.page-login .login-form .form-control,
+body.dark-mode.page-login .login-form .form-control:focus {
+    background-color: transparent;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: var(--lg-ink);
+}
+
+body.dark-mode.page-login .login-form input:-webkit-autofill {
+    -webkit-text-fill-color: var(--lg-ink);
+}
+
+body.dark-mode.page-login .login-card__footer {
+    color: var(--lg-ink-faint);
+}
+
+body.dark-mode.page-login .page-login .alert,
+body.dark-mode.page-login .alert {
+    background: color-mix(in srgb, var(--lg-danger) 18%, transparent);
+    border-color: color-mix(in srgb, var(--lg-danger) 45%, transparent);
+    color: #ff8a80;
+}
+
+body.dark-mode.page-login .login-hero::before {
+    opacity: 1;
+}
+
+body.dark-mode.page-login img.login-card__logo {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 20px;
+    filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.45)) brightness(0.96) contrast(1.02);
+}
+
+/* --------------------------------------------------------------------------
+   4. Landing page — glass role tiles
+   -------------------------------------------------------------------------- */
+
+.page-landing {
+    font-family: var(--lg-font);
+}
+
+.lg-landing__hero {
+    padding: clamp(2rem, 5vw, 3.25rem);
+    border-radius: var(--lg-radius-xl);
+    text-align: center;
+    color: var(--lg-ink);
+}
+
+.lg-landing__title {
+    margin: 0 0 0.75rem;
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+}
+
+.lg-landing__lead {
+    margin: 0;
+    font-size: 1.0625rem;
+    letter-spacing: -0.01em;
+    color: var(--lg-ink-soft);
+}
+
+.lg-tile {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 1.75rem;
+    border-radius: var(--lg-radius-lg);
+    color: var(--lg-ink);
+    overflow: hidden;
+    transition:
+        transform var(--lg-dur-md) var(--ease-ios-out),
+        box-shadow var(--lg-dur-md) var(--ease-ios-out);
+}
+
+.lg-tile::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 45%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+        105deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.35) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: skewX(-18deg);
+    opacity: 0;
+    transition: none;
+}
+
+.lg-tile:hover,
+.lg-tile:focus-within {
+    transform: translateY(-6px);
+    box-shadow: var(--lg-shadow-lift);
+}
+
+.lg-tile:hover::after {
+    animation: lg-sheen-sweep var(--lg-dur-xl) var(--ease-ios) forwards;
+}
+
+@keyframes lg-sheen-sweep {
+    0%   { left: -60%; opacity: 0; }
+    18%  { opacity: 1; }
+    100% { left: 120%; opacity: 0; }
+}
+
+.lg-tile > * {
+    position: relative;
+    z-index: 2;
+}
+
+.lg-tile__title {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+}
+
+.lg-tile__desc {
+    margin: 0 0 1.25rem;
+    font-size: 0.9375rem;
+    letter-spacing: -0.01em;
+    color: var(--lg-ink-soft);
+}
+
+.lg-tile__hint {
+    margin: 0 0 1.25rem;
+    font-size: 0.8125rem;
+    color: var(--lg-ink-faint);
+}
+
+.lg-tile__hint code {
+    padding: 0.1rem 0.4rem;
+    border-radius: 6px;
+    background: var(--lg-tint-sunken);
+    color: var(--lg-ink-soft);
+}
+
+.lg-tile__cta {
+    margin-top: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.7rem 1.1rem;
+    border-radius: var(--lg-radius-sm);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    color: #fff;
+    background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+    transition: transform var(--lg-dur-sm) var(--ease-ios-spring), filter var(--lg-dur-xs) var(--ease-ios);
+}
+
+.lg-tile__cta:hover {
+    color: #fff;
+    filter: brightness(1.07);
+    transform: translateY(-1px);
+}
+
+.lg-tile__cta:active {
+    transform: scale(0.97);
+    transition-duration: 0.08s;
+}
+
+.lg-landing__footer {
+    margin-top: 2.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--lg-ink-faint);
+}
+
+/* --------------------------------------------------------------------------
+   5. Login success overlay
+   -------------------------------------------------------------------------- */
+
+.login-success-overlay {
+    background: color-mix(in srgb, #050b1c 55%, transparent);
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    backdrop-filter: blur(30px) saturate(160%);
+    transition: opacity var(--lg-dur-md) var(--ease-ios);
+}
+
+.login-success-overlay .login-success-card {
+    width: min(360px, 88vw);
+    padding: 2.25rem 2rem 2rem;
+    border-radius: var(--lg-radius-xl);
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint));
+    border: 1px solid var(--lg-hairline);
+    box-shadow: var(--lg-shadow-card);
+    -webkit-backdrop-filter: blur(var(--lg-blur-strong)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur-strong)) saturate(var(--lg-saturate));
+    color: #fff;
+    font-family: var(--lg-font);
+    animation: lg-card-arrive var(--lg-dur-lg) var(--ease-ios-out) forwards;
+}
+
+.login-success-overlay--fade .login-success-card {
+    animation: lg-success-exit var(--lg-dur-md) var(--ease-ios) forwards;
+}
+
+@keyframes lg-success-exit {
+    to {
+        opacity: 0;
+        transform: scale(1.04);
+        filter: blur(8px);
+    }
+}
+
+.login-success-card__ring {
+    width: 96px;
+    height: 96px;
+    margin: 0 auto 1.25rem;
+    border: none;
+    overflow: visible;
+}
+
+.login-success-card__ring::before {
+    border: 3px solid rgba(52, 199, 89, 0.7);
+    animation: lg-success-ring var(--lg-dur-xl) var(--ease-ios-out) forwards;
+}
+
+@keyframes lg-success-ring {
+    0%   { transform: scale(0.7); opacity: 0.9; }
+    100% { transform: scale(1.35); opacity: 0; }
+}
+
+.login-success-card__icon {
+    width: 76px;
+    height: 76px;
+    background: linear-gradient(180deg, #40d267, #2aa74d);
+    box-shadow: 0 10px 26px rgba(28, 140, 62, 0.4);
+    animation: lg-success-pop var(--lg-dur-lg) var(--ease-ios-spring) forwards;
+}
+
+@keyframes lg-success-pop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.login-success-card__check {
+    width: 40px;
+    height: 40px;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: lg-check-draw var(--lg-dur-lg) var(--ease-ios-out) 0.18s forwards;
+}
+
+@keyframes lg-check-draw {
+    to { stroke-dashoffset: 0; }
+}
+
+.login-success-card__title {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+}
+
+.login-success-card__subtitle {
+    font-size: 0.9375rem;
+    letter-spacing: -0.01em;
+    opacity: 0.82;
+}
+
+.login-success-card__progress {
+    width: 140px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.login-success-card__progress-bar {
+    background: #fff;
+    animation-duration: var(--lg-progress-duration, 1.8s);
+    animation-timing-function: linear;
+}
+
+/* --------------------------------------------------------------------------
+   6. Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+    .page-login .login-card {
+        padding: 1.75rem 1.375rem 1.5rem;
+        border-radius: var(--lg-radius-lg);
+    }
+
+    .login-hero {
+        padding: 4.5rem 1.25rem 1.5rem;
+        align-items: flex-start;
+        overflow-y: auto;
+    }
+
+    .page-login .navbar {
+        padding: 0.75rem 1rem;
+    }
+
+    .page-login .login-card__logo {
+        width: 100% !important;
+        border-radius: 16px;
+    }
+
+    .page-login .login-card__brand {
+        margin-bottom: 1.25rem;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   7. Reduced motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .login-hero::before,
+    .login-hero::after,
+    .lg-tile::after,
+    .login-success-card,
+    .login-success-card__ring::before,
+    .login-success-card__icon,
+    .login-success-card__check,
+    .lg-enter-ready .lg-enter,
+    .login-card--shake {
+        animation: none !important;
+    }
+
+    .lg-enter,
+    .lg-enter-ready .lg-enter {
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+    }
+
+    .login-success-card__check {
+        stroke-dashoffset: 0;
+    }
+
+    .page-login .login-card--tilt {
+        transform: none !important;
+    }
+
+    .login-card__sheen {
+        display: none;
+    }
+
+    .lg-tile:hover,
+    .lg-tile:focus-within,
+    .page-login .login-card__submit:hover,
+    .lg-tile__cta:hover {
+        transform: none;
+    }
+}
+
+
+
