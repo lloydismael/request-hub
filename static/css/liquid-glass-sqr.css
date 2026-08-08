@@ -928,10 +928,22 @@ body.dark-mode.sqr-page .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sti
     background-color: #321826 !important;
 }
 @keyframes sqr-revision-pulse {
-    0%, 100% { box-shadow: inset 3px 0 0 var(--lg-crit); }
-    50% { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--lg-crit) 55%, #fff); }
+    /* Opacity-only pulse on a static accent bar — no box-shadow repaint. */
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
 }
 body.sqr-page .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 {
+    position: relative;
+}
+body.sqr-page .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--lg-crit);
+    pointer-events: none;
     animation: sqr-revision-pulse 1.8s ease-in-out infinite;
 }
 

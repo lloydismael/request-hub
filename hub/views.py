@@ -6576,14 +6576,52 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
     def get_queryset(self):
         return User.objects.order_by("date_joined", "username")
 
+    def _paginate_users(self, request):
+        """Server-side search + pagination for the management users pane.
+
+        The users table edits are per-row via a separate endpoint, so it is safe
+        to page the queryset here. Accounts pane stays client-side (bulk formset).
+        """
+        qs = self.get_queryset()
+        query = (request.GET.get("user_q") or "").strip()
+        if query:
+            terms = query.split()
+            for term in terms:
+                qs = qs.filter(
+                    Q(first_name__icontains=term)
+                    | Q(last_name__icontains=term)
+                    | Q(username__icontains=term)
+                    | Q(email__icontains=term)
+                    | Q(department__icontains=term)
+                    | Q(role__icontains=term)
+                )
+        paginator = Paginator(qs, 50)
+        page_num = request.GET.get("user_page") or 1
+        try:
+            page_obj = paginator.page(page_num)
+        except InvalidPage:
+            page_obj = paginator.page(1)
+        return page_obj, query
+
     def get(self, request, *args, **kwargs):
         self._sync_account_baseline()
+        users_page_obj, user_search_query = self._paginate_users(request)
         formset = self.formset_class(queryset=self.get_queryset())
         account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
         create_user_form = UserManagementForm(prefix="create_user")
         self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
-        return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
+        return render(
+            request,
+            self.template_name,
+            self._build_context(
+                formset,
+                account_formset,
+                create_user_form=create_user_form,
+                users_page_obj=users_page_obj,
+                user_search_query=user_search_query,
+            ),
+        )
 
     def post(self, request, *args, **kwargs):
         active_tab = request.POST.get("active_tab", "users")
@@ -6749,9 +6787,12 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             return redirect("hub:management")
         return render(request, self.template_name, self._build_context(user_formset, account_formset, active_tab="accounts"))
 
-    def _build_context(self, formset, account_formset, active_tab="users", create_user_form=None, show_create_user_modal=False):
+    def _build_context(self, formset, account_formset, active_tab="users", create_user_form=None, show_create_user_modal=False, users_page_obj=None, user_search_query=""):
         if create_user_form is None:
             create_user_form = UserManagementForm(prefix="create_user")
+        # Fall back to the full (unpaginated) list for POST re-renders and any
+        # path that doesn't pass a page object, preserving prior behavior.
+        users_value = users_page_obj if users_page_obj is not None else User.objects.select_related().order_by("date_joined", "username")
         return {
             "formset": formset,
             "account_formset": account_formset,
@@ -6761,7 +6802,9 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
             "default_password": getattr(settings, "DEFAULT_USER_PASSWORD", "@Password"),
-            "users": User.objects.select_related().order_by("date_joined", "username"),
+            "users": users_value,
+            "users_page_obj": users_page_obj,
+            "user_search_query": user_search_query,
             "role_choices": User.Roles.choices,
         }
 

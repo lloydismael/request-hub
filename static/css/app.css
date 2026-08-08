@@ -349,13 +349,11 @@ body.dark-mode .alo-sub   { color: #94a3b8; }
     letter-spacing: -0.01em;
 }
 
-/* CTA button — blue pop on white card */
-@keyframes cta-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
-    70%  { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
-}
+/* CTA button — blue pop on white card.
+   Pulse ring animates transform+opacity on a pseudo-element (compositor-only)
+   instead of box-shadow, which repaints every frame. */
 .activity-summary-card .btn-create-activity {
+    position: relative;
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     border: none;
     color: #ffffff;
@@ -367,7 +365,6 @@ body.dark-mode .alo-sub   { color: #94a3b8; }
     box-shadow:
         0 4px 16px rgba(37, 99, 235, 0.35),
         0 1px 3px rgba(37, 99, 235, 0.2);
-    animation: cta-pulse 2.4s ease-out infinite;
     transition:
         background  0.18s ease,
         color       0.18s ease,
@@ -525,22 +522,39 @@ body:not(.dark-mode) .glass-card .table .text-secondary {
 }
 
 .engineer-ack-timer--amber {
+    position: relative;
     background-color: #fff3cd;
     color: #664d03;
     border: 1px solid #ffe69c;
-    animation: engineer-ack-pulse 2s ease-in-out infinite;
 }
 
 .engineer-ack-timer--red {
+    position: relative;
     background-color: #f8d7da;
     color: #842029;
     border: 1px solid #f1aeb5;
-    animation: engineer-ack-pulse 1.2s ease-in-out infinite;
 }
 
-@keyframes engineer-ack-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-    50% { box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.18); }
+/* Compositor-only pulse: expand + fade a pseudo-element ring (transform/opacity)
+   rather than animating box-shadow on the main thread. */
+.engineer-ack-timer--amber::after,
+.engineer-ack-timer--red::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    border: 2px solid rgba(220, 53, 69, 0.55);
+    opacity: 0;
+    transform: scale(1);
+    pointer-events: none;
+    animation: ack-ring-pulse 1.8s ease-out infinite;
+}
+.engineer-ack-timer--amber::after { border-color: rgba(217, 119, 6, 0.5); animation-duration: 2.4s; }
+
+@keyframes ack-ring-pulse {
+    0%   { opacity: 0.9; transform: scale(1); }
+    70%  { opacity: 0;   transform: scale(1.35); }
+    100% { opacity: 0;   transform: scale(1.35); }
 }
 
 body.dark-mode .engineer-ack-timer--neutral {

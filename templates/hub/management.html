@@ -51,12 +51,12 @@
         {# Toolbar: search + New User button #}
         <div class="glass-card overflow-hidden p-0 lg-enter" data-lg-delay="40">
             <div class="mgmt-toolbar">
-                <div class="mgmt-search-box">
+                <form method="get" action="{% url 'hub:management' %}" class="mgmt-search-box" role="search">
                     <i class="bi bi-search mgmt-search-icon"></i>
-                    <input type="text" id="user-search" class="mgmt-search-input"
-                           placeholder="" autocomplete="off" aria-label="Search users">
-                    <span class="mgmt-result-badge" id="user-count-badge"></span>
-                </div>
+                    <input type="text" id="user-search" name="user_q" class="mgmt-search-input"
+                           value="{{ user_search_query }}" placeholder="" autocomplete="off" aria-label="Search users">
+                    <span class="mgmt-result-badge" id="user-count-badge">{% if users_page_obj %}{{ users_page_obj.paginator.count }} total{% endif %}</span>
+                </form>
                 <button type="button" class="btn btn-primary btn-sm lg-btn lg-btn--accent"
                         data-bs-toggle="modal" data-bs-target="#create-user-modal">
                     <i class="bi bi-person-plus-fill me-1"></i>New User
@@ -86,7 +86,7 @@
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="mgmt-avatar flex-shrink-0">
                                             {% if user.profile_photo %}
-                                                <img src="{{ user.profile_photo.url }}" alt="{{ user.get_full_name }}" class="mgmt-avatar__img">
+                                                <img src="{{ user.profile_photo.url }}" alt="{{ user.get_full_name }}" class="mgmt-avatar__img" width="40" height="40" loading="lazy" decoding="async">
                                             {% else %}
                                                 <span class="mgmt-avatar__initial">{{ user.get_full_name|default:user.username|slice:":1"|upper }}</span>
                                             {% endif %}
@@ -177,10 +177,28 @@
                 </table>
             </div>
 
-            {# Card footer #}
+            {# Card footer — server-side pager for users #}
             <div class="mgmt-card-footer">
-                <span class="mgmt-limit-note" id="user-limit-note"></span>
-                <div class="mgmt-pagination" id="user-pagination"></div>
+                <span class="mgmt-limit-note" id="user-limit-note">{% if users_page_obj %}{% if users_page_obj.paginator.num_pages > 1 %}Showing {{ users_page_obj.start_index }}–{{ users_page_obj.end_index }} of {{ users_page_obj.paginator.count }}{% endif %}{% endif %}</span>
+                <div class="mgmt-pagination" id="user-pagination">
+                    {% if users_page_obj and users_page_obj.paginator.num_pages > 1 %}
+                        {% if users_page_obj.has_previous %}
+                            <a class="btn btn-sm btn-outline-secondary mgmt-page-btn"
+                               href="?user_page={{ users_page_obj.previous_page_number }}{% if user_search_query %}&user_q={{ user_search_query|urlencode }}{% endif %}"
+                               aria-label="Previous page"><i class="bi bi-chevron-left"></i></a>
+                        {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary mgmt-page-btn" disabled><i class="bi bi-chevron-left"></i></button>
+                        {% endif %}
+                        <span class="mgmt-page-label">Page {{ users_page_obj.number }} / {{ users_page_obj.paginator.num_pages }}</span>
+                        {% if users_page_obj.has_next %}
+                            <a class="btn btn-sm btn-outline-secondary mgmt-page-btn"
+                               href="?user_page={{ users_page_obj.next_page_number }}{% if user_search_query %}&user_q={{ user_search_query|urlencode }}{% endif %}"
+                               aria-label="Next page"><i class="bi bi-chevron-right"></i></a>
+                        {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary mgmt-page-btn" disabled><i class="bi bi-chevron-right"></i></button>
+                        {% endif %}
+                    {% endif %}
+                </div>
             </div>
         </div>
 
@@ -640,7 +658,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        initTab('users-tbody',    'user-search',    'user-count-badge',    'user-limit-note',    'user-pagination',    null, null);
+        /* Users pane is now server-paginated/searched (GET user_q / user_page);
+           only the accounts pane keeps the client-side initTab behavior. */
         initTab('accounts-tbody', 'account-search', 'account-count-badge', 'account-limit-note', 'account-pagination', 'accounts-save-btn', '#accounts-pane form');
         initManageModal();
     });
