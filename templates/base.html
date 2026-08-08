@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
     <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=8">
+    {% block extra_head %}{% endblock %}
     <link rel="icon" type="image/png" href="{% static 'images/PD favicon.png' %}">
 </head>
 <body class="bg-light {% block body_class %}{% endblock %}">
