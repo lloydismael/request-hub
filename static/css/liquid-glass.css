@@ -25,9 +25,9 @@
     --lg-radius-pill: 980px;
 
     /* Material */
-    --lg-blur: 32px;
-    --lg-blur-strong: 48px;
-    --lg-saturate: 180%;
+    --lg-blur: 36px;
+    --lg-blur-strong: 52px;
+    --lg-saturate: 200%;
 
     --lg-tint: rgba(255, 255, 255, 0.16);
     --lg-tint-strong: rgba(255, 255, 255, 0.28);
@@ -186,11 +186,7 @@ body.page-login.dark-mode {
 
 body.page-landing {
     background-color: #0a1740 !important;
-    background-image:
-        radial-gradient(42% 44% at 14% 12%, rgba(88, 190, 255, 0.5) 0%, rgba(88, 190, 255, 0) 62%),
-        radial-gradient(38% 40% at 86% 16%, rgba(150, 120, 255, 0.45) 0%, rgba(150, 120, 255, 0) 60%),
-        radial-gradient(52% 50% at 50% 96%, rgba(20, 78, 210, 0.6) 0%, rgba(20, 78, 210, 0) 66%) !important;
-    background-attachment: fixed;
+    background-image: none !important;
 }
 
 body.page-landing.dark-mode {

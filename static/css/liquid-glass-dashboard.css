@@ -188,7 +188,8 @@ body:not(.page-login) .nav-avatar {
 }
 
 /* --------------------------------------------------------------------------
-   3. Dashboard shell — static mesh background (no drift)
+   3. Dashboard shell — base color only; color/motion comes from the shared
+   .ambient-mesh orb layer in base.html (liquid-glass-ambient.css)
    -------------------------------------------------------------------------- */
 
 body.admin-dashboard,
@@ -196,16 +197,7 @@ body.requestor-dashboard,
 body.engineer-dashboard {
     font-family: var(--lg-font);
     background-color: #0a1740 !important;
-    background-image:
-        radial-gradient(44% 42% at 12% 8%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 64%),
-        radial-gradient(40% 40% at 88% 10%, rgba(150, 120, 255, 0.72) 0%, rgba(150, 120, 255, 0) 62%),
-        radial-gradient(36% 36% at 80% 84%, rgba(255, 122, 190, 0.5) 0%, rgba(255, 122, 190, 0) 62%),
-        radial-gradient(30% 32% at 8% 78%, rgba(64, 226, 210, 0.45) 0%, rgba(64, 226, 210, 0) 60%),
-        radial-gradient(58% 50% at 44% 104%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%) !important;
-    /* scroll not fixed — fixed multi-layer mesh repaints on every scroll frame */
-    background-attachment: scroll !important;
-    background-repeat: no-repeat !important;
-    background-size: cover !important;
+    background-image: none !important;
     color: var(--lg-ink);
 }
 
@@ -213,11 +205,7 @@ body.dark-mode.admin-dashboard,
 body.dark-mode.requestor-dashboard,
 body.dark-mode.engineer-dashboard {
     background-color: #05070f !important;
-    background-image:
-        radial-gradient(44% 40% at 12% 8%, rgba(58, 120, 220, 0.34) 0%, rgba(58, 120, 220, 0) 62%),
-        radial-gradient(40% 38% at 88% 12%, rgba(96, 72, 190, 0.32) 0%, rgba(96, 72, 190, 0) 60%),
-        radial-gradient(38% 36% at 78% 82%, rgba(168, 66, 128, 0.22) 0%, rgba(168, 66, 128, 0) 62%),
-        radial-gradient(56% 48% at 40% 100%, rgba(12, 34, 96, 0.66) 0%, rgba(12, 34, 96, 0) 66%) !important;
+    background-image: none !important;
 }
 
 /* Panels */
@@ -1436,32 +1424,20 @@ body.engineer-dashboard .activity-chart-wrap {
 
 /* --------------------------------------------------------------------------
    13. Management page (body.management-page)
-   Reuses dashboard mesh / glass / table / button language without broadening
-   admin-dashboard selectors. Overrides legacy app.css .mgmt-* styles.
+   Reuses ambient-mesh background / glass / table / button language without
+   broadening admin-dashboard selectors. Overrides legacy app.css .mgmt-*.
    -------------------------------------------------------------------------- */
 
 body.management-page {
     font-family: var(--lg-font);
     background-color: #0a1740 !important;
-    background-image:
-        radial-gradient(44% 42% at 12% 8%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 64%),
-        radial-gradient(40% 40% at 88% 10%, rgba(150, 120, 255, 0.72) 0%, rgba(150, 120, 255, 0) 62%),
-        radial-gradient(36% 36% at 80% 84%, rgba(255, 122, 190, 0.5) 0%, rgba(255, 122, 190, 0) 62%),
-        radial-gradient(30% 32% at 8% 78%, rgba(64, 226, 210, 0.45) 0%, rgba(64, 226, 210, 0) 60%),
-        radial-gradient(58% 50% at 44% 104%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%) !important;
-    background-attachment: scroll !important;
-    background-repeat: no-repeat !important;
-    background-size: cover !important;
+    background-image: none !important;
     color: var(--lg-ink);
 }
 
 body.dark-mode.management-page {
     background-color: #05070f !important;
-    background-image:
-        radial-gradient(44% 40% at 12% 8%, rgba(58, 120, 220, 0.34) 0%, rgba(58, 120, 220, 0) 62%),
-        radial-gradient(40% 38% at 88% 12%, rgba(96, 72, 190, 0.32) 0%, rgba(96, 72, 190, 0) 60%),
-        radial-gradient(38% 36% at 78% 82%, rgba(168, 66, 128, 0.22) 0%, rgba(168, 66, 128, 0) 62%),
-        radial-gradient(56% 48% at 40% 100%, rgba(12, 34, 96, 0.66) 0%, rgba(12, 34, 96, 0) 66%) !important;
+    background-image: none !important;
 }
 
 body.management-page .glass-card,
@@ -2118,32 +2094,20 @@ body.management-page .mgmt-table-wrapper::-webkit-scrollbar-thumb {
 
 /* --------------------------------------------------------------------------
    14. Reports page (body.reports-page) + shared rpt-* liquid restyle
-   Reuses management mesh / glass / button language. Shared rpt-* rules also
-   cover engineer Activity Logs without forcing reports-page mesh there.
+   Reuses ambient-mesh background / glass / button language. Shared rpt-*
+   rules also cover engineer Activity Logs.
    -------------------------------------------------------------------------- */
 
 body.reports-page {
     font-family: var(--lg-font);
     background-color: #0a1740 !important;
-    background-image:
-        radial-gradient(44% 42% at 12% 8%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 64%),
-        radial-gradient(40% 40% at 88% 10%, rgba(150, 120, 255, 0.72) 0%, rgba(150, 120, 255, 0) 62%),
-        radial-gradient(36% 36% at 80% 84%, rgba(255, 122, 190, 0.5) 0%, rgba(255, 122, 190, 0) 62%),
-        radial-gradient(30% 32% at 8% 78%, rgba(64, 226, 210, 0.45) 0%, rgba(64, 226, 210, 0) 60%),
-        radial-gradient(58% 50% at 44% 104%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%) !important;
-    background-attachment: scroll !important;
-    background-repeat: no-repeat !important;
-    background-size: cover !important;
+    background-image: none !important;
     color: var(--lg-ink);
 }
 
 body.dark-mode.reports-page {
     background-color: #05070f !important;
-    background-image:
-        radial-gradient(44% 40% at 12% 8%, rgba(58, 120, 220, 0.34) 0%, rgba(58, 120, 220, 0) 62%),
-        radial-gradient(40% 38% at 88% 12%, rgba(96, 72, 190, 0.32) 0%, rgba(96, 72, 190, 0) 60%),
-        radial-gradient(38% 36% at 78% 82%, rgba(168, 66, 128, 0.22) 0%, rgba(168, 66, 128, 0) 62%),
-        radial-gradient(56% 48% at 40% 100%, rgba(12, 34, 96, 0.66) 0%, rgba(12, 34, 96, 0) 66%) !important;
+    background-image: none !important;
 }
 
 body.reports-page .glass-card,

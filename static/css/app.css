@@ -30,7 +30,9 @@
 }
 
 body {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #0b1120 100%);
+    /* Flat base color — the shared .ambient-mesh orb layer (base.html) paints
+       the color/motion on top of this on every page. */
+    background: #0a1740;
     min-height: 100vh;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     /* Body bg is always dark — use light text as the base */
@@ -4019,7 +4021,7 @@ body.dark-mode .request-activity-table tbody tr:hover td {
 
 /* Dark Mode Styles */
 body.dark-mode {
-    background: #000000 !important; /* OLED Black */
+    background: #05070f !important; /* Unified dark base — ambient orbs paint color on top */
     background-image: none !important; 
     color: #e5e5e5;
 }

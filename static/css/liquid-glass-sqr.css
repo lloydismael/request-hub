@@ -6,32 +6,20 @@
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. Page mesh + base chrome
+   1. Page base — color/motion comes from the shared .ambient-mesh orb layer
+   in base.html (liquid-glass-ambient.css); keep only the base color here
    -------------------------------------------------------------------------- */
 
 body.sqr-page {
     font-family: var(--lg-font);
     background-color: #0a1740 !important;
-    background-image:
-        radial-gradient(44% 42% at 12% 8%, rgba(88, 190, 255, 0.85) 0%, rgba(88, 190, 255, 0) 64%),
-        radial-gradient(40% 40% at 88% 10%, rgba(150, 120, 255, 0.72) 0%, rgba(150, 120, 255, 0) 62%),
-        radial-gradient(36% 36% at 80% 84%, rgba(255, 122, 190, 0.5) 0%, rgba(255, 122, 190, 0) 62%),
-        radial-gradient(30% 32% at 8% 78%, rgba(64, 226, 210, 0.45) 0%, rgba(64, 226, 210, 0) 60%),
-        radial-gradient(58% 50% at 44% 104%, rgba(20, 78, 210, 0.9) 0%, rgba(20, 78, 210, 0) 68%) !important;
-    /* scroll not fixed — avoids mesh repaint tax while scrolling large trackers */
-    background-attachment: scroll !important;
-    background-repeat: no-repeat !important;
-    background-size: cover !important;
+    background-image: none !important;
     color: var(--lg-ink);
 }
 
 body.dark-mode.sqr-page {
     background-color: #05070f !important;
-    background-image:
-        radial-gradient(44% 40% at 12% 8%, rgba(58, 120, 220, 0.34) 0%, rgba(58, 120, 220, 0) 62%),
-        radial-gradient(40% 38% at 88% 12%, rgba(96, 72, 190, 0.32) 0%, rgba(96, 72, 190, 0) 60%),
-        radial-gradient(38% 36% at 78% 82%, rgba(168, 66, 128, 0.22) 0%, rgba(168, 66, 128, 0) 62%),
-        radial-gradient(56% 48% at 40% 100%, rgba(12, 34, 96, 0.66) 0%, rgba(12, 34, 96, 0) 66%) !important;
+    background-image: none !important;
 }
 
 body.sqr-page main.container {

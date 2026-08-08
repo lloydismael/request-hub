@@ -1,0 +1,380 @@
+/* ==========================================================================
+   Liquid Glass — Ambient mesh (all pages)
+   One shared animated background layer rendered in base.html. Replaces the
+   per-page static radial meshes (dashboards, management, reports, SQR) and
+   the login-only .login-mesh. Subtle intensity so text readability is
+   unaffected; login/landing re-intensify via overrides below.
+
+   Performance contract:
+   - Transform + opacity animations ONLY (compositor, no repaint)
+   - No background-position / background-size animation
+   - No filter / backdrop-filter on animated nodes
+   - Radial-gradient textures are static per-orb; motion is translate/scale
+   - prefers-reduced-motion collapses to a calm static wash
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Layer primitive
+   -------------------------------------------------------------------------- */
+
+.ambient-mesh {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+}
+
+.ambient-mesh__orb {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    filter: none;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95); /* sine-ish */
+    animation-iteration-count: infinite;
+}
+
+/* Center veil — dims orbs that drift behind dense text areas so contrast
+   stays stable without touching orb colors themselves. */
+.ambient-mesh::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(62% 58% at 50% 46%,
+        rgba(10, 23, 64, 0.30) 0%,
+        rgba(10, 23, 64, 0.12) 52%,
+        rgba(10, 23, 64, 0) 78%);
+    pointer-events: none;
+}
+
+body.dark-mode .ambient-mesh::after {
+    background: radial-gradient(62% 58% at 50% 46%,
+        rgba(5, 7, 15, 0.40) 0%,
+        rgba(5, 7, 15, 0.16) 52%,
+        rgba(5, 7, 15, 0) 78%);
+}
+
+/* Film grain — static, breaks up gradient banding (cheap single paint) */
+.ambient-mesh__grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   2. Orbs — 7-color palette (light mode)
+   Existing: sky, violet, deep blue, rose, teal. NEW: amber, mint.
+   Peak alpha kept ~0.30–0.55 (subtle ambient) — content sits above.
+   -------------------------------------------------------------------------- */
+
+/* 1 — Sky (top-left) */
+.ambient-mesh__orb--1 {
+    width: min(68vw, 540px);
+    height: min(68vw, 540px);
+    top: -14%;
+    left: -9%;
+    background: radial-gradient(circle at 40% 40%,
+        rgba(88, 190, 255, 0.55) 0%,
+        rgba(88, 190, 255, 0.24) 36%,
+        rgba(88, 190, 255, 0) 68%);
+    animation-name: am-drift-1;
+    animation-duration: 56s;
+}
+
+/* 2 — Violet (top-right) */
+.ambient-mesh__orb--2 {
+    width: min(64vw, 500px);
+    height: min(64vw, 500px);
+    top: -9%;
+    right: -11%;
+    left: auto;
+    background: radial-gradient(circle at 55% 40%,
+        rgba(150, 120, 255, 0.48) 0%,
+        rgba(150, 120, 255, 0.20) 38%,
+        rgba(150, 120, 255, 0) 68%);
+    animation-name: am-drift-2;
+    animation-duration: 67s;
+    animation-delay: -12s;
+}
+
+/* 3 — Deep blue anchor (bottom) */
+.ambient-mesh__orb--3 {
+    width: min(92vw, 740px);
+    height: min(92vw, 740px);
+    bottom: -30%;
+    left: 16%;
+    top: auto;
+    background: radial-gradient(circle at 50% 35%,
+        rgba(20, 78, 210, 0.60) 0%,
+        rgba(20, 78, 210, 0.26) 40%,
+        rgba(20, 78, 210, 0) 70%);
+    animation-name: am-drift-3;
+    animation-duration: 78s;
+    animation-delay: -27s;
+}
+
+/* 4 — Rose (bottom-right) */
+.ambient-mesh__orb--4 {
+    width: min(56vw, 430px);
+    height: min(56vw, 430px);
+    bottom: 6%;
+    right: -7%;
+    left: auto;
+    top: auto;
+    background: radial-gradient(circle at 45% 45%,
+        rgba(255, 122, 190, 0.40) 0%,
+        rgba(255, 122, 190, 0.16) 38%,
+        rgba(255, 122, 190, 0) 68%);
+    animation-name: am-drift-4;
+    animation-duration: 61s;
+    animation-delay: -41s;
+}
+
+/* 5 — Teal (mid-left) */
+.ambient-mesh__orb--5 {
+    width: min(50vw, 380px);
+    height: min(50vw, 380px);
+    top: 40%;
+    left: -5%;
+    background: radial-gradient(circle at 50% 50%,
+        rgba(64, 226, 210, 0.36) 0%,
+        rgba(64, 226, 210, 0.14) 40%,
+        rgba(64, 226, 210, 0) 68%);
+    animation-name: am-drift-5;
+    animation-duration: 84s;
+    animation-delay: -8s;
+}
+
+/* 6 — Amber, NEW (mid-right) */
+.ambient-mesh__orb--6 {
+    width: min(46vw, 360px);
+    height: min(46vw, 360px);
+    top: 30%;
+    right: 6%;
+    left: auto;
+    background: radial-gradient(circle at 48% 42%,
+        rgba(255, 194, 75, 0.34) 0%,
+        rgba(255, 194, 75, 0.13) 40%,
+        rgba(255, 194, 75, 0) 68%);
+    animation-name: am-drift-6;
+    animation-duration: 72s;
+    animation-delay: -55s;
+}
+
+/* 7 — Mint, NEW (bottom-left) */
+.ambient-mesh__orb--7 {
+    width: min(44vw, 340px);
+    height: min(44vw, 340px);
+    bottom: 16%;
+    left: 10%;
+    top: auto;
+    background: radial-gradient(circle at 52% 48%,
+        rgba(90, 240, 176, 0.32) 0%,
+        rgba(90, 240, 176, 0.12) 40%,
+        rgba(90, 240, 176, 0) 68%);
+    animation-name: am-drift-7;
+    animation-duration: 90s;
+    animation-delay: -33s;
+}
+
+/* --------------------------------------------------------------------------
+   3. Orbs — dark mode (same hues, lower chroma)
+   -------------------------------------------------------------------------- */
+
+body.dark-mode .ambient-mesh__orb--1 {
+    background: radial-gradient(circle at 40% 40%,
+        rgba(58, 140, 255, 0.34) 0%,
+        rgba(58, 140, 255, 0.13) 36%,
+        rgba(58, 140, 255, 0) 68%);
+}
+body.dark-mode .ambient-mesh__orb--2 {
+    background: radial-gradient(circle at 55% 40%,
+        rgba(120, 90, 220, 0.30) 0%,
+        rgba(120, 90, 220, 0.11) 38%,
+        rgba(120, 90, 220, 0) 68%);
+}
+body.dark-mode .ambient-mesh__orb--3 {
+    background: radial-gradient(circle at 50% 35%,
+        rgba(24, 60, 150, 0.48) 0%,
+        rgba(24, 60, 150, 0.18) 40%,
+        rgba(24, 60, 150, 0) 70%);
+}
+body.dark-mode .ambient-mesh__orb--4 {
+    background: radial-gradient(circle at 45% 45%,
+        rgba(180, 70, 130, 0.24) 0%,
+        rgba(180, 70, 130, 0.09) 38%,
+        rgba(180, 70, 130, 0) 68%);
+}
+body.dark-mode .ambient-mesh__orb--5 {
+    background: radial-gradient(circle at 50% 50%,
+        rgba(40, 160, 150, 0.22) 0%,
+        rgba(40, 160, 150, 0.08) 40%,
+        rgba(40, 160, 150, 0) 68%);
+}
+body.dark-mode .ambient-mesh__orb--6 {
+    background: radial-gradient(circle at 48% 42%,
+        rgba(190, 140, 50, 0.20) 0%,
+        rgba(190, 140, 50, 0.07) 40%,
+        rgba(190, 140, 50, 0) 68%);
+}
+body.dark-mode .ambient-mesh__orb--7 {
+    background: radial-gradient(circle at 52% 48%,
+        rgba(50, 170, 120, 0.20) 0%,
+        rgba(50, 170, 120, 0.07) 40%,
+        rgba(50, 170, 120, 0) 68%);
+}
+
+/* --------------------------------------------------------------------------
+   4. Login & landing — re-intensify to the previous vivid login look
+   (content is sparse there, so higher alpha stays readable)
+   -------------------------------------------------------------------------- */
+
+body.page-login .ambient-mesh__orb--1,
+body.page-landing .ambient-mesh__orb--1 {
+    background: radial-gradient(circle at 40% 40%,
+        rgba(88, 190, 255, 0.92) 0%, rgba(88, 190, 255, 0.45) 32%, rgba(88, 190, 255, 0) 68%);
+}
+body.page-login .ambient-mesh__orb--2,
+body.page-landing .ambient-mesh__orb--2 {
+    background: radial-gradient(circle at 55% 40%,
+        rgba(150, 120, 255, 0.85) 0%, rgba(150, 120, 255, 0.40) 34%, rgba(150, 120, 255, 0) 68%);
+}
+body.page-login .ambient-mesh__orb--3,
+body.page-landing .ambient-mesh__orb--3 {
+    background: radial-gradient(circle at 50% 35%,
+        rgba(20, 78, 210, 0.95) 0%, rgba(20, 78, 210, 0.50) 36%, rgba(20, 78, 210, 0) 70%);
+}
+body.page-login .ambient-mesh__orb--4,
+body.page-landing .ambient-mesh__orb--4 {
+    background: radial-gradient(circle at 45% 45%,
+        rgba(255, 122, 190, 0.72) 0%, rgba(255, 122, 190, 0.32) 36%, rgba(255, 122, 190, 0) 68%);
+}
+body.page-login .ambient-mesh__orb--5,
+body.page-landing .ambient-mesh__orb--5 {
+    background: radial-gradient(circle at 50% 50%,
+        rgba(64, 226, 210, 0.62) 0%, rgba(64, 226, 210, 0.28) 38%, rgba(64, 226, 210, 0) 68%);
+}
+
+body.dark-mode.page-login .ambient-mesh__orb--1,
+body.dark-mode.page-landing .ambient-mesh__orb--1 {
+    background: radial-gradient(circle at 40% 40%,
+        rgba(58, 140, 255, 0.70) 0%, rgba(58, 140, 255, 0.28) 34%, rgba(58, 140, 255, 0) 68%);
+}
+body.dark-mode.page-login .ambient-mesh__orb--2,
+body.dark-mode.page-landing .ambient-mesh__orb--2 {
+    background: radial-gradient(circle at 55% 40%,
+        rgba(120, 90, 220, 0.62) 0%, rgba(120, 90, 220, 0.26) 36%, rgba(120, 90, 220, 0) 68%);
+}
+body.dark-mode.page-login .ambient-mesh__orb--3,
+body.dark-mode.page-landing .ambient-mesh__orb--3 {
+    background: radial-gradient(circle at 50% 35%,
+        rgba(24, 60, 150, 0.85) 0%, rgba(24, 60, 150, 0.40) 38%, rgba(24, 60, 150, 0) 70%);
+}
+body.dark-mode.page-login .ambient-mesh__orb--4,
+body.dark-mode.page-landing .ambient-mesh__orb--4 {
+    background: radial-gradient(circle at 45% 45%,
+        rgba(180, 70, 130, 0.50) 0%, rgba(180, 70, 130, 0.22) 38%, rgba(180, 70, 130, 0) 68%);
+}
+body.dark-mode.page-login .ambient-mesh__orb--5,
+body.dark-mode.page-landing .ambient-mesh__orb--5 {
+    background: radial-gradient(circle at 50% 50%,
+        rgba(40, 160, 150, 0.45) 0%, rgba(40, 160, 150, 0.20) 40%, rgba(40, 160, 150, 0) 68%);
+}
+
+/* Login is a centered hero — soften the veil there so the card pops */
+body.page-login .ambient-mesh::after,
+body.page-landing .ambient-mesh::after {
+    opacity: 0.4;
+}
+
+/* --------------------------------------------------------------------------
+   5. Drift paths — slow, large, smooth. Transform-only, seamless loops.
+   No opacity pulsing: stable luminance behind text.
+   -------------------------------------------------------------------------- */
+
+@keyframes am-drift-1 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
+    25%      { transform: translate3d(16%, 10%, 0) scale(1.10); }
+    50%      { transform: translate3d(7%, 20%, 0) scale(0.96); }
+    75%      { transform: translate3d(-9%, 7%, 0) scale(1.05); }
+}
+
+@keyframes am-drift-2 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.04); }
+    20%      { transform: translate3d(-14%, 12%, 0) scale(0.94); }
+    45%      { transform: translate3d(-20%, -6%, 0) scale(1.12); }
+    70%      { transform: translate3d(6%, 14%, 0) scale(1.0); }
+}
+
+@keyframes am-drift-3 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
+    30%      { transform: translate3d(-12%, -10%, 0) scale(1.08); }
+    55%      { transform: translate3d(10%, -16%, 0) scale(0.95); }
+    80%      { transform: translate3d(14%, 5%, 0) scale(1.06); }
+}
+
+@keyframes am-drift-4 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.06); }
+    25%      { transform: translate3d(-16%, -12%, 0) scale(1.14); }
+    50%      { transform: translate3d(-7%, 11%, 0) scale(0.92); }
+    75%      { transform: translate3d(9%, -7%, 0) scale(1.08); }
+}
+
+@keyframes am-drift-5 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
+    22%      { transform: translate3d(18%, -14%, 0) scale(1.12); }
+    48%      { transform: translate3d(12%, 12%, 0) scale(0.94); }
+    72%      { transform: translate3d(-11%, 9%, 0) scale(1.08); }
+}
+
+@keyframes am-drift-6 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
+    28%      { transform: translate3d(-13%, 15%, 0) scale(1.10); }
+    52%      { transform: translate3d(-19%, -9%, 0) scale(0.93); }
+    78%      { transform: translate3d(8%, -13%, 0) scale(1.07); }
+}
+
+@keyframes am-drift-7 {
+    0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.05); }
+    24%      { transform: translate3d(14%, -11%, 0) scale(0.94); }
+    50%      { transform: translate3d(-10%, -16%, 0) scale(1.12); }
+    76%      { transform: translate3d(-16%, 8%, 0) scale(1.0); }
+}
+
+/* --------------------------------------------------------------------------
+   6. Fallbacks & accessibility
+   -------------------------------------------------------------------------- */
+
+/* No compositor-friendly animation: keep a calm static wash */
+@media (prefers-reduced-motion: reduce) {
+    .ambient-mesh__orb {
+        animation: none;
+    }
+}
+
+/* Mobile: fewer, smaller orbs — cuts GPU/compositing cost */
+@media (max-width: 768px) {
+    .ambient-mesh__orb--5,
+    .ambient-mesh__orb--6,
+    .ambient-mesh__orb--7 {
+        display: none;
+    }
+
+    .ambient-mesh__orb--1,
+    .ambient-mesh__orb--2 {
+        width: 78vw;
+        height: 78vw;
+    }
+
+    .ambient-mesh__orb--3,
+    .ambient-mesh__orb--4 {
+        width: 96vw;
+        height: 96vw;
+    }
+}
