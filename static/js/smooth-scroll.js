@@ -15,7 +15,8 @@
 (function () {
     'use strict';
 
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+        (document.body && document.body.classList.contains('pref-reduce-motion'));
     if (reduceMotion) {
         return;
     }
@@ -186,6 +187,35 @@
         return null;
     }
 
+    /* Per-target cache for nativeScrollerAt(). Wheel events fire in bursts
+       aimed at the same element; the ancestor walk calls getComputedStyle()
+       per ancestor, forcing a style recalc on every tick. Only the resolved
+       scroller element is cached — the can-scroll direction checks stay live
+       so edge behaviour (scroller pinned at top/bottom) is unchanged. */
+    var scrollerCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+    function cachedNativeScrollerAt(node, axis, delta) {
+        var el = node && node.nodeType === 1 ? node : node && node.parentElement;
+        if (!el || !scrollerCache) return nativeScrollerAt(el, axis, delta);
+
+        var entry = scrollerCache.get(el);
+        if (entry === undefined) {
+            var found = nativeScrollerAt(el, axis, 1);
+            entry = { scroller: found || null };
+            scrollerCache.set(el, entry);
+        }
+        var scroller = entry.scroller;
+        if (!scroller) return null;
+        if (axis === 'y') {
+            var up = delta < 0 && scroller.scrollTop > 0;
+            var down = delta > 0 && scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1;
+            return (up || down) ? scroller : null;
+        }
+        var left = delta < 0 && scroller.scrollLeft > 0;
+        var right = delta > 0 && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+        return (left || right) ? scroller : null;
+    }
+
     /* ---- Page (window) vertical wheel smoothing ---- */
 
     function attachPageScroll() {
@@ -213,7 +243,7 @@
             if (inExcludedSubtree(event.target)) return;
 
             var delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-            var inner = nativeScrollerAt(event.target, 'y', delta);
+            var inner = cachedNativeScrollerAt(event.target, 'y', delta);
             if (inner && inner.hasAttribute('data-smooth-x')) return; // handled by tracker wiring
             if (inner) return;                       // nested scroller consumes it natively
 
@@ -287,7 +317,9 @@
             lastX: 0,
             lastTs: 0,
             velocity: 0,
-            pointerId: null
+            pointerId: null,
+            dxAcc: 0,      // horizontal deltas accumulated between frames
+            flushRaf: 0    // pending rAF that flushes dxAcc to scrollLeft
         };
 
         function interactiveTarget(node) {
@@ -332,7 +364,19 @@
             event.preventDefault();
             var now = event.timeStamp;
             var dx = event.clientX - dragState.lastX;
-            wrap.scrollLeft -= dx;
+            // Accumulate and flush at most once per frame — high-rate mice fire
+            // pointermove several times per frame, and each scrollLeft write is
+            // a layout read+write on the main thread.
+            dragState.dxAcc += dx;
+            if (!dragState.flushRaf) {
+                dragState.flushRaf = requestAnimationFrame(function () {
+                    dragState.flushRaf = 0;
+                    if (dragState.dxAcc) {
+                        wrap.scrollLeft -= dragState.dxAcc;
+                        dragState.dxAcc = 0;
+                    }
+                });
+            }
 
             var dt = Math.max(now - dragState.lastTs, 1);
             // Track velocity as px/s, smoothed to avoid one-frame spikes.
@@ -346,6 +390,16 @@
             if (event.pointerId !== dragState.pointerId) return;
             var wasActive = dragState.active;
             if (wasActive) {
+                // Flush any deltas still waiting for their frame before the fling
+                // reads the position, then stop the pending flush.
+                if (dragState.flushRaf) {
+                    cancelAnimationFrame(dragState.flushRaf);
+                    dragState.flushRaf = 0;
+                    if (dragState.dxAcc) {
+                        wrap.scrollLeft -= dragState.dxAcc;
+                        dragState.dxAcc = 0;
+                    }
+                }
                 wrap.classList.remove('is-dragging');
                 axis.fling(dragState.velocity);
                 // Suppress the click that follows a real drag so cells/links don't fire.

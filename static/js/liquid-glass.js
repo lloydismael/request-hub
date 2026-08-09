@@ -4,7 +4,8 @@
 (function () {
     'use strict';
 
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+        (document.body && document.body.classList.contains('pref-reduce-motion'));
     var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
     /* ---- Staggered entrance (CSS-driven, no dependency) ---- */
@@ -21,6 +22,12 @@
     }
 
     function primeEntrance() {
+        // Reduce Motion (OS setting or the app's pref-reduce-motion class):
+        // skip the stagger entirely — elements render visible with no animation.
+        if (reduceMotion) {
+            document.body.classList.add('lg-enter-ready');
+            return;
+        }
         var items = document.querySelectorAll('.lg-enter');
         for (var i = 0; i < items.length; i += 1) {
             var delay = normalizeDelaySeconds(items[i].getAttribute('data-lg-delay'), i);

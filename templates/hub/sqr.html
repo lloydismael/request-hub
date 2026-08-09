@@ -492,6 +492,9 @@
                 (function () {
                     var root = document.getElementById('sqr-reports-root');
                     if (!root) return;
+                    // Only poll while the reports tab is actually active — the
+                    // whole point of the interval is live charts on this tab.
+                    if (new URLSearchParams(window.location.search).get('tab') !== 'reports') return;
 
                     var refreshUrl = root.dataset.refreshUrl;
                     var refreshInFlight = false;
@@ -536,7 +539,9 @@
             </script>
         {% else %}
         {# ── Main Tracker Table ────────────────────────────────────────────── #}
-        <div class="glass-card p-2 sqr-view-panel lg-enter" data-lg-delay="80" data-sqr-view-panel="tracker">
+        {% comment %}No lg-enter here: animating/compositing a card that wraps
+           the whole 43-column table stalls first paint.{% endcomment %}
+        <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="tracker">
             <div class="sqr-tracker-wrap">
                 <table class="sqr-tracker table-hover">
                     <thead>
@@ -1027,7 +1032,13 @@
             </div>
         </div>
 
-        <div class="glass-card p-2 sqr-view-panel lg-enter" data-lg-delay="80" data-sqr-view-panel="esg" hidden>
+        {% comment %}ESG panel: content stays in an inert <template> until the ESG view
+           is first opened, so the full second table render is skipped on load.
+           The <template> is a SIBLING of the panel (not a child): the HTML parser
+           drops a hidden div that directly wraps a template containing a table,
+           so we keep them separate and hydrate on demand.{% endcomment %}
+        <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="esg" hidden></div>
+        <template id="sqr-esg-content">
             <div class="sqr-esg-note small mb-2">
                 <i class="bi bi-info-circle me-1"></i>
                 Display-only ESG Performance Tracker layout. Dash values represent columns from the reference tracker that are not stored in the current SQR schema.
@@ -1167,7 +1178,7 @@
                     </tbody>
                 </table>
             </div>
-        </div>
+        </template>
         {% endif %}
 
     </div>
@@ -3222,6 +3233,20 @@
     var panels = document.querySelectorAll('[data-sqr-view-panel]');
     if (!buttons.length || !panels.length) return;
 
+    // The ESG panel ships its table inside an inert <template> (a sibling of
+    // the panel) so the second full row set is never laid out on first load.
+    // Hydrate once, on demand. Must run inside setView() (not only on click):
+    // a saved 'esg' view is restored on load before applySqrTableFilter()
+    // reads the visible panel.
+    function hydrateEsgPanel(panel) {
+        if (!panel || panel.dataset.sqrEsgHydrated === '1') return;
+        var tpl = document.getElementById('sqr-esg-content');
+        if (!tpl) return;
+        panel.appendChild(tpl.content.cloneNode(true));
+        tpl.remove();
+        panel.dataset.sqrEsgHydrated = '1';
+    }
+
     function setView(viewName) {
         var activeView = viewName === 'esg' ? 'esg' : 'tracker';
         buttons.forEach(function (button) {
@@ -3231,6 +3256,9 @@
             button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
         panels.forEach(function (panel) {
+            if (panel.dataset.sqrViewPanel === 'esg' && activeView === 'esg') {
+                hydrateEsgPanel(panel);
+            }
             panel.hidden = panel.dataset.sqrViewPanel !== activeView;
         });
         try { window.localStorage.setItem(storageKey, activeView); } catch (error) {}

@@ -59,10 +59,20 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         # Settings tab has its own lightweight POST — handle before the main form
         if request.POST.get("save_settings"):
             user = request.user
+            # Behavior
             user.show_chatbot = request.POST.get("show_chatbot") == "1"
             user.idle_timeout_enabled = request.POST.get("idle_timeout_enabled") == "1"
             user.show_login_banner = request.POST.get("show_login_banner") == "1"
-            user.save(update_fields=["show_chatbot", "idle_timeout_enabled", "show_login_banner"])
+            # Appearance / Performance / Accessibility
+            user.pref_compact_tables = request.POST.get("pref_compact_tables") == "1"
+            user.pref_large_text = request.POST.get("pref_large_text") == "1"
+            user.pref_reduce_effects = request.POST.get("pref_reduce_effects") == "1"
+            user.pref_reduce_motion = request.POST.get("pref_reduce_motion") == "1"
+            user.save(update_fields=[
+                "show_chatbot", "idle_timeout_enabled", "show_login_banner",
+                "pref_compact_tables", "pref_large_text",
+                "pref_reduce_effects", "pref_reduce_motion",
+            ])
             messages.success(request, "Settings saved.")
             return redirect(reverse_lazy("accounts:update") + "#settings")
         return super().post(request, *args, **kwargs)

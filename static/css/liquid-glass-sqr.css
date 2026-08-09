@@ -934,11 +934,8 @@ body.dark-mode.sqr-page .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sti
 body.dark-mode.sqr-page .sqr-tracker tbody tr.sqr-row--revision:hover td.col-sticky-4 {
     background-color: #321826 !important;
 }
-@keyframes sqr-revision-pulse {
-    /* Opacity-only pulse on a static accent bar — no box-shadow repaint. */
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.45; }
-}
+/* Static accent bar only — the previous infinite opacity pulse ran a per-row
+   animation forever on every for_revision row. */
 body.sqr-page .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0 {
     position: relative;
 }
@@ -951,7 +948,6 @@ body.sqr-page .sqr-tracker tbody tr.sqr-row--revision td.col-sticky-0::before {
     width: 3px;
     background: var(--lg-crit);
     pointer-events: none;
-    animation: sqr-revision-pulse 1.8s ease-in-out infinite;
 }
 
 /* Closed-lost disabled delivery/revenue band */

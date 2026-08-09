@@ -6685,3 +6685,87 @@ body.dark-mode .al-status--wip  { background: rgba(59,130,246,0.14); color: #93c
 body.dark-mode .al-status--pending { background: rgba(245,158,11,0.14); color: #fcd34d; border-color: rgba(245,158,11,0.3); }
 
 
+
+/* ==========================================================================
+   User preference body classes (Settings tab)
+   Emitted server-side on <body> from the authenticated user's prefs:
+     pref-compact-tables · pref-large-text · pref-reduce-effects · pref-reduce-motion
+   ========================================================================== */
+
+/* ---- Appearance: compact tables — denser rows on every data table ---- */
+body.pref-compact-tables .table > tbody > tr > td,
+body.pref-compact-tables .table > thead > tr > th,
+body.pref-compact-tables .sqr-tracker tbody td,
+body.pref-compact-tables .sqr-tracker thead th,
+body.pref-compact-tables .sqr-esg-table tbody td,
+body.pref-compact-tables .dashboard-table-wrapper tbody td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+}
+body.pref-compact-tables .sqr-tracker tbody td,
+body.pref-compact-tables .sqr-esg-table tbody td,
+body.pref-compact-tables .dashboard-table-wrapper tbody td {
+    font-size: 0.8125rem !important;
+    line-height: 1.25 !important;
+}
+
+/* ---- Appearance/Accessibility: large text ---- */
+body.pref-large-text {
+    font-size: 1.075rem;
+}
+body.pref-large-text .table,
+body.pref-large-text .sqr-tracker,
+body.pref-large-text .sqr-esg-table,
+body.pref-large-text .nav-link,
+body.pref-large-text .btn {
+    font-size: 1.02em;
+}
+
+/* ---- Performance: reduce visual effects — drop blur + animated mesh ---- */
+body.pref-reduce-effects .glass-card,
+body.pref-reduce-effects:not(.page-login) .navbar,
+body.pref-reduce-effects .nav-avatar-menu {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+/* Swap the translucent glass fill for an opaque panel so text stays readable
+   once the backdrop blur is gone (light + dark). */
+body.pref-reduce-effects:not(.dark-mode) .glass-card {
+    background: #ffffff !important;
+}
+body.pref-reduce-effects.dark-mode .glass-card {
+    background: #141b2c !important;
+}
+body.pref-reduce-effects:not(.dark-mode):not(.page-login) .navbar {
+    background: #1f2a44 !important;
+}
+body.pref-reduce-effects.dark-mode:not(.page-login) .navbar {
+    background: #0e1426 !important;
+}
+/* The animated orbs are what force blurred layers to repaint every frame. */
+body.pref-reduce-effects .ambient-mesh,
+body.pref-reduce-effects .ambient-mesh__orb {
+    animation: none !important;
+}
+body.pref-reduce-effects .ambient-mesh {
+    opacity: 0.5;
+}
+
+/* ---- Accessibility: reduce motion — kill entrance/ambient animation ---- */
+body.pref-reduce-motion .lg-enter,
+body.pref-reduce-motion .lg-enter-ready .lg-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+}
+body.pref-reduce-motion .ambient-mesh,
+body.pref-reduce-motion .ambient-mesh__orb,
+body.pref-reduce-motion .login-mesh__orb,
+body.pref-reduce-motion .login-hero::before,
+body.pref-reduce-motion .login-hero::after {
+    animation: none !important;
+}
+body.pref-reduce-motion * {
+    scroll-behavior: auto !important;
+}

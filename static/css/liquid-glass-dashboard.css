@@ -1142,12 +1142,8 @@ body:not(.dark-mode).engineer-dashboard .dashboard-table-wrapper .badge.bg-dange
     color: #ffffff !important;
 }
 
-body.admin-dashboard .dashboard-table-wrapper tbody tr,
-body.requestor-dashboard .dashboard-table-wrapper tbody tr,
-body.engineer-dashboard .dashboard-table-wrapper tbody tr {
-    transition: background-color var(--lg-dur-xs) var(--ease-ios);
-}
-
+/* Row hover swaps instantly — the background-color transition was removed to
+   keep large-table scrolling free of per-row paint animations. */
 body.admin-dashboard .dashboard-table-wrapper tbody tr:hover td,
 body.requestor-dashboard .dashboard-table-wrapper tbody tr:hover td,
 body.engineer-dashboard .dashboard-table-wrapper tbody tr:hover td {
