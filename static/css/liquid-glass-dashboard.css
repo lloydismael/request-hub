@@ -3116,3 +3116,206 @@ body.engineer-activity-logs .rpt-activity-detail {
         transition: none !important;
     }
 }
+
+/* ==========================================================================
+   17. Reports 2.0 — refined enterprise analytics layer (rpt2-*)
+   KPI band, page rhythm, quiet card chrome. Old rpt-* kept for rollback.
+   ========================================================================== */
+
+/* Page title — quiet, no icon */
+body.reports-page .rpt2-page-title {
+    font-size: 1.45rem;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    margin: 0;
+    color: var(--lg-ink);
+}
+
+/* Page rhythm: single 24px cadence, wider gutters on desktop */
+@media (min-width: 992px) {
+    body.reports-page main.container {
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
+body.reports-page .row.g-4 {
+    --bs-gutter-x: 1.5rem;
+    --bs-gutter-y: 1.5rem;
+}
+
+/* KPI band → charts breathing room */
+body.reports-page .row:has(> [class*="col-"] > .rpt2-kpi) {
+    margin-bottom: 2.5rem !important;
+}
+
+/* ---- KPI cards ---- */
+body.reports-page .rpt2-kpi {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.15rem;
+    min-height: 6.5rem;
+    height: 100%;
+    padding: 1.1rem 1.25rem 1.05rem 1.5rem;
+    border-radius: var(--lg-radius-lg) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    background:
+        linear-gradient(165deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    box-shadow: var(--lg-shadow-tile) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+    backdrop-filter: blur(18px) saturate(1.6);
+    color: var(--lg-ink) !important;
+}
+
+/* Left accent edge bar — replaces icon chips */
+body.reports-page .rpt2-kpi::before {
+    content: "";
+    position: absolute;
+    left: 0.9rem;
+    top: 1.1rem;
+    bottom: 1.1rem;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--lg-info);
+    opacity: 0.85;
+}
+body.reports-page .rpt2-kpi--blue::before   { background: var(--lg-info); }
+body.reports-page .rpt2-kpi--green::before  { background: var(--lg-ok); }
+body.reports-page .rpt2-kpi--amber::before  { background: var(--lg-warn); }
+body.reports-page .rpt2-kpi--cyan::before   { background: var(--lg-teal); }
+body.reports-page .rpt2-kpi--violet::before { background: var(--lg-violet); }
+
+body.dark-mode.reports-page .rpt2-kpi {
+    background:
+        linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+}
+
+body.reports-page .rpt2-kpi-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-ink-soft) !important;
+}
+
+body.reports-page .rpt2-kpi-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--lg-ink) !important;
+}
+
+/* Hero metric — 2x visual weight */
+body.reports-page .rpt2-kpi--hero {
+    min-height: 8.25rem;
+}
+body.reports-page .rpt2-kpi--hero .rpt2-kpi-value {
+    font-size: 2.5rem;
+    font-weight: 650;
+    letter-spacing: -0.04em;
+}
+body.reports-page .rpt2-kpi-sub {
+    font-size: 0.78rem;
+    color: var(--lg-ink-faint) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Activity filter: single-line, no title block ---- */
+body.reports-page .rpt2-filter {
+    padding: 0.9rem 1.25rem !important;
+}
+body.reports-page .rpt2-filter .rpt-filter-panel {
+    margin-top: 0;
+}
+body.reports-page .rpt2-filter .rpt-period-badge {
+    margin-top: 0;
+}
+
+/* ---- Chart cards: calmer chrome ---- */
+body.reports-page .rpt-chart-card {
+    padding: 1.5rem !important;
+}
+body.reports-page .rpt-chart-head {
+    margin-bottom: 1rem;
+}
+body.reports-page .rpt-chart-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0;
+    color: var(--lg-ink);
+}
+body.reports-page .rpt-chart-sub {
+    font-size: 0.78rem;
+    margin-bottom: 0;
+    color: var(--lg-ink-soft) !important;
+}
+
+/* Expand button: hidden until card hover (reduces permanent chrome) */
+body.reports-page .rpt-expand-btn {
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+body.reports-page .rpt-chart-card:hover .rpt-expand-btn,
+body.reports-page .rpt-expand-btn:focus-visible {
+    opacity: 1;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 991.98px) {
+    body.reports-page .rpt2-kpi--hero .rpt2-kpi-value {
+        font-size: 2rem;
+    }
+}
+@media (max-width: 767.98px) {
+    body.reports-page .rpt2-kpi-value {
+        font-size: 1.4rem;
+    }
+    body.reports-page .rpt2-kpi {
+        min-height: 5.25rem;
+        padding: 0.85rem 0.9rem 0.8rem 1.25rem;
+    }
+    body.reports-page .rpt2-kpi::before {
+        left: 0.7rem;
+        top: 0.85rem;
+        bottom: 0.85rem;
+    }
+    /* KPI rows → 2-col grid (mirrors app.css view-mobile rule for rpt-kpi-card) */
+    body.reports-page .row:has(> [class*="col-"] > .rpt2-kpi) {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.6rem;
+        margin-bottom: 1.75rem !important;
+    }
+    body.reports-page .row:has(> [class*="col-"] > .rpt2-kpi) > [class*="col-"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        flex: unset !important;
+    }
+    /* Hero spans full width of the 2-col grid */
+    body.reports-page .row:has(> [class*="col-"] > .rpt2-kpi) > [class*="col-"]:has(> .rpt2-kpi--hero) {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ---- Reduced motion / reduced effects ---- */
+@media (prefers-reduced-motion: reduce) {
+    body.reports-page .rpt-expand-btn {
+        transition: none !important;
+    }
+}
+body.pref-reduce-effects.reports-page .rpt2-kpi {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--glass-bg) !important;
+}
+body.dark-mode.pref-reduce-effects.reports-page .rpt2-kpi {
+    background: #000 !important;
+}

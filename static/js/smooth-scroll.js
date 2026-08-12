@@ -298,6 +298,12 @@
                 delta = dx;                        // genuine horizontal input / Shift+wheel
             } else {
                 if (isEditable(event.target)) return;
+                /* Only translate a vertical wheel into a horizontal glide when the
+                   cursor is over the wrap's bottom scrollbar strip. Anywhere else
+                   the gesture is vertical intent — let it bubble to the page. */
+                var rect = wrap.getBoundingClientRect();
+                var strip = Math.max(rect.height - wrap.clientHeight, 20);
+                if (event.clientY < rect.bottom - strip) return;
                 delta = dy;                        // map vertical wheel to horizontal glide
             }
 
