@@ -15,7 +15,7 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from accounts.models import User
-from hub.forms import RequestForm
+from hub.forms import RequestForm, RequestStatusForm
 from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange, SqrSubmissionHistory
 from hub.views import (
     AssignmentEmailResult,
@@ -108,6 +108,63 @@ class AssignmentEmailTests(TestCase):
 
     def _create_account_id(self, name: str) -> int:
         return Account.objects.create(name=name).pk
+
+
+class RequestStatusValidationTests(TestCase):
+    def setUp(self):
+        self.requestor = User.objects.create_user(
+            username="status_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="status.requestor@example.com",
+        )
+        self.engineer = User.objects.create_user(
+            username="status_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="status.engineer@example.com",
+        )
+        self.backup_engineer = User.objects.create_user(
+            username="status_backup_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="status.backup@example.com",
+        )
+        self.account = Account.objects.create(name="Status Validation Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Status Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            backup_engineer=self.backup_engineer,
+            status=Request.Status.ONGOING,
+            description="Status validation request.",
+        )
+
+    def test_assigned_engineer_cannot_complete_without_related_activity_logs(self):
+        form = RequestStatusForm(
+            data={"status": Request.Status.COMPLETED, "end_date": timezone.now().date()},
+            instance=self.request_obj,
+            actor_user=self.engineer,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("status", form.errors)
+        self.assertIn("related activity", form.errors["status"][0].lower())
+
+    def test_backup_engineer_cannot_complete_without_related_activity_logs(self):
+        form = RequestStatusForm(
+            data={"status": Request.Status.COMPLETED, "end_date": timezone.now().date()},
+            instance=self.request_obj,
+            actor_user=self.backup_engineer,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("status", form.errors)
+        self.assertIn("related activity", form.errors["status"][0].lower())
 
 
 class OutlookThreadingTests(TestCase):

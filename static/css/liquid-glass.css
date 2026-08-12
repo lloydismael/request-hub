@@ -802,10 +802,87 @@ body.dark-mode .page-login .login-card__logo {
 }
 
 /* --------------------------------------------------------------------------
-   3b. Dark-mode overrides
-   app.css ships aggressive `body.dark-mode` login rules (some !important).
-   These reinstate the glass material without touching that legacy block.
+   3b. Light- and dark-mode overrides
+   app.css ships legacy login rules for the default dark surface. These explicit
+   theme overrides keep the form readable in both modes without clobbering the
+   rest of the app.
    -------------------------------------------------------------------------- */
+
+body.page-login:not(.dark-mode) {
+    background-color: #edf3fb !important;
+    background-image:
+        radial-gradient(circle at 14% 12%, rgba(63, 131, 248, 0.12), transparent 26%),
+        radial-gradient(circle at 86% 18%, rgba(76, 157, 255, 0.09), transparent 28%),
+        linear-gradient(180deg, #f9fbff 0%, #edf3fb 100%) !important;
+    color: #0f172a;
+}
+
+body.page-login:not(.dark-mode) .login-card {
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 255, 0.82)) !important;
+    border: 1px solid rgba(148, 163, 184, 0.42);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12), 0 36px 70px -24px rgba(37, 99, 235, 0.18);
+    color: #0f172a;
+}
+
+body.page-login:not(.dark-mode) .login-card__title,
+body.page-login:not(.dark-mode) .login-card__subtitle,
+body.page-login:not(.dark-mode) .login-card__helper,
+body.page-login:not(.dark-mode) .login-card__brand-subtitle,
+body.page-login:not(.dark-mode) .login-card__footer,
+body.page-login:not(.dark-mode) .login-form label,
+body.page-login:not(.dark-mode) .login-form__account,
+body.page-login:not(.dark-mode) .login-form__account strong,
+body.page-login:not(.dark-mode) .login-form__account code {
+    color: #0f172a;
+}
+
+body.page-login:not(.dark-mode) .login-form__fields {
+    background: rgba(255, 255, 255, 0.48);
+    border-color: rgba(148, 163, 184, 0.3);
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+body.page-login:not(.dark-mode) .login-form__group + .login-form__group {
+    border-top-color: rgba(148, 163, 184, 0.3);
+}
+
+body.page-login:not(.dark-mode) .login-form__group > label {
+    color: rgba(15, 23, 42, 0.62);
+}
+
+body.page-login:not(.dark-mode) .login-form__group:focus-within > label,
+body.page-login:not(.dark-mode) .login-form__group > input:not(:placeholder-shown) ~ label,
+body.page-login:not(.dark-mode) .login-form__group > input:focus ~ label {
+    color: #1768d1;
+}
+
+body.page-login:not(.dark-mode) .login-form__group > input:not(:placeholder-shown):not(:focus) ~ label {
+    color: rgba(15, 23, 42, 0.62);
+}
+
+body.page-login:not(.dark-mode) .login-form input[type="text"],
+body.page-login:not(.dark-mode) .login-form input[type="password"],
+body.page-login:not(.dark-mode) .login-form .form-control,
+body.page-login:not(.dark-mode) .login-form .form-control:focus {
+    background-color: transparent;
+    background: transparent;
+    border: none;
+    box-shadow: none !important;
+    color: #0f172a;
+    transform: none !important;
+}
+
+body.page-login:not(.dark-mode) .login-form input:-webkit-autofill {
+    -webkit-text-fill-color: #0f172a;
+}
+
+body.page-login:not(.dark-mode) .login-card__footer {
+    color: rgba(15, 23, 42, 0.72);
+}
+
+body.page-login:not(.dark-mode) .login-card__submit {
+    box-shadow: 0 10px 24px rgba(23, 104, 209, 0.26);
+}
 
 body.dark-mode.page-login .login-card {
     background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;

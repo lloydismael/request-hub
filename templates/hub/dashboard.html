@@ -1324,6 +1324,16 @@
                 if (ratio >= 0.4) { return palette.mid.start; }
                 return palette.low.start;
             });
+            const resolveThemeToken = function (name, fallback) {
+                const value = getComputedStyle(document.body).getPropertyValue(name).trim();
+                return value || fallback;
+            };
+            const chartTextColor = function () { return resolveThemeToken('--lg-ink', '#0b1220'); };
+            const chartTextSoft = function () { return resolveThemeToken('--lg-ink-soft', 'rgba(11, 18, 32, 0.62)'); };
+            const chartDividerColor = function () { return resolveThemeToken('--lg-divider', 'rgba(11, 18, 32, 0.12)'); };
+            const chartValueLabelColor = function () {
+                return resolveThemeToken('--lg-ink-soft', '#0b1220');
+            };
 
             // Grow height for horizontal layout so each bar has breathing room.
             if (horizontal && wrap) {
@@ -1338,7 +1348,7 @@
                     const meta = chart.getDatasetMeta(0);
                     if (!meta) { return; }
                     c.save();
-                    c.fillStyle = '#1f2937';
+                    c.fillStyle = chartValueLabelColor();
                     c.font = '600 12px "Inter", system-ui, -apple-system, Segoe UI, sans-serif';
                     meta.data.forEach(function (bar, i) {
                         const value = values[i];
@@ -1410,7 +1420,7 @@
                                 display: true,
                                 drawOnChartArea: true,
                                 drawTicks: false,
-                                color: 'rgba(100, 116, 139, 0.35)',
+                                color: function () { return chartDividerColor(); },
                                 lineWidth: 1,
                                 borderDash: horizontal ? [] : [4, 4],
                             },
@@ -1418,10 +1428,10 @@
                             ticks: {
                                 stepSize: horizontal ? undefined : 1,
                                 precision: 0,
-                                color: '#475569',
+                                color: function () { return chartTextSoft(); },
                                 font: { size: 12 }
                             },
-                            title: horizontal ? { display: true, text: 'Number of requests', color: '#475569', font: { size: 12, weight: '600' } } : { display: false }
+                            title: horizontal ? { display: true, text: 'Number of requests', color: function () { return chartTextColor(); }, font: { size: 12, weight: '600' } } : { display: false }
                         },
                         y: {
                             beginAtZero: true,
@@ -1430,7 +1440,7 @@
                                 display: true,
                                 drawOnChartArea: true,
                                 drawTicks: false,
-                                color: horizontal ? 'rgba(100, 116, 139, 0.28)' : 'rgba(148, 163, 184, 0.22)',
+                                color: function () { return chartDividerColor(); },
                                 lineWidth: 1,
                                 borderDash: horizontal ? [4, 4] : [],
                             },
@@ -1438,11 +1448,11 @@
                             ticks: {
                                 stepSize: horizontal ? undefined : 1,
                                 precision: 0,
-                                color: '#475569',
+                                color: function () { return chartTextSoft(); },
                                 font: { size: 12 },
                                 autoSkip: false
                             },
-                            title: !horizontal ? { display: true, text: 'Number of requests', color: '#475569', font: { size: 12, weight: '600' } } : { display: false }
+                            title: !horizontal ? { display: true, text: 'Number of requests', color: function () { return chartTextColor(); }, font: { size: 12, weight: '600' } } : { display: false }
                         }
                     },
                     animation: { duration: 700, easing: 'easeOutQuart' }

@@ -4782,7 +4782,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             form = RequestForm(instance=request_obj, actor_role=self.request.user.role, actor_user=self.request.user)
         status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
         if status_allowed and status_form is None:
-            status_form = RequestStatusForm(instance=request_obj)
+            status_form = RequestStatusForm(instance=request_obj, actor_user=self.request.user)
         elif not status_allowed:
             status_form = None
         if log_form is None:
@@ -4858,7 +4858,23 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         if request.user.role not in ENGINEER_ACCESS_ROLES:
             messages.error(request, "Only the assigned engineer can update the status.")
             return HttpResponseRedirect(request.path)
-        status_form = RequestStatusForm(request.POST, instance=request_obj)
+
+        status_form = RequestStatusForm(request.POST, instance=request_obj, actor_user=request.user)
+        target_status = request.POST.get("status")
+        is_completion = target_status == Request.Status.COMPLETED
+        actor_is_assigned_or_backup = request.user.pk in {request_obj.engineer_id, request_obj.backup_engineer_id}
+        if (
+            is_completion
+            and request_obj.status != Request.Status.COMPLETED
+            and request.user.role in ENGINEER_ACCESS_ROLES
+            and actor_is_assigned_or_backup
+            and not request_obj.activity_logs.exists()
+        ):
+            status_form.add_error(
+                "status",
+                "Add at least one related activity log before marking this request as completed.",
+            )
+
         if status_form.is_valid():
             send_closing_email = (request.POST.get("send_closing_email") or "").strip() in {"1", "true", "True", "on"}
             source_label = self._source_label("Manage Request · Status")
@@ -7117,7 +7133,7 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             return redirect("hub:request-manage-collab", pk=pk)
 
         original = Request.objects.get(pk=request_obj.pk)
-        form = RequestStatusForm(request.POST, instance=request_obj)
+        form = RequestStatusForm(request.POST, instance=request_obj, actor_user=request.user)
         if form.is_valid():
             request_obj._actor_user = request.user
             request_obj._actor_source = "Engineer · Status Update"

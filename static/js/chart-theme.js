@@ -80,6 +80,7 @@
         window.lgChartPalette = palette();
         window.lgChartInk = ink;
         window.lgChartInkSoft = inkSoft;
+        window.lgChartDivider = divider;
     }
 
     // Public: register a callback to re-apply theme (plugins, external charts).

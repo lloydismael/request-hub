@@ -250,10 +250,22 @@ body.admin-dashboard .nav-pills,
 body.requestor-dashboard .nav-pills,
 body.engineer-dashboard .nav-pills {
     gap: 0.25rem;
-    padding: 4px;
-    border-radius: var(--lg-radius-sm);
-    background: var(--lg-tint-sunken);
-    border: 1px solid var(--lg-hairline-soft);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+}
+
+#activity-logs-tabs,
+#activity-logs-tabs.nav-pills,
+body.engineer-dashboard #activity-logs-tabs,
+body.engineer-dashboard #activity-logs-tabs.nav-pills {
+    gap: 0.25rem;
+    padding: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 body.admin-dashboard .nav-pills .nav-link,
@@ -266,6 +278,7 @@ body.engineer-dashboard .nav-pills .nav-link {
     letter-spacing: -0.01em;
     color: var(--lg-ink-soft);
     background: transparent;
+    border: 1px solid transparent;
     transition:
         background-color var(--lg-dur-xs) var(--ease-ios),
         color var(--lg-dur-xs) var(--ease-ios),
@@ -2964,14 +2977,26 @@ body.reports-page .rpt-edit-btn,
 body.engineer-activity-logs .rpt-edit-btn {
     width: 2rem;
     height: 2rem;
-    display: inline-flex;
+    display: inline-flex !important;
     align-items: center;
     justify-content: center;
+    padding: 0;
     border-radius: 999px;
     color: var(--lg-accent) !important;
     background: color-mix(in srgb, var(--lg-accent) 12%, rgba(255, 255, 255, 0.45));
     border: 1px solid color-mix(in srgb, var(--lg-accent) 28%, transparent);
     text-decoration: none !important;
+}
+
+body.reports-page .rpt-edit-btn i,
+body.engineer-activity-logs .rpt-edit-btn i {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    margin: 0;
+    line-height: 1;
 }
 
 body.reports-page .rpt-activity-row--editing,

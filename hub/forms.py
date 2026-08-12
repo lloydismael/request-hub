@@ -1231,9 +1231,19 @@ class RequestStatusForm(forms.ModelForm):
             "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor_user=None, **kwargs):
+        self.actor_user = actor_user
         super().__init__(*args, **kwargs)
         self.instance._allow_capacity_override = True
+
+    def _is_blocked_completion_without_activity(self) -> bool:
+        if not self.actor_user or self.actor_user.role not in User.ENGINEER_ACCESS_ROLES:
+            return False
+        if self.instance.status == Request.Status.COMPLETED:
+            return False
+        if self.actor_user.pk not in {self.instance.engineer_id, self.instance.backup_engineer_id}:
+            return False
+        return not self.instance.activity_logs.exists()
 
     def clean(self):
         cleaned_data = super().clean()
@@ -1248,6 +1258,11 @@ class RequestStatusForm(forms.ModelForm):
                 self.add_error("end_date", "Select the completion date before closing the ticket.")
             else:
                 self.instance.end_date = end_date
+                if self._is_blocked_completion_without_activity():
+                    self.add_error(
+                        "status",
+                        "Add at least one related activity log before marking this request as completed.",
+                    )
         return cleaned_data
 
     def save(self, commit=True):

@@ -57,16 +57,6 @@
         <button class="profile-tab" data-profile-tab="settings">
             <i class="bi bi-sliders me-1"></i>Settings
         </button>
-        {# ── View mode toggle — inline in tab bar ── #}
-        <div class="profile-tabs__vmt ms-auto" id="profile-vmt-clone" role="group" aria-label="View mode">
-            <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
-                <i class="bi bi-pc-display"></i><span>Desktop</span>
-            </button>
-            <span class="profile-vmt__divider" aria-hidden="true"></span>
-            <button class="profile-vmt__btn" data-vmt="mobile" type="button" title="Mobile view" aria-pressed="false">
-                <i class="bi bi-phone-fill"></i><span>Mobile</span>
-            </button>
-        </div>
     </div>
 
     {# ── Main form ─────────────────────────────────────────── #}
@@ -248,7 +238,18 @@
     <div class="profile-panel" id="profile-panel-settings">
         <div class="glass-card profile-card">
             <h2 class="profile-card__title"><i class="bi bi-sliders me-2"></i>Settings</h2>
-            <p class="text-muted small mb-4">Personalise your Request Hub experience. Changes are saved immediately and apply across the whole app.</p>
+            <div class="d-flex align-items-center justify-content-between gap-3 mb-4">
+                <div></div>
+                <div class="profile-tabs__vmt" id="profile-vmt-clone" role="group" aria-label="View mode">
+                    <button class="profile-vmt__btn profile-vmt__btn--active" data-vmt="desktop" type="button" title="Desktop view" aria-pressed="true">
+                        <i class="bi bi-pc-display"></i><span>Desktop</span>
+                    </button>
+                    <span class="profile-vmt__divider" aria-hidden="true"></span>
+                    <button class="profile-vmt__btn" data-vmt="mobile" type="button" title="Mobile view" aria-pressed="false">
+                        <i class="bi bi-phone-fill"></i><span>Mobile</span>
+                    </button>
+                </div>
+            </div>
 
             <form method="post" id="profile-settings-form">
                 {% csrf_token %}
@@ -258,13 +259,11 @@
                 <h3 class="h6 text-uppercase fw-bold mt-2 mb-1" style="letter-spacing:0.05em;color:var(--lg-accent,#4f8cff);">
                     <i class="bi bi-palette-fill me-2"></i>Appearance
                 </h3>
-                <p class="text-muted small mb-2">Control how the app looks and how much fits on screen.</p>
                 <div class="list-group list-group-flush mb-4">
 
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-table me-2 text-primary"></i>Compact Tables</div>
-                            <div class="text-muted small mt-1">Denser rows and tighter spacing on data tables, so more records fit on screen.</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
@@ -277,7 +276,6 @@
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-fonts me-2 text-primary"></i>Large Text</div>
-                            <div class="text-muted small mt-1">Increase the base font size across the app for easier reading.</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
@@ -290,7 +288,6 @@
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-image-fill me-2 text-primary"></i>Profile Banner &amp; Theme</div>
-                            <div class="text-muted small mt-1">Change your profile banner in the <strong>Edit Banner</strong> tab; switch dark/light mode with the toggle in the navbar.</div>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-primary text-nowrap" onclick="document.getElementById('banner-tab-btn')?.click()">
                             <i class="bi bi-image me-1"></i>Edit Banner
@@ -302,12 +299,10 @@
                 <h3 class="h6 text-uppercase fw-bold mb-1" style="letter-spacing:0.05em;color:var(--lg-accent,#4f8cff);">
                     <i class="bi bi-lightning-charge-fill me-2"></i>Performance
                 </h3>
-                <p class="text-muted small mb-2">Reduce visual overhead for a faster, smoother experience — helpful on slower machines or large tables.</p>
                 <div class="list-group list-group-flush mb-4">
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-droplet-half me-2 text-warning"></i>Reduce Visual Effects</div>
-                            <div class="text-muted small mt-1">Disable glass blur and the animated background, which noticeably speeds up scrolling on large tables.</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
@@ -322,13 +317,11 @@
                 <h3 class="h6 text-uppercase fw-bold mb-1" style="letter-spacing:0.05em;color:var(--lg-accent,#4f8cff);">
                     <i class="bi bi-toggles me-2"></i>Behavior
                 </h3>
-                <p class="text-muted small mb-2">How the app behaves around you.</p>
                 <div class="list-group list-group-flush mb-4">
 
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-robot me-2 text-info"></i>AI Chatbot</div>
-                            <div class="text-muted small mt-1">Show or hide the floating AI assistant button on every page.</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
@@ -341,7 +334,6 @@
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-clock-history me-2 text-warning"></i>5-Minute Idle Timeout</div>
-                            <div class="text-muted small mt-1">Automatically log you out after 5 minutes of inactivity. Recommended for shared or public computers.</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
@@ -354,7 +346,6 @@
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-stars me-2 text-success"></i>Welcome Banner</div>
-                            <div class="text-muted small mt-1">Show the &ldquo;Welcome back!&rdquo; splash screen after every login.</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
@@ -369,12 +360,10 @@
                 <h3 class="h6 text-uppercase fw-bold mb-1" style="letter-spacing:0.05em;color:var(--lg-accent,#4f8cff);">
                     <i class="bi bi-universal-access me-2"></i>Accessibility
                 </h3>
-                <p class="text-muted small mb-2">Make the app more comfortable to use.</p>
                 <div class="list-group list-group-flush">
                     <div class="list-group-item px-0 py-3 d-flex align-items-center justify-content-between gap-3" style="background:transparent;border-color:rgba(255,255,255,0.08);">
                         <div>
                             <div class="fw-semibold"><i class="bi bi-hand-index me-2 text-danger"></i>Reduce Motion</div>
-                            <div class="text-muted small mt-1">Disable entrance animations and smooth scrolling. (Your device's &ldquo;reduce motion&rdquo; setting is always respected.)</div>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input settings-toggle" type="checkbox" role="switch"
