@@ -73,14 +73,6 @@
             <div class="rpt2-kpi rpt2-kpi--hero rpt2-kpi--green">
                 <span class="rpt2-kpi-label">Total Hours</span>
                 <span class="rpt2-kpi-value">{{ activity_totals.total_hours|default:0|floatformat:1 }}</span>
-                <span class="rpt2-kpi-sub">
-                    {% if activity_totals.total_hours %}
-                        {% widthratio activity_totals.billable_hours|default:0 activity_totals.total_hours 1 as billable_ratio %}
-                        {{ billable_ratio|floatformat:0 }}% billable
-                    {% else %}
-                        No hours logged
-                    {% endif %}
-                </span>
             </div>
         </div>
         <div class="col-6 col-lg-2">
@@ -269,6 +261,17 @@
             </div>
             <div class="table-responsive dashboard-table-wrapper">
                 <table class="table align-middle rpt-activity-table mb-0">
+                    <colgroup>
+                        <col style="width: 2.75rem;">
+                        <col style="width: 7.5rem;">
+                        <col style="width: 10rem;">
+                        <col style="width: 8.5rem;">
+                        <col style="width: 18rem;">
+                        <col style="width: 4rem;">
+                        <col style="width: 6.5rem;">
+                        <col style="width: 7rem;">
+                        <col style="width: 4.5rem;">
+                    </colgroup>
                     <thead class="rpt-table-head">
                         <tr>
                             <th class="rpt-col-num">#</th>
@@ -294,7 +297,7 @@
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="rpt-eng-avatar">{{ log.engineer.get_full_name|default:log.engineer.username|slice:":1"|upper }}</span>
-                                        <span class="text-nowrap rpt-eng-name">{{ log.engineer.get_full_name|default:log.engineer.username }}</span>
+                                        <span class="rpt-eng-name">{{ log.engineer.get_full_name|default:log.engineer.username }}</span>
                                     </div>
                                 </td>
                                 <td>
@@ -446,26 +449,25 @@
 
     {# ── Operational: KPI band ───────────────────────────────────────────── #}
     <div class="row g-3 mb-4 lg-enter" data-lg-delay="40">
-        <div class="col-12 col-lg-6">
+        <div class="col-6 col-lg-3">
             <div class="rpt2-kpi rpt2-kpi--hero rpt2-kpi--blue">
                 <span class="rpt2-kpi-label">Active Requests</span>
                 <span class="rpt2-kpi-value">{{ totals.ongoing }}</span>
-                <span class="rpt2-kpi-sub">of {{ totals.requests }} total requests</span>
             </div>
         </div>
-        <div class="col-6 col-lg-2">
+        <div class="col-6 col-lg-3">
             <div class="rpt2-kpi rpt2-kpi--green">
                 <span class="rpt2-kpi-label">Completed</span>
                 <span class="rpt2-kpi-value">{{ totals.completed }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-2">
+        <div class="col-6 col-lg-3">
             <div class="rpt2-kpi rpt2-kpi--amber">
                 <span class="rpt2-kpi-label">Requestors</span>
                 <span class="rpt2-kpi-value">{{ totals.account_managers }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-2">
+        <div class="col-6 col-lg-3">
             <div class="rpt2-kpi rpt2-kpi--cyan">
                 <span class="rpt2-kpi-label">Engineers</span>
                 <span class="rpt2-kpi-value">{{ totals.engineers }}</span>
@@ -755,6 +757,10 @@
 
     function makeStackedBar(canvas, payload, cA, cB) {
         if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
+        var axisColor = window.lgChartInk || token('--lg-ink', '#0b1220');
+        var axisSoft = window.lgChartInkSoft || token('--lg-ink-soft', 'rgba(11,18,32,0.62)');
+        var divider = window.lgChartDivider || token('--lg-divider', 'rgba(11,18,32,0.09)');
+        var tooltipBg = document.body.classList.contains('dark-mode') ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.96)';
         var buildFn = function (tgt) {
             return new Chart(tgt, {
                 type: 'bar',
@@ -770,12 +776,29 @@
                     maintainAspectRatio: false,
                     animation: { duration: reducedMotion ? 0 : 650, easing: 'easeOutQuart' },
                     scales: {
-                        x: { stacked: true, ticks: { maxRotation: 35, minRotation: 0, autoSkip: true, maxTicksLimit: 16 } },
-                        y: { stacked: true, beginAtZero: true, grace: '12%', maxTicksLimit: 6, ticks: { precision: 0 } }
+                        x: {
+                            stacked: true,
+                            grid: { color: divider, drawTicks: false },
+                            ticks: { color: axisColor, maxRotation: 35, minRotation: 0, autoSkip: true, maxTicksLimit: 16, font: { weight: 600 } }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grace: '12%',
+                            maxTicksLimit: 6,
+                            grid: { color: divider, drawTicks: false },
+                            ticks: { color: axisColor, precision: 0, font: { weight: 600 } }
+                        }
                     },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
+                            backgroundColor: tooltipBg,
+                            titleColor: axisColor,
+                            bodyColor: axisColor,
+                            borderColor: divider,
+                            borderWidth: 1,
+                            displayColors: false,
                             callbacks: {
                                 afterBody: function (items) {
                                     if (!items.length) return '';
@@ -796,6 +819,9 @@
 
     function makeHourBar(canvas, payload, cA, cB) {
         if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
+        var axisColor = window.lgChartInk || token('--lg-ink', '#0b1220');
+        var divider = window.lgChartDivider || token('--lg-divider', 'rgba(11,18,32,0.09)');
+        var tooltipBg = document.body.classList.contains('dark-mode') ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.96)';
         var buildFn = function (tgt) {
             return new Chart(tgt, {
                 type: 'bar',
@@ -811,12 +837,28 @@
                     maintainAspectRatio: false,
                     animation: { duration: reducedMotion ? 0 : 650, easing: 'easeOutQuart' },
                     scales: {
-                        x: { stacked: true, ticks: { autoSkip: true, maxRotation: 35, maxTicksLimit: 16 } },
-                        y: { stacked: true, beginAtZero: true, maxTicksLimit: 6, ticks: { precision: 0 } }
+                        x: {
+                            stacked: true,
+                            grid: { color: divider, drawTicks: false },
+                            ticks: { color: axisColor, autoSkip: true, maxRotation: 35, maxTicksLimit: 16, font: { weight: 600 } }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            maxTicksLimit: 6,
+                            grid: { color: divider, drawTicks: false },
+                            ticks: { color: axisColor, precision: 0, font: { weight: 600 } }
+                        }
                     },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
+                            backgroundColor: tooltipBg,
+                            titleColor: axisColor,
+                            bodyColor: axisColor,
+                            borderColor: divider,
+                            borderWidth: 1,
+                            displayColors: false,
                             callbacks: {
                                 label: function (ctx) {
                                     return ctx.dataset.label + ': ' + ctx.parsed.y + ' hrs';

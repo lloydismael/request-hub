@@ -6959,8 +6959,8 @@ class NotificationListView(LoginRequiredMixin, ListView):
         if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
             queryset = queryset.filter(source__icontains="new request")
 
-        # ── Filter: read/unread ──
-        self._filter_read = self.request.GET.get("filter", "all")
+        # ── Filter: read/unread (default to unread for the notification dashboard) ──
+        self._filter_read = self.request.GET.get("filter", "unread")
         if self._filter_read == "unread":
             queryset = queryset.filter(is_read=False)
         elif self._filter_read == "read":

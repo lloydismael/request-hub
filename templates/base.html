@@ -157,6 +157,15 @@
             const THEME_REVEAL_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
             const THEME_FADE_DURATION = 320;
 
+            const setToggleLabelState = (isDark) => {
+                if (!toggle || !toggleLabel) return;
+                const nextLabel = isDark ? 'Toggle Light Mode' : 'Toggle Dark Mode';
+                toggle.checked = isDark;
+                toggle.setAttribute('aria-label', nextLabel);
+                toggleLabel.setAttribute('aria-label', nextLabel);
+                toggleLabel.setAttribute('title', nextLabel);
+            };
+
             // Helper to set theme state
             const applyTheme = (isDark) => {
                 if (isDark) {
@@ -166,13 +175,22 @@
                     body.classList.remove('dark-mode');
                     localStorage.setItem(storageKey, 'light');
                 }
+                setToggleLabelState(isDark);
             };
 
-            // Apply saved theme immediately on load
+            // Default to light unless the user has explicitly chosen dark.
             const currentTheme = localStorage.getItem(storageKey);
-            if (currentTheme === 'dark') {
+            const shouldUseDarkMode = currentTheme === 'dark';
+            if (currentTheme === null) {
+                localStorage.setItem(storageKey, 'light');
+            }
+            if (shouldUseDarkMode) {
                 body.classList.add('dark-mode');
-                if (toggle) toggle.checked = true;
+            } else {
+                body.classList.remove('dark-mode');
+            }
+            if (toggle) {
+                setToggleLabelState(shouldUseDarkMode);
             }
 
             if (toggle) {

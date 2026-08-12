@@ -5,6 +5,7 @@ from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
+from django.contrib.auth import authenticate
 from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -108,6 +109,31 @@ class AssignmentEmailTests(TestCase):
 
     def _create_account_id(self, name: str) -> int:
         return Account.objects.create(name=name).pk
+
+
+class AuthenticationBackendTests(TestCase):
+    def test_exact_case_admin_username_takes_priority_over_case_insensitive_duplicate(self):
+        canonical_admin = User.objects.get(username="Admin")
+        canonical_admin.set_password("@Password")
+        canonical_admin.role = User.Roles.ADMIN
+        canonical_admin.is_staff = True
+        canonical_admin.is_superuser = True
+        canonical_admin.save(update_fields=["password", "role", "is_staff", "is_superuser"])
+
+        User.objects.create_user(
+            username="admin",
+            password="lowerpass",
+            role=User.Roles.REQUESTOR,
+            email="lowercase.admin@example.com",
+            is_staff=True,
+            is_superuser=True,
+        )
+
+        authenticated = authenticate(username="Admin", password="@Password")
+
+        self.assertIsNotNone(authenticated)
+        self.assertEqual(authenticated.pk, canonical_admin.pk)
+        self.assertEqual(authenticated.username, "Admin")
 
 
 class RequestStatusValidationTests(TestCase):

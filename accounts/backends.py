@@ -19,17 +19,10 @@ class CaseInsensitiveUsernameBackend(ModelBackend):
             return None
 
         lookup = {f"{UserModel.USERNAME_FIELD}__iexact": normalized_username}
-        try:
-            user = UserModel._default_manager.get(**lookup)
-        except UserModel.DoesNotExist:
-            UserModel().set_password(password)
-            return None
-        except UserModel.MultipleObjectsReturned:
-            user = (
-                UserModel._default_manager.filter(**lookup)
-                .order_by(UserModel.USERNAME_FIELD)
-                .first()
-            )
+        queryset = UserModel._default_manager.filter(**lookup)
+        user = queryset.filter(**{f"{UserModel.USERNAME_FIELD}__exact": normalized_username}).order_by(UserModel.USERNAME_FIELD).first()
+        if user is None:
+            user = queryset.order_by(UserModel.USERNAME_FIELD).first()
 
         if user and user.check_password(password) and self.user_can_authenticate(user):
             return user

@@ -37,10 +37,10 @@
 
         Chart.defaults.font.family = FONT;
         Chart.defaults.font.size = 12;
-        Chart.defaults.color = inkSoft;
+        Chart.defaults.color = ink;
         Chart.defaults.borderColor = divider;
 
-        Chart.defaults.plugins.legend.labels.color = inkSoft;
+        Chart.defaults.plugins.legend.labels.color = ink;
         Chart.defaults.plugins.legend.labels.usePointStyle = true;
         Chart.defaults.plugins.legend.labels.boxWidth = 8;
         Chart.defaults.plugins.legend.labels.padding = 14;
@@ -74,8 +74,9 @@
         Chart.defaults.scale.grid.drawTicks = false;
         Chart.defaults.scale.border = Chart.defaults.scale.border || {};
         Chart.defaults.scale.border.display = false;
-        Chart.defaults.scale.ticks.color = inkSoft;
+        Chart.defaults.scale.ticks.color = ink;
         Chart.defaults.scale.ticks.padding = 8;
+        Chart.defaults.scale.ticks.font = { weight: 600 };
 
         window.lgChartPalette = palette();
         window.lgChartInk = ink;

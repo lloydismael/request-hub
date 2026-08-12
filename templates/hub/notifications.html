@@ -6,23 +6,22 @@
 
     <section class="notif-hero" aria-labelledby="notifications-heading">
         <div class="notif-hero__content">
-            <span class="notif-hero__eyebrow">Notification center</span>
-            <h1 id="notifications-heading" class="notif-hero__title">Stay on top of request activity</h1>
-            <p class="notif-hero__sub">
-                Review new requests, assignments, updates, completions, and reminders in one easy-to-scan feed.
-            </p>
+            <div class="notif-hero__meta">
+                <span class="notif-hero__icon" aria-hidden="true"><i class="bi bi-bell-fill"></i></span>
+                <div class="notif-hero__text">
+                    <span class="notif-hero__eyebrow">Overview</span>
+                    <h1 id="notifications-heading" class="notif-hero__title">Notifications</h1>
+                </div>
+            </div>
             <div class="notif-hero__stats" aria-label="Notification summary">
-                <span class="notif-stat-pill notif-stat-pill--primary">
-                    <strong>{{ unread_count }}</strong> unread
-                </span>
-                <span class="notif-stat-pill">
-                    <strong>{{ total_count }}</strong> total
-                </span>
-                {% if unread_count > 0 %}
-                    <span class="notif-stat-pill notif-stat-pill--attention">Action needed</span>
-                {% else %}
-                    <span class="notif-stat-pill notif-stat-pill--success">All caught up</span>
-                {% endif %}
+                <div class="notif-stat-card notif-stat-card--primary">
+                    <span class="notif-stat-card__label">Unread</span>
+                    <span class="notif-stat-card__value">{{ unread_count }}</span>
+                </div>
+                <div class="notif-stat-card">
+                    <span class="notif-stat-card__label">Total</span>
+                    <span class="notif-stat-card__value">{{ total_count }}</span>
+                </div>
             </div>
         </div>
         <div class="notif-hero__actions">
@@ -45,12 +44,11 @@
     <section class="notif-controls" aria-label="Notification filters">
         <div class="notif-controls__header">
             <div>
-                <h2 class="notif-section-title">Filter your inbox</h2>
-                <p class="notif-section-sub">Choose what you want to focus on first.</p>
+                <h2 class="notif-section-title">Filters</h2>
             </div>
             {% if current_filter and current_filter != 'all' or current_category %}
                 <a href="?" class="notif-clear-filters">
-                    <i class="bi bi-x-lg"></i> Clear filters
+                    <i class="bi bi-x-lg"></i> Clear
                 </a>
             {% endif %}
         </div>
@@ -58,17 +56,17 @@
         <div class="notif-filter-tabs" role="list" aria-label="Read status filters">
             <a href="?filter=all{% if current_category %}&category={{ current_category }}{% endif %}"
                class="notif-filter-tab {% if current_filter == 'all' or not current_filter %}is-active{% endif %}">
-                <span>All notifications</span>
+                <span>All</span>
                 <strong>{{ total_count }}</strong>
             </a>
             <a href="?filter=unread{% if current_category %}&category={{ current_category }}{% endif %}"
                class="notif-filter-tab {% if current_filter == 'unread' %}is-active{% endif %}">
-                <span>Unread first</span>
+                <span>Unread</span>
                 <strong>{{ unread_count }}</strong>
             </a>
             <a href="?filter=read{% if current_category %}&category={{ current_category }}{% endif %}"
                class="notif-filter-tab {% if current_filter == 'read' %}is-active{% endif %}">
-                <span>Already read</span>
+                <span>Read</span>
                 <i class="bi bi-check2-circle"></i>
             </a>
         </div>
@@ -77,32 +75,32 @@
             <a href="?{% if current_filter and current_filter != 'all' %}filter={{ current_filter }}{% endif %}"
                class="notif-category-card {% if not current_category %}is-active{% endif %}">
                 <span class="notif-category-card__icon"><i class="bi bi-grid"></i></span>
-                <span class="notif-category-card__text"><strong>Everything</strong><small>Full activity feed</small></span>
+                <span class="notif-category-card__text"><strong>All</strong></span>
             </a>
             <a href="?category=new_request{% if current_filter and current_filter != 'all' %}&filter={{ current_filter }}{% endif %}"
                class="notif-category-card notif-category-card--new {% if current_category == 'new_request' %}is-active{% endif %}">
                 <span class="notif-category-card__icon"><i class="bi bi-plus-circle-fill"></i></span>
-                <span class="notif-category-card__text"><strong>New requests</strong><small>{{ category_counts.new_request|default:0 }} item{{ category_counts.new_request|default:0|pluralize }}</small></span>
+                <span class="notif-category-card__text"><strong>New</strong></span>
             </a>
             <a href="?category=assignment{% if current_filter and current_filter != 'all' %}&filter={{ current_filter }}{% endif %}"
                class="notif-category-card notif-category-card--assign {% if current_category == 'assignment' %}is-active{% endif %}">
                 <span class="notif-category-card__icon"><i class="bi bi-person-workspace"></i></span>
-                <span class="notif-category-card__text"><strong>Assignments</strong><small>{{ category_counts.assignment|default:0 }} item{{ category_counts.assignment|default:0|pluralize }}</small></span>
+                <span class="notif-category-card__text"><strong>Assigned</strong></span>
             </a>
             <a href="?category=update{% if current_filter and current_filter != 'all' %}&filter={{ current_filter }}{% endif %}"
                class="notif-category-card notif-category-card--update {% if current_category == 'update' %}is-active{% endif %}">
                 <span class="notif-category-card__icon"><i class="bi bi-chat-left-text-fill"></i></span>
-                <span class="notif-category-card__text"><strong>Updates</strong><small>{{ category_counts.update|default:0 }} item{{ category_counts.update|default:0|pluralize }}</small></span>
+                <span class="notif-category-card__text"><strong>Updated</strong></span>
             </a>
             <a href="?category=completion{% if current_filter and current_filter != 'all' %}&filter={{ current_filter }}{% endif %}"
                class="notif-category-card notif-category-card--complete {% if current_category == 'completion' %}is-active{% endif %}">
                 <span class="notif-category-card__icon"><i class="bi bi-check2-circle"></i></span>
-                <span class="notif-category-card__text"><strong>Completed</strong><small>{{ category_counts.completion|default:0 }} item{{ category_counts.completion|default:0|pluralize }}</small></span>
+                <span class="notif-category-card__text"><strong>Done</strong></span>
             </a>
             <a href="?category=reminder{% if current_filter and current_filter != 'all' %}&filter={{ current_filter }}{% endif %}"
                class="notif-category-card notif-category-card--remind {% if current_category == 'reminder' %}is-active{% endif %}">
                 <span class="notif-category-card__icon"><i class="bi bi-alarm"></i></span>
-                <span class="notif-category-card__text"><strong>Reminders</strong><small>{{ category_counts.reminder|default:0 }} item{{ category_counts.reminder|default:0|pluralize }}</small></span>
+                <span class="notif-category-card__text"><strong>Reminders</strong></span>
             </a>
         </div>
     </section>
@@ -114,7 +112,6 @@
                     <div class="notif-group__header">
                         <div>
                             <span class="notif-group__label">{{ group_label }}</span>
-                            <p class="notif-group__hint">{{ group_items|length }} update{{ group_items|length|pluralize }} in this section</p>
                         </div>
                     </div>
 
@@ -139,7 +136,6 @@
                                 </div>
 
                                 <div class="notif-card__body">
-                                    <span class="notif-card__body-label">What happened</span>
                                     <p class="notif-card__message">{{ notification.message }}</p>
                                 </div>
 
@@ -175,7 +171,7 @@
                                         {% csrf_token %}
                                         <button class="notif-card__action notif-card__action--read" type="submit">
                                             <i class="bi bi-check2"></i>
-                                            <span>Mark read</span>
+                                            <span>Read</span>
                                         </button>
                                     </form>
                                 {% endif %}
