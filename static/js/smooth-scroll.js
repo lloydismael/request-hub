@@ -148,8 +148,42 @@
     /* ------------------------------------------------------------------ */
 
     function isEditable(node) {
-        return !!(node && node.closest &&
-            node.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]'));
+        if (!node) return false;
+
+        var current = node.nodeType === 1 ? node : node.parentElement;
+        if (!current) return false;
+
+        if (current.closest && current.closest(
+            'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
+        )) {
+            return true;
+        }
+
+        var active = document.activeElement;
+        if (active && active !== document.body && active !== document.documentElement) {
+            if (active === current || (active.contains && active.contains(current))) {
+                return true;
+            }
+
+            if (active.closest && active.closest(
+                'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
+            )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function editableHasOverflow(node) {
+        var current = node && node.nodeType === 1 ? node : node && node.parentElement;
+        while (current && current !== document.body && current !== document.documentElement) {
+            if (current.matches && current.matches('textarea, [contenteditable="true"], [contenteditable=""]')) {
+                return current.scrollHeight > current.clientHeight + 1 || current.scrollWidth > current.clientWidth + 1;
+            }
+            current = current.parentElement;
+        }
+        return false;
     }
 
     function inExcludedSubtree(node) {
@@ -239,7 +273,7 @@
             if (event.ctrlKey) return;               // pinch-zoom gesture
             if (Math.abs(event.deltaY) === 0) return;
             if (event.deltaMode === 2) return;       // page-mode: leave native
-            if (isEditable(event.target)) return;
+            if (isEditable(event.target) && editableHasOverflow(event.target)) return;
             if (inExcludedSubtree(event.target)) return;
 
             var delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;

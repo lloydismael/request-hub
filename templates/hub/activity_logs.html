@@ -527,12 +527,22 @@
             button.addEventListener('click', closeModal, { passive: true });
         });
 
-        const shouldOpenOnLoad = modal.dataset.openOnLoad === 'true';
+        const url = new URL(window.location.href);
+        const prefillRequestId = url.searchParams.get('request');
+        const requestSelect = document.getElementById('id_request');
+
+        if (prefillRequestId && requestSelect) {
+            const matchedOption = Array.from(requestSelect.options).find((option) => option.value === prefillRequestId);
+            if (matchedOption) {
+                requestSelect.value = matchedOption.value;
+            }
+        }
+
+        const shouldOpenOnLoad = modal.dataset.openOnLoad === 'true' || Boolean(prefillRequestId);
         if (shouldOpenOnLoad) {
             openModal();
         }
 
-        const url = new URL(window.location.href);
         const editId = url.searchParams.get('edit');
         if (!editId) {
             return;

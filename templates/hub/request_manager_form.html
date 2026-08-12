@@ -357,6 +357,12 @@
                     </div>
                 </div>
 
+                <div class="d-flex justify-content-end mb-3">
+                    <a href="{% url 'hub:activity-logs' %}?request={{ object.pk }}" class="btn btn-primary btn-sm request-activity-empty-state__action">
+                        <i class="bi bi-plus-circle me-1"></i>Add Activity Logs
+                    </a>
+                </div>
+
                 {% if related_activity_logs %}
                     <div class="table-responsive request-activity-table-wrap">
                         <table class="table table-sm align-middle mb-0 request-activity-table">
@@ -405,7 +411,9 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-muted small mt-3 request-activity-empty-state">No activity logs are linked to this request yet.</div>
+                    <div class="request-activity-empty-state">
+                        <div class="text-muted small">No activity logs are linked to this request yet.</div>
+                    </div>
                 {% endif %}
             </div>
         </div>

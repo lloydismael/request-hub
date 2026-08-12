@@ -3577,6 +3577,17 @@ body.dark-mode .act-form-error {
     display: inline-flex;
     align-items: center;
     z-index: 10;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.page-login .theme-toggle-wrapper {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 
 /* If you specifically want absolute positioning on login page only, scope it */
@@ -3594,8 +3605,8 @@ body.dark-mode .act-form-error {
 
 /* ── Toggle track ── */
 .checkbox-label {
-    /* Default (not-checked) = LIGHT mode: warm sky-blue track */
-    background: linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%);
+    /* Keep the login toggle visually quiet and aligned with the page background */
+    background: rgba(255, 255, 255, 0.08);
     width: 62px;
     height: 32px;
     border-radius: 999px;
@@ -3604,10 +3615,8 @@ body.dark-mode .act-form-error {
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    border: 1.5px solid rgba(14, 165, 233, 0.3);
-    box-shadow:
-        0 2px 12px rgba(14, 165, 233, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
     overflow: hidden;
     transition:
         background 0.65s var(--theme-transition-easing),
@@ -3618,11 +3627,21 @@ body.dark-mode .act-form-error {
 
 /* Checked = DARK mode: deep navy track */
 #theme-checkbox:checked + .checkbox-label {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border-color: rgba(148, 163, 184, 0.22);
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    background: rgba(15, 23, 42, 0.12);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: none;
+}
+
+body.page-login .theme-toggle-wrapper .checkbox-label {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: none;
+}
+
+body.page-login #theme-checkbox:checked + .checkbox-label {
+    background: rgba(15, 23, 42, 0.1);
+    border-color: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
 }
 
 /* ── Sun icon — sits on LEFT, visible in LIGHT mode (not-checked) — NO yellow ── */
@@ -3741,8 +3760,11 @@ body.dark-mode .act-form-error {
 }
 
 #theme-checkbox:focus-visible + .checkbox-label {
-    outline: 2px solid rgba(99, 102, 241, 0.55);
-    outline-offset: 2px;
+    outline: none !important;
+    box-shadow:
+        0 0 0 0 rgba(99, 102, 241, 0),
+        0 2px 12px rgba(14, 165, 233, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 /* Transitions for Smooth Switching */
@@ -4091,6 +4113,18 @@ body:not(.dark-mode) .request-activity-table tbody td {
     margin-top: 1rem !important;
     padding-top: 0.75rem;
     border-top: 1px solid rgba(15,23,42,0.08);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.request-activity-empty-state__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    white-space: nowrap;
 }
 
 .request-activity-stat-card .fs-5,
@@ -5466,6 +5500,31 @@ body.requestor-dashboard.dark-mode .dashboard-metric-card--active {
     color: rgba(255, 255, 255, 0.90);
     background: rgba(255, 255, 255, 0.12);
 }
+.profile-vmt__btn--maintenance {
+    opacity: 0.6;
+    cursor: not-allowed;
+    position: relative;
+}
+.profile-vmt__btn--maintenance:hover::after,
+.profile-vmt__btn--maintenance:focus-visible::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 10px);
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.96);
+    color: #f8fafc;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    padding: 5px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+    z-index: 30;
+    pointer-events: none;
+}
 .profile-vmt__divider {
     display: block;
     width: 1px;
@@ -5486,6 +5545,10 @@ body:not(.dark-mode) .profile-tabs__vmt .profile-vmt__btn:focus-visible {
     color: #0f172a !important;
     background: transparent !important;
 }
+body:not(.dark-mode) .profile-vmt__btn--maintenance {
+    opacity: 0.6;
+    color: #475569 !important;
+}
 body:not(.dark-mode) .profile-tabs__vmt .profile-vmt__btn--active {
     background: linear-gradient(135deg, #2f6cf3 0%, #4f46e5 100%) !important;
     color: #fff !important;
@@ -5493,6 +5556,47 @@ body:not(.dark-mode) .profile-tabs__vmt .profile-vmt__btn--active {
 }
 body:not(.dark-mode) .profile-tabs__vmt .profile-vmt__divider {
     background: rgba(148, 163, 184, 0.5) !important;
+}
+
+/* Dark-mode readability fixes for profile settings card */
+body.dark-mode .profile-card,
+body.dark-mode .profile-card h3,
+body.dark-mode .profile-card .profile-card__title,
+body.dark-mode .profile-card .profile-label,
+body.dark-mode .profile-card .list-group-item,
+body.dark-mode .profile-card .list-group-item .fw-semibold,
+body.dark-mode .profile-card .list-group-item .text-muted,
+body.dark-mode .profile-card p,
+body.dark-mode .profile-card .small,
+body.dark-mode .profile-card .form-text,
+body.dark-mode .profile-card .text-muted {
+    color: #f8fafc !important;
+}
+body.dark-mode .profile-card .list-group-item .text-muted,
+body.dark-mode .profile-card p,
+body.dark-mode .profile-card .small,
+body.dark-mode .profile-card .form-text,
+body.dark-mode .profile-card .text-muted {
+    color: rgba(226, 232, 240, 0.78) !important;
+}
+body.dark-mode .profile-card .list-group-item {
+    color: #f8fafc !important;
+    border-color: rgba(148, 163, 184, 0.18) !important;
+    background: transparent !important;
+}
+body.dark-mode .profile-card .list-group-item > div:first-child {
+    color: #f8fafc !important;
+}
+body.dark-mode .profile-card form > h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .profile-card .btn-outline-primary {
+    color: #dbeafe !important;
+    border-color: rgba(96, 165, 250, 0.95) !important;
+}
+body.dark-mode .profile-card .btn-outline-primary:hover {
+    color: #eff6ff !important;
+    background: rgba(59, 130, 246, 0.14) !important;
 }
 
 /* Mobile: stack view-mode below tabs */
@@ -6062,6 +6166,14 @@ body.view-mobile > nav.navbar > .container-fluid {
     background: linear-gradient(120deg, #1d4ed8, #3b82f6) !important;
     padding: 0.55rem 1rem !important;
     box-shadow: 0 2px 14px rgba(15, 23, 42, 0.55);
+}
+
+body.page-login.view-mobile > nav.navbar > .container-fluid {
+    max-width: none !important;
+    margin: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
 }
 
 /* ── 3. Force hamburger menu inside the narrow frame ── */

@@ -565,6 +565,23 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
         edit_id = request.GET.get("edit")
         editing_log = None
         form = None
+        prefill_request_id = request.GET.get("request")
+        initial = {}
+
+        if prefill_request_id:
+            try:
+                selected_request_id = int(prefill_request_id)
+            except (TypeError, ValueError):
+                selected_request_id = None
+            if selected_request_id is not None:
+                allowed_request_ids = set(
+                    Request.objects.filter(
+                        Q(engineer=request.user) | Q(backup_engineer=request.user)
+                    ).values_list("id", flat=True)
+                )
+                if selected_request_id in allowed_request_ids:
+                    initial["request"] = selected_request_id
+
         if edit_id:
             try:
                 editing_log = self.get_queryset().get(pk=edit_id)
@@ -572,6 +589,9 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                 messages.error(request, "We could not find that activity log to edit.")
                 return redirect("hub:activity-logs")
             form = self.form_class(engineer=request.user, instance=editing_log)
+        else:
+            form = self.form_class(engineer=request.user, initial=initial)
+
         context = self.get_context_data(form=form, editing_log=editing_log)
         return self.render_to_response(context)
 
