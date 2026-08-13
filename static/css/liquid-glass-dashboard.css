@@ -285,6 +285,34 @@ body.engineer-dashboard .nav-pills .nav-link {
         transform var(--lg-dur-sm) var(--ease-ios-spring);
 }
 
+body:not(.dark-mode) .nav-pills .nav-link,
+body:not(.dark-mode) #activity-logs-tabs .nav-link {
+    color: #0f172a !important;
+    background: rgba(255, 255, 255, 0.52);
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+body:not(.dark-mode) .nav-pills .nav-link:hover,
+body:not(.dark-mode) #activity-logs-tabs .nav-link:hover {
+    color: #0f172a !important;
+    background: rgba(255, 255, 255, 0.76);
+    border-color: rgba(15, 23, 42, 0.12);
+}
+
+body.dark-mode .nav-pills .nav-link,
+body.dark-mode #activity-logs-tabs .nav-link {
+    color: #f2f5fb !important;
+    background: rgba(120, 140, 180, 0.14);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-mode .nav-pills .nav-link:hover,
+body.dark-mode #activity-logs-tabs .nav-link:hover {
+    color: #ffffff !important;
+    background: rgba(120, 140, 180, 0.2);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
 body.admin-dashboard .nav-pills .nav-link:hover,
 body.requestor-dashboard .nav-pills .nav-link:hover,
 body.engineer-dashboard .nav-pills .nav-link:hover {
@@ -298,6 +326,14 @@ body.engineer-dashboard .nav-pills .nav-link.active {
     color: #fff;
     background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 12px -4px color-mix(in srgb, var(--lg-accent) 60%, transparent);
+}
+
+body:not(.dark-mode) .nav-pills .nav-link.active,
+body:not(.dark-mode) #activity-logs-tabs .nav-link.active {
+    color: #ffffff !important;
+    background: linear-gradient(180deg, #0a84ff, #0060df) !important;
+    border-color: rgba(10, 132, 255, 0.22) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 6px 16px -8px rgba(0, 96, 223, 0.75) !important;
 }
 
 body.admin-dashboard .nav-pills .nav-link:active,
@@ -1335,13 +1371,23 @@ body.dark-mode .requestor-modal__header .h5 {
     color: var(--lg-ink) !important;
 }
 
+body:not(.dark-mode) .requestor-modal__body .form-label,
+body:not(.dark-mode) .requestor-modal__body .form-text,
+body:not(.dark-mode) .requestor-modal__body .text-muted,
 .requestor-modal__body .form-label,
 .requestor-modal__body .form-text,
-.requestor-modal__body .text-muted,
+.requestor-modal__body .text-muted {
+    color: var(--lg-ink-soft) !important;
+}
 body.dark-mode .requestor-modal__body .form-label,
 body.dark-mode .requestor-modal__body .form-text,
 body.dark-mode .requestor-modal__body .text-muted {
     color: var(--lg-ink-soft) !important;
+}
+body:not(.dark-mode) .requestor-modal__body .form-label,
+body:not(.dark-mode) .requestor-modal__body .form-text,
+body:not(.dark-mode) .requestor-modal__body .text-muted {
+    color: #0f172a !important;
 }
 
 .requestor-modal__body .form-control,

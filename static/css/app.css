@@ -2873,6 +2873,9 @@ body.dark-mode .acct-dropdown__item.is-active {
     max-width: 760px;
     max-height: min(840px, 92vh);
     margin: 4vh auto;
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(148, 163, 184, 0.22);
+    color: #0f172a;
 }
 
 /* ── Header ── */
@@ -2881,7 +2884,7 @@ body.dark-mode .acct-dropdown__item.is-active {
     align-items: center;
     gap: 0.9rem;
     padding: 1rem 1.25rem;
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.76);
     border-bottom: 1px solid rgba(15, 23, 42, 0.09);
     flex-shrink: 0;
     position: relative;
@@ -2961,7 +2964,7 @@ body.dark-mode .acct-dropdown__item.is-active {
 .act-form-label {
     font-size: 0.7rem;
     font-weight: 700;
-    color: #64748b;
+    color: #334155;
     display: flex;
     align-items: center;
     gap: 0.3rem;
@@ -2970,17 +2973,37 @@ body.dark-mode .acct-dropdown__item.is-active {
     margin: 0;
     user-select: none;
 }
+body:not(.dark-mode) .act-form-label,
+body:not(.dark-mode) .requestor-modal__body .form-label,
+body:not(.dark-mode) .requestor-modal__body .form-text,
+body:not(.dark-mode) .requestor-modal__body .text-muted {
+    color: #0f172a !important;
+}
+body:not(.dark-mode) .act-form-label .act-form-optional,
+body:not(.dark-mode) .requestor-modal__body .act-form-label .act-form-optional,
+body:not(.dark-mode) .act-form-optional,
+body:not(.dark-mode) .requestor-modal__body .act-form-optional {
+    color: #1f2937 !important;
+    opacity: 1 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em !important;
+}
 .act-form-label i {
     font-size: 0.78rem;
     color: #2563eb;
     flex-shrink: 0;
 }
-.act-form-optional {
-    font-weight: 400;
-    color: #94a3b8;
+.act-form-label .act-form-optional {
+    font-weight: 700;
+    color: #334155;
     text-transform: none;
-    letter-spacing: 0;
+    letter-spacing: 0.01em;
     font-size: 0.68rem;
+    opacity: 1;
+    line-height: 1.2;
+}
+body.dark-mode .act-form-label .act-form-optional {
+    color: #cbd5e1;
 }
 .act-form-error {
     font-size: 0.72rem;
@@ -2989,13 +3012,27 @@ body.dark-mode .acct-dropdown__item.is-active {
 
 /* Compact inputs inside the act modal */
 .act-modal-body .form-control,
-.act-modal-body .form-select {
+.act-modal-body .form-select,
+.act-modal-body input[type="date"] {
     font-size: 0.875rem;
     padding: 0.42rem 0.75rem;
     border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(15, 23, 42, 0.18);
+    color: #0f172a;
+    color-scheme: light;
+    box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.04);
 }
 .act-modal-body .form-select {
     padding-right: 2rem;
+}
+.act-modal-body .form-control::placeholder,
+.act-modal-body .form-select option {
+    color: #475569;
+}
+.act-modal-body .form-select option {
+    background-color: #ffffff;
+    color: #0f172a;
 }
 #id_details {
     resize: vertical;
@@ -3087,6 +3124,16 @@ body.dark-mode .act-modal-close:hover {
 }
 body.dark-mode .act-form-label {
     color: #94a3b8;
+}
+body:not(.dark-mode) .act-form-label {
+    color: #0f172a !important;
+}
+body:not(.dark-mode) .act-form-label i {
+    color: #2563eb;
+}
+body:not(.dark-mode) .act-form-optional {
+    color: #1f2937 !important;
+    font-weight: 700;
 }
 body.dark-mode .act-form-label i {
     color: #60a5fa;
