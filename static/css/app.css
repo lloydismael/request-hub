@@ -4083,6 +4083,23 @@ body:not(.dark-mode) .request-activity-table tbody td {
 
 /* Status form padding */
 .rmf-status-form { padding: 1.25rem 1.5rem 1.25rem; }
+.rmf-status-form .row {
+    align-items: flex-start;
+}
+.rmf-status-form .col-sm-6 {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 100%;
+}
+.rmf-status-form .col-sm-6 > .form-select,
+.rmf-status-form .col-sm-6 > .form-control,
+.rmf-status-form .col-sm-6 > .invalid-feedback {
+    width: 100%;
+}
+.rmf-status-form .col-sm-6 > .invalid-feedback {
+    margin-top: 0.5rem;
+}
 
 /* ── Timeline log ── */
 .rmf-timeline {
