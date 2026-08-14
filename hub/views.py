@@ -4883,18 +4883,6 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         target_status = request.POST.get("status")
         is_completion = target_status == Request.Status.COMPLETED
         actor_is_assigned_or_backup = request.user.pk in {request_obj.engineer_id, request_obj.backup_engineer_id}
-        if (
-            is_completion
-            and request_obj.status != Request.Status.COMPLETED
-            and request.user.role in ENGINEER_ACCESS_ROLES
-            and actor_is_assigned_or_backup
-            and not request_obj.activity_logs.exists()
-        ):
-            status_form.add_error(
-                "status",
-                "Add at least one related activity log before marking this request as completed.",
-            )
-
         if status_form.is_valid():
             send_closing_email = (request.POST.get("send_closing_email") or "").strip() in {"1", "true", "True", "on"}
             source_label = self._source_label("Manage Request · Status")
