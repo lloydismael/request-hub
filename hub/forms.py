@@ -437,6 +437,18 @@ class RequestForm(forms.ModelForm):
 
 
 class RequestAdminForm(forms.ModelForm):
+    account_name = forms.ChoiceField(
+        label="Account",
+        required=True,
+        choices=(),
+        widget=forms.Select(
+            attrs={
+                "class": "form-select",
+                "data-admin-account-field": "true",
+            }
+        ),
+        help_text="Change the account selected by the requestor.",
+    )
     request_date = forms.DateField(
         label="Request Date",
         required=True,
@@ -467,6 +479,7 @@ class RequestAdminForm(forms.ModelForm):
     class Meta:
         model = Request
         fields = [
+            "account_name",
             "request_date",
             "requestor",
             "priority",
@@ -490,9 +503,41 @@ class RequestAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Flag used by Request.clean() to bypass engineer capacity validation when admin overrides.
         self.instance._allow_capacity_override = allow_capacity_override
+        self.order_fields(
+            [
+                "account_name",
+                "request_date",
+                "requestor",
+                "priority",
+                "status",
+                "engineer",
+                "backup_engineer",
+                "due_date",
+                "end_date",
+                "description",
+            ]
+        )
         # Request date initial
         if self.instance and getattr(self.instance, "start_date", None):
             self.fields["request_date"].initial = self.instance.start_date
+
+        existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
+        suggestions = []
+        for raw_name in existing_accounts:
+            cleaned = (raw_name or "").strip()
+            if cleaned:
+                suggestions.append(cleaned)
+        current_account_name = ""
+        if self.instance and getattr(self.instance, "account_id", None):
+            current_account_name = (self.instance.account.name or "").strip()
+            if current_account_name and current_account_name not in suggestions:
+                suggestions.insert(0, current_account_name)
+        self.account_name_suggestions = tuple(suggestions)
+        account_choices = [("", "Select account")] + [(name, name) for name in suggestions]
+        self.fields["account_name"].choices = account_choices
+        if current_account_name:
+            self.fields["account_name"].initial = current_account_name
+
         # Requestor field setup
         self.fields["requestor"].queryset = self.fields["requestor"].queryset.order_by("first_name", "last_name")
         req_widget = self.fields["requestor"].widget
@@ -516,7 +561,26 @@ class RequestAdminForm(forms.ModelForm):
         due_field.required = False
         due_field.help_text = "Leave blank to keep the SLA-based due date."
 
+        if self.is_bound and self.errors:
+            for name, field in self.fields.items():
+                if name in self.errors:
+                    widget = field.widget
+                    existing_classes = widget.attrs.get("class", "")
+                    class_list = existing_classes.split()
+                    if "is-invalid" not in class_list:
+                        widget.attrs["class"] = (existing_classes + " is-invalid").strip()
+
+    def clean_account_name(self):
+        value = (self.cleaned_data.get("account_name") or "").strip()
+        if not value:
+            raise forms.ValidationError("Select an account.")
+        return value
+
     def save(self, commit=True):
+        account_name = self.cleaned_data.get("account_name")
+        if account_name:
+            account, _ = Account.objects.get_or_create(name=account_name)
+            self.instance.account = account
         self.instance.start_date = self.cleaned_data.get("request_date") or self.instance.start_date
         return super().save(commit=commit)
 

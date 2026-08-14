@@ -16,12 +16,13 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from accounts.models import User
-from hub.forms import RequestForm, RequestStatusForm
+from hub.forms import RequestAdminForm, RequestForm, RequestStatusForm
 from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange, SqrSubmissionHistory
 from hub.views import (
     AssignmentEmailResult,
     DashboardLiveDataView,
     DashboardView,
+    RequestAdminUpdateView,
     RequestCollaborativeManageView,
     SqrListView,
     clear_engineer_outlook_lock_on_reassignment,
@@ -1333,3 +1334,100 @@ class SqrMyAssignedFilterTests(TestCase):
         self.assertFalse(context["default_my_assigned_filter"])
         self.assertFalse(context["is_pm_esg"])
         self.assertEqual(len(context["proposal_submissions"]), 2)
+class AdminAccountChangeTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.admin = User.objects.create_user(
+            username="admin_account_change",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="admin.account@example.com",
+            first_name="Admin",
+            last_name="Account",
+        )
+        self.requestor = User.objects.create_user(
+            username="requestor_account_change",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="requestor.account@example.com",
+            first_name="Req",
+            last_name="Account",
+        )
+        self.original_account = Account.objects.create(name="Original Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.original_account,
+            account_manager="Req Account",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            description="Admin can reassign account.",
+            start_date=date(2026, 8, 1),
+        )
+
+    def test_admin_form_can_change_account_via_dropdown(self):
+        existing = Account.objects.create(name="Existing Target Account")
+        form = RequestAdminForm(
+            data={
+                "account_name": existing.name,
+                "request_date": "2026-08-01",
+                "requestor": str(self.requestor.pk),
+                "priority": Request.Priority.MEDIUM,
+                "status": self.request_obj.status,
+                "engineer": "",
+                "backup_engineer": "",
+                "due_date": "",
+                "end_date": "",
+                "description": self.request_obj.description,
+            },
+            instance=self.request_obj,
+            allow_capacity_override=True,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.request_obj.refresh_from_db()
+        self.assertEqual(self.request_obj.account_id, existing.pk)
+
+    def test_admin_manage_view_exposes_account_field_and_saves_change(self):
+        target = Account.objects.create(name="Admin Reassigned Account")
+        request = self.factory.get(reverse("hub:request-manage", args=[self.request_obj.pk]))
+        request.user = self.admin
+        AssignmentEmailTests._attach_session_and_messages(request)
+        response = RequestAdminUpdateView.as_view()(request, pk=self.request_obj.pk)
+        self.assertEqual(response.status_code, 200)
+        response.render()
+        html = response.content.decode()
+        self.assertIn('name="account_name"', html)
+        self.assertIn("form-select", html)
+        self.assertIn('data-admin-account-field="true"', html)
+        self.assertRegex(html, r'<select[^>]*name="account_name"[^>]*class="[^"]*form-select')
+        self.assertIn("Original Account", html)
+        self.assertIn(target.name, html)
+        self.assertIn("<option", html)
+
+        post = self.factory.post(
+            reverse("hub:request-manage", args=[self.request_obj.pk]),
+            data={
+                "form_type": "details",
+                "override_capacity": "0",
+                "account_name": target.name,
+                "request_date": "2026-08-01",
+                "requestor": str(self.requestor.pk),
+                "priority": Request.Priority.MEDIUM,
+                "status": self.request_obj.status,
+                "engineer": "",
+                "backup_engineer": "",
+                "due_date": "",
+                "end_date": "",
+                "description": self.request_obj.description,
+            },
+        )
+        post.user = self.admin
+        AssignmentEmailTests._attach_session_and_messages(post)
+        with patch("hub.views.notify_engineer_assignment_email", return_value=AssignmentEmailResult("no_new_assignee")):
+            with patch("hub.views.notify_engineer_assignment_notification"):
+                response = RequestAdminUpdateView.as_view()(post, pk=self.request_obj.pk)
+        self.assertEqual(response.status_code, 302)
+        self.request_obj.refresh_from_db()
+        self.assertEqual(self.request_obj.account_id, target.pk)
+        self.assertEqual(self.request_obj.account.name, "Admin Reassigned Account")

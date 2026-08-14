@@ -4036,7 +4036,7 @@ body:not(.dark-mode) .request-activity-table tbody td {
 .rmf-status-badge--cancelled { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
 .rmf-status-badge--on_hold   { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
 
-/* ── Info strip (read-only) ── */
+/* ── Info strip (read-only + admin account edit) ── */
 .rmf-info-strip {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -4049,6 +4049,16 @@ body:not(.dark-mode) .request-activity-table tbody td {
 .rmf-info-item { display: flex; flex-direction: column; gap: 0.15rem; }
 .rmf-info-item__label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; }
 .rmf-info-item__value { font-size: 0.9rem; font-weight: 600; color: #0f172a; }
+.rmf-info-item--editable { grid-column: 1 / -1; }
+.rmf-info-item__control .form-control,
+.rmf-info-item__control .form-select {
+    max-width: 28rem;
+    width: 100%;
+}
+.rmf-info-item__control .form-text {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+}
 
 /* ── Form fields grid ── */
 .rmf-form { padding: 1.25rem 1.5rem 1.25rem; }
@@ -4355,6 +4365,7 @@ body.dark-mode .rmf-card__header-icon--log    { background: rgba(99,102,241,0.1)
 body.dark-mode .rmf-info-strip          { background: rgba(255,255,255,0.025); border-bottom-color: rgba(255,255,255,0.07); }
 body.dark-mode .rmf-info-item__label    { color: #475569; }
 body.dark-mode .rmf-info-item__value    { color: #e2e8f0; }
+body.dark-mode .rmf-info-item__control .form-text { color: #64748b; }
 body.dark-mode .rmf-form                { background: transparent; }
 body.dark-mode .rmf-label               { color: #94a3b8; }
 body.dark-mode .rmf-label-sm            { color: #64748b; }

@@ -4560,12 +4560,16 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         original = Request.objects.get(pk=form.instance.pk)
         previous_engineer_id = original.engineer_id
         previous_backup_id = original.backup_engineer_id
-        changed_fields = list(form.changed_data)
+        changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
         clear_engineer_outlook_lock_on_reassignment(
             self.object,
             previous_engineer_id=previous_engineer_id,
         )
+        if original.account_id != self.object.account_id and "account" not in changed_fields:
+            changed_fields.append("account")
+        if "request_date" in form.changed_data and "start_date" not in changed_fields:
+            changed_fields.append("start_date")
         if changed_fields:
             self._notify_request_update(original, self.object, changed_fields)
         assignment_email_result = notify_engineer_assignment_email(
@@ -4604,8 +4608,9 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         context["engineer_capacity_map"] = self._build_engineer_capacity_map()
         context["status_form"] = None
         context["status_allowed"] = False
-        context["account_name_choices"] = []
+        context["account_name_choices"] = getattr(context.get("form"), "account_name_suggestions", ()) or ()
         context["is_admin_form"] = True
+        context["can_change_account"] = True
         context.update(get_request_activity_log_context(self.object))
         return context
 
@@ -4826,6 +4831,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "account_name_choices": getattr(form, "account_name_suggestions", ()),
             "back_url": back_url,
             "status_allowed": status_allowed,
+            "can_change_account": self.request.user.role in ADMIN_PANEL_ROLES,
             "linked_sqr": linked_sqr,
             **get_request_activity_log_context(request_obj),
         }

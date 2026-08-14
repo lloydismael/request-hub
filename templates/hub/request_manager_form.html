@@ -60,16 +60,24 @@
                     </datalist>
                 {% endif %}
 
-                {# ── Read-only info strip ── #}
+                {# ── Info strip ── #}
                 <div class="rmf-info-strip">
-                    {# Account: from form field if available, else from the request object #}
-                    <div class="rmf-info-item">
+                    {# Account: admins/PM-ESG can change it; engineers keep current value; others edit below #}
+                    <div class="rmf-info-item{% if can_change_account and form.account_name %} rmf-info-item--editable{% endif %}">
                         <span class="rmf-info-item__label"><i class="bi bi-building me-1"></i>Account</span>
-                        <span class="rmf-info-item__value">
-                            {% if form.account_name %}{{ form.account_name.value|default_if_none:"—" }}{% else %}{{ object.account.name|default:"—" }}{% endif %}
-                        </span>
-                        {% if form.account_name and request.user.is_engineer_access_role %}
-                            <input type="hidden" name="account_name" value="{{ form.account_name.value|default_if_none:'' }}">
+                        {% if can_change_account and form.account_name %}
+                            <div class="rmf-info-item__control">
+                                {{ form.account_name }}
+                                {% if form.account_name.help_text %}<div class="form-text">{{ form.account_name.help_text }}</div>{% endif %}
+                                {% if form.account_name.errors %}<div class="invalid-feedback d-block">{{ form.account_name.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% else %}
+                            <span class="rmf-info-item__value">
+                                {% if form.account_name %}{{ form.account_name.value|default_if_none:"—" }}{% else %}{{ object.account.name|default:"—" }}{% endif %}
+                            </span>
+                            {% if form.account_name and request.user.is_engineer_access_role %}
+                                <input type="hidden" name="account_name" value="{{ form.account_name.value|default_if_none:'' }}">
+                            {% endif %}
                         {% endif %}
                     </div>
                     {% for field in form %}
@@ -92,8 +100,8 @@
                 <div class="rmf-fields">
                     {% for field in form %}
                         {% if field.name == 'account_name' or field.name == 'request_date' or field.name == 'needed_by' %}
-                            {# Already rendered in info strip or handled separately #}
-                            {% if not request.user.is_engineer_access_role and field.name == 'account_name' %}
+                            {# Account is rendered in the info strip for admins; requestors still edit it here #}
+                            {% if not can_change_account and not request.user.is_engineer_access_role and field.name == 'account_name' %}
                                 <div class="rmf-field-group">
                                     <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                     {{ field }}
