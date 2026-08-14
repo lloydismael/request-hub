@@ -1102,6 +1102,12 @@ body.dark-mode .deployment-calendar--active {
     -webkit-backdrop-filter: none !important;
     color: #0f172a !important;
 }
+body.dark-mode .deployment-calendar,
+body.dark-mode .deployment-calendar--active {
+    background: #0f172a !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+    color: #e2e8f0 !important;
+}
 
 .deployment-calendar__summary {
     display: flex;
@@ -1113,11 +1119,19 @@ body.dark-mode .deployment-calendar--active {
     font-size: 0.75rem;
     color: #475569;
 }
+body.dark-mode .deployment-calendar__summary {
+    color: #94a3b8 !important;
+}
 
 .deployment-calendar__summary--active .badge {
     background: rgba(148, 163, 184, 0.12) !important;
     color: #334155 !important;
     border-color: rgba(148, 163, 184, 0.3) !important;
+}
+body.dark-mode .deployment-calendar__summary--active .badge {
+    background: rgba(148, 163, 184, 0.14) !important;
+    color: #e2e8f0 !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
 }
 
 .deployment-calendar__summary [data-deployment-summary-text] {

@@ -1352,6 +1352,13 @@ body.dark-mode .acct-dropdown {
     backdrop-filter: none !important;
     color: #0f172a !important;
 }
+body.dark-mode .deployment-calendar,
+body.dark-mode .deployment-calendar--active,
+body.dark-mode .acct-dropdown {
+    background: #0f172a !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+    color: #e2e8f0 !important;
+}
 
 .acct-dropdown__item,
 body.dark-mode .acct-dropdown__item {
