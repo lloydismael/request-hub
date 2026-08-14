@@ -7,7 +7,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
@@ -22,8 +22,15 @@ class Account(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @classmethod
+    def used_queryset(cls):
+        """Accounts linked to any request row, including soft-deleted requests."""
+        request_exists = Exists(Request.all_objects.filter(account_id=OuterRef("pk")))
+        return cls.objects.filter(request_exists).order_by("name")
+
 
 class Request(models.Model):
+
     class Priority(models.TextChoices):
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"

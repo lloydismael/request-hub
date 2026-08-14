@@ -2883,6 +2883,69 @@ body.dark-mode .acct-dropdown__item.is-active {
     color: #93c5fd;
 }
 
+.acct-dropdown__label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.acct-dropdown__mark {
+    padding: 0;
+    background: rgba(47, 108, 243, 0.18);
+    color: inherit;
+    border-radius: 2px;
+}
+
+.acct-dropdown__item--create {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    border-top: 1px dashed rgba(148, 163, 184, 0.55);
+    background: rgba(47, 108, 243, 0.04);
+    color: #1d4ed8;
+    white-space: normal;
+}
+
+.acct-dropdown__item--create:hover,
+.acct-dropdown__item--create.is-active {
+    background: rgba(47, 108, 243, 0.12);
+    color: #1d4ed8;
+}
+
+.acct-dropdown__create-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1.3;
+}
+
+.acct-dropdown__hint {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: #64748b;
+    line-height: 1.25;
+}
+
+body.dark-mode .acct-dropdown__mark {
+    background: rgba(147, 197, 253, 0.22);
+}
+
+body.dark-mode .acct-dropdown__item--create {
+    border-top-color: rgba(148, 163, 184, 0.28);
+    background: rgba(47, 108, 243, 0.12);
+    color: #93c5fd;
+}
+
+body.dark-mode .acct-dropdown__item--create:hover,
+body.dark-mode .acct-dropdown__item--create.is-active {
+    background: rgba(47, 108, 243, 0.22);
+    color: #bfdbfe;
+}
+
+body.dark-mode .acct-dropdown__hint {
+    color: #94a3b8;
+}
+
 @media (max-width: 640px) {
     .requestor-modal__dialog {
         margin: 4vh auto;
@@ -3236,6 +3299,13 @@ body.dark-mode .act-form-error {
     justify-content: center;
     overflow: hidden;
     text-transform: uppercase;
+}
+
+body.dark-mode .avatar-select__image {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.22);
+    color: #f8fafc;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
 }
 
 .avatar-select__image img {
@@ -4274,6 +4344,26 @@ body:not(.dark-mode) .request-activity-table tbody td {
     border-color: rgba(15,23,42,0.06);
 }
 
+.request-activity-table tbody tr.request-activity-row--clickable {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.request-activity-table tbody tr.request-activity-row--clickable:hover,
+.request-activity-table tbody tr.request-activity-row--clickable:focus-within {
+    background: rgba(47, 108, 243, 0.08);
+}
+
+.request-activity-table tbody tr.request-activity-row--clickable:focus {
+    outline: 2px solid rgba(47, 108, 243, 0.35);
+    outline-offset: -2px;
+}
+
+body.dark-mode .request-activity-table tbody tr.request-activity-row--clickable:hover,
+body.dark-mode .request-activity-table tbody tr.request-activity-row--clickable:focus-within {
+    background: rgba(74, 163, 255, 0.12);
+}
+
 .request-activity-table th,
 .request-activity-table td {
     vertical-align: middle;
@@ -4381,9 +4471,13 @@ body.dark-mode input[type="date"] {
     color-scheme: dark;
 }
 body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1) brightness(1.5);
+    display: block;
+    filter: invert(1) brightness(1.8) saturate(1.4);
     opacity: 1;
     cursor: pointer;
+}
+body.dark-mode .requestor-modal__body input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(1.9) saturate(1.5);
 }
 body.dark-mode input[type="date"]::-webkit-datetime-edit {
     color: #e2e8f0;

@@ -819,6 +819,7 @@
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
         <script src="{% static 'js/chart-theme.js' %}"></script>
     {% endif %}
+    <script src="{% static 'js/account-autocomplete.js' %}?v=1"></script>
     <script>
         (function () {
             const modal = document.getElementById("create-request-modal");
@@ -1119,125 +1120,10 @@
                 });
             }
 
-            // Custom autocomplete for Account Name field (replaces native <datalist>
-            // which can't be bounded by the modal's overflow:hidden container).
-            (function () {
-                const acctInput = document.getElementById("id_account_name");
-                if (!acctInput) return;
-
-                // Disable the native datalist dropdown.
-                const listId = acctInput.getAttribute("list");
-                acctInput.removeAttribute("list");
-                const datalistEl = listId ? document.getElementById(listId) : null;
-                const allOptions = datalistEl
-                    ? Array.from(datalistEl.options).map((o) => o.value).filter(Boolean)
-                    : [];
-                if (!allOptions.length) return;
-
-                // Build a fixed-position dropdown appended to <body> so it is never
-                // clipped by the modal's overflow:hidden.
-                const dropdown = document.createElement("div");
-                dropdown.className = "acct-dropdown";
-                dropdown.setAttribute("role", "listbox");
-                dropdown.style.display = "none";
-                document.body.appendChild(dropdown);
-
-                let activeIndex = -1;
-
-                const positionDropdown = () => {
-                    const rect = acctInput.getBoundingClientRect();
-                    dropdown.style.top = (rect.bottom + 3) + "px";
-                    dropdown.style.left = rect.left + "px";
-                    dropdown.style.width = rect.width + "px";
-                };
-
-                const closeDropdown = () => {
-                    dropdown.style.display = "none";
-                    activeIndex = -1;
-                };
-
-                const setActive = (index) => {
-                    const items = dropdown.querySelectorAll(".acct-dropdown__item");
-                    items.forEach((el, i) => el.classList.toggle("is-active", i === index));
-                    if (items[index]) {
-                        items[index].scrollIntoView({ block: "nearest" });
-                    }
-                    activeIndex = index;
-                };
-
-                const renderOptions = (query) => {
-                    const q = query.trim().toLowerCase();
-                    const filtered = q
-                        ? allOptions.filter((o) => o.toLowerCase().includes(q))
-                        : allOptions;
-
-                    if (!filtered.length) {
-                        closeDropdown();
-                        return;
-                    }
-
-                    const slice = filtered.slice(0, 60);
-                    dropdown.innerHTML = slice
-                        .map((o) => `<div class="acct-dropdown__item" role="option" data-value="${o.replace(/"/g, "&quot;").replace(/</g, "&lt;")}">${o}</div>`)
-                        .join("");
-                    activeIndex = -1;
-                    positionDropdown();
-                    dropdown.style.display = "block";
-                };
-
-                acctInput.addEventListener("input", () => renderOptions(acctInput.value));
-
-                acctInput.addEventListener("focus", () => {
-                    renderOptions(acctInput.value);
-                });
-
-                acctInput.addEventListener("keydown", (e) => {
-                    const items = dropdown.querySelectorAll(".acct-dropdown__item");
-                    if (dropdown.style.display === "none" || !items.length) return;
-                    if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        setActive(Math.min(activeIndex + 1, items.length - 1));
-                    } else if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setActive(Math.max(activeIndex - 1, 0));
-                    } else if (e.key === "Enter" && activeIndex >= 0) {
-                        e.preventDefault();
-                        acctInput.value = items[activeIndex].dataset.value;
-                        closeDropdown();
-                    } else if (e.key === "Escape") {
-                        closeDropdown();
-                    }
-                });
-
-                dropdown.addEventListener("mousedown", (e) => {
-                    const item = e.target.closest(".acct-dropdown__item");
-                    if (!item) return;
-                    e.preventDefault();
-                    acctInput.value = item.dataset.value;
-                    closeDropdown();
-                });
-
-                document.addEventListener("click", (e) => {
-                    if (!acctInput.contains(e.target) && !dropdown.contains(e.target)) {
-                        closeDropdown();
-                    }
-                });
-
-                // Reposition only while open; coalesce scroll/resize to one rAF.
-                let positionRaf = 0;
-                const schedulePosition = () => {
-                    if (dropdown.style.display === "none") return;
-                    if (positionRaf) return;
-                    positionRaf = requestAnimationFrame(() => {
-                        positionRaf = 0;
-                        if (dropdown.style.display !== "none") {
-                            positionDropdown();
-                        }
-                    });
-                };
-                window.addEventListener("scroll", schedulePosition, { passive: true, capture: true });
-                window.addEventListener("resize", schedulePosition, { passive: true });
-            }());
+            // Guided account autocomplete (shared module).
+            if (typeof window.initAccountAutocompletes === "function") {
+                window.initAccountAutocompletes(modal);
+            }
         })();
     </script>
 {% endif %}

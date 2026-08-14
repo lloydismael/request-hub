@@ -74,7 +74,6 @@ from .forms import (
     SqrSubmissionForm,
     StatusLogForm,
 )
-from .constants import ACCOUNT_NAME_RAW
 from .models import (
     Account,
     EngineerActivityLog,
@@ -4780,7 +4779,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         except Http404:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
-        context = self.get_context_data(request_obj)
+        editing_activity_log = self._get_requested_edit_activity_log()
+        context = self.get_context_data(
+            request_obj,
+            activity_form=None,
+            editing_activity_log=editing_activity_log,
+        )
         return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
@@ -4790,6 +4794,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         form_type = request.POST.get("form_type", "details")
+        if form_type == "activity_log":
+            return self._handle_activity_log_post(request, request_obj)
         if form_type == "status_log":
             return self._handle_status_log_post(request, request_obj)
         if form_type == "status":
@@ -4802,7 +4808,26 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     def _source_label(self, suffix: str) -> str:
         return f"{self._actor_prefix()} · {suffix}"
 
-    def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
+    def _get_requested_edit_activity_log(self):
+        edit_activity_id = (self.request.GET.get("edit_activity") or "").strip()
+        if not edit_activity_id:
+            return None
+        try:
+            edit_activity_id_int = int(edit_activity_id)
+        except (TypeError, ValueError):
+            messages.error(self.request, "We could not find that activity log to edit.")
+            return None
+
+        queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+        if self.request.user.role in ENGINEER_ACCESS_ROLES:
+            queryset = queryset.filter(engineer=self.request.user)
+        try:
+            return queryset.get(pk=edit_activity_id_int)
+        except EngineerActivityLog.DoesNotExist:
+            messages.error(self.request, "We could not find that activity log to edit.")
+            return None
+
+    def get_context_data(self, request_obj, form=None, status_form=None, log_form=None, activity_form=None, editing_activity_log=None):
         if form is None:
             form = RequestForm(instance=request_obj, actor_role=self.request.user.role, actor_user=self.request.user)
         status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
@@ -4812,6 +4837,11 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             status_form = None
         if log_form is None:
             log_form = StatusLogForm()
+        if editing_activity_log is not None and activity_form is None:
+            activity_form = EngineerActivityLogForm(
+                engineer=editing_activity_log.engineer,
+                instance=editing_activity_log,
+            )
 
         referer = self.request.META.get("HTTP_REFERER")
         fallback = reverse("hub:dashboard")
@@ -4827,6 +4857,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "form": form,
             "status_form": status_form,
             "log_form": log_form,
+            "activity_form": activity_form,
+            "editing_activity_log": editing_activity_log,
             "status_logs": request_obj.status_logs.select_related("author").order_by("-created_at"),
             "account_name_choices": getattr(form, "account_name_suggestions", ()),
             "back_url": back_url,
@@ -4835,6 +4867,33 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "linked_sqr": linked_sqr,
             **get_request_activity_log_context(request_obj),
         }
+
+    def _handle_activity_log_post(self, request, request_obj):
+        log_id = (request.POST.get("log_id") or "").strip()
+        instance = None
+        if log_id:
+            queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+            if request.user.role in ENGINEER_ACCESS_ROLES:
+                queryset = queryset.filter(engineer=request.user)
+            try:
+                instance = queryset.get(pk=log_id)
+            except (EngineerActivityLog.DoesNotExist, ValueError):
+                messages.error(request, "Unable to update the selected activity log.")
+                return redirect("hub:request-manage-collab", pk=request_obj.pk)
+
+        engineer_for_form = instance.engineer if instance else (request_obj.engineer or request.user)
+        form = EngineerActivityLogForm(data=request.POST, engineer=engineer_for_form, instance=instance)
+        if form.is_valid():
+            activity_log = form.save(commit=False)
+            activity_log.engineer = engineer_for_form
+            if not activity_log.request_date:
+                activity_log.request_date = timezone.now().date()
+            activity_log.save()
+            messages.success(request, "Activity log updated successfully." if instance else "Activity log saved successfully.")
+            return redirect("hub:request-manage-collab", pk=request_obj.pk)
+
+        context = self.get_context_data(request_obj, activity_form=form, editing_activity_log=instance)
+        return render(request, self.template_name, context)
 
     def _handle_details_update(self, request, request_obj):
         form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role, actor_user=request.user)
@@ -6856,18 +6915,10 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
 
     @staticmethod
     def _sync_account_baseline():
-        if Account.objects.exists():
-            return
-
-        seed_accounts = []
-        for raw_name in ACCOUNT_NAME_RAW:
-            normalized = (raw_name or "").strip()
-            if not normalized:
-                continue
-            seed_accounts.append(Account(name=normalized))
-
-        if seed_accounts:
-            Account.objects.bulk_create(seed_accounts, ignore_conflicts=True)
+        # Accounts are created via request get_or_create and Management "New".
+        # Do not bulk-seed ACCOUNT_NAME_RAW on an empty table — that reintroduces
+        # hundreds of unused names after prune_unused_accounts.
+        return
 
     def _handle_user_action_request(self, request, action_value):
         action, separator, raw_user_id = (action_value or "").partition(":")

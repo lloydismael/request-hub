@@ -256,6 +256,15 @@ body.engineer-dashboard .nav-pills {
     border: 1px solid var(--lg-hairline-soft);
 }
 
+/* Requestor dashboard tabs: keep pill buttons, drop the track shade. */
+body.requestor-dashboard #requestor-dashboard-tabs.nav-pills {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
 body.admin-dashboard .nav-pills .nav-link,
 body.requestor-dashboard .nav-pills .nav-link,
 body.engineer-dashboard .nav-pills .nav-link {
@@ -1321,8 +1330,24 @@ body.dark-mode .requestor-modal__body .form-control,
 body.dark-mode .requestor-modal__body .form-select {
     border-radius: 10px !important;
     color: var(--lg-ink) !important;
-    background-color: var(--lg-tint) !important;
-    border: 1px solid var(--lg-hairline-soft) !important;
+    background-color: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.16) !important;
+}
+
+body.dark-mode .requestor-modal__body .avatar-select__image {
+    background: rgba(148, 163, 184, 0.12) !important;
+    border-color: rgba(148, 163, 184, 0.22) !important;
+    color: #f8fafc !important;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.requestor-modal__body .form-select {
+    /* Keep room for the custom chevron without clipping selected text. */
+    padding-right: 2.35rem !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23475569' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.85rem center !important;
+    background-size: 14px 10px !important;
 }
 
 .requestor-modal__body .form-control:focus,
@@ -1331,9 +1356,67 @@ body.dark-mode .requestor-modal__body .form-select {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--lg-accent) 18%, transparent) !important;
 }
 
+.requestor-modal__body .is-invalid,
+.requestor-modal__body .is-invalid:focus,
+.requestor-modal__body .form-control.is-invalid,
+.requestor-modal__body .form-select.is-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12) !important;
+}
+
+.requestor-modal__body .invalid-feedback {
+    display: block !important;
+    margin-top: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 8px;
+    background: rgba(254, 242, 242, 0.96);
+    border: 1px solid rgba(220, 38, 38, 0.18);
+    color: #b42318 !important;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    font-weight: 600;
+}
+
+body.dark-mode .requestor-modal__body .invalid-feedback {
+    background: rgba(127, 29, 29, 0.24);
+    border-color: rgba(248, 113, 113, 0.3);
+    color: #fecaca !important;
+}
+
+/* Blank / prompt option stays muted; real choices use full ink. */
+.requestor-modal__body .form-select option {
+    background-color: #ffffff;
+    color: #0f172a;
+}
+
+.requestor-modal__body .form-select option[value=""] {
+    color: #64748b;
+}
+
+body.dark-mode .requestor-modal__body .form-control,
+body.dark-mode .requestor-modal__body .form-select {
+    background-color: #111827 !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .requestor-modal__body input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(1.9) saturate(1.4) !important;
+    opacity: 1 !important;
+    cursor: pointer;
+}
+
+body.dark-mode .requestor-modal__body .form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23cbd5e1' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+}
+
 body.dark-mode .requestor-modal__body .form-select option {
-    background-color: #141a2c;
-    color: var(--lg-ink);
+    background-color: #111827;
+    color: #f8fafc;
+}
+
+body.dark-mode .requestor-modal__body .form-select option[value=""] {
+    color: #94a3b8;
 }
 
 .deployment-calendar,
@@ -2881,6 +2964,120 @@ body.dark-mode.reports-page .rpt-chart-modal__close:hover {
 }
 
 /* Activity Logs glass tables/pagination under engineer-activity-logs */
+
+body:not(.dark-mode).engineer-activity-logs #activity-logs-tabs.nav-pills {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 24px -18px rgba(15, 23, 42, 0.4);
+}
+
+body.engineer-activity-logs #activity-logs-tabs.nav-pills {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    background: color-mix(in srgb, var(--lg-tint-sunken) 88%, #ffffff);
+    border-color: rgba(15, 23, 42, 0.1);
+}
+
+body.engineer-activity-logs #activity-logs-tabs .nav-link {
+    color: #1e293b !important;
+    font-weight: 650;
+    border-radius: 10px;
+}
+
+body:not(.dark-mode).engineer-activity-logs #activity-logs-tabs .nav-link {
+    color: #0f172a !important;
+}
+
+body.engineer-activity-logs #activity-logs-tabs .nav-link:hover {
+    color: #0f172a !important;
+    background: rgba(15, 23, 42, 0.08);
+}
+
+body:not(.dark-mode).engineer-activity-logs #activity-logs-tabs .nav-link:hover {
+    background: rgba(148, 163, 184, 0.14);
+}
+
+body.engineer-activity-logs #activity-logs-tabs .nav-link.active,
+body.engineer-activity-logs #activity-logs-tabs .nav-link.active:hover {
+    color: #ffffff !important;
+    background: linear-gradient(180deg, var(--lg-accent), var(--lg-accent-deep));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 18px -12px rgba(10, 132, 255, 0.7);
+}
+
+body.dark-mode.engineer-activity-logs #activity-logs-tabs.nav-pills {
+    background: var(--lg-tint-sunken);
+    border-color: var(--lg-hairline-soft);
+}
+
+body.dark-mode.engineer-activity-logs #activity-logs-tabs .nav-link {
+    color: rgba(242, 245, 251, 0.78) !important;
+}
+
+body.dark-mode.engineer-activity-logs #activity-logs-tabs .nav-link:hover {
+    color: #f8fafc !important;
+    background: var(--lg-tint);
+}
+
+body.dark-mode.engineer-activity-logs #activity-logs-tabs .nav-link.active,
+body.dark-mode.engineer-activity-logs #activity-logs-tabs .nav-link.active:hover {
+    color: #ffffff !important;
+}
+
+/* Match the summary banner to the activity table glass card. */
+body.engineer-activity-logs .activity-summary-card {
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    border-radius: var(--lg-radius-xl);
+    box-shadow: var(--lg-shadow-card) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(1.45);
+    backdrop-filter: blur(14px) saturate(1.45);
+    color: var(--lg-ink);
+}
+
+body.engineer-activity-logs .activity-summary-card__info h1 {
+    color: var(--lg-ink);
+}
+
+body.engineer-activity-logs .activity-summary-card__info p {
+    color: var(--lg-ink-soft);
+}
+
+body.engineer-activity-logs .activity-summary-card__cta {
+    border-left-color: var(--lg-hairline-soft);
+}
+
+body.engineer-activity-logs .activity-summary-pill {
+    background: color-mix(in srgb, #ffffff 72%, transparent);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: var(--lg-ink);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+body.engineer-activity-logs .activity-summary-pill .pill-label {
+    color: color-mix(in srgb, var(--lg-ink) 62%, transparent);
+}
+
+body.engineer-activity-logs .activity-summary-pill .pill-value {
+    color: var(--lg-ink);
+}
+
+body.dark-mode.engineer-activity-logs .activity-summary-card {
+    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    border: 1px solid var(--lg-hairline) !important;
+    box-shadow: var(--lg-shadow-card) !important;
+}
+
+body.dark-mode.engineer-activity-logs .activity-summary-pill {
+    background: rgba(15, 23, 42, 0.42);
+    border-color: rgba(148, 163, 184, 0.18);
+    box-shadow: none;
+    color: var(--lg-ink);
+}
+
 body.engineer-activity-logs .table-responsive {
     border-radius: var(--lg-radius-md);
     overflow: auto;

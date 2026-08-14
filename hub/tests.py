@@ -10,14 +10,30 @@ from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
+from django.core.management import call_command
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
 from accounts.models import User
-from hub.forms import RequestAdminForm, RequestForm, RequestStatusForm
-from hub.models import Account, Request, RequestCommunication, SqrSubmission, SqrSubmissionChange, SqrSubmissionHistory
+from hub.forms import (
+    AdminRequestFilterForm,
+    EngineerActivityLogForm,
+    RequestAdminForm,
+    RequestForm,
+    RequestStatusForm,
+    SqrSubmissionForm,
+)
+from hub.models import (
+    Account,
+    EngineerActivityLog,
+    Request,
+    RequestCommunication,
+    SqrSubmission,
+    SqrSubmissionChange,
+    SqrSubmissionHistory,
+)
 from hub.views import (
     AssignmentEmailResult,
     DashboardLiveDataView,
@@ -25,6 +41,7 @@ from hub.views import (
     RequestAdminUpdateView,
     RequestCollaborativeManageView,
     SqrListView,
+    UserManagementView,
     clear_engineer_outlook_lock_on_reassignment,
     notify_engineer_assignment_email,
 )
@@ -691,6 +708,59 @@ class OnHoldRoleTests(TestCase):
         view.kwargs = {"pk": request_obj.pk}
 
         self.assertEqual(view.get_object(), request_obj)
+
+
+class RequestActivityLogEditModalTests(TestCase):
+    def setUp(self):
+        self.requestor = User.objects.create_user(
+            username="activity_modal_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="activity.modal.requestor@example.com",
+        )
+        self.engineer = User.objects.create_user(
+            username="activity_modal_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="activity.modal.engineer@example.com",
+        )
+        self.account = Account.objects.create(name="Activity Modal Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Activity Modal Manager",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            description="Request for activity log editing modal test.",
+        )
+        self.activity_log = EngineerActivityLog.objects.create(
+            engineer=self.engineer,
+            account=self.account,
+            request=self.request_obj,
+            request_date=date.today(),
+            activity_type=EngineerActivityLog.ActivityType.DEPLOYMENT,
+            actual_hours=Decimal("2.50"),
+            details="Fix deployment follow-up bug.",
+            location=EngineerActivityLog.Location.OFFICE,
+            is_billable=False,
+            status=EngineerActivityLog.Status.IN_PROGRESS,
+        )
+
+    def test_manage_request_shows_edit_activity_modal_for_selected_log(self):
+        self.client.force_login(self.engineer)
+
+        response = self.client.get(
+            reverse("hub:request-manage-collab", args=[self.request_obj.pk]),
+            {"edit_activity": self.activity_log.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit Activity Report")
+        self.assertContains(response, 'id="activity-log-form"')
+        self.assertContains(response, 'name="form_type" value="activity_log"')
+        self.assertContains(response, f'name="log_id" value="{self.activity_log.pk}"')
 
 
 class SqrEngineerLinkedRequestAccessTests(TestCase):
@@ -1365,8 +1435,22 @@ class AdminAccountChangeTests(TestCase):
             start_date=date(2026, 8, 1),
         )
 
+    def _make_used_account(self, name: str) -> Account:
+        account = Account.objects.create(name=name)
+        Request.objects.create(
+            requestor=self.requestor,
+            account=account,
+            account_manager="Req Account",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            description=f"Anchor request for {name}",
+            start_date=date(2026, 8, 1),
+        )
+        return account
+
     def test_admin_form_can_change_account_via_dropdown(self):
-        existing = Account.objects.create(name="Existing Target Account")
+        existing = self._make_used_account("Existing Target Account")
         form = RequestAdminForm(
             data={
                 "account_name": existing.name,
@@ -1389,7 +1473,7 @@ class AdminAccountChangeTests(TestCase):
         self.assertEqual(self.request_obj.account_id, existing.pk)
 
     def test_admin_manage_view_exposes_account_field_and_saves_change(self):
-        target = Account.objects.create(name="Admin Reassigned Account")
+        target = self._make_used_account("Admin Reassigned Account")
         request = self.factory.get(reverse("hub:request-manage", args=[self.request_obj.pk]))
         request.user = self.admin
         AssignmentEmailTests._attach_session_and_messages(request)
@@ -1398,12 +1482,15 @@ class AdminAccountChangeTests(TestCase):
         response.render()
         html = response.content.decode()
         self.assertIn('name="account_name"', html)
-        self.assertIn("form-select", html)
+        self.assertIn("form-control", html)
         self.assertIn('data-admin-account-field="true"', html)
-        self.assertRegex(html, r'<select[^>]*name="account_name"[^>]*class="[^"]*form-select')
+        self.assertIn('data-account-autocomplete="true"', html)
+        self.assertRegex(html, r'<input[^>]*name="account_name"[^>]*class="[^"]*form-control')
+        self.assertIn('id="account-name-options"', html)
         self.assertIn("Original Account", html)
         self.assertIn(target.name, html)
-        self.assertIn("<option", html)
+        self.assertIn("account-autocomplete", html)
+        self.assertIn("initAccountAutocompletes", html)
 
         post = self.factory.post(
             reverse("hub:request-manage", args=[self.request_obj.pk]),
@@ -1431,3 +1518,114 @@ class AdminAccountChangeTests(TestCase):
         self.request_obj.refresh_from_db()
         self.assertEqual(self.request_obj.account_id, target.pk)
         self.assertEqual(self.request_obj.account.name, "Admin Reassigned Account")
+
+
+class UnusedAccountPruneTests(TestCase):
+    def setUp(self):
+        self.requestor = User.objects.create_user(
+            username="unused_acct_requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="unused.acct.req@example.com",
+            first_name="Unused",
+            last_name="Requestor",
+        )
+        self.engineer = User.objects.create_user(
+            username="unused_acct_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="unused.acct.eng@example.com",
+            first_name="Unused",
+            last_name="Engineer",
+        )
+        self.used_account = Account.objects.create(name="Used Live Account")
+        self.live_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.used_account,
+            account_manager="Unused Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            description="Live request keeps account used.",
+            start_date=date(2026, 8, 1),
+        )
+        self.soft_deleted_account = Account.objects.create(name="Soft Deleted Only Account")
+        self.soft_request = Request.all_objects.create(
+            requestor=self.requestor,
+            account=self.soft_deleted_account,
+            account_manager="Unused Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            description="Soft-deleted request still counts.",
+            start_date=date(2026, 8, 1),
+            is_deleted=True,
+            deleted_at=timezone.now(),
+        )
+        self.unused_account = Account.objects.create(name="Truly Unused Account")
+        self.activity_only_account = Account.objects.create(name="Activity Log Only Account")
+        EngineerActivityLog.objects.create(
+            engineer=self.engineer,
+            account=self.activity_only_account,
+            request_date=date(2026, 8, 1),
+            activity_type=EngineerActivityLog.ActivityType.INTERNAL_SUPPORT,
+            actual_hours=Decimal("1.00"),
+            details="Log without request",
+            location=EngineerActivityLog.Location.OFFICE,
+            is_billable=False,
+            status=EngineerActivityLog.Status.COMPLETED,
+        )
+
+    def test_used_queryset_includes_live_and_soft_deleted_excludes_unused(self):
+        names = set(Account.used_queryset().values_list("name", flat=True))
+        self.assertIn(self.used_account.name, names)
+        self.assertIn(self.soft_deleted_account.name, names)
+        self.assertNotIn(self.unused_account.name, names)
+        self.assertNotIn(self.activity_only_account.name, names)
+
+    def test_request_form_suggestions_exclude_unused(self):
+        form = RequestForm(actor_role=User.Roles.REQUESTOR, actor_user=self.requestor)
+        self.assertIn(self.used_account.name, form.account_name_suggestions)
+        self.assertIn(self.soft_deleted_account.name, form.account_name_suggestions)
+        self.assertNotIn(self.unused_account.name, form.account_name_suggestions)
+        self.assertNotIn(self.activity_only_account.name, form.account_name_suggestions)
+
+    def test_admin_form_keeps_current_and_excludes_unused(self):
+        form = RequestAdminForm(instance=self.live_request, allow_capacity_override=True)
+        self.assertIn(self.used_account.name, form.account_name_suggestions)
+        self.assertNotIn(self.unused_account.name, form.account_name_suggestions)
+        self.assertEqual(form.fields["account_name"].initial, self.used_account.name)
+        self.assertEqual(form.fields["account_name"].widget.attrs.get("data-account-autocomplete"), "true")
+        self.assertEqual(form.fields["account_name"].__class__.__name__, "CharField")
+
+    def test_sqr_and_filter_and_activity_forms_use_used_accounts(self):
+        sqr_form = SqrSubmissionForm()
+        self.assertIn(self.used_account.name, sqr_form.account_name_options)
+        self.assertNotIn(self.unused_account.name, sqr_form.account_name_options)
+
+        filter_form = AdminRequestFilterForm()
+        filter_names = set(filter_form.fields["account"].queryset.values_list("name", flat=True))
+        self.assertIn(self.used_account.name, filter_names)
+        self.assertNotIn(self.unused_account.name, filter_names)
+
+        activity_form = EngineerActivityLogForm(engineer=self.engineer)
+        activity_names = set(activity_form.fields["account"].queryset.values_list("name", flat=True))
+        self.assertIn(self.used_account.name, activity_names)
+        self.assertNotIn(self.unused_account.name, activity_names)
+        self.assertNotIn(self.activity_only_account.name, activity_names)
+
+    def test_prune_command_deletes_unused_skips_protected_and_soft_deleted(self):
+        call_command("prune_unused_accounts", "--apply")
+        remaining = set(Account.objects.values_list("name", flat=True))
+        self.assertIn(self.used_account.name, remaining)
+        self.assertIn(self.soft_deleted_account.name, remaining)
+        self.assertIn(self.activity_only_account.name, remaining)
+        self.assertNotIn(self.unused_account.name, remaining)
+
+    def test_management_baseline_does_not_reseed_when_empty(self):
+        EngineerActivityLog.objects.all().delete()
+        Request.all_objects.all().delete()
+        Account.objects.all().delete()
+        self.assertEqual(Account.objects.count(), 0)
+        UserManagementView._sync_account_baseline()
+        self.assertEqual(Account.objects.count(), 0)

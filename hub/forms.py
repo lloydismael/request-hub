@@ -85,13 +85,17 @@ class RequestForm(forms.ModelForm):
 
     account_name = forms.CharField(
         label="Account Name",
-        help_text="Select from the list or type a new account name.",
+        help_text="Search existing accounts or create a new one.",
         widget=forms.TextInput(
             attrs={
                 "class": "form-control",
                 "list": "account-name-options",
-                "placeholder": "Start typing to search accounts",
+                "placeholder": "Search accounts…",
                 "autocomplete": "off",
+                "data-account-autocomplete": "true",
+                "role": "combobox",
+                "aria-autocomplete": "list",
+                "aria-expanded": "false",
             }
         ),
     )
@@ -301,6 +305,20 @@ class RequestForm(forms.ModelForm):
                 filtered_choices.append((Request.Engagement.CERTIFICATION, Request.Engagement.CERTIFICATION.label))
             engagement_field.choices = filtered_choices
 
+        # Human-readable blank options instead of Django's default "---------".
+        product_field = self.fields["product_category"]
+        product_field.choices = self._choices_with_placeholder(
+            product_field.choices,
+            "Select product category",
+        )
+        engagement_field.choices = self._choices_with_placeholder(
+            engagement_field.choices,
+            "Select engagement type",
+        )
+        product_field.widget.attrs.setdefault("aria-label", "Product category")
+        engagement_field.widget.attrs.setdefault("aria-label", "Engagement type")
+        engineer_field.widget.attrs.setdefault("aria-label", engineer_field.label)
+
         _DEPLOYMENT_LIKE = {Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION}
         deployment_start_field = self.fields["deployment_start"]
         deployment_end_field = self.fields["deployment_end"]
@@ -311,7 +329,7 @@ class RequestForm(forms.ModelForm):
             deployment_start_field.initial = today
             deployment_end_field.initial = today
 
-        existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
+        existing_accounts = Account.used_queryset().values_list("name", flat=True)
         suggestions = []
         for raw_name in existing_accounts:
             cleaned = (raw_name or "").strip()
@@ -328,6 +346,16 @@ class RequestForm(forms.ModelForm):
                     class_list = existing_classes.split()
                     if "is-invalid" not in class_list:
                         widget.attrs["class"] = (existing_classes + " is-invalid").strip()
+
+    @staticmethod
+    def _choices_with_placeholder(choices, placeholder: str):
+        """Replace Django's default blank label (---------) with a clear prompt."""
+        cleaned = []
+        for value, label in list(choices or ()):
+            if value in (None, ""):
+                continue
+            cleaned.append((value, label))
+        return [("", placeholder), *cleaned]
 
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
@@ -437,17 +465,23 @@ class RequestForm(forms.ModelForm):
 
 
 class RequestAdminForm(forms.ModelForm):
-    account_name = forms.ChoiceField(
+    account_name = forms.CharField(
         label="Account",
         required=True,
-        choices=(),
-        widget=forms.Select(
+        help_text="Search existing accounts or create a new one.",
+        widget=forms.TextInput(
             attrs={
-                "class": "form-select",
+                "class": "form-control",
+                "list": "account-name-options",
+                "placeholder": "Search accounts…",
+                "autocomplete": "off",
+                "data-account-autocomplete": "true",
                 "data-admin-account-field": "true",
+                "role": "combobox",
+                "aria-autocomplete": "list",
+                "aria-expanded": "false",
             }
         ),
-        help_text="Change the account selected by the requestor.",
     )
     request_date = forms.DateField(
         label="Request Date",
@@ -521,7 +555,7 @@ class RequestAdminForm(forms.ModelForm):
         if self.instance and getattr(self.instance, "start_date", None):
             self.fields["request_date"].initial = self.instance.start_date
 
-        existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
+        existing_accounts = Account.used_queryset().values_list("name", flat=True)
         suggestions = []
         for raw_name in existing_accounts:
             cleaned = (raw_name or "").strip()
@@ -533,8 +567,6 @@ class RequestAdminForm(forms.ModelForm):
             if current_account_name and current_account_name not in suggestions:
                 suggestions.insert(0, current_account_name)
         self.account_name_suggestions = tuple(suggestions)
-        account_choices = [("", "Select account")] + [(name, name) for name in suggestions]
-        self.fields["account_name"].choices = account_choices
         if current_account_name:
             self.fields["account_name"].initial = current_account_name
 
@@ -573,7 +605,7 @@ class RequestAdminForm(forms.ModelForm):
     def clean_account_name(self):
         value = (self.cleaned_data.get("account_name") or "").strip()
         if not value:
-            raise forms.ValidationError("Select an account.")
+            raise forms.ValidationError("Account name is required.")
         return value
 
     def save(self, commit=True):
@@ -765,7 +797,7 @@ class SqrSubmissionForm(forms.ModelForm):
         import json
         super().__init__(*args, **kwargs)
         self.account_name_options = list(
-            Account.objects.order_by("name").values_list("name", flat=True).distinct()
+            Account.used_queryset().values_list("name", flat=True).distinct()
         )
         required_fields = ("linked_request", "pm_esg_reviewer", "sqr_folder_link")
         for field_name in required_fields:
@@ -1413,7 +1445,11 @@ class EngineerActivityLogForm(forms.ModelForm):
 
         account_field = self.fields["account"]
         account_field.required = False
-        account_field.queryset = Account.objects.order_by("name")
+        account_qs = Account.used_queryset()
+        current_account = getattr(self.instance, "account", None)
+        if current_account and current_account.pk:
+            account_qs = (account_qs | Account.objects.filter(pk=current_account.pk)).distinct().order_by("name")
+        account_field.queryset = account_qs
 
         request_field = self.fields["request"]
         request_field.required = False
@@ -1570,7 +1606,7 @@ class AdminRequestFilterForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["account"].queryset = Account.objects.order_by("name")
+        self.fields["account"].queryset = Account.used_queryset()
         self.fields["account"].empty_label = "All accounts"
         requestor_qs = User.objects.filter(role=User.Roles.REQUESTOR).order_by("first_name", "last_name")
         self.fields["account_manager"].queryset = requestor_qs
