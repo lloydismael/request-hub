@@ -792,12 +792,16 @@ body.dark-mode .bg-primary-subtle.text-primary {
 }
 .form-control:focus,
 .form-select:focus {
-    transform: scale(1.012);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(59, 130, 246, 0.08);
+    transform: none;
+    box-shadow: none;
+    outline: none;
+    border-color: rgba(15, 23, 42, 0.2);
 }
 body.dark-mode .form-control:focus,
 body.dark-mode .form-select:focus {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28), 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: none;
+    outline: none;
+    border-color: rgba(148, 163, 184, 0.35);
 }
 
 /* ── Table sort links ── */
@@ -1084,17 +1088,19 @@ code:hover {
     pointer-events: auto;
 }
 
-.deployment-calendar {
-    border: 1px dashed rgba(59, 130, 246, 0.4);
-    border-radius: 14px;
-    padding: 1rem;
-    background: rgba(59, 130, 246, 0.06);
-    transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.deployment-calendar--active {
-    border-color: rgba(59, 130, 246, 0.85);
-    background: rgba(59, 130, 246, 0.14);
+.deployment-calendar,
+.deployment-calendar--active,
+body.dark-mode .deployment-calendar,
+body.dark-mode .deployment-calendar--active {
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    border-radius: 0.75rem !important;
+    padding: 0.75rem 0.875rem !important;
+    background: #fff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #0f172a !important;
 }
 
 .deployment-calendar__summary {
@@ -1102,12 +1108,16 @@ code:hover {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #475569;
 }
 
 .deployment-calendar__summary--active .badge {
-    background: rgba(13, 110, 253, 0.2) !important;
-    color: #0a58ca !important;
-    border-color: rgba(13, 110, 253, 0.45) !important;
+    background: rgba(148, 163, 184, 0.12) !important;
+    color: #334155 !important;
+    border-color: rgba(148, 163, 184, 0.3) !important;
 }
 
 .deployment-calendar__summary [data-deployment-summary-text] {
@@ -3962,6 +3972,17 @@ body:not(.dark-mode) .request-activity-table tbody td {
     --bs-secondary-color: rgba(15, 23, 42, 0.55);
     --bs-body-color: #0f172a;
 }
+.rmf-card--details {
+    height: auto;
+    min-height: 0;
+    flex-grow: 0;
+}
+.request-manage-grid,
+.row.g-3.align-items-start,
+.row.g-4.align-items-start {
+    --bs-gutter-x: 0.875rem;
+    --bs-gutter-y: 0.75rem;
+}
 /* Hide help text and avatars inside the manage request form card */
 .rmf-card .form-text { display: none; }
 .rmf-card .avatar-select { display: block; }
@@ -3969,8 +3990,8 @@ body:not(.dark-mode) .request-activity-table tbody td {
 .rmf-card__header {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    padding: 1.25rem 1.5rem;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
     border-bottom: 1px solid rgba(15,23,42,0.07);
     background: #fafbfc;
 }
@@ -4016,7 +4037,7 @@ body:not(.dark-mode) .request-activity-table tbody td {
 .rmf-info-item__value { font-size: 0.9rem; font-weight: 600; color: #0f172a; }
 
 /* ── Form fields grid ── */
-.rmf-form { padding: 1.25rem 1.5rem 0; }
+.rmf-form { padding: 1.25rem 1.5rem 1.25rem; }
 .rmf-fields {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -4076,7 +4097,7 @@ body:not(.dark-mode) .request-activity-table tbody td {
     display: flex; flex-wrap: wrap; gap: 0.6rem;
     padding: 0;
     border-top: none;
-    margin: 1.25rem 0 0;
+    margin: 1rem 0 0;
     background: transparent;
 }
 .rmf-form-actions--end { justify-content: flex-end; border-top: none; background: transparent; padding: 0; margin: 1rem 0 0; }
@@ -4161,6 +4182,10 @@ body:not(.dark-mode) .request-activity-table tbody td {
 .rmf-log-form textarea { border-radius: 10px; font-size: 0.875rem; resize: vertical; min-height: 80px; }
 
 /* Related activity logs */
+.rmf-card.mt-4 > .px-3.pb-3 {
+    padding-top: 1rem;
+}
+
 .request-activity-stat-card {
     background: #f8fafc;
     border-color: rgba(15,23,42,0.08) !important;
