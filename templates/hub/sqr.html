@@ -16,12 +16,19 @@
                 <div>
                     <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2 text-primary"></i>Service Quotation Request</h2>
                 </div>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
                     {% if is_pm %}
                         <a href="{% if active_sqr_tab == 'reports' %}{% url 'hub:sqr' %}{% else %}{% url 'hub:sqr' %}?tab=reports{% endif %}" class="btn btn-sm sqr-toggle-btn lg-btn {% if active_sqr_tab == 'reports' %}btn-primary lg-btn--accent{% else %}btn-outline-primary lg-btn--ghost{% endif %}">
                             <i class="bi {% if active_sqr_tab == 'reports' %}bi-table{% else %}bi-bar-chart-line-fill{% endif %} me-1"></i>{% if active_sqr_tab == 'reports' %}To SQR Tracker{% else %}To Reports{% endif %}
                         </a>
                         {% if active_sqr_tab != 'reports' %}
+                        <div class="sqr-toolbar-search-wrap" aria-label="SQR quick search">
+                            <div class="mgmt-search-box sqr-toolbar-search-box" role="search" aria-label="Search SQR records">
+                                <i class="bi bi-search mgmt-search-icon"></i>
+                                <input type="text" id="sqr-header-search" class="mgmt-search-input" placeholder="Search SQR..." autocomplete="off" aria-label="Search SQR records">
+                                <span class="mgmt-result-badge" id="sqr-header-count-badge">0 total</span>
+                            </div>
+                        </div>
                         <button type="button" class="btn btn-sm btn-outline-secondary lg-btn lg-btn--ghost" data-bs-toggle="collapse" data-bs-target="#sqr-table-filter-panel" aria-expanded="false" aria-controls="sqr-table-filter-panel" id="sqr-table-filter-toggle">
                             <i class="bi bi-funnel-fill me-1"></i>Filter
                         </button>
@@ -3286,7 +3293,9 @@
     var defaultMyAssigned = !!(badgeRoot && badgeRoot.dataset.defaultMyAssigned === '1');
     var currentUserId = badgeRoot ? String(badgeRoot.dataset.currentUserId || '') : '';
     var activeFilter = defaultMyAssigned ? 'my_assigned' : '';   // '' = show all
-    var searchInput = document.getElementById('sqr-table-filter-search');
+    var toolbarSearchInput = document.getElementById('sqr-header-search');
+    var searchInput = document.getElementById('sqr-table-filter-search') || toolbarSearchInput;
+    var headerCountBadge = document.getElementById('sqr-header-count-badge');
     var statusSelect = document.getElementById('sqr-table-filter-status');
     var proposalStatusSelect = document.getElementById('sqr-table-filter-proposal-status');
     var overallStatusSelect = document.getElementById('sqr-table-filter-overall-status');
@@ -3490,6 +3499,9 @@
                 resultsMeta.textContent = 'Showing ' + visibleCount + ' of ' + rows.length + ' rows' + (activeFilterCount ? ' • ' + activeFilterCount + ' active filter' + (activeFilterCount === 1 ? '' : 's') : '');
             }
         }
+        if (headerCountBadge) {
+            headerCountBadge.textContent = visibleCount + ' total';
+        }
     }
     window.applySqrTableFilter = applyFilter;
 
@@ -3521,8 +3533,21 @@
         });
     });
 
+    if (toolbarSearchInput) {
+        toolbarSearchInput.addEventListener('input', function () {
+            if (searchInput && searchInput !== toolbarSearchInput && searchInput.value !== toolbarSearchInput.value) {
+                searchInput.value = toolbarSearchInput.value;
+            }
+            scheduleSearchFilter();
+        });
+    }
     if (searchInput) {
-        searchInput.addEventListener('input', scheduleSearchFilter);
+        searchInput.addEventListener('input', function () {
+            if (toolbarSearchInput && toolbarSearchInput !== searchInput && toolbarSearchInput.value !== searchInput.value) {
+                toolbarSearchInput.value = searchInput.value;
+            }
+            scheduleSearchFilter();
+        });
     }
     [overallStatusSelect, healthSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
         if (!control) return;

@@ -250,6 +250,34 @@ body.sqr-page .sqr-view-panel[hidden] {
     display: none !important;
 }
 
+body.sqr-page .sqr-toolbar-search-wrap {
+    display: inline-flex;
+    align-items: center;
+}
+
+body.sqr-page .sqr-toolbar-search-box {
+    flex: 0 0 260px;
+    max-width: 320px;
+    min-width: 170px;
+    min-height: 2rem;
+    height: 2rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 12px;
+}
+
+body.sqr-page .sqr-toolbar-search-box .mgmt-search-input {
+    font-size: 0.875rem;
+}
+
+body.sqr-page .sqr-toolbar-search-box .mgmt-result-badge {
+    font-size: 0.75rem;
+    padding: 0.12rem 0.5rem;
+}
+
+body.sqr-page .sqr-toolbar-search-box .mgmt-search-icon {
+    font-size: 0.8rem;
+}
+
 body.sqr-page .sqr-view-toggle {
     display: inline-flex;
     gap: 0.25rem;

@@ -47,13 +47,22 @@
                 {% endif %}
                 {% if role == 'admin' %}
                     <div class="dashboard-toolbar d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
-                        {% if can_create_request %}
-                            <button type="button" class="btn btn-sm btn-primary lg-btn lg-btn--accent" id="new-request-btn">New Request</button>
-                        {% endif %}
-                        <a class="btn btn-sm lg-btn lg-btn--ghost {% if show_filters or filters_active %}is-active{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
-                            <i class="bi {% if show_filters or filters_active %}bi-funnel-fill{% else %}bi-funnel{% endif %}"></i>
-                        </a>
-                        <a class="btn btn-sm lg-btn lg-btn--ghost" href="{% url 'hub:request-export' %}"><i class="bi bi-download me-1"></i>Export CSV</a>
+                        <div class="dashboard-toolbar__search">
+                            <div class="mgmt-search-box dashboard-request-search-box dashboard-request-search-box--toolbar" role="search" aria-label="Search requests">
+                                <i class="bi bi-search mgmt-search-icon"></i>
+                                <input type="text" id="dashboard-request-search" class="mgmt-search-input" placeholder="Search requests..." autocomplete="off" aria-label="Search requests">
+                                <span class="mgmt-result-badge" id="dashboard-request-count-badge">0 total</span>
+                            </div>
+                        </div>
+                        <div class="dashboard-toolbar__actions d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                            {% if can_create_request %}
+                                <button type="button" class="btn btn-sm btn-primary lg-btn lg-btn--accent" id="new-request-btn">New Request</button>
+                            {% endif %}
+                            <a class="btn btn-sm lg-btn lg-btn--ghost {% if show_filters or filters_active %}is-active{% endif %}" href="{{ filter_toggle_link }}" title="Toggle filters" aria-label="Toggle filters">
+                                <i class="bi {% if show_filters or filters_active %}bi-funnel-fill{% else %}bi-funnel{% endif %}"></i>
+                            </a>
+                            <a class="btn btn-sm lg-btn lg-btn--ghost" href="{% url 'hub:request-export' %}"><i class="bi bi-download me-1"></i>Export CSV</a>
+                        </div>
                     </div>
                 {% endif %}
             </div>
@@ -674,6 +683,9 @@
                             const tbody = document.getElementById("dashboard-live-tbody");
                             if (tbody) {
                                 tbody.innerHTML = data.html_rows;
+                                if (window.initDashboardRequestSearch) {
+                                    window.initDashboardRequestSearch();
+                                }
                             }
                         }
                     })
@@ -694,6 +706,95 @@
     </script>
     <script>
         (function () {
+            function initDashboardRequestSearch() {
+                const searchInput = document.getElementById("dashboard-request-search");
+                const tbody = document.getElementById("dashboard-live-tbody");
+                const badge = document.getElementById("dashboard-request-count-badge");
+                if (!searchInput || !tbody) {
+                    return;
+                }
+
+                const rows = Array.from(tbody.querySelectorAll("tr")).filter(function (row) {
+                    return !row.classList.contains("dashboard-empty-row");
+                });
+
+                let emptyRow = tbody.querySelector("tr.dashboard-empty-row");
+                if (!emptyRow) {
+                    emptyRow = document.createElement("tr");
+                    emptyRow.className = "dashboard-empty-row";
+                    const totalColumns = tbody.closest("table")?.querySelectorAll("thead th").length || 1;
+                    emptyRow.innerHTML = '<td colspan="' + totalColumns + '" class="text-center text-muted py-5"><i class="bi bi-search display-6 d-block mb-2 opacity-50"></i>No requests found.</td>';
+                    tbody.appendChild(emptyRow);
+                }
+
+                function getRowText(row) {
+                    return (row.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+                }
+
+                function scoreMatch(row, query) {
+                    if (!query) {
+                        return 1;
+                    }
+                    const text = getRowText(row);
+                    if (!text) {
+                        return 0;
+                    }
+
+                    let score = 0;
+                    if (text === query) score += 1000;
+                    if (text.startsWith(query)) score += 300;
+                    if (text.includes(query)) score += 120;
+
+                    text.split(/\s+/).forEach(function (term) {
+                        if (term === query) score += 180;
+                        if (term.startsWith(query)) score += 60;
+                    });
+
+                    return score;
+                }
+
+                function render() {
+                    const q = searchInput.value.trim().toLowerCase();
+                    const filtered = rows
+                        .map(function (row) {
+                            return { row: row, score: scoreMatch(row, q) };
+                        })
+                        .filter(function (item) {
+                            return !q || item.score > 0;
+                        })
+                        .sort(function (a, b) {
+                            if (b.score !== a.score) {
+                                return b.score - a.score;
+                            }
+                            return getRowText(a.row).localeCompare(getRowText(b.row));
+                        });
+
+                    rows.forEach(function (row) {
+                        row.style.display = "none";
+                    });
+
+                    if (filtered.length === 0) {
+                        emptyRow.style.display = "";
+                    } else {
+                        emptyRow.style.display = "none";
+                        filtered.forEach(function (item) {
+                            item.row.style.display = "";
+                            tbody.appendChild(item.row);
+                        });
+                    }
+
+                    if (badge) {
+                        badge.textContent = q ? filtered.length + " match" + (filtered.length !== 1 ? "es" : "") : rows.length + " total";
+                    }
+                }
+
+                searchInput.addEventListener("input", render);
+                render();
+            }
+
+            window.initDashboardRequestSearch = initDashboardRequestSearch;
+            document.addEventListener("DOMContentLoaded", initDashboardRequestSearch);
+
             const wrapper = document.querySelector(".dashboard-table-wrapper");
             if (!wrapper) {
                 return;

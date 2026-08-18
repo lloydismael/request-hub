@@ -36,7 +36,7 @@
         var divider = token('--lg-divider', 'rgba(11,18,32,0.09)');
 
         Chart.defaults.font.family = FONT;
-        Chart.defaults.font.size = 12;
+        Chart.defaults.font.size = document.body.classList.contains('pref-large-text') ? 14 : 12;
         Chart.defaults.color = ink;
         Chart.defaults.borderColor = divider;
 
@@ -92,7 +92,8 @@
         }
     };
     window.lgChartToken = token;
-    window.lgReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.lgReducedMotion = document.body.classList.contains('pref-reduce-motion')
+        || !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     apply();
 

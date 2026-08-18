@@ -1,6 +1,7 @@
 {% load tz %}
                         {% for item in requests %}
-                            <tr class="{% if not is_requestor_ui and item.engagement_type != 'deployment' and item.is_overdue or not is_requestor_ui and item.engagement_type != 'deployment' and item.sla_overrun or not is_requestor_ui and item.engagement_type != 'deployment' and item.missed_sla %}table-danger{% endif %}" data-engineer-id="{{ item.engineer.pk|default:'' }}">
+                            <tr class="{% if not is_requestor_ui and item.engagement_type != 'deployment' and item.is_overdue or not is_requestor_ui and item.engagement_type != 'deployment' and item.sla_overrun or not is_requestor_ui and item.engagement_type != 'deployment' and item.missed_sla %}table-danger{% endif %}"
+                                data-engineer-id="{{ item.engineer.pk|default:'' }}">
                                 {% if role == 'admin' %}
                                     <td class="request-id-cell{% if item.ack_sla_status %} request-id-cell--{{ item.ack_sla_status }}{% endif %}" title="{{ item.ack_sla_tooltip }}">
                                         <a href="{% url 'hub:request-manage' item.pk %}" class="text-reset text-decoration-none" title="{{ item.description|default:'No description provided' }}">{{ item.reference_code }}</a>

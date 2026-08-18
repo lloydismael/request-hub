@@ -4,19 +4,20 @@
 {% block body_class %}reports-page{% endblock %}
 {% block content %}
 
-{# ── Page Header ─────────────────────────────────────────────────────────── #}
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 lg-enter" data-lg-delay="0">
-    <div>
+<header class="rpt2-header lg-enter" data-lg-delay="0">
+    <div class="rpt2-heading">
         <h1 class="rpt2-page-title">Reports</h1>
     </div>
-    <div class="d-flex flex-wrap align-items-center gap-2">
+    <div class="rpt2-header-actions">
         <div class="rpt-tab-group" role="group" aria-label="Report view toggle">
             <a href="?report_view=operational"
-               class="rpt-tab {% if report_view == 'operational' %}rpt-tab--active{% endif %}">
+               class="rpt-tab {% if report_view == 'operational' %}rpt-tab--active{% endif %}"
+               {% if report_view == 'operational' %}aria-current="page"{% endif %}>
                 <i class="bi bi-graph-up-arrow"></i> Operational
             </a>
             <a href="?report_view=activity"
-               class="rpt-tab {% if report_view == 'activity' %}rpt-tab--active{% endif %}">
+               class="rpt-tab {% if report_view == 'activity' %}rpt-tab--active{% endif %}"
+               {% if report_view == 'activity' %}aria-current="page"{% endif %}>
                 <i class="bi bi-clipboard-data-fill"></i> Activity Logs
             </a>
         </div>
@@ -25,7 +26,7 @@
             <i class="bi bi-download me-1"></i>Export CSV
         </a>
     </div>
-</div>
+</header>
 
 {% if report_view == 'activity' %}
 
@@ -68,29 +69,35 @@
     </div>
 
     {# ── Activity: KPI band ────────────────────────────────────────────── #}
-    <div class="row g-3 mb-4 lg-enter" data-lg-delay="40">
-        <div class="col-12 col-lg-6">
-            <div class="rpt2-kpi rpt2-kpi--hero rpt2-kpi--green">
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 mb-4 lg-enter rpt2-kpi-grid" data-lg-delay="40">
+        <div class="col">
+            <div class="rpt2-kpi rpt2-kpi--green">
                 <span class="rpt2-kpi-label">Total Hours</span>
                 <span class="rpt2-kpi-value">{{ activity_totals.total_hours|default:0|floatformat:1 }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-2">
+        <div class="col">
             <div class="rpt2-kpi rpt2-kpi--blue">
                 <span class="rpt2-kpi-label">Log Entries</span>
                 <span class="rpt2-kpi-value">{{ activity_totals.entries }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-2">
+        <div class="col">
             <div class="rpt2-kpi rpt2-kpi--violet">
                 <span class="rpt2-kpi-label">Billable Hrs</span>
                 <span class="rpt2-kpi-value">{{ activity_totals.billable_hours|default:0|floatformat:1 }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-2">
+        <div class="col">
             <div class="rpt2-kpi rpt2-kpi--amber">
                 <span class="rpt2-kpi-label">Accounts</span>
                 <span class="rpt2-kpi-value">{{ activity_totals.unique_accounts }}</span>
+            </div>
+        </div>
+        <div class="col">
+            <div class="rpt2-kpi rpt2-kpi--cyan">
+                <span class="rpt2-kpi-label">Non-Billable</span>
+                <span class="rpt2-kpi-value">{{ activity_totals.non_billable_hours|default:0|floatformat:1 }}</span>
             </div>
         </div>
     </div>
@@ -103,10 +110,11 @@
                     <div>
                         <h3 class="rpt-chart-title">Hours by Engineer</h3>
                     </div>
-                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityEngineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityEngineerChart" aria-label="Expand Hours by Engineer chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div class="rpt-series-key" aria-label="Chart series"><span class="rpt-series-key__item rpt-series-key__item--green">Billable</span><span class="rpt-series-key__item rpt-series-key__item--gray">Not Billable</span></div>
                 {% if activity_engineer_chart.labels %}
-                    <div class="rpt-canvas-wrap"><canvas id="activityEngineerChart"></canvas></div>
+                    <div class="rpt-canvas-wrap"><canvas id="activityEngineerChart" role="img" aria-label="Billable and non-billable hours grouped by engineer. Detailed values follow in the Engineer Hour Breakdown table."></canvas></div>
                 {% else %}
                     <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No engineer activity entries available yet.</p></div>
                 {% endif %}
@@ -137,8 +145,9 @@
                     <div>
                         <h3 class="rpt-chart-title">Hours by Activity Type</h3>
                     </div>
-                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityTypeChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityTypeChart" aria-label="Expand Hours by Activity Type chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div class="rpt-series-key" aria-label="Chart series"><span class="rpt-series-key__item rpt-series-key__item--blue">Billable</span><span class="rpt-series-key__item rpt-series-key__item--amber">Not Billable</span></div>
                 {% if activity_type_chart.labels %}
                     <div class="rpt-canvas-wrap"><canvas id="activityTypeChart"></canvas></div>
                 {% else %}
@@ -448,29 +457,35 @@
 {% else %}
 
     {# ── Operational: KPI band ───────────────────────────────────────────── #}
-    <div class="row g-3 mb-4 lg-enter" data-lg-delay="40">
-        <div class="col-6 col-lg-3">
-            <div class="rpt2-kpi rpt2-kpi--hero rpt2-kpi--blue">
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 mb-4 lg-enter rpt2-kpi-grid" data-lg-delay="40">
+        <div class="col">
+            <div class="rpt2-kpi rpt2-kpi--blue">
                 <span class="rpt2-kpi-label">Active Requests</span>
                 <span class="rpt2-kpi-value">{{ totals.ongoing }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
+        <div class="col">
             <div class="rpt2-kpi rpt2-kpi--green">
                 <span class="rpt2-kpi-label">Completed</span>
                 <span class="rpt2-kpi-value">{{ totals.completed }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
+        <div class="col">
             <div class="rpt2-kpi rpt2-kpi--amber">
-                <span class="rpt2-kpi-label">Requestors</span>
+                <span class="rpt2-kpi-label">Account Managers</span>
                 <span class="rpt2-kpi-value">{{ totals.account_managers }}</span>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
+        <div class="col">
             <div class="rpt2-kpi rpt2-kpi--cyan">
                 <span class="rpt2-kpi-label">Engineers</span>
                 <span class="rpt2-kpi-value">{{ totals.engineers }}</span>
+            </div>
+        </div>
+        <div class="col">
+            <div class="rpt2-kpi rpt2-kpi--violet">
+                <span class="rpt2-kpi-label">Total Requests</span>
+                <span class="rpt2-kpi-value">{{ totals.requests }}</span>
             </div>
         </div>
     </div>
@@ -482,12 +497,12 @@
                 <div class="rpt-chart-head">
                     <div>
                         <h3 class="rpt-chart-title">Requests by Engineer</h3>
-                        <p class="rpt-chart-sub">Includes unassigned requests to indicate backlog.</p>
                     </div>
-                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="engineerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="engineerChart" aria-label="Expand Requests by Engineer chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div class="rpt-series-key" aria-label="Chart series"><span class="rpt-series-key__item rpt-series-key__item--green">Completed</span><span class="rpt-series-key__item rpt-series-key__item--violet">Ongoing</span></div>
                 {% if engineer_stats %}
-                    <div class="rpt-canvas-wrap"><canvas id="engineerChart"></canvas></div>
+                    <div class="rpt-canvas-wrap"><canvas id="engineerChart" role="img" aria-label="Completed and ongoing requests for the ten busiest engineers, with remaining engineers grouped as Others. Full values follow in the Engineer Allocation table."></canvas></div>
                 {% else %}
                     <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No engineer assignments captured yet.</p></div>
                 {% endif %}
@@ -516,14 +531,15 @@
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
                     <div>
-                        <h3 class="rpt-chart-title">Requests by Requestor</h3>
+                        <h3 class="rpt-chart-title">Requests by Account Manager</h3>
                     </div>
-                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="accountManagerChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="accountManagerChart" aria-label="Expand Requests by Account Manager chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div class="rpt-series-key" aria-label="Chart series"><span class="rpt-series-key__item rpt-series-key__item--green">Completed</span><span class="rpt-series-key__item rpt-series-key__item--violet">Ongoing</span></div>
                 {% if account_manager_stats %}
-                    <div class="rpt-canvas-wrap"><canvas id="accountManagerChart"></canvas></div>
+                    <div class="rpt-canvas-wrap"><canvas id="accountManagerChart" role="img" aria-label="Completed and ongoing requests for the ten busiest account managers, with remaining managers grouped as Others. Full values follow in the Account Manager Breakdown table."></canvas></div>
                 {% else %}
-                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No requests recorded yet for requestors.</p></div>
+                    <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No requests recorded yet for account managers.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -550,7 +566,7 @@
             <div class="glass-card rpt-chart-card h-100">
                 <div class="rpt-chart-head">
                     <div>
-                        <h3 class="rpt-chart-title">Requestor Breakdown</h3>
+                        <h3 class="rpt-chart-title">Account Manager Breakdown</h3>
                     </div>
                 </div>
                 {% if account_manager_stats %}
@@ -558,7 +574,7 @@
                         <table class="table table-sm align-middle mb-0">
                             <thead class="rpt-table-head">
                                 <tr>
-                                    <th>Requestor</th>
+                                    <th>Account Manager</th>
                                     <th class="text-end">Total</th>
                                     <th class="text-end">Completed</th>
                                     <th class="text-end">Ongoing</th>
@@ -577,7 +593,7 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="rpt-empty"><i class="bi bi-table"></i><p>No requestors have created requests yet.</p></div>
+                    <div class="rpt-empty"><i class="bi bi-table"></i><p>No account manager workload is available yet.</p></div>
                 {% endif %}
             </div>
         </div>
@@ -619,19 +635,21 @@
     </div>
 
     {{ account_manager_chart|json_script:"account-manager-data" }}
+    {{ account_manager_chart_full|json_script:"account-manager-full-data" }}
     {{ engineer_chart|json_script:"engineer-data" }}
+    {{ engineer_chart_full|json_script:"engineer-full-data" }}
     {{ engagement_chart|json_script:"engagement-data" }}
     {{ product_chart|json_script:"product-data" }}
 
 {% endif %}
 
 {# ── Chart expand modal ──────────────────────────────────────────────────── #}
-<div class="rpt-chart-modal" id="rptChartModal" role="dialog" aria-modal="true" aria-labelledby="rptChartModalTitle">
+<div class="rpt-chart-modal" id="rptChartModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="rptChartModalTitle">
     <div class="rpt-chart-modal__inner">
         <div class="rpt-chart-modal__header">
             <span class="rpt-chart-modal__title" id="rptChartModalTitle"></span>
-            <button type="button" class="rpt-chart-modal__png" id="rptChartModalPng" title="Download PNG"><i class="bi bi-download"></i></button>
-            <button type="button" class="rpt-chart-modal__close" id="rptChartModalClose" title="Close"><i class="bi bi-x-lg"></i></button>
+            <button type="button" class="rpt-chart-modal__png" id="rptChartModalPng" aria-label="Download expanded chart as PNG"><i class="bi bi-download"></i></button>
+            <button type="button" class="rpt-chart-modal__close" id="rptChartModalClose" aria-label="Close expanded chart"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="rpt-chart-modal__canvas-wrap">
             <canvas id="rptModalCanvas"></canvas>
@@ -640,7 +658,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="{% static 'js/chart-theme.js' %}?v=2"></script>
+<script src="{% static 'js/chart-theme.js' %}?v=3"></script>
 <script>
 (function () {
     function hexToRgba(hex, alpha) {
@@ -755,20 +773,23 @@
         return title ? title.textContent.trim() : '';
     }
 
-    function makeStackedBar(canvas, payload, cA, cB) {
+    function makeStackedBar(canvas, payload, cA, cB, expandedPayload) {
         if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
         var axisColor = window.lgChartInk || token('--lg-ink', '#0b1220');
         var axisSoft = window.lgChartInkSoft || token('--lg-ink-soft', 'rgba(11,18,32,0.62)');
         var divider = window.lgChartDivider || token('--lg-divider', 'rgba(11,18,32,0.09)');
         var tooltipBg = document.body.classList.contains('dark-mode') ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.96)';
-        var buildFn = function (tgt) {
+        var buildFn = function (tgt, payloadOverride, showAll) {
+            var chartPayload = payloadOverride || payload;
+            var existing = typeof Chart.getChart === 'function' ? Chart.getChart(tgt) : null;
+            if (existing) existing.destroy();
             return new Chart(tgt, {
                 type: 'bar',
                 data: {
-                    labels: payload.labels,
+                    labels: chartPayload.labels,
                     datasets: [
-                        { label: 'Completed', data: payload.completed || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'r', order: 1 },
-                        { label: 'Ongoing', data: payload.ongoing || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'r', order: 2 }
+                        { label: 'Completed', data: chartPayload.completed || [], backgroundColor: cA.bg, borderColor: cA.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'r', order: 1 },
+                        { label: 'Ongoing', data: chartPayload.ongoing || [], backgroundColor: cB.bg, borderColor: cB.b, borderWidth: 0, borderRadius: 8, borderSkipped: false, stack: 'r', order: 2 }
                     ]
                 },
                 options: {
@@ -779,7 +800,7 @@
                         x: {
                             stacked: true,
                             grid: { color: divider, drawTicks: false },
-                            ticks: { color: axisColor, maxRotation: 35, minRotation: 0, autoSkip: true, maxTicksLimit: 16, font: { weight: 600 } }
+                            ticks: { color: axisColor, maxRotation: showAll ? 55 : 35, minRotation: 0, autoSkip: !showAll, maxTicksLimit: showAll ? undefined : 16, font: { weight: 600 } }
                         },
                         y: {
                             stacked: true,
@@ -802,19 +823,24 @@
                             callbacks: {
                                 afterBody: function (items) {
                                     if (!items.length) return '';
-                                    var t = (payload.totals || [])[items[0].dataIndex];
+                                    var t = (chartPayload.totals || [])[items[0].dataIndex];
                                     return t != null ? 'Total: ' + t : '';
                                 }
                             }
                         },
-                        totalLabels: { display: true, totals: payload.totals }
+                        totalLabels: { display: true, totals: chartPayload.totals }
                     }
                 },
                 plugins: [totalLabelsPlugin]
             });
         };
         buildFn(canvas);
-        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: chartTitle(canvas) };
+        if (canvas.id) {
+            var expandedBuild = expandedPayload && expandedPayload.labels && expandedPayload.labels.length
+                ? function (tgt) { return buildFn(tgt, expandedPayload, true); }
+                : function (tgt) { return buildFn(tgt, payload, true); };
+            chartBuilders[canvas.id] = { build: buildFn, expandBuild: expandedBuild, title: chartTitle(canvas) };
+        }
     }
 
     function makeHourBar(canvas, payload, cA, cB) {
@@ -822,7 +848,9 @@
         var axisColor = window.lgChartInk || token('--lg-ink', '#0b1220');
         var divider = window.lgChartDivider || token('--lg-divider', 'rgba(11,18,32,0.09)');
         var tooltipBg = document.body.classList.contains('dark-mode') ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.96)';
-        var buildFn = function (tgt) {
+        var buildFn = function (tgt, showAll) {
+            var existing = typeof Chart.getChart === 'function' ? Chart.getChart(tgt) : null;
+            if (existing) existing.destroy();
             return new Chart(tgt, {
                 type: 'bar',
                 data: {
@@ -840,7 +868,7 @@
                         x: {
                             stacked: true,
                             grid: { color: divider, drawTicks: false },
-                            ticks: { color: axisColor, autoSkip: true, maxRotation: 35, maxTicksLimit: 16, font: { weight: 600 } }
+                            ticks: { color: axisColor, autoSkip: !showAll, maxRotation: showAll ? 55 : 35, maxTicksLimit: showAll ? undefined : 16, font: { weight: 600 } }
                         },
                         y: {
                             stacked: true,
@@ -870,12 +898,14 @@
             });
         };
         buildFn(canvas);
-        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, title: chartTitle(canvas) };
+        if (canvas.id) chartBuilders[canvas.id] = { build: buildFn, expandBuild: function (tgt) { return buildFn(tgt, true); }, title: chartTitle(canvas) };
     }
 
     function makeDonut(canvas, payload, bgColors, brColors, labelFn) {
         if (!canvas || !payload || !payload.labels || !payload.labels.length) return;
         var buildFn = function (tgt) {
+            var existing = typeof Chart.getChart === 'function' ? Chart.getChart(tgt) : null;
+            if (existing) existing.destroy();
             return new Chart(tgt, {
                 type: 'doughnut',
                 data: {
@@ -911,12 +941,14 @@
 
     if (rptView === 'operational') {
         var amN = document.getElementById('account-manager-data');
+        var amFullN = document.getElementById('account-manager-full-data');
         var engN = document.getElementById('engineer-data');
+        var engFullN = document.getElementById('engineer-full-data');
         var engtN = document.getElementById('engagement-data');
         var prodN = document.getElementById('product-data');
 
-        if (amN && amN.textContent) makeStackedBar(document.getElementById('accountManagerChart'), JSON.parse(amN.textContent), P.green, P.violet);
-        if (engN && engN.textContent) makeStackedBar(document.getElementById('engineerChart'), JSON.parse(engN.textContent), P.green, P.violet);
+        if (amN && amN.textContent) makeStackedBar(document.getElementById('accountManagerChart'), JSON.parse(amN.textContent), P.green, P.violet, amFullN ? JSON.parse(amFullN.textContent) : null);
+        if (engN && engN.textContent) makeStackedBar(document.getElementById('engineerChart'), JSON.parse(engN.textContent), P.green, P.violet, engFullN ? JSON.parse(engFullN.textContent) : null);
         if (engtN && engtN.textContent) {
             var ep = JSON.parse(engtN.textContent);
             if ((ep.totals || []).some(function (v) { return v > 0; })) makeStackedBar(document.getElementById('engagementChart'), ep, P.green, P.blue);
@@ -963,40 +995,63 @@
         }
     }
 
+    if (typeof window.lgChartOnTheme === 'function') {
+        window.lgChartOnTheme(function () {
+            P = buildPalette();
+            DONUT_BG = [P.blue.bg, P.green.bg, P.amber.bg, P.violet.bg, P.cyan.bg, P.rose.bg, P.gray.bg];
+            DONUT_BR = [P.blue.b, P.green.b, P.amber.b, P.violet.b, P.cyan.b, P.rose.b, P.gray.b];
+            Object.keys(chartBuilders).forEach(function (id) {
+                var canvas = document.getElementById(id);
+                if (canvas) chartBuilders[id].build(canvas);
+            });
+        });
+    }
+
     (function () {
         var modal = document.getElementById('rptChartModal');
         var titleEl = document.getElementById('rptChartModalTitle');
         var closeBtn = document.getElementById('rptChartModalClose');
         if (!modal) return;
         var activeChart = null;
+        var returnFocus = null;
 
-        function openModal(id) {
+        function focusableElements() {
+            return Array.prototype.slice.call(modal.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+        }
+
+        function openModal(id, trigger) {
             var entry = chartBuilders[id];
             if (!entry) return;
+            returnFocus = trigger || document.activeElement;
             titleEl.textContent = entry.title;
             if (activeChart) {
                 activeChart.destroy();
                 activeChart = null;
             }
             modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
             requestAnimationFrame(function () {
                 var mc = document.getElementById('rptModalCanvas');
-                if (mc) activeChart = entry.build(mc);
+                if (mc) activeChart = (entry.expandBuild || entry.build)(mc);
+                if (closeBtn) closeBtn.focus();
             });
         }
 
         function closeModal() {
             modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
             if (activeChart) {
                 activeChart.destroy();
                 activeChart = null;
             }
+            if (returnFocus && typeof returnFocus.focus === 'function') returnFocus.focus();
+            returnFocus = null;
         }
 
         document.querySelectorAll('[data-expand-chart]').forEach(function (btn) {
-            btn.addEventListener('click', function () { openModal(btn.dataset.expandChart); });
+            btn.addEventListener('click', function () { openModal(btn.dataset.expandChart, btn); });
         });
         var pngBtn = document.getElementById('rptChartModalPng');
         if (pngBtn) {
@@ -1012,6 +1067,19 @@
         modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+            if (e.key === 'Tab' && modal.classList.contains('is-open')) {
+                var focusable = focusableElements();
+                if (!focusable.length) return;
+                var first = focusable[0];
+                var last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
         });
     })();
 

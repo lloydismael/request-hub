@@ -4951,19 +4951,23 @@ body.dark-mode .mgmt-toolbar {
     flex: 1;
     min-width: 180px;
     max-width: 440px;
-    background: rgba(15, 23, 42, 0.05);
-    border: 1.5px solid rgba(15, 23, 42, 0.22);
+    min-height: 2rem;
+    height: 2rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
+    border: 1.5px solid rgba(37, 99, 235, 0.35);
     border-radius: 12px;
-    padding: 0.4rem 0.85rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    padding: 0.35rem 0.85rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 2px 10px rgba(15, 23, 42, 0.08);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .mgmt-search-box:focus-within {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 body.dark-mode .mgmt-search-box {
     background: rgba(255, 255, 255, 0.05);
     border-color: #2e2e2e;
+    box-shadow: none;
 }
 body.dark-mode .mgmt-search-box:focus-within {
     border-color: #3b82f6;
@@ -4971,8 +4975,8 @@ body.dark-mode .mgmt-search-box:focus-within {
 }
 
 .mgmt-search-icon {
-    color: #9ca3af;
-    font-size: 0.82rem;
+    color: #0f172a;
+    font-size: 0.875rem;
     flex-shrink: 0;
 }
 .mgmt-search-input {
@@ -4981,26 +4985,108 @@ body.dark-mode .mgmt-search-box:focus-within {
     outline: none;
     flex: 1;
     font-size: 0.875rem;
-    color: #111827;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.005em;
+    line-height: 1.5;
     min-width: 0;
 }
-.mgmt-search-input::placeholder { color: #6b7280; }
-body.dark-mode .mgmt-search-input::placeholder { color: #9ca3af; }
-body.dark-mode .mgmt-search-input { color: #e2e8f0; }
+.mgmt-search-input::placeholder {
+    color: #0f172a;
+    opacity: 1;
+    font-weight: 600;
+}
+body.dark-mode .mgmt-search-icon { color: #f2f5fb; }
+body.dark-mode .mgmt-search-input::placeholder { color: #f2f5fb; }
+body.dark-mode .mgmt-search-input { color: #f2f5fb; }
 
 .mgmt-result-badge {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #6b7280;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0f172a;
     white-space: nowrap;
-    background: rgba(107, 114, 128, 0.1);
+    background: rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(15, 23, 42, 0.16);
     padding: 0.1rem 0.5rem;
     border-radius: 999px;
-    letter-spacing: 0.03em;
+    letter-spacing: -0.005em;
+    line-height: 1.5;
 }
 body.dark-mode .mgmt-result-badge {
-    color: #94a3b8;
-    background: rgba(255, 255, 255, 0.08);
+    color: #f2f5fb;
+    background: rgba(242, 245, 251, 0.12);
+    border-color: rgba(242, 245, 251, 0.22);
+}
+
+.dashboard-toolbar {
+    width: min(100%, 760px);
+}
+
+.dashboard-toolbar__search {
+    display: flex;
+    justify-content: flex-start;
+    flex: 0 0 auto;
+    min-width: 220px;
+}
+
+.dashboard-toolbar__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    margin-left: 0.25rem;
+}
+
+body:not(.dark-mode) .dashboard-toolbar .mgmt-search-box,
+body:not(.dark-mode) .dashboard-toolbar .dashboard-request-search-box--toolbar {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+    border-color: rgba(37, 99, 235, 0.58);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 3px 14px rgba(15, 23, 42, 0.09);
+}
+
+body:not(.dark-mode) .dashboard-toolbar .mgmt-search-icon {
+    color: #0f172a !important;
+    opacity: 1;
+}
+
+body:not(.dark-mode) .dashboard-toolbar .mgmt-search-input,
+body:not(.dark-mode) .dashboard-toolbar .mgmt-search-input::placeholder {
+    color: #0f172a !important;
+    opacity: 1;
+    font-weight: 600;
+}
+
+body:not(.dark-mode) .dashboard-toolbar .mgmt-result-badge {
+    color: #0f172a !important;
+    background: rgba(148, 163, 184, 0.2);
+    border: 1px solid rgba(71, 85, 105, 0.25);
+    font-weight: 700;
+}
+
+.dashboard-toolbar .dashboard-request-search-box--toolbar {
+    flex: 0 0 280px;
+    max-width: 350px;
+    min-width: 200px;
+    margin-inline: 0;
+}
+
+@media (max-width: 768px) {
+    .dashboard-toolbar {
+        width: 100%;
+    }
+
+    .dashboard-toolbar__search,
+    .dashboard-toolbar__actions {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .dashboard-toolbar .dashboard-request-search-box--toolbar {
+        width: 100%;
+        max-width: none;
+        margin-inline: 0;
+    }
 }
 
 /* ── Table header ── */

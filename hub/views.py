@@ -34,6 +34,7 @@ from django.db import close_old_connections
 from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
 from django.db.models import Count, Max, Min, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
@@ -6159,6 +6160,36 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
 
 class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
     template_name = "hub/report.html"
+    CHART_RANKING_LIMIT = 10
+
+    @classmethod
+    def _compact_ranked_chart(cls, rows: list[dict]) -> dict:
+        visible_rows = rows[: cls.CHART_RANKING_LIMIT]
+        overflow_rows = rows[cls.CHART_RANKING_LIMIT :]
+        labels = [row["name"] for row in visible_rows]
+        totals = [row["total"] for row in visible_rows]
+        ongoing = [row["ongoing"] for row in visible_rows]
+        completed = [row["completed"] for row in visible_rows]
+        if overflow_rows:
+            labels.append("Others")
+            totals.append(sum(row["total"] for row in overflow_rows))
+            ongoing.append(sum(row["ongoing"] for row in overflow_rows))
+            completed.append(sum(row["completed"] for row in overflow_rows))
+        return {
+            "labels": labels,
+            "totals": totals,
+            "ongoing": ongoing,
+            "completed": completed,
+        }
+
+    @staticmethod
+    def _full_ranked_chart(rows: list[dict]) -> dict:
+        return {
+            "labels": [row["name"] for row in rows],
+            "totals": [row["total"] for row in rows],
+            "ongoing": [row["ongoing"] for row in rows],
+            "completed": [row["completed"] for row in rows],
+        }
 
     @staticmethod
     def _normalize_report_view(value: str | None) -> str:
@@ -6422,29 +6453,17 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
                 bucket["completed"] += item["total"]
 
         engagement_labels_map = dict(Request.Engagement.choices)
-        engagement_order = [
-            Request.Engagement.OPPORTUNITY,
-            Request.Engagement.SUPPORT,
-            Request.Engagement.TRAINING,
-            Request.Engagement.INQUIRY,
-        ]
+        engagement_order = [value for value, _ in Request.Engagement.choices]
 
-        product_categories = ["Azure", "M365", "Others"]
+        product_choices = list(Request._meta.get_field("product_category").choices)
+        product_categories = [value for value, _ in product_choices]
         product_buckets = {
             category: {"total": 0, "ongoing": 0, "completed": 0}
             for category in product_categories
         }
         for item in Request.objects.values("product_category", "status").annotate(total=Count("id")):
             category = item["product_category"] or "Others"
-            normalized = (category or "").lower()
-            if normalized == "azure" or category == "Azure":
-                key = "Azure"
-            elif normalized in {"m365", "microsoft 365"}:
-                key = "M365"
-            else:
-                key = "Others"
-
-            bucket = product_buckets.setdefault(key, {"total": 0, "ongoing": 0, "completed": 0})
+            bucket = product_buckets.setdefault(category, {"total": 0, "ongoing": 0, "completed": 0})
             bucket["total"] += item["total"]
             if item["status"] == Request.Status.ONGOING:
                 bucket["ongoing"] += item["total"]
@@ -6458,7 +6477,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "completed": [engagement_counts.get(value, {"completed": 0})["completed"] for value in engagement_order],
         }
         product_chart_payload = {
-            "labels": list(product_buckets.keys()),
+            "labels": [dict(product_choices).get(key, key) for key in product_buckets],
             "totals": [bucket["total"] for bucket in product_buckets.values()],
             "ongoing": [bucket["ongoing"] for bucket in product_buckets.values()],
             "completed": [bucket["completed"] for bucket in product_buckets.values()],
@@ -6485,18 +6504,10 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
                 "ongoing": Request.objects.filter(status=Request.Status.ONGOING).count(),
                 "completed": Request.objects.filter(status=Request.Status.COMPLETED).count(),
             },
-            "account_manager_chart": {
-                "labels": [item["name"] for item in account_manager_data],
-                "totals": [item["total"] for item in account_manager_data],
-                "ongoing": [item["ongoing"] for item in account_manager_data],
-                "completed": [item["completed"] for item in account_manager_data],
-            },
-            "engineer_chart": {
-                "labels": [item["name"] for item in engineer_data],
-                "totals": [item["total"] for item in engineer_data],
-                "ongoing": [item["ongoing"] for item in engineer_data],
-                "completed": [item["completed"] for item in engineer_data],
-            },
+            "account_manager_chart": self._compact_ranked_chart(account_manager_data),
+            "account_manager_chart_full": self._full_ranked_chart(account_manager_data),
+            "engineer_chart": self._compact_ranked_chart(engineer_data),
+            "engineer_chart_full": self._full_ranked_chart(engineer_data),
             "engagement_chart": engagement_chart_payload,
             "engagement_chart_has_data": engagement_chart_has_data,
             "product_chart": product_chart_payload,
@@ -6674,7 +6685,7 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         qs = self.get_queryset()
         query = (request.GET.get("user_q") or "").strip()
         if query:
-            terms = query.split()
+            terms = [term for term in query.split() if term]
             for term in terms:
                 qs = qs.filter(
                     Q(first_name__icontains=term)
@@ -6684,6 +6695,7 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                     | Q(department__icontains=term)
                     | Q(role__icontains=term)
                 )
+        qs = qs.order_by("first_name", "last_name", "username")
         paginator = Paginator(qs, 50)
         page_num = request.GET.get("user_page") or 1
         try:
@@ -6970,6 +6982,28 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         messages.success(request, message)
         return redirect("hub:management")
 
+    @staticmethod
+    def _protected_delete_error_message(display_name: str, protected_records: set) -> str:
+        if not protected_records:
+            return f"Cannot delete the account for {display_name} because it is still referenced by protected records."
+
+        summary = []
+        for record in sorted(protected_records, key=lambda obj: (obj._meta.label_lower, getattr(obj, "reference_code", "") or "", obj.pk)):
+            model_name = record._meta.verbose_name.title()
+            identifier = getattr(record, "reference_code", None) or getattr(record, "title", None) or getattr(record, "username", None)
+            if identifier:
+                summary.append(f"{model_name} {identifier}")
+            else:
+                summary.append(f"{model_name} #{record.pk}")
+
+        details = ", ".join(summary[:3])
+        if len(summary) > 3:
+            details += ", ..."
+        return (
+            f"Cannot delete the account for {display_name} because it is still referenced by protected records: {details}. "
+            "Reassign or delete those related records first."
+        )
+
     def _delete_user_account(self, request, target_user: User):
         if target_user.is_superuser:
             messages.error(request, "Superuser accounts cannot be deleted.")
@@ -6986,7 +7020,16 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                 return redirect("hub:management")
 
         display_name = target_user.get_full_name() or target_user.username
-        target_user.delete()
+        try:
+            target_user.delete()
+        except ProtectedError as exc:
+            protected_records = getattr(exc, "protected", set())
+            if not protected_records and len(exc.args) > 1 and isinstance(exc.args[1], set):
+                protected_records = exc.args[1]
+            message = self._protected_delete_error_message(display_name, protected_records)
+            messages.error(request, message)
+            return redirect("hub:management")
+
         messages.success(request, f"Deleted user account for {display_name}.")
         return redirect("hub:management")
 

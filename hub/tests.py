@@ -154,6 +154,158 @@ class AuthenticationBackendTests(TestCase):
         self.assertEqual(authenticated.username, "Admin")
 
 
+class RequestReportViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="reports-admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="reports-admin@example.com",
+        )
+        self.requestor = User.objects.create_user(
+            username="reports-requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="reports-requestor@example.com",
+        )
+        self.engineer = User.objects.create_user(
+            username="reports-engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="reports-engineer@example.com",
+            first_name="Report",
+            last_name="Engineer",
+        )
+        self.account = Account.objects.create(name="Reports Account")
+
+    def _create_request(self, **overrides):
+        values = {
+            "requestor": self.requestor,
+            "account": self.account,
+            "account_manager": "Account Manager 01",
+            "product_category": "Azure",
+            "engagement_type": Request.Engagement.SUPPORT,
+            "priority": Request.Priority.MEDIUM,
+            "engineer": self.engineer,
+        }
+        values.update(overrides)
+        return Request.objects.create(**values)
+
+    def test_report_requires_admin_or_pm_esg_role(self):
+        self.client.force_login(self.requestor)
+        response = self.client.get(reverse("hub:report"))
+        self.assertEqual(response.status_code, 403)
+
+        pm_esg = User.objects.create_user(
+            username="reports-pm-esg",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+        )
+        self.client.force_login(pm_esg)
+        response = self.client.get(reverse("hub:report"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_operational_report_excludes_soft_deleted_requests(self):
+        self._create_request(status=Request.Status.ONGOING)
+        deleted = self._create_request(
+            account_manager="Deleted Manager",
+            status=Request.Status.COMPLETED,
+        )
+        deleted.is_deleted = True
+        deleted.save(update_fields=["is_deleted"])
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("hub:report"))
+
+        self.assertEqual(response.context["totals"]["requests"], 1)
+        self.assertEqual(response.context["totals"]["ongoing"], 1)
+        self.assertEqual(response.context["totals"]["completed"], 0)
+        self.assertNotIn("Deleted Manager", response.context["account_manager_chart"]["labels"])
+
+    def test_operational_charts_include_all_configured_categories(self):
+        self._create_request(
+            engagement_type=Request.Engagement.PROJECT_MANAGEMENT,
+            product_category="VMware",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("hub:report"))
+
+        self.assertEqual(
+            response.context["engagement_chart"]["labels"],
+            [label for _, label in Request.Engagement.choices],
+        )
+        self.assertEqual(
+            response.context["product_chart"]["labels"],
+            [label for _, label in Request._meta.get_field("product_category").choices],
+        )
+        engagement_index = response.context["engagement_chart"]["labels"].index("Project Management")
+        product_index = response.context["product_chart"]["labels"].index("VMware")
+        self.assertEqual(response.context["engagement_chart"]["totals"][engagement_index], 1)
+        self.assertEqual(response.context["product_chart"]["totals"][product_index], 1)
+
+    def test_ranked_charts_compact_after_top_ten_but_tables_remain_complete(self):
+        for index in range(12):
+            for _ in range(12 - index):
+                self._create_request(
+                    account_manager=f"Account Manager {index + 1:02d}",
+                    engineer=None,
+                    status=Request.Status.COMPLETED,
+                )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("hub:report"))
+
+        chart = response.context["account_manager_chart"]
+        self.assertEqual(len(chart["labels"]), 11)
+        self.assertEqual(chart["labels"][-1], "Others")
+        self.assertEqual(chart["totals"][-1], 3)
+        self.assertEqual(len(response.context["account_manager_stats"]), 12)
+        self.assertEqual(len(response.context["account_manager_chart_full"]["labels"]), 12)
+        self.assertNotIn("Others", response.context["account_manager_chart_full"]["labels"])
+
+
+class UserManagementSearchTests(TestCase):
+    def test_user_search_prioritizes_best_matches_and_sorts_results(self):
+        alina = User.objects.create_user(
+            username="alina",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="alina@example.com",
+            first_name="Alina",
+            last_name="Smith",
+        )
+        alice = User.objects.create_user(
+            username="alice",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="alice@example.com",
+            first_name="Alice",
+            last_name="Wong",
+        )
+        User.objects.create_user(
+            username="zoe",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="zoe@example.com",
+            first_name="Zoe",
+            last_name="Brown",
+        )
+
+        alina.date_joined = timezone.datetime(2024, 1, 1, tzinfo=timezone.utc)
+        alice.date_joined = timezone.datetime(2024, 1, 3, tzinfo=timezone.utc)
+        alina.save(update_fields=["date_joined"])
+        alice.save(update_fields=["date_joined"])
+
+        request = RequestFactory().get("/management/", {"user_q": "ali"})
+
+        page_obj, query = UserManagementView()._paginate_users(request)
+        usernames = [user.username for user in page_obj.object_list]
+
+        self.assertEqual(query, "ali")
+        self.assertEqual(usernames[:2], ["alice", "alina"])
+
+
 class RequestStatusValidationTests(TestCase):
     def setUp(self):
         self.requestor = User.objects.create_user(
@@ -372,6 +524,42 @@ class DashboardViewTests(TestCase):
             email="engineer.dashboard@example.com",
         )
         self.account = Account.objects.create(name="Dashboard Account")
+
+    def test_dashboard_includes_live_keyword_search_controls(self):
+        admin = User.objects.create_user(
+            username="admin_dashboard_search",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="admin.dashboard.search@example.com",
+        )
+        Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Regular Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            description="Searchable dashboard request",
+        )
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse("hub:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="dashboard-request-search"', content)
+        self.assertIn('id="dashboard-request-count-badge"', content)
+        self.assertIn('Search requests...', content)
+
+    def test_sqr_page_includes_compact_toolbar_search_control(self):
+        self.client.force_login(self.pm_esg)
+        response = self.client.get(reverse("hub:sqr"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="sqr-header-search"', content)
+        self.assertIn('placeholder="Search SQR..."', content)
 
     def test_pm_ess_dashboard_includes_own_and_requestor_ess_requests(self):
         own_request = Request.objects.create(
@@ -1518,6 +1706,41 @@ class AdminAccountChangeTests(TestCase):
         self.request_obj.refresh_from_db()
         self.assertEqual(self.request_obj.account_id, target.pk)
         self.assertEqual(self.request_obj.account.name, "Admin Reassigned Account")
+
+    def test_delete_user_account_blocks_when_user_has_protected_requests(self):
+        engineer = User.objects.create_user(
+            username="engineer_protected_delete",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="engineer.protected@example.com",
+            first_name="Protected",
+            last_name="Engineer",
+        )
+        account = Account.objects.create(name="Protected Request Account")
+        request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=account,
+            account_manager="Req Account",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            description="Engineer is referenced by a request.",
+            start_date=date(2026, 8, 1),
+            engineer=engineer,
+        )
+
+        request = self.factory.post(reverse("hub:management"), data={})
+        request.user = self.admin
+        AssignmentEmailTests._attach_session_and_messages(request)
+
+        response = UserManagementView()._delete_user_account(request, engineer)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(User.objects.filter(pk=engineer.pk).exists())
+        self.assertEqual(Request.objects.get(pk=request_obj.pk).engineer_id, engineer.pk)
+        messages = [message.message for message in get_messages(request)]
+        self.assertTrue(any("cannot delete" in message.lower() for message in messages))
+        self.assertTrue(any("request" in message.lower() for message in messages))
 
 
 class UnusedAccountPruneTests(TestCase):

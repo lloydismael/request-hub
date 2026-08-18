@@ -612,6 +612,76 @@
         render();
     }
 
+    function initUserLiveSearch() {
+        var searchInput = document.getElementById('user-search');
+        var tbody = document.getElementById('users-tbody');
+        var badge = document.getElementById('user-count-badge');
+        if (!searchInput || !tbody) return;
+
+        var rows = Array.from(tbody.querySelectorAll('tr.mgmt-row'));
+        var emptyState = tbody.querySelector('tr.mgmt-empty-state');
+        if (!emptyState) {
+            emptyState = document.createElement('tr');
+            emptyState.className = 'mgmt-empty-state text-center text-muted';
+            emptyState.innerHTML = '<td colspan="7" class="text-center text-muted py-5"><i class="bi bi-people display-6 d-block mb-2 opacity-50"></i>No users found.</td>';
+            tbody.appendChild(emptyState);
+        }
+
+        function scoreMatch(row, query) {
+            if (!query) return 1;
+            var text = (row.dataset.searchText || '').toLowerCase();
+            if (!text) return 0;
+            var score = 0;
+            if (text === query) score += 1000;
+            if (text.startsWith(query)) score += 300;
+            if (text.includes(query)) score += 120;
+            var parts = text.split(/\s+/);
+            for (var i = 0; i < parts.length; i += 1) {
+                if (parts[i] === query) score += 180;
+                if (parts[i].startsWith(query)) score += 60;
+            }
+            return score;
+        }
+
+        function render() {
+            var q = searchInput.value.trim().toLowerCase();
+            var filtered = rows
+                .map(function (row) {
+                    return { row: row, score: scoreMatch(row, q) };
+                })
+                .filter(function (item) {
+                    return !q || item.score > 0;
+                })
+                .sort(function (a, b) {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return (a.row.dataset.searchText || '').localeCompare(b.row.dataset.searchText || '');
+                });
+
+            rows.forEach(function (row) {
+                row.style.display = 'none';
+            });
+
+            if (filtered.length === 0) {
+                emptyState.style.display = '';
+            } else {
+                emptyState.style.display = 'none';
+                filtered.forEach(function (item) {
+                    item.row.style.display = '';
+                    tbody.appendChild(item.row);
+                });
+            }
+
+            if (badge) {
+                badge.textContent = q
+                    ? filtered.length + ' match' + (filtered.length !== 1 ? 'es' : '')
+                    : rows.length + ' total';
+            }
+        }
+
+        searchInput.addEventListener('input', render);
+        render();
+    }
+
     /* ── Manage User Modal: populate from data-* attributes ── */
     function initManageModal() {
         var manageForm   = document.getElementById('manage-user-form');
@@ -658,8 +728,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        /* Users pane is now server-paginated/searched (GET user_q / user_page);
-           only the accounts pane keeps the client-side initTab behavior. */
+        initUserLiveSearch();
         initTab('accounts-tbody', 'account-search', 'account-count-badge', 'account-limit-note', 'account-pagination', 'accounts-save-btn', '#accounts-pane form');
         initManageModal();
     });
