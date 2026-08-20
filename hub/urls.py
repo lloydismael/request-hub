@@ -47,6 +47,7 @@ from .views import (
     UserEditView,
     UserManagementView,
     RequestCollaborativeManageView,
+    RequestLifecycleAcceptView,
 )
 
 app_name = "hub"
@@ -62,6 +63,7 @@ urlpatterns = [
     path("requests/<int:pk>/status/", RequestStatusUpdateView.as_view(), name="request-status"),
     path("requests/<int:pk>/manage/", RequestAdminUpdateView.as_view(), name="request-manage"),
     path("requests/<int:pk>/manage/collab/", RequestCollaborativeManageView.as_view(), name="request-manage-collab"),
+    path("requests/<int:pk>/lifecycle/accept/", RequestLifecycleAcceptView.as_view(), name="request-lifecycle-accept"),
     path("status-logs/<int:pk>/edit/", StatusLogUpdateView.as_view(), name="status-log-edit"),
     path("requests/<int:pk>/nudge/", RequestNudgeView.as_view(), name="request-nudge"),
     path("requests/<int:pk>/teams-chat/", RequestTeamsRedirectView.as_view(), name="request-teams"),

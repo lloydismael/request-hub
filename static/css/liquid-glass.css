@@ -172,15 +172,28 @@ body.dark-mode {
 
 /* !important required to beat Bootstrap's .bg-light on <body> */
 body.page-login {
+    --login-glass-blur: 24px;
+    --login-glass-saturate: 170%;
+    --login-glass-tint: rgba(244, 249, 255, 0.64);
+    --login-glass-tint-deep: rgba(225, 238, 252, 0.54);
+    --login-glass-rim: rgba(255, 255, 255, 0.88);
+    --login-glass-shadow: rgba(25, 58, 104, 0.22);
+    --login-light-x: 50%;
+    --login-light-y: 18%;
+    --login-refraction-scale: 1;
     background-color: #0a1740 !important;
     background-image: none !important;
     font-family: var(--lg-font);
     min-height: 100dvh;
-    height: 100dvh;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 body.page-login.dark-mode {
+    --login-glass-tint: rgba(14, 23, 42, 0.66);
+    --login-glass-tint-deep: rgba(8, 15, 31, 0.58);
+    --login-glass-rim: rgba(190, 220, 255, 0.62);
+    --login-glass-shadow: rgba(0, 0, 0, 0.52);
     background-color: #05070f !important;
 }
 
@@ -198,7 +211,8 @@ body.page-landing.dark-mode {
     min-height: 100dvh;
     padding: clamp(1.5rem, 5vw, 4rem);
     isolation: isolate;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -471,18 +485,67 @@ body.dark-mode.page-login .navbar {
     border-radius: var(--lg-radius-xl);
     color: var(--lg-ink);
     z-index: 1;
-    transform-style: preserve-3d;
+    overflow: hidden;
+    contain: layout paint style;
+    background: linear-gradient(145deg, var(--login-glass-tint), var(--login-glass-tint-deep)) !important;
+    border-color: color-mix(in srgb, var(--login-glass-rim) 58%, transparent);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--login-glass-rim) 78%, transparent),
+        inset 0 -16px 28px rgba(16, 47, 88, 0.07),
+        0 24px 58px -18px var(--login-glass-shadow);
+    -webkit-backdrop-filter: blur(var(--login-glass-blur)) saturate(var(--login-glass-saturate));
+    backdrop-filter: blur(var(--login-glass-blur)) saturate(var(--login-glass-saturate));
     transition:
         transform var(--lg-dur-md) var(--ease-ios-out),
         box-shadow var(--lg-dur-md) var(--ease-ios-out);
 }
 
-.page-login .login-card--tilt {
-    transform:
-        perspective(1200px)
-        rotateX(var(--lg-tilt-x, 0deg))
-        rotateY(var(--lg-tilt-y, 0deg));
-    transition: transform 0.12s linear, box-shadow var(--lg-dur-md) var(--ease-ios-out);
+.lg-filter-defs {
+    position: fixed;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.login-card__lens,
+.login-card__rim {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+/* A narrow, feathered proxy bends only the pane edge; content remains crisp. */
+.login-card__lens {
+    z-index: 0;
+    inset: -5px;
+    padding: 14px;
+    background:
+        radial-gradient(16rem 13rem at var(--login-light-x) var(--login-light-y), rgba(255, 255, 255, 0.24), transparent 72%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(54, 116, 190, 0.08));
+    -webkit-backdrop-filter: blur(8px) saturate(178%);
+    backdrop-filter: blur(8px) saturate(178%);
+    filter: url("#lg-edge-refraction");
+    transform: scale(var(--login-refraction-scale));
+    transform-origin: center;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0.68;
+    transition: transform 180ms var(--ease-ios-out), opacity 220ms var(--ease-ios-out);
+}
+
+.login-card__rim {
+    z-index: 2;
+    inset: 1px;
+    box-shadow:
+        inset 0 1px 1px color-mix(in srgb, var(--login-glass-rim) 88%, transparent),
+        inset 1px 0 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 1px rgba(5, 18, 38, 0.2);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 32%, rgba(0, 0, 0, 0.2) 72%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 32%, rgba(0, 0, 0, 0.2) 72%, transparent 100%);
 }
 
 /* Cursor-tracking specular sheen */
@@ -492,22 +555,32 @@ body.dark-mode.page-login .navbar {
     border-radius: inherit;
     pointer-events: none;
     z-index: 1;
-    opacity: 0;
+    opacity: 0.58;
     background: radial-gradient(
-        22rem 22rem at var(--lg-sheen-x, 50%) var(--lg-sheen-y, 0%),
-        rgba(255, 255, 255, 0.42) 0%,
-        rgba(255, 255, 255, 0.08) 38%,
-        rgba(255, 255, 255, 0) 70%
+        18rem 15rem at var(--login-light-x) var(--login-light-y),
+        rgba(255, 255, 255, 0.48) 0%,
+        rgba(255, 255, 255, 0.12) 34%,
+        rgba(255, 255, 255, 0) 72%
     );
+    mix-blend-mode: soft-light;
     transition: opacity var(--lg-dur-md) var(--ease-ios-out);
 }
 
 .page-login .login-card:hover .login-card__sheen,
 .page-login .login-card:focus-within .login-card__sheen {
-    opacity: 1;
+    opacity: 0.9;
 }
 
-.page-login .login-card > * {
+.page-login .login-card.is-pressed {
+    --login-refraction-scale: 1.012;
+    transform: scale(0.992);
+}
+
+.page-login .login-card.is-pressed .login-card__lens {
+    opacity: 0.9;
+}
+
+.page-login .login-card > :not(.login-card__lens):not(.login-card__rim):not(.login-card__sheen) {
     position: relative;
     z-index: 3;
 }
@@ -793,12 +866,21 @@ body.dark-mode .page-login .login-card__logo {
 @keyframes lg-card-arrive {
     0% {
         opacity: 0;
-        transform: translateY(24px) scale(0.94);
+        transform: translateY(20px) scale(0.97);
     }
     100% {
         opacity: 1;
         transform: translateY(0) scale(1);
     }
+}
+
+.lg-enter-ready .login-card.lg-enter .login-card__sheen {
+    animation: lg-glass-condense 0.8s var(--ease-ios-out) both;
+}
+
+@keyframes lg-glass-condense {
+    0% { opacity: 0; filter: blur(8px); transform: scale(1.025); }
+    100% { filter: blur(0); transform: scale(1); }
 }
 
 /* --------------------------------------------------------------------------
@@ -818,9 +900,9 @@ body.page-login:not(.dark-mode) {
 }
 
 body.page-login:not(.dark-mode) .login-card {
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 255, 0.82)) !important;
-    border: 1px solid rgba(148, 163, 184, 0.42);
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12), 0 36px 70px -24px rgba(37, 99, 235, 0.18);
+    background: linear-gradient(145deg, var(--login-glass-tint), var(--login-glass-tint-deep)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -16px 28px rgba(16, 47, 88, 0.07), 0 24px 58px -18px var(--login-glass-shadow);
     color: #0f172a;
 }
 
@@ -885,9 +967,9 @@ body.page-login:not(.dark-mode) .login-card__submit {
 }
 
 body.dark-mode.page-login .login-card {
-    background: linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
-    border: 1px solid var(--lg-hairline);
-    box-shadow: var(--lg-shadow-card);
+    background: linear-gradient(145deg, var(--login-glass-tint), var(--login-glass-tint-deep)) !important;
+    border: 1px solid rgba(190, 220, 255, 0.24);
+    box-shadow: inset 0 1px 0 rgba(205, 229, 255, 0.42), inset 0 -18px 30px rgba(0, 0, 0, 0.18), 0 28px 64px -18px var(--login-glass-shadow);
     color: var(--lg-ink);
 }
 
@@ -1278,12 +1360,16 @@ body.dark-mode.page-login img.login-card__logo {
         stroke-dashoffset: 0;
     }
 
-    .page-login .login-card--tilt {
+    .login-card__lens,
+    .login-card__sheen {
+        animation: none !important;
+        transition: none !important;
         transform: none !important;
     }
 
     .login-card__sheen {
-        display: none;    }
+        opacity: 0.42;
+    }
 
     .lg-tile:hover,
     .lg-tile:focus-within,
@@ -1291,6 +1377,44 @@ body.dark-mode.page-login img.login-card__logo {
     .lg-tile__cta:hover {
         transform: none;
     }
+}
+
+@media (pointer: coarse) {
+    .login-card__sheen { opacity: 0.48; }
+}
+
+@supports not (filter: url("#lg-edge-refraction")) {
+    .login-card__lens { filter: none; }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .page-login .login-card {
+        background: rgba(242, 247, 253, 0.96) !important;
+    }
+
+    body.dark-mode.page-login .login-card {
+        background: rgba(13, 21, 38, 0.96) !important;
+    }
+
+    .login-card__lens { display: none; }
+}
+
+body.pref-reduce-effects.page-login .login-card {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(242, 247, 253, 0.96) !important;
+}
+
+body.pref-reduce-effects.page-login .login-card__lens {
+    display: none;
+}
+
+body.pref-reduce-effects.page-login .login-card__sheen {
+    opacity: 0.25;
+}
+
+body.dark-mode.pref-reduce-effects.page-login .login-card {
+    background: rgba(13, 21, 38, 0.96) !important;
 }
 
 

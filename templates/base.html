@@ -5,11 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Request Hub{% endblock %}</title>
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('reqHubTheme');
+                var useDark = savedTheme === 'dark' ||
+                    (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.classList.toggle('theme-dark-pending', useDark);
+            } catch (_) {}
+        }());
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=11">
-    <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=9">
-    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=22">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=12">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=10">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=25">
     <!-- Ambient background layer renders below content; defer so it doesn't block first paint -->
     <link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=1" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=1"></noscript>
@@ -17,6 +27,12 @@
     <link rel="icon" type="image/png" href="{% static 'images/PD favicon.png' %}">
 </head>
 <body class="bg-light {% block body_class %}{% endblock %}{% if request.user.is_authenticated %}{% if request.user.pref_compact_tables %} pref-compact-tables{% endif %}{% if request.user.pref_large_text %} pref-large-text{% endif %}{% if request.user.pref_reduce_effects %} pref-reduce-effects{% endif %}{% if request.user.pref_reduce_motion %} pref-reduce-motion{% endif %}{% endif %}">
+    <script>
+        if (document.documentElement.classList.contains('theme-dark-pending')) {
+            document.body.classList.add('dark-mode');
+        }
+        document.documentElement.classList.remove('theme-dark-pending');
+    </script>
     <!-- Shared ambient background — animated color orbs behind every page.
          Subtle intensity; login/landing re-intensify via CSS overrides. -->
     <div class="ambient-mesh" aria-hidden="true">
@@ -170,7 +186,9 @@
 
             // Apply saved theme immediately on load
             const currentTheme = localStorage.getItem(storageKey);
-            if (currentTheme === 'dark') {
+            const startsDark = currentTheme === 'dark' ||
+                (!currentTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (startsDark) {
                 body.classList.add('dark-mode');
                 if (toggle) toggle.checked = true;
             }
@@ -392,8 +410,8 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
-    <script src="{% static 'js/liquid-glass.js' %}?v=3" defer></script>
-    <script src="{% static 'js/smooth-scroll.js' %}?v=3" defer></script>
+    <script src="{% static 'js/liquid-glass.js' %}?v=4" defer></script>
+    <script src="{% static 'js/smooth-scroll.js' %}?v=4" defer></script>
     <script src="{% static 'js/login-success.js' %}" defer></script>
     <script>
         // Nav avatar dropdown

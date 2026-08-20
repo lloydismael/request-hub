@@ -755,12 +755,15 @@
 
                 function render() {
                     const q = searchInput.value.trim().toLowerCase();
-                    const filtered = rows
-                        .map(function (row) {
+                    const filtered = !q
+                        ? rows.map(function (row) {
+                            return { row: row, score: 1 };
+                        })
+                        : rows.map(function (row) {
                             return { row: row, score: scoreMatch(row, q) };
                         })
                         .filter(function (item) {
-                            return !q || item.score > 0;
+                            return item.score > 0;
                         })
                         .sort(function (a, b) {
                             if (b.score !== a.score) {

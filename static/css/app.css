@@ -4537,6 +4537,125 @@ body.dark-mode .request-activity-table tbody tr:hover td {
     background: rgba(255,255,255,0.03);
 }
 
+/* ── Request lifecycle progress ── */
+.rmf-card__header-icon--progress {
+    background: rgba(14,165,233,0.09);
+    border-color: rgba(14,165,233,0.2);
+    color: #0284c7;
+}
+.rmf-progress__body { padding: 1.25rem 1.5rem; }
+.rmf-progress__list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.rmf-progress__step {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    padding-right: 0.75rem;
+}
+.rmf-progress__step:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 18px;
+    left: 38px;
+    right: 0;
+    height: 2px;
+    background: #e2e8f0;
+}
+.rmf-progress__step--complete:not(:last-child)::after { background: #22c55e; }
+.rmf-progress__marker {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    border: 2px solid #cbd5e1;
+    border-radius: 50%;
+    background: #fff;
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+.rmf-progress__step--complete .rmf-progress__marker { background: #16a34a; border-color: #16a34a; color: #fff; }
+.rmf-progress__step--current .rmf-progress__marker { border-color: #2563eb; color: #2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+.rmf-progress__content { position: relative; z-index: 1; display: flex; min-width: 0; flex-direction: column; background: #fff; padding-right: 0.45rem; }
+.rmf-progress__label { overflow: hidden; color: #334155; font-size: 0.83rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.rmf-progress__state { color: #94a3b8; font-size: 0.7rem; }
+.rmf-progress__step--current .rmf-progress__label,
+.rmf-progress__step--current .rmf-progress__state { color: #1d4ed8; }
+.rmf-progress__action {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.45rem 1rem;
+    margin-top: 1.25rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    background: #f8fbff;
+}
+.rmf-progress__eyebrow { grid-column: 1; color: #2563eb; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.rmf-progress__action-text { grid-column: 2; grid-row: 1 / span 2; margin: 0; color: #334155; font-size: 0.87rem; }
+.rmf-progress__owner { grid-column: 3; display: flex; align-items: center; gap: 0.45rem; color: #0f172a; font-size: 0.84rem; }
+.rmf-progress__support { grid-column: 3; color: #64748b; font-size: 0.75rem; }
+.rmf-progress__action form { grid-column: 3; }
+.rmf-progress-history { margin-top: 1rem; border-top: 1px solid #e2e8f0; padding-top: 0.85rem; }
+.rmf-progress-history > summary { color: #475569; cursor: pointer; font-size: 0.82rem; font-weight: 700; }
+.rmf-progress-history__list { display: grid; gap: 0.65rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
+.rmf-progress-history__list li { border-left: 3px solid #bfdbfe; padding: 0.25rem 0 0.25rem 0.8rem; }
+.rmf-progress-history__heading { display: flex; justify-content: space-between; gap: 1rem; color: #334155; font-size: 0.8rem; }
+.rmf-progress-history__heading time { color: #94a3b8; font-weight: 500; }
+.rmf-progress-history__meta { margin-top: 0.15rem; color: #64748b; font-size: 0.75rem; }
+.rmf-progress-history__inferred { display: inline-block; margin-left: 0.5rem; border-radius: 999px; background: #f1f5f9; padding: 0.15rem 0.45rem; color: #64748b; font-size: 0.68rem; font-weight: 700; }
+
+body.dark-mode .rmf-progress__step:not(:last-child)::after { background: #334155; }
+body.dark-mode .rmf-progress__step--complete:not(:last-child)::after { background: #22c55e; }
+body.dark-mode .rmf-progress__marker { background: #0f172a; border-color: #475569; color: #94a3b8; }
+body.dark-mode .rmf-progress__step--complete .rmf-progress__marker { background: #16a34a; border-color: #16a34a; color: #fff; }
+body.dark-mode .rmf-progress__step--current .rmf-progress__marker { border-color: #60a5fa; color: #93c5fd; }
+body.dark-mode .rmf-progress__content { background: #0f172a; }
+body.dark-mode .rmf-progress__label { color: #cbd5e1; }
+body.dark-mode .rmf-progress__step--current .rmf-progress__label,
+body.dark-mode .rmf-progress__step--current .rmf-progress__state { color: #93c5fd; }
+body.dark-mode .rmf-progress__action { background: rgba(30,58,138,0.12); border-color: rgba(96,165,250,0.2); }
+body.dark-mode .rmf-progress__action-text,
+body.dark-mode .rmf-progress__owner { color: #e2e8f0; }
+body.dark-mode .rmf-progress__support,
+body.dark-mode .rmf-progress-history__meta { color: #94a3b8; }
+body.dark-mode .rmf-progress-history { border-top-color: rgba(148,163,184,0.16); }
+body.dark-mode .rmf-progress-history > summary,
+body.dark-mode .rmf-progress-history__heading { color: #cbd5e1; }
+body.dark-mode .rmf-progress-history__inferred { background: rgba(148,163,184,0.12); color: #cbd5e1; }
+
+@media (max-width: 768px) {
+    .rmf-progress__list { grid-template-columns: 1fr; gap: 0.65rem; }
+    .rmf-progress__step { min-height: 42px; padding: 0 0 0.2rem; }
+    .rmf-progress__step:not(:last-child)::after { top: 35px; bottom: -0.7rem; left: 17px; right: auto; width: 2px; height: auto; }
+    .rmf-progress__content { padding-right: 0; }
+    .rmf-progress__label { white-space: normal; }
+    .rmf-progress__action { grid-template-columns: 1fr; }
+    .rmf-progress__eyebrow,
+    .rmf-progress__action-text,
+    .rmf-progress__owner,
+    .rmf-progress__support,
+    .rmf-progress__action form { grid-column: 1; grid-row: auto; }
+    .rmf-progress-history__heading { flex-direction: column; gap: 0.1rem; }
+}
+
+body.pref-large-text .rmf-progress__label { white-space: normal; }
+body.pref-reduce-motion .rmf-progress-card * { transition: none !important; }
+
 /* ══ END REQUEST MANAGER FORM ══════════════════════════════ */
 
 /* Dark Mode Styles */

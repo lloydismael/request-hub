@@ -30,6 +30,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.db import close_old_connections
 from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
@@ -92,6 +93,7 @@ from .mixins import (
     AdminRequiredMixin,
     EngineerRequiredMixin,
 )
+from .services import request_lifecycle
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
@@ -2472,6 +2474,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if request.user.role in ADMIN_PANEL_ROLES:
                 req._allow_capacity_override = True
             req.save()
+            lifecycle_result = request_lifecycle.record_created(
+                req.pk,
+                actor=request.user,
+                source="Dashboard · New Request",
+            )
+            req = lifecycle_result.request
             notify_engineer_assignment_notification(req, actor_user=request.user)
             assignment_email_result = notify_engineer_assignment_email(
                 req,
@@ -4562,6 +4570,22 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         previous_backup_id = original.backup_engineer_id
         changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
+        lifecycle_result = request_lifecycle.record_assignment_change(
+            self.object.pk,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+            actor=self.request.user,
+            source="Admin · Manage Request",
+        )
+        self.object = lifecycle_result.request
+        if original.status != self.object.status:
+            lifecycle_status = request_lifecycle.record_status_change(
+                self.object.pk,
+                previous_status=original.status,
+                actor=self.request.user,
+                source="Admin · Manage Request",
+            )
+            self.object = lifecycle_status.request
         clear_engineer_outlook_lock_on_reassignment(
             self.object,
             previous_engineer_id=previous_engineer_id,
@@ -4611,6 +4635,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         context["account_name_choices"] = getattr(context.get("form"), "account_name_suggestions", ()) or ()
         context["is_admin_form"] = True
         context["can_change_account"] = True
+        context["lifecycle"] = request_lifecycle.build_lifecycle_context(self.object, self.request.user)
         context.update(get_request_activity_log_context(self.object))
         return context
 
@@ -4716,6 +4741,14 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         previous_engineer_id = original.engineer_id
         changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
+        lifecycle_result = request_lifecycle.record_assignment_change(
+            self.object.pk,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=original.backup_engineer_id,
+            actor=self.request.user,
+            source="Requestor · Edit Request",
+        )
+        self.object = lifecycle_result.request
         clear_engineer_outlook_lock_on_reassignment(
             self.object,
             previous_engineer_id=previous_engineer_id,
@@ -4831,7 +4864,10 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     def get_context_data(self, request_obj, form=None, status_form=None, log_form=None, activity_form=None, editing_activity_log=None):
         if form is None:
             form = RequestForm(instance=request_obj, actor_role=self.request.user.role, actor_user=self.request.user)
-        status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
+        status_allowed = (
+            self.request.user.pk == request_obj.engineer_id
+            or self.request.user.role in ADMIN_PANEL_ROLES
+        )
         if status_allowed and status_form is None:
             status_form = RequestStatusForm(instance=request_obj, actor_user=self.request.user)
         elif not status_allowed:
@@ -4866,6 +4902,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "status_allowed": status_allowed,
             "can_change_account": self.request.user.role in ADMIN_PANEL_ROLES,
             "linked_sqr": linked_sqr,
+            "lifecycle": request_lifecycle.build_lifecycle_context(request_obj, self.request.user),
             **get_request_activity_log_context(request_obj),
         }
 
@@ -4907,6 +4944,14 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             previous_backup_id = original.backup_engineer_id
             changed_fields = normalize_request_form_changed_fields(form.changed_data)
             form.save()
+            lifecycle_result = request_lifecycle.record_assignment_change(
+                request_obj.pk,
+                previous_engineer_id=previous_engineer_id,
+                previous_backup_id=previous_backup_id,
+                actor=request.user,
+                source=source_label,
+            )
+            request_obj = lifecycle_result.request
             clear_engineer_outlook_lock_on_reassignment(
                 request_obj,
                 previous_engineer_id=previous_engineer_id,
@@ -4941,8 +4986,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
     def _handle_status_update(self, request, request_obj):
-        if request.user.role not in ENGINEER_ACCESS_ROLES:
-            messages.error(request, "Only the assigned engineer can update the status.")
+        if request.user.pk != request_obj.engineer_id and request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only the primary assignee or a manager can update the status.")
             return HttpResponseRedirect(request.path)
 
         status_form = RequestStatusForm(request.POST, instance=request_obj, actor_user=request.user)
@@ -4956,6 +5001,13 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             request_obj._actor_user = request.user
             request_obj._actor_source = source_label
             status_form.save()
+            lifecycle_result = request_lifecycle.record_status_change(
+                request_obj.pk,
+                previous_status=original.status,
+                actor=request.user,
+                source=source_label,
+            )
+            request_obj = lifecycle_result.request
             changed_fields = []
             if original.status != request_obj.status:
                 changed_fields.append("status")
@@ -7229,6 +7281,29 @@ class RequestNudgeView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         return redirect("hub:request-manage", pk=pk)
 
 
+class RequestLifecycleAcceptView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        try:
+            expected_revision = int(request.POST.get("assignment_revision", ""))
+        except (TypeError, ValueError):
+            messages.error(request, "The assignment version is invalid. Refresh and try again.")
+            return redirect("hub:request-manage-collab", pk=pk)
+
+        try:
+            request_lifecycle.accept_request(
+                pk,
+                actor=request.user,
+                expected_revision=expected_revision,
+            )
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+        except request_lifecycle.LifecycleConflictError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, "Request accepted. Work is now ongoing.")
+        return redirect("hub:request-manage-collab", pk=pk)
+
+
 class RequestStatusUpdateView(LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(
@@ -7246,6 +7321,12 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             request_obj._actor_user = request.user
             request_obj._actor_source = "Engineer · Status Update"
             form.save()
+            request_lifecycle.record_status_change(
+                request_obj.pk,
+                previous_status=original.status,
+                actor=request.user,
+                source="Engineer · Status Update",
+            )
             changed_fields = []
             if original.status != request_obj.status:
                 changed_fields.append("status")

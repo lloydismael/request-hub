@@ -6,7 +6,11 @@
 
 <header class="rpt2-header lg-enter" data-lg-delay="0">
     <div class="rpt2-heading">
+        <span class="rpt2-eyebrow"><i class="bi bi-bar-chart-line-fill"></i> Analytics workspace</span>
         <h1 class="rpt2-page-title">Reports</h1>
+        <p class="rpt2-page-subtitle">
+            {% if report_view == 'activity' %}Engineer activity, utilization, and billable-hour insights.{% else %}Request volume, ownership, and delivery insights.{% endif %}
+        </p>
     </div>
     <div class="rpt2-header-actions">
         <div class="rpt-tab-group" role="group" aria-label="Report view toggle">
@@ -31,9 +35,9 @@
 {% if report_view == 'activity' %}
 
     {# ── Activity: filter ───────────────────────────────────────────────── #}
-    <div class="glass-card rpt2-filter mb-4 lg-enter" data-lg-delay="40">
+    <div class="glass-card rpt2-filter rpt2-activity-filter mb-4 lg-enter" data-lg-delay="40">
         <div class="rpt-filter-panel">
-            <form method="get" class="row g-2 align-items-end">
+            <form method="get" class="row g-2 align-items-end" aria-label="Filter activity report by month">
                 <input type="hidden" name="report_view" value="activity">
                 <div class="col-12 col-md-4">
                     <label for="activity-start-month" class="form-label mb-1 small">From Month</label>
@@ -126,10 +130,10 @@
                     <div>
                         <h3 class="rpt-chart-title">Billable Distribution</h3>
                     </div>
-                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityBillableChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityBillableChart" aria-label="Expand Billable Distribution chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_totals.entries %}
-                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityBillableChart"></canvas></div>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityBillableChart" role="img" aria-label="Billable and non-billable logged-hour distribution."></canvas></div>
                 {% else %}
                     <div class="rpt-empty"><i class="bi bi-pie-chart"></i><p>Log activity to see billable trends.</p></div>
                 {% endif %}
@@ -149,7 +153,7 @@
                 </div>
                 <div class="rpt-series-key" aria-label="Chart series"><span class="rpt-series-key__item rpt-series-key__item--blue">Billable</span><span class="rpt-series-key__item rpt-series-key__item--amber">Not Billable</span></div>
                 {% if activity_type_chart.labels %}
-                    <div class="rpt-canvas-wrap"><canvas id="activityTypeChart"></canvas></div>
+                    <div class="rpt-canvas-wrap"><canvas id="activityTypeChart" role="img" aria-label="Billable and non-billable hours grouped by activity type. Detailed values follow in the Activity Type Breakdown table."></canvas></div>
                 {% else %}
                     <div class="rpt-empty"><i class="bi bi-bar-chart"></i><p>No activity type data captured yet.</p></div>
                 {% endif %}
@@ -161,10 +165,10 @@
                     <div>
                         <h3 class="rpt-chart-title">Work Location Mix</h3>
                     </div>
-                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityLocationChart" title="Expand chart"><i class="bi bi-fullscreen"></i></button>
+                    <button type="button" class="rpt-expand-btn ms-auto" data-expand-chart="activityLocationChart" aria-label="Expand Work Location Mix chart"><i class="bi bi-fullscreen"></i></button>
                 </div>
                 {% if activity_location_chart.labels %}
-                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityLocationChart"></canvas></div>
+                    <div class="rpt-canvas-wrap rpt-canvas-wrap--donut"><canvas id="activityLocationChart" role="img" aria-label="Logged hours grouped by work location."></canvas></div>
                 {% else %}
                     <div class="rpt-empty"><i class="bi bi-pie-chart"></i><p>No location data logged yet.</p></div>
                 {% endif %}
@@ -247,10 +251,11 @@
     </div>
 
     {# ── Activity: log table ─────────────────────────────────────────────── #}
-    <div class="glass-card rpt-chart-card mb-4">
+    <section class="glass-card rpt-chart-card rpt2-activity-log-card mb-4" aria-labelledby="recent-engineer-activity-title">
         <div class="rpt-chart-head flex-wrap gap-2">
             <div class="flex-grow-1">
-                <h3 class="rpt-chart-title">Recent Engineer Activity</h3>
+                <h3 class="rpt-chart-title" id="recent-engineer-activity-title">Recent Engineer Activity</h3>
+                <p class="rpt-chart-sub">Detailed entries for {{ activity_month_filter_label|lower }}.</p>
             </div>
             {% if activity_totals.entries %}
                 <span class="rpt-log-count-badge">
@@ -270,6 +275,7 @@
             </div>
             <div class="table-responsive dashboard-table-wrapper">
                 <table class="table align-middle rpt-activity-table mb-0">
+                    <caption class="visually-hidden">Recent engineer activity entries for {{ activity_month_filter_label }}</caption>
                     <colgroup>
                         <col style="width: 2.75rem;">
                         <col style="width: 7.5rem;">
@@ -398,7 +404,7 @@
         {% else %}
             <div class="rpt-empty"><i class="bi bi-journal-x"></i><p>No engineer activity logs recorded yet.</p></div>
         {% endif %}
-    </div>
+    </section>
 
     {# ── Activity edit modal ─────────────────────────────────────────────── #}
     <div class="requestor-modal" id="activity-edit-modal" aria-hidden="true"

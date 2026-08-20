@@ -191,6 +191,21 @@ class RequestReportViewTests(TestCase):
         values.update(overrides)
         return Request.objects.create(**values)
 
+    def _create_activity_log(self, **overrides):
+        values = {
+            "engineer": self.engineer,
+            "account": self.account,
+            "request_date": date(2026, 8, 15),
+            "activity_type": EngineerActivityLog.ActivityType.INTERNAL_SUPPORT,
+            "actual_hours": Decimal("2.50"),
+            "details": "Activity report regression entry",
+            "location": EngineerActivityLog.Location.OFFICE,
+            "is_billable": True,
+            "status": EngineerActivityLog.Status.COMPLETED,
+        }
+        values.update(overrides)
+        return EngineerActivityLog.objects.create(**values)
+
     def test_report_requires_admin_or_pm_esg_role(self):
         self.client.force_login(self.requestor)
         response = self.client.get(reverse("hub:report"))
@@ -263,6 +278,56 @@ class RequestReportViewTests(TestCase):
         self.assertEqual(len(response.context["account_manager_stats"]), 12)
         self.assertEqual(len(response.context["account_manager_chart_full"]["labels"]), 12)
         self.assertNotIn("Others", response.context["account_manager_chart_full"]["labels"])
+
+    def test_activity_report_uses_operational_layout_and_retains_recent_activity(self):
+        activity_log = self._create_activity_log()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse("hub:report"),
+            {
+                "report_view": "activity",
+                "start_month": "2026-09",
+                "end_month": "2026-08",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["report_view"], "activity")
+        self.assertContains(response, 'class="rpt-tab rpt-tab--active"')
+        self.assertContains(response, 'aria-current="page"')
+        self.assertContains(response, 'class="glass-card rpt2-filter rpt2-activity-filter')
+        self.assertContains(response, 'class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 mb-4 lg-enter rpt2-kpi-grid"')
+        self.assertContains(response, 'class="glass-card rpt-chart-card rpt2-activity-log-card')
+        self.assertContains(response, "Recent Engineer Activity")
+        self.assertContains(response, "Activity report regression entry")
+        self.assertEqual(response.context["activity_start_month"], "2026-08")
+        self.assertEqual(response.context["activity_end_month"], "2026-09")
+        self.assertTrue(response.context["activity_range_swapped"])
+        self.assertContains(response, "Range was reversed")
+        self.assertContains(response, "August 2026 to September 2026")
+        self.assertContains(response, "start_month=2026-08&end_month=2026-09")
+        self.assertContains(response, f"edit_activity={activity_log.pk}")
+
+    def test_activity_report_pagination_preserves_month_filters(self):
+        for index in range(51):
+            self._create_activity_log(details=f"Paginated activity {index:02d}")
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse("hub:report"),
+            {
+                "report_view": "activity",
+                "start_month": "2026-08",
+                "end_month": "2026-08",
+            },
+        )
+
+        self.assertEqual(response.context["activity_logs_page_obj"].paginator.num_pages, 2)
+        self.assertContains(
+            response,
+            "?report_view=activity&start_month=2026-08&end_month=2026-08&activity_log_page=2",
+        )
 
 
 class UserManagementSearchTests(TestCase):
@@ -551,6 +616,25 @@ class DashboardViewTests(TestCase):
         self.assertIn('id="dashboard-request-search"', content)
         self.assertIn('id="dashboard-request-count-badge"', content)
         self.assertIn('Search requests...', content)
+
+    def test_dashboard_search_preserves_server_sort_when_query_is_empty(self):
+        admin = User.objects.create_user(
+            username="admin_dashboard_sort",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="admin.dashboard.sort@example.com",
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(
+            reverse("hub:dashboard"),
+            {"sort": "engineer", "direction": "asc"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("const filtered = !q", content)
+        self.assertIn("? rows.map(function (row) {", content)
 
     def test_sqr_page_includes_compact_toolbar_search_control(self):
         self.client.force_login(self.pm_esg)
@@ -1592,6 +1676,94 @@ class SqrMyAssignedFilterTests(TestCase):
         self.assertFalse(context["default_my_assigned_filter"])
         self.assertFalse(context["is_pm_esg"])
         self.assertEqual(len(context["proposal_submissions"]), 2)
+
+
+class SqrReportsDashboardTests(TestCase):
+    retained_chart_ids = (
+        "sqrFunnelChart",
+        "sqrDealStageChart",
+        "sqrRevenueOverviewChart",
+        "sqrMonthlyTrendChart",
+        "sqrGroupDistributionChart",
+    )
+    removed_chart_ids = (
+        "sqrQuickOverviewChart",
+        "sqrStatusChart",
+        "sqrDeliveryHealthChart",
+        "sqrScopeDistributionChart",
+    )
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="sqr_reports_admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="sqr.reports.admin@example.com",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_reports_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.reports.pm@example.com",
+        )
+        self.engineer = User.objects.create_user(
+            username="sqr_reports_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.reports.engineer@example.com",
+        )
+        SqrSubmission.objects.create(
+            engineer=self.engineer,
+            pm_esg_reviewer=self.pm,
+            customer_name="CRM Account",
+            customer_company="Enterprise",
+            customer_contact="CRM Contact",
+            project_title="CRM Service",
+            project_details="Implementation",
+            sse_manhrs=Decimal("10"),
+            documentation_links="https://example.com/doc",
+            sqr_folder_link="https://example.com/sqr-report",
+        )
+
+    def assert_compact_dashboard_contract(self, html):
+        self.assertIn("Sales Pipeline", html)
+        self.assertIn("Won Value", html)
+        self.assertIn("Top Won Accounts", html)
+        self.assertIn("Highest-Value Wins", html)
+        for chart_id in self.retained_chart_ids:
+            self.assertIn(f'id="{chart_id}"', html)
+        for chart_id in self.removed_chart_ids:
+            self.assertNotIn(f'id="{chart_id}"', html)
+        self.assertNotIn("What the dashboard is saying right now", html)
+        self.assertNotIn("Executive summary", html)
+
+    def test_admin_reports_page_renders_compact_sales_dashboard(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("hub:sqr"), {"tab": "reports"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assert_compact_dashboard_contract(response.content.decode())
+
+    def test_pm_reports_fragment_uses_same_dashboard_contract(self):
+        self.client.force_login(self.pm)
+
+        response = self.client.get(reverse("hub:sqr-reports-data"))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assert_compact_dashboard_contract(payload["html"])
+
+    def test_engineer_cannot_fetch_reports_fragment(self):
+        self.client.force_login(self.engineer)
+
+        response = self.client.get(reverse("hub:sqr-reports-data"))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"ok": False, "error": "Permission denied"})
+
+
 class AdminAccountChangeTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()

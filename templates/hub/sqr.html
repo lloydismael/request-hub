@@ -3,7 +3,7 @@
 {% block title %}SQR &middot; Request Hub{% endblock %}
 {% block body_class %}sqr-page{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=7">
+<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=8">
 {% endblock %}
 
 {% block content %}
@@ -359,15 +359,30 @@
                                 scales: {
                                     x: {
                                         grid: { color: theme.grid, display: options.hideXGrid ? false : true },
-                                        ticks: { color: theme.text }
+                                        ticks: {
+                                            color: theme.text,
+                                            autoSkip: true,
+                                            maxTicksLimit: options.maxXTicks || 8,
+                                            maxRotation: 0,
+                                            minRotation: 0,
+                                            callback: function (value) {
+                                                return options.currencyMode && options.indexAxis === 'y'
+                                                    ? formatCurrency(value)
+                                                    : this.getLabelForValue(value);
+                                            }
+                                        }
                                     },
                                     y: {
                                         beginAtZero: true,
                                         grid: { color: theme.grid },
                                         ticks: {
                                             color: theme.text,
+                                            autoSkip: true,
+                                            maxTicksLimit: options.maxYTicks || 6,
                                             callback: function (value) {
-                                                return options.currencyMode ? formatCurrency(value) : value;
+                                                return options.currencyMode && options.indexAxis !== 'y'
+                                                    ? formatCurrency(value)
+                                                    : this.getLabelForValue(value);
                                             }
                                         }
                                     }
@@ -443,26 +458,17 @@
                             maxBarThickness: 32,
                             hideXGrid: true
                         }, theme, tooltipCfg);
-                        makeBar('sqrQuickOverviewChart', readPayload('sqr-reports-quick-overview-chart-data'), {
-                            label: 'Count',
-                            gradient: function (canvas) {
-                                return buildGradient(canvas, 'rgba(14,165,233,0.82)', 'rgba(99,102,241,0.32)');
-                            },
-                            borderColor: 'rgba(14,165,233,1)',
-                            maxBarThickness: 30,
-                            hideXGrid: true
-                        }, theme, tooltipCfg);
                         makeBar('sqrRevenueOverviewChart', readPayload('sqr-reports-revenue-chart-data'), {
                             label: 'Value',
+                            indexAxis: 'y',
                             gradient: function (canvas) {
                                 return buildGradient(canvas, 'rgba(16,185,129,0.82)', 'rgba(6,182,212,0.4)');
                             },
                             borderColor: 'rgba(16,185,129,1)',
-                            currencyMode: true
+                            currencyMode: true,
+                            maxYTicks: 4
                         }, theme, tooltipCfg);
-                        makeDonut('sqrStatusChart', readPayload('sqr-reports-status-chart-data'), false, theme, tooltipCfg, donutPalette);
                         makeDonut('sqrDealStageChart', readPayload('sqr-reports-deal-chart-data'), false, theme, tooltipCfg, donutPalette);
-                        makeDonut('sqrDeliveryHealthChart', readPayload('sqr-reports-delivery-chart-data'), false, theme, tooltipCfg, donutPalette);
                         makeBar('sqrGroupDistributionChart', readPayload('sqr-reports-group-chart-data'), {
                             label: 'Submissions',
                             indexAxis: 'y',
@@ -470,16 +476,8 @@
                                 return buildGradient(canvas, 'rgba(99,102,241,0.86)', 'rgba(59,130,246,0.3)');
                             },
                             borderColor: 'rgba(99,102,241,1)',
-                            maxBarThickness: 28
-                        }, theme, tooltipCfg);
-                        makeBar('sqrScopeDistributionChart', readPayload('sqr-reports-scope-chart-data'), {
-                            label: 'Requests',
-                            indexAxis: 'y',
-                            gradient: function (canvas) {
-                                return buildGradient(canvas, 'rgba(245,158,11,0.88)', 'rgba(249,115,22,0.3)');
-                            },
-                            borderColor: 'rgba(245,158,11,1)',
-                            maxBarThickness: 28
+                            maxBarThickness: 28,
+                            maxYTicks: 8
                         }, theme, tooltipCfg);
                         makeBar('sqrFunnelChart', readPayload('sqr-reports-funnel-chart-data'), {
                             label: 'Count',

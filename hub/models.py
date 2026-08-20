@@ -48,6 +48,13 @@ class Request(models.Model):
         ONGOING = "ongoing", "Ongoing"
         COMPLETED = "completed", "Completed"
 
+    class LifecycleStage(models.TextChoices):
+        CREATED = "created", "Created"
+        ASSIGNED = "assigned", "Assigned"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        ONGOING = "ongoing", "Ongoing"
+        COMPLETED = "completed", "Completed"
+
     SLA_DAYS = {
         Priority.MEDIUM: 5,
         Priority.HIGH: 3,
@@ -100,6 +107,13 @@ class Request(models.Model):
     )
     teams_chat_topic = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)
+    lifecycle_stage = models.CharField(
+        max_length=20,
+        choices=LifecycleStage.choices,
+        default=LifecycleStage.CREATED,
+        db_index=True,
+    )
+    assignment_revision = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -159,6 +173,10 @@ class Request(models.Model):
 
     def save(self, *args, **kwargs):
         creating = self.pk is None
+        if self.assignment_revision is None:
+            self.assignment_revision = 0
+        if not self.lifecycle_stage:
+            self.lifecycle_stage = self.LifecycleStage.CREATED
         if creating and not self.start_date:
             self.start_date = timezone.now().date()
         if self.due_date is None:
@@ -341,6 +359,89 @@ class Request(models.Model):
         if account_name:
             return f"{reference} · {account_name}"
         return reference
+
+
+class RequestLifecycleEvent(models.Model):
+    """Immutable audit entry for a request lifecycle transition."""
+
+    class EventType(models.TextChoices):
+        CREATED = "created", "Created"
+        ASSIGNED = "assigned", "Assigned"
+        UNASSIGNED = "unassigned", "Unassigned"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        STARTED = "started", "Work started"
+        COMPLETED = "completed", "Completed"
+        REOPENED = "reopened", "Reopened"
+
+    request = models.ForeignKey(
+        Request,
+        on_delete=models.CASCADE,
+        related_name="lifecycle_events",
+    )
+    sequence = models.PositiveIntegerField()
+    stage = models.CharField(max_length=20, choices=Request.LifecycleStage.choices)
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    previous_stage = models.CharField(
+        max_length=20,
+        choices=Request.LifecycleStage.choices,
+        blank=True,
+        default="",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="request_lifecycle_actions",
+        blank=True,
+        null=True,
+    )
+    primary_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="request_lifecycle_primary_snapshots",
+        blank=True,
+        null=True,
+    )
+    backup_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="request_lifecycle_backup_snapshots",
+        blank=True,
+        null=True,
+    )
+    actor_label = models.CharField(max_length=255, blank=True, default="")
+    primary_owner_label = models.CharField(max_length=255, blank=True, default="")
+    backup_owner_label = models.CharField(max_length=255, blank=True, default="")
+    assignment_revision = models.PositiveIntegerField(default=0)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=120, blank=True, default="")
+    is_synthetic = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict, blank=True)
+    idempotency_key = models.CharField(max_length=160)
+
+    class Meta:
+        ordering = ["sequence"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["request", "sequence"],
+                name="uniq_req_lifecycle_sequence",
+            ),
+            models.UniqueConstraint(
+                fields=["request", "idempotency_key"],
+                name="uniq_req_lifecycle_key",
+            ),
+            models.CheckConstraint(
+                check=Q(sequence__gte=1),
+                name="req_lifecycle_sequence_gte_1",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["request", "occurred_at"], name="req_life_req_time_idx"),
+            models.Index(fields=["primary_owner", "stage"], name="req_life_owner_stage_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.request.reference_code} · {self.get_event_type_display()}"
 
 
 class RequestCommunication(models.Model):

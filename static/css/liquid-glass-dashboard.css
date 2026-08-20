@@ -973,6 +973,15 @@ body.dark-mode .dashboard-table-wrapper {
     backdrop-filter: none;
     overflow: auto;
     contain: layout paint;
+    cursor: grab;
+}
+
+body.admin-dashboard .dashboard-table-wrapper.is-dragging,
+body.requestor-dashboard .dashboard-table-wrapper.is-dragging,
+body.engineer-dashboard .dashboard-table-wrapper.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 body.dark-mode.admin-dashboard .dashboard-table-wrapper,
@@ -3803,4 +3812,92 @@ body.reports-page #rptModalCanvas {
     body.reports-page .rpt2-kpi-grid .rpt2-kpi { min-height: 5rem; }
     body.reports-page .rpt-chart-modal__inner { width: 98vw; height: 92vh; }
     body.reports-page #rptModalCanvas { min-width: 900px; }
+}
+
+/* Activity report: Operational visual parity with the detailed log retained. */
+body.reports-page .rpt2-activity-filter {
+    border-color: color-mix(in srgb, var(--lg-hairline) 84%, var(--lg-accent) 16%);
+    box-shadow: var(--lg-shadow-tile);
+}
+body.reports-page .rpt2-activity-filter form {
+    --bs-gutter-x: .85rem;
+    --bs-gutter-y: .7rem;
+}
+body.reports-page .rpt2-activity-filter .form-label {
+    color: var(--lg-ink-soft);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+body.reports-page .rpt2-activity-filter .form-control {
+    min-height: 2.75rem;
+    border-color: var(--lg-hairline);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--glass-bg) 82%, transparent);
+    color: var(--lg-ink);
+}
+body.reports-page .rpt2-activity-filter .rpt-period-badge {
+    min-height: 2.75rem;
+    padding-inline: .85rem;
+}
+body.reports-page .rpt-range-hint {
+    display: inline-flex;
+    align-items: center;
+    color: var(--lg-warn);
+    font-weight: 600;
+}
+body.reports-page .rpt2-activity-log-card {
+    margin-top: .25rem;
+    overflow: hidden;
+}
+body.reports-page .rpt2-activity-log-card .rpt-chart-head {
+    align-items: flex-start;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--lg-hairline);
+}
+body.reports-page .rpt2-activity-log-card .rpt-log-meta {
+    min-height: 1.5rem;
+}
+body.reports-page .rpt2-activity-log-card .dashboard-table-wrapper {
+    border-radius: 12px;
+    overflow-x: auto;
+}
+body.reports-page .rpt2-activity-log-card .rpt-activity-table {
+    min-width: 1080px;
+}
+body.reports-page .rpt2-activity-log-card .rpt-log-pagination {
+    margin-top: 1rem !important;
+}
+body.dark-mode.reports-page .rpt2-activity-filter .form-control {
+    color-scheme: dark;
+    background: color-mix(in srgb, var(--glass-bg) 88%, transparent);
+}
+
+@media (max-width: 767.98px) {
+    body.reports-page .rpt2-activity-filter {
+        padding: 1rem !important;
+    }
+    body.reports-page .rpt2-activity-filter .rpt-period-badge {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0 !important;
+    }
+    body.reports-page .rpt2-activity-log-card .rpt-chart-head {
+        align-items: stretch;
+    }
+    body.reports-page .rpt2-activity-log-card .rpt-log-count-badge {
+        align-self: flex-start;
+    }
+}
+
+body.pref-compact-tables.reports-page .rpt2-activity-log-card .rpt-activity-table th,
+body.pref-compact-tables.reports-page .rpt2-activity-log-card .rpt-activity-table td {
+    padding-block: .45rem;
+}
+body.pref-large-text.reports-page .rpt2-activity-log-card .rpt-activity-table {
+    min-width: 1240px;
+}
+body.pref-reduce-effects.reports-page .rpt2-activity-filter .form-control {
+    background: var(--glass-bg) !important;
 }

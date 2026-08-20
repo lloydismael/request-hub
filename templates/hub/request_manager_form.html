@@ -30,6 +30,73 @@
     </div>
 </div>
 
+{% if lifecycle %}
+<section class="rmf-card rmf-progress-card mb-4" aria-labelledby="request-progress-title">
+    <div class="rmf-card__header">
+        <div class="rmf-card__header-icon rmf-card__header-icon--progress">
+            <i class="bi bi-signpost-split" aria-hidden="true"></i>
+        </div>
+        <div>
+            <h2 class="rmf-card__header-title mb-0" id="request-progress-title">Request progress</h2>
+            <div class="rmf-card__header-sub">Current stage: <strong>{{ lifecycle.current_stage_label }}</strong></div>
+        </div>
+    </div>
+    <div class="rmf-progress__body">
+        <ol class="rmf-progress__list" aria-label="Request lifecycle stages">
+            {% for stage in lifecycle.stages %}
+            <li class="rmf-progress__step rmf-progress__step--{{ stage.state }}"{% if stage.is_current %} aria-current="step"{% endif %}>
+                <span class="rmf-progress__marker" aria-hidden="true">
+                    {% if stage.is_complete %}<i class="bi bi-check-lg"></i>{% else %}{{ forloop.counter }}{% endif %}
+                </span>
+                <span class="rmf-progress__content">
+                    <span class="rmf-progress__label">{{ stage.label }}</span>
+                    <span class="rmf-progress__state">{{ stage.state_label }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ol>
+
+        <aside class="rmf-progress__action" aria-labelledby="current-action-title">
+            <div class="rmf-progress__eyebrow" id="current-action-title">Current action</div>
+            <p class="rmf-progress__action-text">{{ lifecycle.current_action_label }}</p>
+            <div class="rmf-progress__owner"><i class="bi bi-person-circle" aria-hidden="true"></i><span><strong>Owner:</strong> {{ lifecycle.current_owner_label }}</span></div>
+            {% if lifecycle.backup_support_label %}
+            <div class="rmf-progress__support"><strong>Backup support:</strong> {{ lifecycle.backup_support_label }}</div>
+            {% endif %}
+            {% if lifecycle.can_accept %}
+            <form method="post" action="{{ lifecycle.accept_url }}" class="mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="assignment_revision" value="{{ lifecycle.assignment_revision }}">
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>Accept request
+                </button>
+            </form>
+            {% endif %}
+        </aside>
+
+        {% if lifecycle.events %}
+        <details class="rmf-progress-history">
+            <summary>Progress history ({{ lifecycle.events|length }})</summary>
+            <ol class="rmf-progress-history__list">
+                {% for event in lifecycle.events %}
+                <li>
+                    <div class="rmf-progress-history__heading">
+                        <strong>{{ event.label }}</strong>
+                        <time datetime="{{ event.occurred_at|date:'c' }}">{{ event.occurred_at|timezone:"Asia/Manila"|date:"M d, Y · h:i A" }}</time>
+                    </div>
+                    <div class="rmf-progress-history__meta">
+                        By {{ event.actor_label }}{% if event.owner_label %} · Owner: {{ event.owner_label }}{% endif %}
+                        {% if event.is_inferred %}<span class="rmf-progress-history__inferred">Inferred from existing data</span>{% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+        </details>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
 {# ── Two-column layout ── #}
 <div class="row g-4 align-items-start">
 

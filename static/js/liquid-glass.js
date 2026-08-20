@@ -1,11 +1,10 @@
-/* Liquid Glass interactions — login card tilt, sheen, staggered entrance, submit state.
-   CSS provides the baseline animation; Motion One (if reachable) upgrades the entrance.
-   Everything degrades gracefully when the CDN is blocked. */
+/* Liquid Glass interactions — light parallax, staggered entrance, and submit state. */
 (function () {
     'use strict';
 
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
-        (document.body && document.body.classList.contains('pref-reduce-motion'));
+        (document.body && (document.body.classList.contains('pref-reduce-motion') ||
+            document.body.classList.contains('pref-reduce-effects')));
     var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
     /* ---- Staggered entrance (CSS-driven, no dependency) ---- */
@@ -38,46 +37,86 @@
         });
     }
 
-    /* ---- Pointer tilt + sheen tracking ---- */
+    /* ---- Smoothed light vector; the pane stays stable while its optics move ---- */
     function bindCardMotion(card) {
-        if (reduceMotion || coarsePointer) {
+        if (reduceMotion) {
             return;
         }
 
         var frame = null;
-        var maxTilt = 4;
+        var currentX = 0.5;
+        var currentY = 0.18;
+        var targetX = currentX;
+        var targetY = currentY;
 
-        function apply(event) {
-            frame = null;
-            var rect = card.getBoundingClientRect();
-            var px = (event.clientX - rect.left) / rect.width;
-            var py = (event.clientY - rect.top) / rect.height;
-            card.style.setProperty('--lg-tilt-y', ((px - 0.5) * maxTilt * 2).toFixed(2) + 'deg');
-            card.style.setProperty('--lg-tilt-x', ((0.5 - py) * maxTilt * 2).toFixed(2) + 'deg');
-            card.style.setProperty('--lg-sheen-x', (px * 100).toFixed(1) + '%');
-            card.style.setProperty('--lg-sheen-y', (py * 100).toFixed(1) + '%');
-        }
+        function render() {
+            currentX += (targetX - currentX) * 0.16;
+            currentY += (targetY - currentY) * 0.16;
+            card.style.setProperty('--login-light-x', (currentX * 100).toFixed(1) + '%');
+            card.style.setProperty('--login-light-y', (currentY * 100).toFixed(1) + '%');
 
-        card.addEventListener('pointermove', function (event) {
-            if (event.pointerType !== 'mouse') {
-                return;
-            }
-            card.classList.add('login-card--tilt');
-            if (frame === null) {
-                frame = requestAnimationFrame(function () {
-                    apply(event);
-                });
-            }
-        });
-
-        card.addEventListener('pointerleave', function () {
-            if (frame !== null) {
-                cancelAnimationFrame(frame);
+            if (Math.abs(targetX - currentX) > 0.002 || Math.abs(targetY - currentY) > 0.002) {
+                frame = requestAnimationFrame(render);
+            } else {
                 frame = null;
             }
-            card.classList.remove('login-card--tilt');
-            card.style.removeProperty('--lg-tilt-x');
-            card.style.removeProperty('--lg-tilt-y');
+        }
+
+        function requestRender() {
+            if (frame === null && !document.hidden) {
+                frame = requestAnimationFrame(render);
+            }
+        }
+
+        function setPointerTarget(event) {
+            var rect = card.getBoundingClientRect();
+            targetX = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+            targetY = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+            requestRender();
+        }
+
+        if (!coarsePointer) {
+            card.addEventListener('pointermove', setPointerTarget, { passive: true });
+
+            card.addEventListener('pointerleave', function () {
+                targetX = 0.5;
+                targetY = 0.18;
+                requestRender();
+            });
+        }
+
+        card.addEventListener('pointerdown', function () {
+            card.classList.add('is-pressed');
+        });
+
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (eventName) {
+            card.addEventListener(eventName, function () {
+                card.classList.remove('is-pressed');
+            });
+        });
+
+        function handleOrientation(event) {
+            if (!coarsePointer || event.gamma === null || event.beta === null) {
+                return;
+            }
+            targetX = Math.min(0.82, Math.max(0.18, 0.5 + event.gamma / 90));
+            targetY = Math.min(0.72, Math.max(0.12, 0.35 + event.beta / 180));
+            requestRender();
+        }
+
+        /* Never request permission unexpectedly; listen only where access is already granted. */
+        if (coarsePointer && 'DeviceOrientationEvent' in window &&
+                typeof window.DeviceOrientationEvent.requestPermission !== 'function') {
+            window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && frame !== null) {
+                cancelAnimationFrame(frame);
+                frame = null;
+            } else if (!document.hidden) {
+                requestRender();
+            }
         });
     }
 

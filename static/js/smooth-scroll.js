@@ -297,9 +297,11 @@
         }, { passive: true });
     }
 
-    /* ---- SQR tracker horizontal wheel smoothing + drag fling ---- */
+    /* ---- Wide table horizontal wheel smoothing + drag fling ---- */
 
-    function attachTrackerScroll(wrap) {
+    function attachHorizontalScroll(wrap) {
+        if (wrap.hasAttribute('data-drag-scroll-attached')) return;
+        wrap.setAttribute('data-drag-scroll-attached', '');
         wrap.setAttribute('data-smooth-x', '');
 
         var axis = new Axis({
@@ -365,7 +367,8 @@
         function interactiveTarget(node) {
             return !!(node && node.closest && node.closest(
                 'a, button, input, textarea, select, label, [contenteditable], ' +
-                '.resize-handle, .col-resize-handle, th .th-resize, [draggable="true"]'
+                '.resize-handle, .col-resize-handle, .column-resize-handle, ' +
+                'th .th-resize, [draggable="true"]'
             ));
         }
 
@@ -466,11 +469,11 @@
     function init() {
         attachPageScroll();
 
-        if (document.body && document.body.classList.contains('sqr-page')) {
-            var wraps = document.querySelectorAll('.sqr-tracker-wrap');
-            for (var i = 0; i < wraps.length; i += 1) {
-                attachTrackerScroll(wraps[i]);
-            }
+        var wraps = document.querySelectorAll(
+            '.sqr-tracker-wrap, .dashboard-table-wrapper'
+        );
+        for (var i = 0; i < wraps.length; i += 1) {
+            attachHorizontalScroll(wraps[i]);
         }
     }
 
