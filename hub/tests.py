@@ -737,6 +737,37 @@ class DashboardViewTests(TestCase):
         request_obj = Request.objects.get(description="PM ESG submitted request.")
         self.assertEqual(request_obj.requestor, self.pm_esg)
         self.assertEqual(request_obj.account_manager, "PM ESG")
+        self.assertEqual(request_obj.assignment_revision, 1)
+        self.assertEqual(request_obj.lifecycle_stage, Request.LifecycleStage.ASSIGNED)
+        self.assertEqual(
+            list(request_obj.lifecycle_events.values_list("event_type", flat=True)),
+            ["created", "assigned"],
+        )
+
+    def test_requestor_dashboard_post_initializes_unassigned_lifecycle(self):
+        request = self.factory.post(
+            reverse("hub:dashboard"),
+            data={
+                "account_name": self.account.name,
+                "product_category": "Azure",
+                "engagement_type": Request.Engagement.SUPPORT,
+                "priority": Request.Priority.MEDIUM,
+                "description": "Unassigned request lifecycle defaults.",
+            },
+        )
+        request.user = self.requestor
+        AssignmentEmailTests._attach_session_and_messages(request)
+
+        response = DashboardView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        request_obj = Request.objects.get(description="Unassigned request lifecycle defaults.")
+        self.assertEqual(request_obj.assignment_revision, 0)
+        self.assertEqual(request_obj.lifecycle_stage, Request.LifecycleStage.CREATED)
+        self.assertEqual(
+            list(request_obj.lifecycle_events.values_list("event_type", flat=True)),
+            ["created"],
+        )
 
     def test_engineer_completed_filter_orders_recent_first(self):
         engineer = User.objects.create_user(
