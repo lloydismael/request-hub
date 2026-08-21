@@ -634,7 +634,7 @@ class DashboardViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("const filtered = !q", content)
-        self.assertIn("? rows.map(function (row) {", content)
+        self.assertIn("? state.records.map(function (record) {", content)
 
     def test_sqr_page_includes_compact_toolbar_search_control(self):
         self.client.force_login(self.pm_esg)

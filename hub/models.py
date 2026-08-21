@@ -876,15 +876,6 @@ class SqrSubmission(models.Model):
             return Decimal("32")
         return Decimal("48")
 
-    @classmethod
-    def _should_use_bucketed_pm_manhrs(cls, pm_manhrs):
-        if pm_manhrs is None:
-            return True
-        try:
-            return Decimal(str(pm_manhrs)) in cls._PM_MANHOUR_BUCKETS
-        except (ArithmeticError, ValueError, TypeError):
-            return False
-
     @property
     def effective_pm_manhrs(self):
         """Return the saved PM man-hours, defaulting only when blank."""

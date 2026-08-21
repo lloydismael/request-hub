@@ -105,7 +105,7 @@
                     {% endif %}
                 </ul>
                 <div class="tab-content" id="requestor-dashboard-tab-content">
-                    <div class="tab-pane fade show active" id="request-list-pane" role="tabpanel" aria-labelledby="request-list-tab" tabindex="0">
+                    <div class="tab-pane show active" id="request-list-pane" role="tabpanel" aria-labelledby="request-list-tab" tabindex="0">
             {% endif %}
             {% if role == 'admin' %}
                 {% include "hub/partials/dashboard_admin_metrics.html" %}
@@ -464,7 +464,7 @@
             {% endif %}
             {% if is_requestor_ui %}
                     </div>
-                    <div class="tab-pane fade" id="request-report-graph-pane" role="tabpanel" aria-labelledby="request-report-graph-tab" tabindex="0">
+                    <div class="tab-pane" id="request-report-graph-pane" role="tabpanel" aria-labelledby="request-report-graph-tab" tabindex="0">
                         <div class="row g-4">
                             <div class="col-12 col-lg-6">
                                 <div class="glass-card p-3">
@@ -613,6 +613,25 @@
             let inFlight = false;
             const INTERVAL_MS = 15000;
 
+            function applyRowsWhenIdle(html, attempt = 0) {
+                const wrapper = document.querySelector(".dashboard-table-wrapper");
+                if (wrapper && wrapper.classList.contains("is-scrolling-x") && attempt < 12) {
+                    window.setTimeout(() => applyRowsWhenIdle(html, attempt + 1), 100);
+                    return;
+                }
+                const tbody = document.getElementById("dashboard-live-tbody");
+                if (!tbody) return;
+                const scrollLeft = wrapper ? wrapper.scrollLeft : 0;
+                tbody.innerHTML = html;
+                if (wrapper) wrapper.scrollLeft = scrollLeft;
+                if (window.initDashboardRequestSearch) {
+                    window.initDashboardRequestSearch();
+                }
+                if (window.invalidateRequestHubScrollGeometry) {
+                    window.invalidateRequestHubScrollGeometry(wrapper || document);
+                }
+            }
+
             function buildUrl() {
                 const params = new URLSearchParams(window.location.search || "");
                 if (version) {
@@ -680,13 +699,7 @@
                             }
                         }
                         if (data.html_rows) {
-                            const tbody = document.getElementById("dashboard-live-tbody");
-                            if (tbody) {
-                                tbody.innerHTML = data.html_rows;
-                                if (window.initDashboardRequestSearch) {
-                                    window.initDashboardRequestSearch();
-                                }
-                            }
+                            applyRowsWhenIdle(data.html_rows);
                         }
                     })
                     .catch(() => {})
@@ -706,6 +719,8 @@
     </script>
     <script>
         (function () {
+            let searchState = null;
+
             function initDashboardRequestSearch() {
                 const searchInput = document.getElementById("dashboard-request-search");
                 const tbody = document.getElementById("dashboard-live-tbody");
@@ -714,8 +729,14 @@
                     return;
                 }
 
-                const rows = Array.from(tbody.querySelectorAll("tr")).filter(function (row) {
+                const records = Array.from(tbody.querySelectorAll("tr")).filter(function (row) {
                     return !row.classList.contains("dashboard-empty-row");
+                }).map(function (row, index) {
+                    return {
+                        row: row,
+                        order: index,
+                        text: (row.textContent || "").replace(/\s+/g, " ").trim().toLowerCase()
+                    };
                 });
 
                 let emptyRow = tbody.querySelector("tr.dashboard-empty-row");
@@ -727,15 +748,10 @@
                     tbody.appendChild(emptyRow);
                 }
 
-                function getRowText(row) {
-                    return (row.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
-                }
-
-                function scoreMatch(row, query) {
+                function scoreMatch(text, query) {
                     if (!query) {
                         return 1;
                     }
-                    const text = getRowText(row);
                     if (!text) {
                         return 0;
                     }
@@ -753,14 +769,18 @@
                     return score;
                 }
 
+                searchState = { input: searchInput, tbody: tbody, badge: badge, records: records, emptyRow: emptyRow };
+
                 function render() {
-                    const q = searchInput.value.trim().toLowerCase();
+                    if (!searchState) return;
+                    const state = searchState;
+                    const q = state.input.value.trim().toLowerCase();
                     const filtered = !q
-                        ? rows.map(function (row) {
-                            return { row: row, score: 1 };
+                        ? state.records.map(function (record) {
+                            return { record: record, score: 1 };
                         })
-                        : rows.map(function (row) {
-                            return { row: row, score: scoreMatch(row, q) };
+                        : state.records.map(function (record) {
+                            return { record: record, score: scoreMatch(record.text, q) };
                         })
                         .filter(function (item) {
                             return item.score > 0;
@@ -769,29 +789,39 @@
                             if (b.score !== a.score) {
                                 return b.score - a.score;
                             }
-                            return getRowText(a.row).localeCompare(getRowText(b.row));
+                            const textOrder = a.record.text.localeCompare(b.record.text);
+                            return textOrder || a.record.order - b.record.order;
                         });
 
-                    rows.forEach(function (row) {
-                        row.style.display = "none";
+                    state.records.forEach(function (record) {
+                        record.row.style.display = "none";
                     });
 
                     if (filtered.length === 0) {
-                        emptyRow.style.display = "";
+                        state.emptyRow.style.display = "";
                     } else {
-                        emptyRow.style.display = "none";
+                        state.emptyRow.style.display = "none";
+                        const fragment = document.createDocumentFragment();
                         filtered.forEach(function (item) {
-                            item.row.style.display = "";
-                            tbody.appendChild(item.row);
+                            item.record.row.style.display = "";
+                            fragment.appendChild(item.record.row);
                         });
+                        state.tbody.appendChild(fragment);
                     }
 
-                    if (badge) {
-                        badge.textContent = q ? filtered.length + " match" + (filtered.length !== 1 ? "es" : "") : rows.length + " total";
+                    if (state.badge) {
+                        state.badge.textContent = q ? filtered.length + " match" + (filtered.length !== 1 ? "es" : "") : state.records.length + " total";
                     }
                 }
 
-                searchInput.addEventListener("input", render);
+                if (searchInput.dataset.dashboardSearchBound !== "1") {
+                    let searchTimer = 0;
+                    searchInput.addEventListener("input", function () {
+                        window.clearTimeout(searchTimer);
+                        searchTimer = window.setTimeout(render, 100);
+                    });
+                    searchInput.dataset.dashboardSearchBound = "1";
+                }
                 render();
             }
 
@@ -859,6 +889,9 @@
                     cell.style.minWidth = `${width}px`;
                     cell.style.maxWidth = `${width}px`;
                 });
+                if (window.invalidateRequestHubScrollGeometry) {
+                    window.invalidateRequestHubScrollGeometry(wrapper);
+                }
             };
 
             headers.forEach((th, index) => {
@@ -882,6 +915,8 @@
                     const startX = event.touches ? event.touches[0].pageX : event.pageX;
                     const startWidth = th.getBoundingClientRect().width;
                     const columnIndex = index + 1;
+                    let resizeFrame = 0;
+                    let pendingWidth = startWidth;
 
                     handle.classList.add("is-dragging");
                     document.body.classList.add("is-column-resizing");
@@ -892,11 +927,21 @@
                         }
                         const clientX = moveEvent.touches ? moveEvent.touches[0].pageX : moveEvent.pageX;
                         const delta = clientX - startX;
-                        const newWidth = Math.max(minWidth, startWidth + delta);
-                        applyWidth(columnIndex, newWidth);
+                        pendingWidth = Math.max(minWidth, startWidth + delta);
+                        if (!resizeFrame) {
+                            resizeFrame = requestAnimationFrame(function () {
+                                resizeFrame = 0;
+                                applyWidth(columnIndex, pendingWidth);
+                            });
+                        }
                     };
 
                     const stopDrag = () => {
+                        if (resizeFrame) {
+                            cancelAnimationFrame(resizeFrame);
+                            resizeFrame = 0;
+                            applyWidth(columnIndex, pendingWidth);
+                        }
                         handle.classList.remove("is-dragging");
                         document.body.classList.remove("is-column-resizing");
                         document.removeEventListener("mousemove", handleMove);

@@ -58,7 +58,7 @@
 </ul>
 
 <div class="tab-content" id="activity-logs-tab-content">
-    <div class="tab-pane fade show active" id="activity-list-pane" role="tabpanel" aria-labelledby="activity-list-tab" tabindex="0">
+    <div class="tab-pane show active" id="activity-list-pane" role="tabpanel" aria-labelledby="activity-list-tab" tabindex="0">
         <div class="glass-card p-4 activity-log-grid">
 
             {# ── Card header ── #}
@@ -111,7 +111,7 @@
             {% endif %}
 
             {# ── Table ── #}
-            <div class="table-responsive">
+            <div class="table-responsive" data-table-scroll-track>
                 <table class="table align-middle rpt-activity-table mb-0">
                     <colgroup>
                         <col style="width: 3.5rem;">
@@ -269,7 +269,7 @@
         </div>
     </div>
 
-    <div class="tab-pane fade" id="activity-graph-pane" role="tabpanel" aria-labelledby="activity-graph-tab" tabindex="0">
+    <div class="tab-pane" id="activity-graph-pane" role="tabpanel" aria-labelledby="activity-graph-tab" tabindex="0">
 
         {# ── KPI row ── #}
         <div class="row g-3 mb-4">

@@ -38,6 +38,11 @@
     animation-iteration-count: infinite;
 }
 
+body.table-scroll-active .ambient-mesh__orb {
+    animation-play-state: paused !important;
+    will-change: auto !important;
+}
+
 /* Center veil — dims orbs that drift behind dense text areas so contrast
    stays stable without touching orb colors themselves. */
 .ambient-mesh::after {

@@ -3,7 +3,7 @@
 {% block title %}SQR &middot; Request Hub{% endblock %}
 {% block body_class %}sqr-page{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=11">
 {% endblock %}
 
 {% block content %}
@@ -3162,13 +3162,18 @@
 
     var hoverTimer = null;
     var activeCell = null;
+    var clippedCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var positionFrame = 0;
+    var pendingPointer = null;
 
     function isClipped(td) {
-        if (td.scrollWidth > td.offsetWidth) return true;
+        if (clippedCache && clippedCache.has(td)) return clippedCache.get(td);
+        var clipped = td.scrollWidth > td.offsetWidth;
         var span = td.querySelector('.sqr-display') || td;
-        if (span.scrollHeight > span.offsetHeight + 2) return true;
-        if (span.scrollWidth > span.offsetWidth) return true;
-        return false;
+        clipped = clipped || span.scrollHeight > span.offsetHeight + 2;
+        clipped = clipped || span.scrollWidth > span.offsetWidth;
+        if (clippedCache) clippedCache.set(td, clipped);
+        return clipped;
     }
 
     function showPreview(td, e) {
@@ -3184,19 +3189,26 @@
     }
 
     function positionPreview(e) {
-        var vw = window.innerWidth, vh = window.innerHeight;
-        var pw = 340, ph = 120;
-        var x = e.clientX + 14;
-        var y = e.clientY + 14;
-        if (x + pw > vw - 10) x = e.clientX - pw - 10;
-        if (y + ph > vh - 10) y = e.clientY - ph - 10;
-        preview.style.left = x + 'px';
-        preview.style.top = y + 'px';
+        pendingPointer = { x: e.clientX, y: e.clientY };
+        if (positionFrame) return;
+        positionFrame = requestAnimationFrame(function () {
+            positionFrame = 0;
+            if (!pendingPointer) return;
+            var vw = window.innerWidth, vh = window.innerHeight;
+            var pw = 340, ph = 120;
+            var x = pendingPointer.x + 14;
+            var y = pendingPointer.y + 14;
+            if (x + pw > vw - 10) x = pendingPointer.x - pw - 10;
+            if (y + ph > vh - 10) y = pendingPointer.y - ph - 10;
+            preview.style.left = x + 'px';
+            preview.style.top = y + 'px';
+        });
     }
 
     function hidePreview() {
         preview.classList.remove('visible');
         activeCell = null;
+        pendingPointer = null;
     }
 
     // Event delegation — avoid N listeners per cell across dual large tables
@@ -3204,12 +3216,18 @@
     previewRoot.addEventListener('mouseover', function (e) {
         var td = e.target.closest('.sqr-tracker td, .sqr-esg-table td');
         if (!td || !previewRoot.contains(td)) return;
+        var wrap = td.closest('.sqr-tracker-wrap');
+        if (wrap && wrap.classList.contains('is-scrolling-x')) return;
         if (td === activeCell) return;
         clearTimeout(hoverTimer);
         if (td.classList.contains('sqr-editing')) return;
-        if (!isClipped(td)) return;
         var evt = e;
-        hoverTimer = setTimeout(function () { showPreview(td, evt); }, 350);
+        hoverTimer = setTimeout(function () {
+            if (!td.isConnected || td.classList.contains('sqr-editing')) return;
+            var currentWrap = td.closest('.sqr-tracker-wrap');
+            if (currentWrap && currentWrap.classList.contains('is-scrolling-x')) return;
+            if (isClipped(td)) showPreview(td, evt);
+        }, 350);
     });
     previewRoot.addEventListener('mousemove', function (e) {
         if (activeCell) positionPreview(e);
@@ -3227,6 +3245,14 @@
         clearTimeout(hoverTimer);
         hidePreview();
     });
+    previewRoot.addEventListener('requesthub:table-scroll-start', function () {
+        clearTimeout(hoverTimer);
+        hidePreview();
+    });
+    window.addEventListener('resize', function () {
+        clippedCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+        hidePreview();
+    }, { passive: true });
 })();
 </script>
 
@@ -3250,6 +3276,13 @@
         panel.appendChild(tpl.content.cloneNode(true));
         tpl.remove();
         panel.dataset.sqrEsgHydrated = '1';
+        if (typeof window.initRequestHubSmoothScroll === 'function') {
+            window.initRequestHubSmoothScroll(panel);
+        }
+        if (typeof window.invalidateRequestHubScrollGeometry === 'function') {
+            window.invalidateRequestHubScrollGeometry(panel);
+        }
+        panel.dispatchEvent(new CustomEvent('sqr:panel-hydrated', { bubbles: true }));
     }
 
     function setView(viewName) {
@@ -3411,13 +3444,49 @@
         // Prefer the visible panel only — hidden ESG/tracker still in DOM but skip it
         var activePanel = document.querySelector('[data-sqr-view-panel]:not([hidden])');
         if (activePanel) {
-            return activePanel.querySelectorAll('tbody tr');
+            return { panel: activePanel, rows: activePanel.querySelectorAll('tbody tr') };
         }
-        return document.querySelectorAll('.sqr-tracker tbody tr, .sqr-esg-table tbody tr');
+        return {
+            panel: document,
+            rows: document.querySelectorAll('.sqr-tracker tbody tr, .sqr-esg-table tbody tr')
+        };
+    }
+
+    var rowCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var filterFrame = 0;
+
+    function getRowRecords(panel, rows) {
+        var cached = rowCache && rowCache.get(panel);
+        if (cached && cached.length === rows.length) return cached;
+        var records = Array.from(rows).map(function (row) {
+            return {
+                row: row,
+                searchText: null,
+                indexedText: normalizeText([
+                    row.dataset.sqrRef,
+                    row.dataset.sqrCustomer,
+                    row.dataset.sqrGroup,
+                    row.dataset.sqrAssignedPm,
+                    row.dataset.sqrAssignedSse,
+                    row.dataset.engineerName
+                ].join(' ')),
+                group: normalizeText(row.dataset.sqrGroup || ''),
+                totalPrice: parseAmount(row.dataset.sqrTotalPrice || '0') || 0
+            };
+        });
+        if (rowCache) rowCache.set(panel, records);
+        return records;
     }
 
     function applyFilter() {
-        var rows = getActiveTableRows();
+        if (filterFrame) cancelAnimationFrame(filterFrame);
+        filterFrame = requestAnimationFrame(runFilter);
+    }
+
+    function runFilter() {
+        filterFrame = 0;
+        var activeRows = getActiveTableRows();
+        var records = getRowRecords(activeRows.panel, activeRows.rows);
         var query = normalizeText(searchInput && searchInput.value ? searchInput.value : '');
         var statusValue = statusSelect ? statusSelect.value : '';
         var proposalValue = proposalStatusSelect ? proposalStatusSelect.value : '';
@@ -3434,39 +3503,33 @@
         var myAssignedOnly = isMyAssignedActive();
         var billedOnly = !!(billedOnlyCheckbox && billedOnlyCheckbox.checked);
         var visibleCount = 0;
-        rows.forEach(function (row) {
+        records.forEach(function (record) {
+            var row = record.row;
             var matchesStatus = !statusValue || (row.dataset.sqrStatus || '') === statusValue;
             var matchesProposal = !proposalValue || (row.dataset.sqrProposalStatus || '') === proposalValue;
             var matchesOverallStatus = !overallStatusValue || (row.dataset.sqrOverallStatus || '') === overallStatusValue;
             var matchesHealth = !healthValue || (row.dataset.sqrHealth || '') === healthValue;
             var matchesRevenueSource = !revenueSourceValue || (row.dataset.sqrRevenueSource || '') === revenueSourceValue;
-            var matchesGroup = !groupValue || normalizeText(row.dataset.sqrGroup || '').indexOf(groupValue) !== -1;
+            var matchesGroup = !groupValue || record.group.indexOf(groupValue) !== -1;
             var createdAt = row.dataset.sqrCreatedAt || '';
             var matchesDateFrom = !sqrDateFrom || (createdAt && createdAt >= sqrDateFrom);
             var matchesDateTo = !sqrDateTo || (createdAt && createdAt <= sqrDateTo);
-            var totalPrice = parseAmount(row.dataset.sqrTotalPrice || '0');
-            var matchesAmountMin = amountMin === null || ((totalPrice || 0) >= amountMin);
-            var matchesAmountMax = amountMax === null || ((totalPrice || 0) <= amountMax);
+            var matchesAmountMin = amountMin === null || record.totalPrice >= amountMin;
+            var matchesAmountMax = amountMax === null || record.totalPrice <= amountMax;
             var matchesLinkedRequest = !linkedRequestOnly || (row.dataset.sqrLinkedRequest || '') === 'yes';
             var matchesAssignedSse = !assignedSseOnly || !!normalizeText(row.dataset.sqrAssignedSse || '');
             var matchesMyAssigned = !myAssignedOnly || (
                 !!currentUserId && String(row.dataset.sqrApproverId || '') === currentUserId
             );
             var matchesBilled = !billedOnly || (row.dataset.sqrRevenueStatus || '') === 'billed';
-            // Prefer data-* fields; fall back to textContent only when searching
             var matchesQuery = true;
             if (query) {
-                var dataText = [
-                    row.dataset.sqrRef,
-                    row.dataset.sqrCustomer,
-                    row.dataset.sqrGroup,
-                    row.dataset.sqrAssignedPm,
-                    row.dataset.sqrAssignedSse,
-                    row.dataset.engineerName
-                ].join(' ').toLowerCase();
-                matchesQuery = dataText.indexOf(query) !== -1;
+                matchesQuery = record.indexedText.indexOf(query) !== -1;
                 if (!matchesQuery) {
-                    matchesQuery = (row.textContent || '').toLowerCase().indexOf(query) !== -1;
+                    if (record.searchText === null) {
+                        record.searchText = normalizeText(row.textContent || '');
+                    }
+                    matchesQuery = record.searchText.indexOf(query) !== -1;
                 }
             }
             var isVisible = matchesStatus
@@ -3485,23 +3548,34 @@
                 && matchesBilled
                 && matchesQuery;
 
-            row.style.display = isVisible ? '' : 'none';
+            var nextDisplay = isVisible ? '' : 'none';
+            if (row.style.display !== nextDisplay) {
+                row.style.display = nextDisplay;
+            }
             if (isVisible) visibleCount += 1;
         });
 
         if (resultsMeta) {
             var activeFilterCount = countActiveFilters();
-            if (visibleCount === rows.length && activeFilterCount === 0) {
+            if (visibleCount === records.length && activeFilterCount === 0) {
                 resultsMeta.textContent = 'Showing all rows';
             } else {
-                resultsMeta.textContent = 'Showing ' + visibleCount + ' of ' + rows.length + ' rows' + (activeFilterCount ? ' • ' + activeFilterCount + ' active filter' + (activeFilterCount === 1 ? '' : 's') : '');
+                resultsMeta.textContent = 'Showing ' + visibleCount + ' of ' + records.length + ' rows' + (activeFilterCount ? ' • ' + activeFilterCount + ' active filter' + (activeFilterCount === 1 ? '' : 's') : '');
             }
         }
         if (headerCountBadge) {
             headerCountBadge.textContent = visibleCount + ' total';
         }
+        if (typeof window.invalidateRequestHubScrollGeometry === 'function') {
+            window.invalidateRequestHubScrollGeometry(activeRows.panel);
+        }
     }
     window.applySqrTableFilter = applyFilter;
+
+    document.addEventListener('sqr:panel-hydrated', function (event) {
+        if (rowCache) rowCache.delete(event.target);
+        applyFilter();
+    });
 
     var searchDebounceTimer = null;
     function scheduleSearchFilter() {
@@ -3547,11 +3621,14 @@
             scheduleSearchFilter();
         });
     }
-    [overallStatusSelect, healthSelect, revenueSourceSelect, sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
+    [overallStatusSelect, healthSelect, revenueSourceSelect].forEach(function (control) {
         if (!control) return;
-        control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', function () {
-            applyFilter();
-        });
+        control.addEventListener('change', applyFilter);
+    });
+
+    [sqrDateFromInput, sqrDateToInput, groupInput, amountMinInput, amountMaxInput].forEach(function (control) {
+        if (!control) return;
+        control.addEventListener('input', scheduleSearchFilter);
     });
 
     [linkedRequestCheckbox, assignedSseCheckbox, billedOnlyCheckbox].forEach(function (control) {

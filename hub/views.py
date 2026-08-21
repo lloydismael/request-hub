@@ -2742,6 +2742,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "assigned_pm",
             "assigned_sse",
             "linked_request",
+            "linked_request__account",
         ).order_by("-created_at", "-pk")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
@@ -4813,7 +4814,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         except Http404:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
-        editing_activity_log = self._get_requested_edit_activity_log()
+        editing_activity_log = self._get_requested_edit_activity_log(request_obj)
         context = self.get_context_data(
             request_obj,
             activity_form=None,
@@ -4842,7 +4843,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     def _source_label(self, suffix: str) -> str:
         return f"{self._actor_prefix()} · {suffix}"
 
-    def _get_requested_edit_activity_log(self):
+    def _get_requested_edit_activity_log(self, request_obj):
         edit_activity_id = (self.request.GET.get("edit_activity") or "").strip()
         if not edit_activity_id:
             return None
@@ -4852,7 +4853,9 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             messages.error(self.request, "We could not find that activity log to edit.")
             return None
 
-        queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+        queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request").filter(
+            request=request_obj
+        )
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             queryset = queryset.filter(engineer=self.request.user)
         try:
@@ -4877,6 +4880,7 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         if editing_activity_log is not None and activity_form is None:
             activity_form = EngineerActivityLogForm(
                 engineer=editing_activity_log.engineer,
+                bound_request=request_obj,
                 instance=editing_activity_log,
             )
 
@@ -4910,7 +4914,9 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         log_id = (request.POST.get("log_id") or "").strip()
         instance = None
         if log_id:
-            queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request")
+            queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request").filter(
+                request=request_obj
+            )
             if request.user.role in ENGINEER_ACCESS_ROLES:
                 queryset = queryset.filter(engineer=request.user)
             try:
@@ -4920,10 +4926,17 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
                 return redirect("hub:request-manage-collab", pk=request_obj.pk)
 
         engineer_for_form = instance.engineer if instance else (request_obj.engineer or request.user)
-        form = EngineerActivityLogForm(data=request.POST, engineer=engineer_for_form, instance=instance)
+        form = EngineerActivityLogForm(
+            data=request.POST,
+            engineer=engineer_for_form,
+            bound_request=request_obj,
+            instance=instance,
+        )
         if form.is_valid():
             activity_log = form.save(commit=False)
             activity_log.engineer = engineer_for_form
+            activity_log.request = request_obj
+            activity_log.account = request_obj.account
             if not activity_log.request_date:
                 activity_log.request_date = timezone.now().date()
             activity_log.save()
@@ -4993,7 +5006,6 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         status_form = RequestStatusForm(request.POST, instance=request_obj, actor_user=request.user)
         target_status = request.POST.get("status")
         is_completion = target_status == Request.Status.COMPLETED
-        actor_is_assigned_or_backup = request.user.pk in {request_obj.engineer_id, request_obj.backup_engineer_id}
         if status_form.is_valid():
             send_closing_email = (request.POST.get("send_closing_email") or "").strip() in {"1", "true", "True", "on"}
             source_label = self._source_label("Manage Request · Status")
@@ -5140,22 +5152,6 @@ class RequestRestoreView(LoginRequiredMixin, View):
         else:
             messages.error(request, "Request not found or already active.")
         return redirect(str(reverse_lazy("accounts:update")) + "#backup")
-
-
-class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
-    def post(self, request, pk):
-        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor"), pk=pk)
-        teams_url = request_obj.teams_chat_url
-
-        if not teams_url:
-            messages.error(
-                request,
-                "Unable to start a Teams chat. Ensure the engineer and requestor both have emails configured.",
-            )
-            return redirect("hub:dashboard")
-
-        messages.info(request, "Opening Microsoft Teams in a new tab…")
-        return redirect(teams_url)
 
 
 class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
@@ -6759,16 +6755,14 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         self._sync_account_baseline()
         users_page_obj, user_search_query = self._paginate_users(request)
-        formset = self.formset_class(queryset=self.get_queryset())
         account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
         create_user_form = UserManagementForm(prefix="create_user")
-        self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
         return render(
             request,
             self.template_name,
             self._build_context(
-                formset,
+                None,
                 account_formset,
                 create_user_form=create_user_form,
                 users_page_obj=users_page_obj,
@@ -7112,7 +7106,7 @@ class NotificationListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         queryset = (
-            self.request.user.notifications.select_related("related_request")
+            self.request.user.notifications.select_related("related_request", "related_request__account")
             .order_by("-created_at")
         )
         user = self.request.user

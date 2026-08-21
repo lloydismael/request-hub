@@ -24,9 +24,9 @@
     /* Time constant (seconds) for wheel approach: lower = snappier, higher = floatier. */
     var TAU = 0.085;
     /* Fling decay rate (1/seconds) for drag momentum. */
-    var LAMBDA = 3.2;
+    var LAMBDA = 4.2;
     /* Stop threshold in px. */
-    var EPS = 0.5;
+    var EPS = 0.75;
     /* Cap per-wheel-tick delta so huge driver deltas don't fling the page. */
     var MAX_TICK = 900;
     /* Pointer must move this far before a drag is claimed (keeps clicks working). */
@@ -46,6 +46,8 @@
         this.lastTs = 0;
         this.velocity = 0;             // px/s, used by drag fling
         this.flinging = false;
+        this.lastPosition = null;
+        this.stalledFrames = 0;
         var self = this;
         this._step = function (ts) { self._frame(ts); };
     }
@@ -91,6 +93,8 @@
         this.target = null;
         this.velocity = 0;
         this.flinging = false;
+        this.lastPosition = null;
+        this.stalledFrames = 0;
         if (this.raf) {
             cancelAnimationFrame(this.raf);
             this.raf = 0;
@@ -134,14 +138,36 @@
             return;
         }
         var pos = this.current();
+        var maxTarget = this.maxScroll();
+        if (this.target > maxTarget) this.target = maxTarget;
+        if (this.target < 0) this.target = 0;
         var remaining = this.target - pos;
         if (Math.abs(remaining) <= EPS) {
             this.scroller.set(this.target);
             this.target = null;
+            this.lastPosition = null;
+            this.stalledFrames = 0;
             return;
         }
         var k = 1 - Math.exp(-dt / TAU);
-        this.scroller.set(pos + remaining * k);
+        var step = remaining * k;
+        // Never terminate solely from a sub-pixel frame step: at high refresh
+        // rates that can leave a visibly large remaining distance. The bounded
+        // no-progress guard below handles rounded scroll positions safely.
+        if (this.lastPosition !== null && Math.abs(pos - this.lastPosition) < 0.01) {
+            this.stalledFrames += 1;
+        } else {
+            this.stalledFrames = 0;
+        }
+        if (this.stalledFrames >= 2) {
+            this.scroller.set(this.target);
+            this.target = null;
+            this.lastPosition = null;
+            this.stalledFrames = 0;
+            return;
+        }
+        this.lastPosition = pos;
+        this.scroller.set(pos + step);
         this.raf = requestAnimationFrame(this._step);
     };
 
@@ -303,51 +329,70 @@
         if (wrap.hasAttribute('data-drag-scroll-attached')) return;
         wrap.setAttribute('data-drag-scroll-attached', '');
         wrap.setAttribute('data-smooth-x', '');
+        var dragEnabled = wrap.matches('.sqr-tracker-wrap, .dashboard-table-wrapper');
+
+        var geometry = { valid: false, max: 0 };
+        var scrollIdleTimer = 0;
+        var motionActive = false;
+        var internalScrollWrite = false;
+
+        function measureGeometry() {
+            geometry.max = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+            geometry.valid = true;
+        }
+
+        function invalidateGeometry() {
+            geometry.valid = false;
+            requestAnimationFrame(function () {
+                if (!geometry.valid && wrap.isConnected) measureGeometry();
+            });
+        }
+
+        function ensureGeometry() {
+            if (!geometry.valid) measureGeometry();
+            return geometry;
+        }
+
+        function beginMotion() {
+            if (!motionActive) {
+                motionActive = true;
+                wrap.classList.add('is-scrolling-x');
+                document.body.classList.add('table-scroll-active');
+                wrap.dispatchEvent(new CustomEvent('requesthub:table-scroll-start', { bubbles: true }));
+            }
+            window.clearTimeout(scrollIdleTimer);
+            scrollIdleTimer = window.setTimeout(function () {
+                if (!dragState.active && !axis.raf) {
+                    motionActive = false;
+                    wrap.classList.remove('is-scrolling-x');
+                    if (!document.querySelector('.is-scrolling-x')) {
+                        document.body.classList.remove('table-scroll-active');
+                    }
+                    wrap.dispatchEvent(new CustomEvent('requesthub:table-scroll-end', { bubbles: true }));
+                }
+            }, 150);
+        }
+
+        wrap._requestHubInvalidateScrollGeometry = invalidateGeometry;
 
         var axis = new Axis({
             get: function () { return wrap.scrollLeft; },
             set: function (v) {
                 // instant: same double-smoothing guard as the page scroller.
+                internalScrollWrite = true;
                 if (wrap.scrollTo) {
                     wrap.scrollTo({ left: v, behavior: 'instant' });
                 } else {
                     wrap.scrollLeft = v;
                 }
+                requestAnimationFrame(function () { internalScrollWrite = false; });
             },
-            max: function () { return Math.max(0, wrap.scrollWidth - wrap.clientWidth); }
+            max: function () { return ensureGeometry().max; }
         });
 
-        wrap.addEventListener('wheel', function (event) {
-            if (event.ctrlKey) return;
-            if (dragState.active) {
-                event.preventDefault();
-                return;
-            }
-
-            var dx = event.deltaX;
-            var dy = event.deltaY;
-            if (event.deltaMode === 1) { dx *= 16; dy *= 16; }
-            if (event.deltaMode === 2) return; // page-mode: leave native
-
-            var delta;
-            if (Math.abs(dx) > Math.abs(dy)) {
-                delta = dx;                        // genuine horizontal input / Shift+wheel
-            } else {
-                if (isEditable(event.target)) return;
-                /* Only translate a vertical wheel into a horizontal glide when the
-                   cursor is over the wrap's bottom scrollbar strip. Anywhere else
-                   the gesture is vertical intent — let it bubble to the page. */
-                var rect = wrap.getBoundingClientRect();
-                var strip = Math.max(rect.height - wrap.clientHeight, 20);
-                if (event.clientY < rect.bottom - strip) return;
-                delta = dy;                        // map vertical wheel to horizontal glide
-            }
-
-            if (axis.push(clampTick(delta))) {
-                event.preventDefault();
-                event.stopPropagation();           // don't also scroll the page
-            }
-        }, { passive: false });
+        if (typeof ResizeObserver === 'function') {
+            new ResizeObserver(invalidateGeometry).observe(wrap);
+        }
 
         /* Pointer drag-to-scroll with fling. Mouse only — touch keeps native
            momentum which is already smooth. */
@@ -373,6 +418,7 @@
         }
 
         wrap.addEventListener('pointerdown', function (event) {
+            if (!dragEnabled) return;
             if (event.pointerType !== 'mouse' || event.button !== 0) return;
             if (interactiveTarget(event.target)) return;
             dragState.pending = true;
@@ -384,6 +430,7 @@
             dragState.velocity = 0;
             dragState.pointerId = event.pointerId;
             axis.halt();
+            try { wrap.setPointerCapture(event.pointerId); } catch (e) { /* noop */ }
         });
 
         wrap.addEventListener('pointermove', function (event) {
@@ -401,6 +448,8 @@
                 }
                 dragState.active = true;
                 wrap.classList.add('is-dragging');
+                beginMotion();
+                wrap.dispatchEvent(new CustomEvent('requesthub:table-drag-start', { bubbles: true }));
                 try { wrap.setPointerCapture(event.pointerId); } catch (e) { /* noop */ }
             }
 
@@ -417,6 +466,7 @@
                     if (dragState.dxAcc) {
                         wrap.scrollLeft -= dragState.dxAcc;
                         dragState.dxAcc = 0;
+                        beginMotion();
                     }
                 });
             }
@@ -429,7 +479,7 @@
             dragState.lastTs = now;
         });
 
-        function endDrag(event) {
+        function endDrag(event, cancelled) {
             if (event.pointerId !== dragState.pointerId) return;
             var wasActive = dragState.active;
             if (wasActive) {
@@ -444,7 +494,17 @@
                     }
                 }
                 wrap.classList.remove('is-dragging');
-                axis.fling(dragState.velocity);
+                var releaseAge = Math.max(event.timeStamp - dragState.lastTs, 0);
+                var releaseVelocity = releaseAge >= 100
+                    ? 0
+                    : dragState.velocity * Math.max(0, 1 - releaseAge / 100);
+                if (cancelled) {
+                    axis.halt();
+                } else {
+                    releaseVelocity = Math.max(-3200, Math.min(3200, releaseVelocity));
+                    axis.fling(releaseVelocity);
+                    beginMotion();
+                }
                 // Suppress the click that follows a real drag so cells/links don't fire.
                 dragState.justDragged = true;
                 window.setTimeout(function () { dragState.justDragged = false; }, 0);
@@ -454,8 +514,15 @@
             dragState.pointerId = null;
         }
 
-        wrap.addEventListener('pointerup', endDrag);
-        wrap.addEventListener('pointercancel', endDrag);
+        wrap.addEventListener('pointerup', function (event) { endDrag(event, false); });
+        wrap.addEventListener('pointercancel', function (event) { endDrag(event, true); });
+
+        wrap.addEventListener('scroll', function () {
+            if (!internalScrollWrite && axis.raf) axis.halt();
+            beginMotion();
+        }, { passive: true });
+
+        window.addEventListener('resize', invalidateGeometry, { passive: true });
 
         wrap.addEventListener('click', function (event) {
             if (dragState.justDragged) {
@@ -466,16 +533,45 @@
         }, true);
     }
 
-    function init() {
-        attachPageScroll();
+    var pageScrollAttached = false;
 
-        var wraps = document.querySelectorAll(
-            '.sqr-tracker-wrap, .dashboard-table-wrapper'
+    function init(root) {
+        if (!pageScrollAttached) {
+            // Dense table pages are paint-heavy. Keep their vertical wheel
+            // scrolling native so sticky cells can use compositor scrolling.
+            if (!document.body.matches('.sqr-page, .admin-dashboard, .requestor-dashboard, .engineer-dashboard')) {
+                attachPageScroll();
+            }
+            pageScrollAttached = true;
+        }
+
+        var scope = root && root.querySelectorAll ? root : document;
+        var wraps = scope.querySelectorAll(
+            '.sqr-tracker-wrap, .dashboard-table-wrapper, [data-table-scroll-track]'
         );
         for (var i = 0; i < wraps.length; i += 1) {
             attachHorizontalScroll(wraps[i]);
         }
+
+        if (scope.matches && scope.matches('.sqr-tracker-wrap, .dashboard-table-wrapper, [data-table-scroll-track]')) {
+            attachHorizontalScroll(scope);
+        }
     }
+
+    window.initRequestHubSmoothScroll = init;
+    window.invalidateRequestHubScrollGeometry = function (root) {
+        var scope = root && root.querySelectorAll ? root : document;
+        var wraps = scope.querySelectorAll('.sqr-tracker-wrap, .dashboard-table-wrapper, [data-table-scroll-track]');
+        for (var i = 0; i < wraps.length; i += 1) {
+            if (wraps[i]._requestHubInvalidateScrollGeometry) {
+                wraps[i]._requestHubInvalidateScrollGeometry();
+            }
+        }
+        if (scope.matches && scope.matches('.sqr-tracker-wrap, .dashboard-table-wrapper, [data-table-scroll-track]') &&
+            scope._requestHubInvalidateScrollGeometry) {
+            scope._requestHubInvalidateScrollGeometry();
+        }
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

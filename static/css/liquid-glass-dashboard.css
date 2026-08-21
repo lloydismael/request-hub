@@ -1162,16 +1162,81 @@ body:not(.dark-mode).engineer-dashboard .dashboard-table-wrapper .badge.bg-dange
 
 /* Row hover swaps instantly — the background-color transition was removed to
    keep large-table scrolling free of per-row paint animations. */
-body.admin-dashboard .dashboard-table-wrapper tbody tr:hover td,
-body.requestor-dashboard .dashboard-table-wrapper tbody tr:hover td,
-body.engineer-dashboard .dashboard-table-wrapper tbody tr:hover td {
+body.admin-dashboard .dashboard-table-wrapper:not(.is-scrolling-x) tbody tr:hover td,
+body.requestor-dashboard .dashboard-table-wrapper:not(.is-scrolling-x) tbody tr:hover td,
+body.engineer-dashboard .dashboard-table-wrapper:not(.is-scrolling-x) tbody tr:hover td {
     background: rgba(191, 219, 254, 0.55) !important;
 }
 
-body.dark-mode.admin-dashboard .dashboard-table-wrapper tbody tr:hover td,
-body.dark-mode.requestor-dashboard .dashboard-table-wrapper tbody tr:hover td,
-body.dark-mode.engineer-dashboard .dashboard-table-wrapper tbody tr:hover td {
+body.dark-mode.admin-dashboard .dashboard-table-wrapper:not(.is-scrolling-x) tbody tr:hover td,
+body.dark-mode.requestor-dashboard .dashboard-table-wrapper:not(.is-scrolling-x) tbody tr:hover td,
+body.dark-mode.engineer-dashboard .dashboard-table-wrapper:not(.is-scrolling-x) tbody tr:hover td {
     background: var(--lg-row-hover) !important;
+}
+
+/* Dense-table pages keep the same palette and depth without large live
+   backdrop-filter surfaces or row transition paints during scrolling. */
+body.admin-dashboard .glass-card--expanded,
+body.requestor-dashboard .glass-card--expanded,
+body.engineer-dashboard .glass-card--expanded {
+    background: linear-gradient(155deg, #e7edf6, #d8e2ef) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+body.dark-mode.admin-dashboard .glass-card--expanded,
+body.dark-mode.requestor-dashboard .glass-card--expanded,
+body.dark-mode.engineer-dashboard .glass-card--expanded {
+    background: linear-gradient(155deg, #192238, #10172a) !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper tbody tr,
+body.requestor-dashboard .dashboard-table-wrapper tbody tr,
+body.engineer-dashboard .dashboard-table-wrapper tbody tr,
+body.admin-dashboard .dashboard-table-wrapper tbody td,
+body.requestor-dashboard .dashboard-table-wrapper tbody td,
+body.engineer-dashboard .dashboard-table-wrapper tbody td {
+    transition: none !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper .btn,
+body.admin-dashboard .dashboard-table-wrapper .badge,
+body.requestor-dashboard .dashboard-table-wrapper .btn,
+body.requestor-dashboard .dashboard-table-wrapper .badge,
+body.engineer-dashboard .dashboard-table-wrapper .btn,
+body.engineer-dashboard .dashboard-table-wrapper .badge {
+    will-change: auto !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper tbody tr,
+body.requestor-dashboard .dashboard-table-wrapper tbody tr,
+body.engineer-dashboard .dashboard-table-wrapper tbody tr {
+    box-shadow: none !important;
+}
+
+body.admin-dashboard .dashboard-table-wrapper.is-scrolling-x .btn,
+body.admin-dashboard .dashboard-table-wrapper.is-scrolling-x .badge,
+body.requestor-dashboard .dashboard-table-wrapper.is-scrolling-x .btn,
+body.requestor-dashboard .dashboard-table-wrapper.is-scrolling-x .badge,
+body.engineer-dashboard .dashboard-table-wrapper.is-scrolling-x .btn,
+body.engineer-dashboard .dashboard-table-wrapper.is-scrolling-x .badge {
+    transform: none !important;
+    transition: none !important;
+}
+
+body.admin-dashboard .glass-card--expanded,
+body.requestor-dashboard .glass-card--expanded,
+body.engineer-dashboard .glass-card--expanded {
+    transition: none !important;
+}
+
+body.sqr-page .navbar,
+body.admin-dashboard .navbar,
+body.requestor-dashboard .navbar,
+body.engineer-dashboard .navbar {
+    background: linear-gradient(180deg, rgba(14, 20, 38, 0.97), rgba(14, 20, 38, 0.94)) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
 }
 
 body.admin-dashboard .dashboard-table-wrapper tbody tr.table-danger td,

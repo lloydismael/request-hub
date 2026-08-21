@@ -1437,8 +1437,9 @@ class EngineerActivityLogForm(forms.ModelForm):
             "status": forms.Select(attrs={"class": "form-select"}),
         }
 
-    def __init__(self, *args, engineer=None, **kwargs):
+    def __init__(self, *args, engineer=None, bound_request=None, **kwargs):
         self.engineer = engineer
+        self.bound_request = bound_request
         if self.engineer is None:
             raise ValueError("EngineerActivityLogForm requires an engineer instance.")
         super().__init__(*args, **kwargs)
@@ -1453,9 +1454,16 @@ class EngineerActivityLogForm(forms.ModelForm):
 
         request_field = self.fields["request"]
         request_field.required = False
-        related_requests = Request.objects.filter(
-            Q(engineer=self.engineer) | Q(backup_engineer=self.engineer)
-        ).order_by("-created_at").select_related("account")
+        if self.bound_request is not None:
+            related_requests = Request.objects.filter(pk=self.bound_request.pk)
+            request_field.required = True
+            if not self.is_bound and not self.instance.pk:
+                request_field.initial = self.bound_request
+        else:
+            related_requests = Request.objects.filter(
+                Q(engineer=self.engineer) | Q(backup_engineer=self.engineer)
+            )
+        related_requests = related_requests.order_by("-created_at").select_related("account")
         request_field.queryset = related_requests
         request_field.empty_label = "Select request (optional)"
         self.fields["is_billable"].initial = "false"
