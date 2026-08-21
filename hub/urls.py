@@ -10,6 +10,7 @@ from .views import (
     NotificationReadView,
     NotificationDeleteView,
     NotificationMarkAllReadView,
+    NotificationToastDataView,
     RequestAdminUpdateView,
     RequestDeleteView,
     RequestRestoreView,
@@ -47,7 +48,7 @@ from .views import (
     UserEditView,
     UserManagementView,
     RequestCollaborativeManageView,
-    RequestLifecycleAcceptView,
+    RequestLifecycleAcknowledgeView,
 )
 
 app_name = "hub"
@@ -55,6 +56,7 @@ app_name = "hub"
 urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("dashboard/live/", DashboardLiveDataView.as_view(), name="dashboard-live"),
+    path("dashboard/toasts/", NotificationToastDataView.as_view(), name="notification-toast-data"),
     path("activity-logs/", EngineerActivityLogView.as_view(), name="activity-logs"),
     path("activity-logs/<int:pk>/delete/", EngineerActivityLogDeleteView.as_view(), name="activity-log-delete"),
     path("requests/export/csv/", RequestExportCSVView.as_view(), name="request-export"),
@@ -63,7 +65,7 @@ urlpatterns = [
     path("requests/<int:pk>/status/", RequestStatusUpdateView.as_view(), name="request-status"),
     path("requests/<int:pk>/manage/", RequestAdminUpdateView.as_view(), name="request-manage"),
     path("requests/<int:pk>/manage/collab/", RequestCollaborativeManageView.as_view(), name="request-manage-collab"),
-    path("requests/<int:pk>/lifecycle/accept/", RequestLifecycleAcceptView.as_view(), name="request-lifecycle-accept"),
+    path("requests/<int:pk>/lifecycle/acknowledge/", RequestLifecycleAcknowledgeView.as_view(), name="request-lifecycle-acknowledge"),
     path("status-logs/<int:pk>/edit/", StatusLogUpdateView.as_view(), name="status-log-edit"),
     path("requests/<int:pk>/nudge/", RequestNudgeView.as_view(), name="request-nudge"),
     path("requests/<int:pk>/teams-chat/", RequestTeamsRedirectView.as_view(), name="request-teams"),

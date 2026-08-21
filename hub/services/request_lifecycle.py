@@ -98,7 +98,7 @@ def record_created(request_id: int, *, actor=None, source: str = "") -> Transiti
     request = Request.all_objects.select_for_update(of=("self",)).select_related("engineer", "backup_engineer").get(pk=request_id)
     events = [_ensure_created_event(request, actor=actor, source=source)]
     previous_stage = request.lifecycle_stage
-    request.assignment_revision = 1 if request.engineer_id else 0
+    request.assignment_revision = 1 if request.engineer_id or request.backup_engineer_id else 0
     request.lifecycle_stage = Request.LifecycleStage.ASSIGNED if request.engineer_id else Request.LifecycleStage.CREATED
     request.status = Request.Status.ONGOING
     request.end_date = None
@@ -126,15 +126,19 @@ def record_assignment_change(
     previous_backup_id: int | None,
     actor=None,
     source: str = "",
+    allow_capacity_override: bool = False,
 ) -> TransitionResult:
     request = Request.all_objects.select_for_update(of=("self",)).select_related("engineer", "backup_engineer").get(pk=request_id)
+    if allow_capacity_override:
+        request._allow_capacity_override = True
     _ensure_created_event(request, actor=actor, source=source)
     primary_changed = previous_engineer_id != request.engineer_id
     backup_changed = previous_backup_id != request.backup_engineer_id
     previous_stage = request.lifecycle_stage
     events: list[RequestLifecycleEvent] = []
-    if primary_changed:
+    if primary_changed or backup_changed:
         request.assignment_revision += 1
+    if primary_changed:
         request.lifecycle_stage = Request.LifecycleStage.ASSIGNED if request.engineer_id else Request.LifecycleStage.CREATED
         request.status = Request.Status.ONGOING
         request.end_date = None
@@ -153,24 +157,26 @@ def record_assignment_change(
                 metadata={"previous_engineer_id": previous_engineer_id},
             )
         )
+    elif backup_changed:
+        request.save(update_fields=["assignment_revision", "updated_at"])
     return TransitionResult(request, tuple(events), previous_stage, request.lifecycle_stage, primary_changed, backup_changed)
 
 
 @transaction.atomic
-def accept_request(
+def acknowledge_request(
     request_id: int,
     *,
     actor,
     expected_revision: int,
-    source: str = "Manage Request · Accept",
+    source: str = "Manage Request · Acknowledge",
 ) -> TransitionResult:
     request = Request.all_objects.select_for_update(of=("self",)).select_related("engineer", "backup_engineer").get(pk=request_id)
     if not request.engineer_id or actor.pk != request.engineer_id:
-        raise PermissionDenied("Only the current primary assignee can accept this request.")
+        raise PermissionDenied("Only the current primary assignee can acknowledge this request.")
     if request.assignment_revision != expected_revision:
-        raise LifecycleConflictError("The assignment changed. Refresh the page before accepting.")
+        raise LifecycleConflictError("The assignment changed. Refresh the page before acknowledging.")
     if request.lifecycle_stage != Request.LifecycleStage.ASSIGNED:
-        raise LifecycleConflictError("This request is no longer awaiting acceptance.")
+        raise LifecycleConflictError("This request is no longer awaiting acknowledgement.")
 
     occurred_at = timezone.now()
     acknowledged = _create_event(
@@ -257,7 +263,7 @@ def _stage_state(stage_value: str, current_stage: str) -> str:
 def _action_label(request: Request) -> str:
     labels = {
         Request.LifecycleStage.CREATED: "Assign a primary owner to the request.",
-        Request.LifecycleStage.ASSIGNED: "Primary owner must accept the request.",
+        Request.LifecycleStage.ASSIGNED: "Primary owner must acknowledge the request and send the acknowledgement email.",
         Request.LifecycleStage.ACKNOWLEDGED: "Prepare to begin work.",
         Request.LifecycleStage.ONGOING: "Complete the work and record related activity.",
         Request.LifecycleStage.COMPLETED: "No pending action. This request is complete.",
@@ -307,12 +313,19 @@ def build_lifecycle_context(request: Request, actor) -> dict:
         "current_owner_label": owner_label,
         "backup_support_label": _user_label(request.backup_engineer),
         "assignment_revision": request.assignment_revision,
-        "can_accept": bool(
-            request.lifecycle_stage == Request.LifecycleStage.ASSIGNED
-            and request.engineer_id
+        "can_acknowledge": bool(
+            request.engineer_id
             and actor.pk == request.engineer_id
+            and request.lifecycle_stage
+            in {
+                Request.LifecycleStage.ASSIGNED,
+                Request.LifecycleStage.ACKNOWLEDGED,
+                Request.LifecycleStage.ONGOING,
+            }
         ),
-        "accept_url": reverse("hub:request-lifecycle-accept", kwargs={"pk": request.pk}),
+        "acknowledge_again": request.lifecycle_stage
+        in {Request.LifecycleStage.ACKNOWLEDGED, Request.LifecycleStage.ONGOING},
+        "acknowledge_url": reverse("hub:request-lifecycle-acknowledge", kwargs={"pk": request.pk}),
         "stages": stages,
         "events": events,
     }

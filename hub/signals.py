@@ -51,31 +51,5 @@ def notify_on_completion(sender, instance, created, **kwargs):
             )
 
 
-@receiver(post_save, sender=Request)
-def notify_on_assignment(sender, instance, created, **kwargs):
-    if not instance.engineer:
-        return
-    previous_engineer_id = getattr(instance, "_previous_engineer_id", None)
-    if created or previous_engineer_id != instance.engineer_id:
-        code = instance.reference_code or f"REQ-{instance.pk:05d}"
-        actor = _resolve_actor(instance)
-        source = _resolve_source(instance, "Request · Assignment")
-        Notification.objects.create(
-            recipient=instance.engineer,
-            related_request=instance,
-            message=f"You have been assigned to request {code}",
-            actor=actor,
-            source=source,
-        )
-
-
-@receiver(pre_save, sender=Request)
-def cache_previous_engineer(sender, instance, **kwargs):
-    if not instance.pk:
-        instance._previous_engineer_id = None
-        return
-    try:
-        previous = sender.objects.get(pk=instance.pk)
-        instance._previous_engineer_id = previous.engineer_id
-    except sender.DoesNotExist:
-        instance._previous_engineer_id = None
+# Assignment notifications are created by hub.services.notifications.
+ASSIGNMENT_NOTIFICATIONS_CENTRALIZED = True

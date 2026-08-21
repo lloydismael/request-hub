@@ -1056,6 +1056,111 @@ code:hover {
     font-size: 1rem;
 }
 
+.request-success-toast__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.request-success-toast__ticket,
+.notification-toast__ticket {
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid rgba(22, 163, 74, 0.3);
+    border-radius: 999px;
+    background: rgba(22, 163, 74, 0.13);
+    color: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.notification-toast-region {
+    position: fixed;
+    top: 5.25rem;
+    right: 1rem;
+    z-index: 2060;
+    display: grid;
+    width: min(420px, calc(100vw - 2rem));
+    gap: 0.75rem;
+    pointer-events: none;
+}
+
+.notification-toast {
+    pointer-events: auto;
+    padding: 1rem;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.97);
+    color: #172033;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+    animation: notification-toast-in 0.3s ease both;
+}
+
+body.dark-mode .notification-toast {
+    border-color: rgba(96, 165, 250, 0.35);
+    background: rgba(18, 25, 43, 0.97);
+    color: #f8fafc;
+}
+
+.notification-toast__header,
+.notification-toast__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.notification-toast__title {
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 750;
+}
+
+.notification-toast__message {
+    margin: 0.65rem 0 0;
+    color: inherit;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.notification-toast__actions {
+    justify-content: flex-end;
+    margin-top: 0.8rem;
+}
+
+.notification-toast__close {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+@keyframes notification-toast-in {
+    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 575.98px) {
+    .notification-toast-region {
+        top: auto;
+        right: 1rem;
+        bottom: 1rem;
+        left: 1rem;
+        width: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notification-toast {
+        animation: none;
+    }
+}
+
 .request-success-toast--hide {
     opacity: 0;
     transform: translate(-50%, -55%) scale(0.86);

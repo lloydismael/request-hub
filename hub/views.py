@@ -30,7 +30,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections
 from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
@@ -94,6 +94,10 @@ from .mixins import (
     EngineerRequiredMixin,
 )
 from .services import request_lifecycle
+from .services.notifications import (
+    queue_assignment_notifications,
+    queue_new_request_notifications,
+)
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
 logger = logging.getLogger(__name__)
@@ -1063,29 +1067,12 @@ def notify_engineer_assignment_notification(
     previous_backup_id: int | None = None,
 ) -> None:
     """Create in-app notifications when an engineer or backup is newly assigned."""
-
-    recipients: dict[int, User] = {}
-    if request_obj.engineer and request_obj.engineer_id != previous_engineer_id:
-        recipients[request_obj.engineer_id] = request_obj.engineer
-    if request_obj.backup_engineer and request_obj.backup_engineer_id != previous_backup_id:
-        recipients[request_obj.backup_engineer_id] = request_obj.backup_engineer
-
-    recipients.pop(actor_user.pk, None)
-
-    if not recipients:
-        return
-
-    actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
-    account_name = request_obj.account.name if request_obj.account else "Account"
-    engagement = request_obj.get_engagement_type_display()
-    for recipient in recipients.values():
-        Notification.objects.create(
-            recipient=recipient,
-            message=f"You were assigned to {request_obj.reference_code} · {account_name} ({engagement}).",
-            related_request=request_obj,
-            actor=actor_name,
-            source="Assignment",
-        )
+    queue_assignment_notifications(
+        request_obj,
+        actor_user=actor_user,
+        previous_engineer_id=previous_engineer_id,
+        previous_backup_id=previous_backup_id,
+    )
 
 
 def clear_engineer_outlook_lock_on_reassignment(
@@ -1732,6 +1719,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        session = getattr(self.request, "session", None)
+        context["request_success_reference"] = (
+            session.pop("request_success_reference", "") if session is not None else ""
+        )
         if user.role in ADMIN_PANEL_ROLES:
             context["role"] = User.Roles.ADMIN
         elif user.role in ENGINEER_ACCESS_ROLES:
@@ -2487,7 +2478,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 request=request,
             )
             self._notify_admins_new_request(req)
-            messages.success(request, "Request submitted", extra_tags="request-success")
+            request.session["request_success_reference"] = req.reference_code
+            messages.success(request, f"Request submitted · {req.reference_code}", extra_tags="request-success")
             flash_assignment_email_feedback(
                 request,
                 assignment_email_result,
@@ -2500,24 +2492,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     @staticmethod
     def _notify_admins_new_request(request_obj):
-        actor = request_obj.requestor.get_full_name() or request_obj.requestor.username
-        priority_label = request_obj.get_priority_display()
-        category_label = request_obj.get_product_category_display()
-        due_display = request_obj.due_date.strftime("%b %d, %Y") if request_obj.due_date else "No due date"
-        message = (
-            f"New {priority_label} ticket {request_obj.reference_code} for {request_obj.account.name} "
-            f"({category_label}) submitted by {actor}. Due {due_display}."
-        )
-        for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
-            if admin.pk == request_obj.requestor_id:
-                continue
-            Notification.objects.create(
-                recipient=admin,
-                message=message,
-                related_request=request_obj,
-                actor=actor,
-                source="Dashboard · New Request",
-            )
+        queue_new_request_notifications(request_obj, actor_user=request_obj.requestor)
 
 
 def _refresh_sqr_request_account_map(form):
@@ -3320,6 +3295,58 @@ class DashboardLiveDataView(LoginRequiredMixin, View):
                 "request_count": len(context.get("requests") or []),
                 "html_metrics": html_metrics,
                 "html_rows": html_rows,
+            }
+        )
+
+
+class NotificationToastDataView(LoginRequiredMixin, View):
+    """Return new request/assignment events for the signed-in user's toast queue."""
+
+    PAGE_SIZE = 50
+
+    def get(self, request, *args, **kwargs):
+        queryset = (
+            Notification.objects.filter(
+                recipient=request.user,
+                event_type__in=[
+                    Notification.EventType.NEW_REQUEST,
+                    Notification.EventType.ASSIGNMENT,
+                ],
+                related_request__isnull=False,
+            )
+            .select_related("related_request")
+            .order_by("id")
+        )
+        raw_cursor = request.GET.get("cursor")
+        if raw_cursor in (None, ""):
+            baseline = queryset.aggregate(value=Max("id"))["value"] or 0
+            return JsonResponse({"ok": True, "events": [], "next_cursor": baseline, "has_more": False})
+        try:
+            cursor = max(int(raw_cursor), 0)
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Invalid cursor"}, status=400)
+
+        rows = list(queryset.filter(id__gt=cursor)[: self.PAGE_SIZE + 1])
+        has_more = len(rows) > self.PAGE_SIZE
+        rows = rows[: self.PAGE_SIZE]
+        events = [
+            {
+                "id": item.pk,
+                "type": item.event_type,
+                "request_id": item.related_request_id,
+                "reference_code": item.related_request.reference_code,
+                "message": item.message,
+                "created_at": item.created_at.isoformat(),
+                "manage_url": reverse("hub:notification-follow", args=[item.pk]),
+            }
+            for item in rows
+        ]
+        return JsonResponse(
+            {
+                "ok": True,
+                "events": events,
+                "next_cursor": rows[-1].pk if rows else cursor,
+                "has_more": has_more,
             }
         )
 
@@ -4569,6 +4596,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         original = Request.objects.get(pk=form.instance.pk)
         previous_engineer_id = original.engineer_id
         previous_backup_id = original.backup_engineer_id
+        previous_backup_id = original.backup_engineer_id
         changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
         lifecycle_result = request_lifecycle.record_assignment_change(
@@ -4577,6 +4605,7 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
             previous_backup_id=previous_backup_id,
             actor=self.request.user,
             source="Admin · Manage Request",
+            allow_capacity_override=self.request.POST.get("override_capacity") == "1",
         )
         self.object = lifecycle_result.request
         if original.status != self.object.status:
@@ -4745,7 +4774,7 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         lifecycle_result = request_lifecycle.record_assignment_change(
             self.object.pk,
             previous_engineer_id=previous_engineer_id,
-            previous_backup_id=original.backup_engineer_id,
+            previous_backup_id=previous_backup_id,
             actor=self.request.user,
             source="Requestor · Edit Request",
         )
@@ -4764,6 +4793,12 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
                 changed_fields,
                 "Requestor · Edit Request",
             )
+        notify_engineer_assignment_notification(
+            self.object,
+            actor_user=self.request.user,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+        )
         messages.success(self.request, "Request updated.")
         return response
 
@@ -5155,7 +5190,7 @@ class RequestRestoreView(LoginRequiredMixin, View):
 
 
 class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
-    def post(self, request, pk):
+    def post(self, request, pk, allow_existing_draft=False):
         request_obj = get_object_or_404(
             Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
             pk=pk,
@@ -5172,7 +5207,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
                 user__role__in=ENGINEER_ACCESS_ROLES,
                 channel=RequestCommunication.Channel.OUTLOOK,
             ).exists()
-            if already_launched:
+            if already_launched and not allow_existing_draft:
                 messages.warning(request, "You already launched the Outlook draft for this request.")
                 return redirect(redirect_target)
 
@@ -7275,7 +7310,7 @@ class RequestNudgeView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         return redirect("hub:request-manage", pk=pk)
 
 
-class RequestLifecycleAcceptView(LoginRequiredMixin, View):
+class RequestLifecycleAcknowledgeView(LoginRequiredMixin, View):
     def post(self, request, pk):
         try:
             expected_revision = int(request.POST.get("assignment_revision", ""))
@@ -7283,19 +7318,46 @@ class RequestLifecycleAcceptView(LoginRequiredMixin, View):
             messages.error(request, "The assignment version is invalid. Refresh and try again.")
             return redirect("hub:request-manage-collab", pk=pk)
 
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "requestor"),
+            pk=pk,
+        )
+        engineer_email = request_obj.engineer.email if request_obj.engineer and request_obj.engineer.email else None
+        manager_email = request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
+        if not engineer_email or not manager_email:
+            messages.error(
+                request,
+                "Unable to draft an acknowledgement email. Ensure the engineer and requestor both have emails configured.",
+            )
+            return redirect("hub:request-manage-collab", pk=pk)
+
         try:
-            request_lifecycle.accept_request(
+            request_lifecycle.acknowledge_request(
                 pk,
                 actor=request.user,
                 expected_revision=expected_revision,
             )
         except PermissionDenied as exc:
             messages.error(request, str(exc))
-        except request_lifecycle.LifecycleConflictError as exc:
+            return redirect("hub:request-manage-collab", pk=pk)
+        except request_lifecycle.LifecycleConflictError:
+            request_obj.refresh_from_db()
+            already_acknowledged = (
+                request_obj.engineer_id == request.user.id
+                and request_obj.lifecycle_stage
+                in {
+                    Request.LifecycleStage.ACKNOWLEDGED,
+                    Request.LifecycleStage.ONGOING,
+                    Request.LifecycleStage.COMPLETED,
+                }
+            )
+            if not already_acknowledged:
+                messages.error(request, "This request is no longer awaiting acknowledgement.")
+                return redirect("hub:request-manage-collab", pk=pk)
+        except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-        else:
-            messages.success(request, "Request accepted. Work is now ongoing.")
-        return redirect("hub:request-manage-collab", pk=pk)
+            return redirect("hub:request-manage-collab", pk=pk)
+        return RequestOutlookRedirectView().post(request, pk, allow_existing_draft=True)
 
 
 class RequestStatusUpdateView(LoginRequiredMixin, View):

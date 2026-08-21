@@ -1017,10 +1017,10 @@ body.admin-dashboard .engineer-ack-timer {
    -------------------------------------------------------------------------- */
 
 body.requestor-dashboard .requestor-summary {
-    padding: 1.25rem 1.4rem;
-    border-radius: var(--lg-radius-lg);
-    background: var(--lg-tint-sunken);
-    border: 1px solid var(--lg-hairline-soft);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
 }
 
 body.requestor-dashboard .requestor-summary__label {
@@ -1573,6 +1573,14 @@ body.dark-mode.engineer-dashboard .table-cell-nowrap {
 /* --------------------------------------------------------------------------
    11. Create-request modal
    -------------------------------------------------------------------------- */
+
+/* The dashboard navbar is sticky and visually prominent enough to remain
+    visible through the translucent modal backdrop. Remove it from the modal
+    interaction layer while preserving its layout position for a stable close. */
+body.requestor-dashboard.requestor-modal-open .navbar {
+     visibility: hidden;
+     pointer-events: none;
+}
 
 .requestor-modal__backdrop {
     background: color-mix(in srgb, #050b1c 55%, transparent) !important;

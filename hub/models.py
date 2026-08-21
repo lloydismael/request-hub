@@ -138,8 +138,19 @@ class Request(models.Model):
     def clean(self):
         super().clean()
         bypass_capacity = getattr(self, "_allow_capacity_override", False)
+        engineer_is_changing = True
+        if self.pk:
+            previous_engineer_id = (
+                type(self).all_objects.filter(pk=self.pk).values_list("engineer_id", flat=True).first()
+            )
+            engineer_is_changing = previous_engineer_id != self.engineer_id
 
-        if self.engineer and self.status == self.Status.ONGOING and not bypass_capacity:
+        if (
+            self.engineer
+            and self.status == self.Status.ONGOING
+            and not bypass_capacity
+            and engineer_is_changing
+        ):
             assigned = Request.objects.filter(
                 engineer=self.engineer,
                 status=self.Status.ONGOING,
@@ -1028,16 +1039,34 @@ class SqrSubmissionHistory(models.Model):
 
 
 class Notification(models.Model):
+    class EventType(models.TextChoices):
+        SYSTEM = "system", "System"
+        NEW_REQUEST = "new_request", "New Request"
+        ASSIGNMENT = "assignment", "Assignment"
+
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     message = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     is_read = models.BooleanField(default=False)
     related_request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="notifications", null=True, blank=True)
     actor = models.CharField(max_length=255, blank=True)
     source = models.CharField(max_length=255, blank=True)
+    event_type = models.CharField(max_length=32, choices=EventType.choices, default=EventType.SYSTEM, db_index=True)
+    event_key = models.CharField(max_length=160, blank=True, default="")
+    event_revision = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipient", "event_key"],
+                condition=~models.Q(event_key=""),
+                name="uniq_notif_recipient_event_key",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["recipient", "event_type", "id"], name="notif_rec_evt_id"),
+        ]
 
     def __str__(self) -> str:
         return self.message
@@ -1049,6 +1078,8 @@ class Notification(models.Model):
 
     @property
     def category_key(self) -> str:
+        if self.event_type != self.EventType.SYSTEM:
+            return self.event_type
         message_lower = (self.message or "").lower()
         source_lower = (self.source or "").lower()
         if "nudge" in source_lower or "reminder" in message_lower:

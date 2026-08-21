@@ -29,9 +29,9 @@
     </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=19">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20">
     <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=12">
-    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=45">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=47">
     <!-- Ambient background layer renders below content; defer so it doesn't block first paint -->
     <link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=3" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=3"></noscript>
@@ -354,7 +354,12 @@
                             <path class="request-success-toast__check" d="M16 24.5l6 6 12-12"></path>
                         </svg>
                     </span>
-                    <span class="request-success-toast__message">{{ message }}</span>
+                    <span class="request-success-toast__content">
+                        <span class="request-success-toast__message">Request submitted successfully</span>
+                        {% if request_success_reference %}
+                            <strong class="request-success-toast__ticket">{{ request_success_reference }}</strong>
+                        {% endif %}
+                    </span>
                 </div>
             {% elif "login-success" in message.tags %}
                 <div class="login-success-overlay" data-login-success-overlay data-redirect-delay="1800" aria-live="polite" role="status">
@@ -381,11 +386,25 @@
             </div>
     </main>
 
+    {% if request.user.is_authenticated %}
+        <div data-notification-toast-config
+             data-url="{% url 'hub:notification-toast-data' %}"
+             data-user-id="{{ request.user.pk }}"
+             data-initial-cursor="{{ notification_toast_initial_cursor|default:0 }}"
+             hidden></div>
+        <section class="notification-toast-region"
+                 aria-label="Request notifications"
+                 aria-live="polite"
+                 aria-relevant="additions"
+                 data-notification-toast-region></section>
+    {% endif %}
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
         <script src="{% static 'js/page-transitions.js' %}?v=1" defer></script>
     <script src="{% static 'js/navbar-contrast.js' %}?v=1" defer></script>
     <script src="{% static 'js/liquid-glass.js' %}?v=4" defer></script>
     <script src="{% static 'js/smooth-scroll.js' %}?v=10" defer></script>
+    <script src="{% static 'js/notification-toasts.js' %}?v=2" defer></script>
     <script src="{% static 'js/login-success.js' %}" defer></script>
     <script>
         // Nav avatar dropdown

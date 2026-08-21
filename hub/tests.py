@@ -46,6 +46,10 @@ from hub.views import (
     clear_engineer_outlook_lock_on_reassignment,
     notify_engineer_assignment_email,
 )
+from hub.services.notifications import (
+    queue_assignment_notifications,
+    queue_new_request_notifications,
+)
 
 
 class AssignmentEmailTests(TestCase):
@@ -864,6 +868,165 @@ class DashboardViewTests(TestCase):
             list(request_obj.lifecycle_events.values_list("event_type", flat=True)),
             ["created"],
         )
+
+    def test_requestor_dashboard_success_toast_highlights_reference(self):
+        self.client.force_login(self.requestor)
+        response = self.client.post(
+            reverse("hub:dashboard"),
+            {
+                "account_name": self.account.name,
+                "product_category": "Azure",
+                "engagement_type": Request.Engagement.SUPPORT,
+                "priority": Request.Priority.MEDIUM,
+                "description": "Toast success request.",
+            },
+            follow=True,
+        )
+
+        request_obj = Request.objects.get(description="Toast success request.")
+        self.assertContains(response, "Request submitted successfully")
+        self.assertContains(response, request_obj.reference_code)
+        self.assertContains(response, 'class="request-success-toast__ticket"')
+        self.assertContains(response, 'data-notification-toast-config')
+
+
+class NotificationToastTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.requestor = User.objects.create_user(
+            username="toast-requestor",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+        )
+        self.admin = User.objects.create_user(
+            username="toast-admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+        )
+        self.pm_esg = User.objects.create_user(
+            username="toast-pmesg",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+        )
+        self.engineer = User.objects.create_user(
+            username="toast-engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+        )
+        self.backup = User.objects.create_user(
+            username="toast-backup",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+        )
+        self.account = Account.objects.create(name="Toast Account")
+        self.request_obj = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Toast Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.HIGH,
+            engineer=self.engineer,
+            backup_engineer=self.backup,
+            assignment_revision=1,
+        )
+
+    def test_new_request_events_are_typed_and_idempotent(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_new_request_notifications(self.request_obj, actor_user=self.requestor)
+        first_ids = set(
+            Notification.objects.filter(
+                event_type=Notification.EventType.NEW_REQUEST,
+                related_request=self.request_obj,
+            ).values_list("pk", flat=True)
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_new_request_notifications(self.request_obj, actor_user=self.requestor)
+
+        events = Notification.objects.filter(
+            event_type=Notification.EventType.NEW_REQUEST,
+            related_request=self.request_obj,
+        )
+        self.assertEqual(set(events.values_list("pk", flat=True)), first_ids)
+        self.assertTrue(events.filter(recipient=self.admin).exists())
+        self.assertTrue(events.filter(recipient=self.pm_esg).exists())
+        self.assertFalse(events.filter(recipient=self.requestor).exists())
+
+    def test_assignment_events_deduplicate_and_exclude_actor(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_assignment_notifications(self.request_obj, actor_user=self.requestor)
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_assignment_notifications(self.request_obj, actor_user=self.requestor)
+
+        events = Notification.objects.filter(event_type=Notification.EventType.ASSIGNMENT)
+        self.assertEqual(events.count(), 2)
+        self.assertEqual(set(events.values_list("recipient_id", flat=True)), {self.engineer.pk, self.backup.pk})
+
+        actor_request = Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Toast Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            assignment_revision=1,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_assignment_notifications(actor_request, actor_user=self.engineer)
+        self.assertFalse(Notification.objects.filter(related_request=actor_request).exists())
+
+    def test_toast_endpoint_baselines_then_returns_only_current_users_events(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_new_request_notifications(self.request_obj, actor_user=self.requestor)
+        baseline_id = Notification.objects.filter(recipient=self.admin).get().pk
+        self.client.force_login(self.admin)
+
+        baseline = self.client.get(reverse("hub:notification-toast-data"))
+        self.assertEqual(baseline.status_code, 200)
+        self.assertEqual(baseline.json()["events"], [])
+        self.assertEqual(baseline.json()["next_cursor"], baseline_id)
+
+        newer = Notification.objects.create(
+            recipient=self.admin,
+            related_request=self.request_obj,
+            event_type=Notification.EventType.NEW_REQUEST,
+            event_key="toast-endpoint-newer",
+            message=f"New request {self.request_obj.reference_code}",
+        )
+        response = self.client.get(reverse("hub:notification-toast-data"), {"cursor": baseline_id})
+        payload = response.json()
+        self.assertEqual([event["id"] for event in payload["events"]], [newer.pk])
+        self.assertEqual(payload["events"][0]["reference_code"], self.request_obj.reference_code)
+        self.assertEqual(
+            payload["events"][0]["manage_url"],
+            reverse("hub:notification-follow", args=[newer.pk]),
+        )
+
+    def test_toast_endpoint_rejects_invalid_cursor_and_requires_login(self):
+        anonymous = self.client.get(reverse("hub:notification-toast-data"))
+        self.assertEqual(anonymous.status_code, 302)
+        self.client.force_login(self.admin)
+        invalid = self.client.get(reverse("hub:notification-toast-data"), {"cursor": "bad"})
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_non_dashboard_page_initializes_global_live_toast_polling(self):
+        event = Notification.objects.create(
+            recipient=self.engineer,
+            related_request=self.request_obj,
+            event_type=Notification.EventType.ASSIGNMENT,
+            event_key="global-toast-config",
+            message=f"Assigned to {self.request_obj.reference_code}",
+        )
+        self.client.force_login(self.engineer)
+
+        response = self.client.get(reverse("hub:notifications"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-notification-toast-config')
+        self.assertContains(response, f'data-initial-cursor="{event.pk}"')
+        self.assertContains(response, 'notification-toasts')
+        self.assertContains(response, '?v=2')
 
     def test_engineer_completed_filter_orders_recent_first(self):
         engineer = User.objects.create_user(

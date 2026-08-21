@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from hub.models import Account, EngineerActivityLog, Request, RequestLifecycleEvent
+from hub.models import Account, EngineerActivityLog, Request, RequestCommunication, RequestLifecycleEvent
 from hub.services import request_lifecycle
 
 
@@ -77,13 +77,13 @@ class RequestLifecycleServiceTests(TestCase):
         request.refresh_from_db()
 
         with self.assertRaises(PermissionDenied):
-            request_lifecycle.accept_request(
+            request_lifecycle.acknowledge_request(
                 request.pk,
                 actor=self.backup,
                 expected_revision=request.assignment_revision,
             )
 
-        result = request_lifecycle.accept_request(
+        result = request_lifecycle.acknowledge_request(
             request.pk,
             actor=self.primary,
             expected_revision=request.assignment_revision,
@@ -99,7 +99,7 @@ class RequestLifecycleServiceTests(TestCase):
         request = self.create_request(engineer=self.primary, backup_engineer=self.backup)
         request_lifecycle.record_created(request.pk, actor=self.requestor)
         request.refresh_from_db()
-        request_lifecycle.accept_request(request.pk, actor=self.primary, expected_revision=request.assignment_revision)
+        request_lifecycle.acknowledge_request(request.pk, actor=self.primary, expected_revision=request.assignment_revision)
         previous_revision = request.assignment_revision
         request.engineer = self.backup
         request.save()
@@ -119,8 +119,9 @@ class RequestLifecycleServiceTests(TestCase):
         request = self.create_request(engineer=self.primary)
         request_lifecycle.record_created(request.pk, actor=self.requestor)
         request.refresh_from_db()
-        request_lifecycle.accept_request(request.pk, actor=self.primary, expected_revision=request.assignment_revision)
+        request_lifecycle.acknowledge_request(request.pk, actor=self.primary, expected_revision=request.assignment_revision)
         request.refresh_from_db()
+        previous_revision = request.assignment_revision
         request.backup_engineer = self.backup
         request.save()
 
@@ -132,14 +133,76 @@ class RequestLifecycleServiceTests(TestCase):
         )
 
         self.assertEqual(result.request.lifecycle_stage, Request.LifecycleStage.ONGOING)
+        self.assertEqual(result.request.assignment_revision, previous_revision + 1)
         self.assertEqual(result.events, ())
         self.assertTrue(result.backup_changed)
+
+    def test_assignment_change_preserves_authorized_capacity_override(self):
+        request = self.create_request()
+        request_lifecycle.record_created(request.pk, actor=self.requestor)
+        for index in range(3):
+            self.create_request(
+                engineer=self.primary,
+                engagement_type=(
+                    Request.Engagement.DEPLOYMENT
+                    if index == 0
+                    else Request.Engagement.SUPPORT
+                ),
+            )
+        request.engineer = self.primary
+        request._allow_capacity_override = True
+        request.save()
+
+        result = request_lifecycle.record_assignment_change(
+            request.pk,
+            previous_engineer_id=None,
+            previous_backup_id=None,
+            actor=self.manager,
+            allow_capacity_override=True,
+        )
+
+        self.assertEqual(result.request.engineer, self.primary)
+        self.assertEqual(result.request.lifecycle_stage, Request.LifecycleStage.ASSIGNED)
+        self.assertEqual(result.request.assignment_revision, 1)
+
+    def test_acknowledge_does_not_recheck_engineer_capacity(self):
+        request = self.create_request()
+        request_lifecycle.record_created(request.pk, actor=self.requestor)
+        for index in range(3):
+            self.create_request(
+                engineer=self.primary,
+                engagement_type=(
+                    Request.Engagement.DEPLOYMENT
+                    if index == 0
+                    else Request.Engagement.SUPPORT
+                ),
+            )
+        request.engineer = self.primary
+        request._allow_capacity_override = True
+        request.save()
+        request_lifecycle.record_assignment_change(
+            request.pk,
+            previous_engineer_id=None,
+            previous_backup_id=None,
+            actor=self.manager,
+            allow_capacity_override=True,
+        )
+        request.refresh_from_db()
+
+        result = request_lifecycle.acknowledge_request(
+            request.pk,
+            actor=self.primary,
+            expected_revision=request.assignment_revision,
+        )
+
+        self.assertEqual(result.request.lifecycle_stage, Request.LifecycleStage.ONGOING)
+        self.assertEqual(result.request.status, Request.Status.ONGOING)
 
     def test_completion_and_reopen_are_recorded(self):
         request = self.create_request(engineer=self.primary)
         request_lifecycle.record_created(request.pk, actor=self.requestor)
         request.refresh_from_db()
-        request_lifecycle.accept_request(request.pk, actor=self.primary, expected_revision=request.assignment_revision)
+        request_lifecycle.acknowledge_request(request.pk, actor=self.primary, expected_revision=request.assignment_revision)
         EngineerActivityLog.objects.create(
             engineer=self.primary,
             account=self.account,
@@ -180,6 +243,7 @@ class RequestLifecycleManagePageTests(TestCase):
             username="tracker-requestor",
             password="pass12345",
             role=User.Roles.REQUESTOR,
+            email="tracker.requestor@example.com",
         )
         self.primary = User.objects.create_user(
             username="tracker-primary",
@@ -187,6 +251,7 @@ class RequestLifecycleManagePageTests(TestCase):
             role=User.Roles.ENGINEER,
             first_name="Primary",
             last_name="Engineer",
+            email="tracker.primary@example.com",
         )
         self.account = Account.objects.create(name="Tracker Account")
         self.request = Request.objects.create(
@@ -200,33 +265,61 @@ class RequestLifecycleManagePageTests(TestCase):
         )
         request_lifecycle.record_created(self.request.pk, actor=self.requestor)
 
-    def test_manage_page_renders_tracker_and_accept_for_primary(self):
+    def test_manage_page_renders_tracker_and_acknowledge_for_primary(self):
         self.client.force_login(self.primary)
         response = self.client.get(reverse("hub:request-manage-collab", args=[self.request.pk]))
 
         self.assertContains(response, "Request progress")
         self.assertContains(response, "Current stage: <strong>Assigned</strong>", html=True)
         self.assertContains(response, "Primary Engineer")
-        self.assertContains(response, "Accept request")
+        self.assertContains(response, "Acknowledge request")
         self.assertContains(response, 'aria-current="step"')
 
-    def test_accept_endpoint_advances_request(self):
+    def test_acknowledge_endpoint_advances_request_and_opens_email_draft(self):
         self.request.refresh_from_db()
         self.client.force_login(self.primary)
         response = self.client.post(
-            reverse("hub:request-lifecycle-accept", args=[self.request.pk]),
+            reverse("hub:request-lifecycle-acknowledge", args=[self.request.pk]),
             {"assignment_revision": self.request.assignment_revision},
         )
 
-        self.assertRedirects(response, reverse("hub:request-manage-collab", args=[self.request.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Opening Mail Draft")
+        self.assertContains(response, "acknowledge%20your%20request")
         self.request.refresh_from_db()
         self.assertEqual(self.request.lifecycle_stage, Request.LifecycleStage.ONGOING)
 
-    def test_requestor_cannot_accept(self):
+    def test_acknowledge_relaunches_email_draft_after_existing_outlook_lock(self):
+        self.request.refresh_from_db()
+        RequestCommunication.objects.create(
+            request=self.request,
+            user=self.primary,
+            channel=RequestCommunication.Channel.OUTLOOK,
+        )
+        self.client.force_login(self.primary)
+        first = self.client.post(
+            reverse("hub:request-lifecycle-acknowledge", args=[self.request.pk]),
+            {"assignment_revision": self.request.assignment_revision},
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertContains(first, "Opening Mail Draft")
+
+        second = self.client.post(
+            reverse("hub:request-lifecycle-acknowledge", args=[self.request.pk]),
+            {"assignment_revision": self.request.assignment_revision},
+        )
+        self.assertEqual(second.status_code, 200)
+        self.assertContains(second, "Opening Mail Draft")
+        self.assertNotContains(second, "You already launched the Outlook draft for this request.")
+
+        manage_page = self.client.get(reverse("hub:request-manage-collab", args=[self.request.pk]))
+        self.assertContains(manage_page, "Send acknowledgement email")
+
+    def test_requestor_cannot_acknowledge(self):
         self.request.refresh_from_db()
         self.client.force_login(self.requestor)
         self.client.post(
-            reverse("hub:request-lifecycle-accept", args=[self.request.pk]),
+            reverse("hub:request-lifecycle-acknowledge", args=[self.request.pk]),
             {"assignment_revision": self.request.assignment_revision},
         )
         self.request.refresh_from_db()
