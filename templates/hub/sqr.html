@@ -3,7 +3,7 @@
 {% block title %}SQR &middot; Request Hub{% endblock %}
 {% block body_class %}sqr-page{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=11">
+<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=14">
 {% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@
     <div class="col-12">
 
         {# ── Header card ──────────────────────────────────────────────────── #}
-        <div class="glass-card p-3 mb-3 lg-enter" data-lg-delay="0">
+        <div class="glass-card p-3 mb-3 lg-enter" data-lg-delay="0" data-navbar-surface="theme">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
                 <div>
                     <h2 class="h5 mb-0"><i class="bi bi-clipboard-data-fill me-2 text-primary"></i>Service Quotation Request</h2>
@@ -26,7 +26,7 @@
                             <div class="mgmt-search-box sqr-toolbar-search-box" role="search" aria-label="Search SQR records">
                                 <i class="bi bi-search mgmt-search-icon"></i>
                                 <input type="text" id="sqr-header-search" class="mgmt-search-input" placeholder="Search SQR..." autocomplete="off" aria-label="Search SQR records">
-                                <span class="mgmt-result-badge" id="sqr-header-count-badge">0 total</span>
+                                <span class="mgmt-result-badge" id="sqr-header-count-badge" role="status" aria-live="polite">0 total</span>
                             </div>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-secondary lg-btn lg-btn--ghost" data-bs-toggle="collapse" data-bs-target="#sqr-table-filter-panel" aria-expanded="false" aria-controls="sqr-table-filter-panel" id="sqr-table-filter-toggle">
@@ -67,7 +67,7 @@
                             <div class="fw-semibold">SQR Table Filters</div>
                             <div class="sqr-filter-toolbar__meta">Filter by keyword, workflow stage, delivery health, revenue details, dates, and amount range.</div>
                         </div>
-                        <div class="sqr-filter-toolbar__meta" id="sqr-filter-results-meta">Showing all rows</div>
+                            <div class="sqr-filter-toolbar__meta" id="sqr-filter-results-meta" role="status" aria-live="polite">Showing all rows</div>
                     </div>
                     <div class="row g-3 align-items-end">
                         <div class="col-12 col-lg-5">
@@ -182,45 +182,45 @@
             <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters"
                  data-default-my-assigned="{% if default_my_assigned_filter %}1{% else %}0{% endif %}"
                  data-current-user-id="{{ sqr_current_user_id|default:'' }}">
-                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="" style="cursor:pointer;">Total: {{ proposal_counts.total }}</span>
+                <button type="button" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="">Total: {{ proposal_counts.total }}</button>
                 {% if is_pm_esg %}
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="my_assigned" style="cursor:pointer;" title="Show SQRs assigned to you as Approver">
+                <button type="button" class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="my_assigned" title="Show SQRs assigned to you as Approver">
                     <i class="bi bi-person-check-fill me-1"></i>My Assigned SQR: {{ my_assigned_sqr_count }}
-                </span>
+                </button>
                 {% endif %}
-                <span class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted" style="cursor:pointer;">
+                <button type="button" class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted">
                     <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
-                </span>
-                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="status:for_revision" style="cursor:pointer;">
+                </button>
+                <button type="button" class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="status:for_revision">
                     <i class="bi bi-pencil-square me-1"></i>For Revision: {{ proposal_counts.for_revision }}
-                </span>
-                <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="status:reviewed" style="cursor:pointer;">
+                </button>
+                <button type="button" class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="status:reviewed">
                     <i class="bi bi-check2-circle me-1"></i>Approved: {{ proposal_counts.approved }}
-                </span>
+                </button>
                 {% if proposal_counts.submitted_pending %}
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:submitted_pending" style="cursor:pointer;">
+                <button type="button" class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:submitted_pending">
                     <i class="bi bi-send me-1"></i>Submitted: {{ proposal_counts.submitted_pending }}
-                </span>
+                </button>
                 {% endif %}
                 {% if proposal_counts.negotiation %}
-                <span class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sqr-filter="proposal_status:negotiation_review" style="cursor:pointer;">
+                <button type="button" class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sqr-filter="proposal_status:negotiation_review">
                     <i class="bi bi-chat-dots me-1"></i>On Review: {{ proposal_counts.negotiation }}
-                </span>
+                </button>
                 {% endif %}
                 {% if proposal_counts.closed_won %}
-                <span class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_won" style="cursor:pointer;">
+                <button type="button" class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_won">
                     <i class="bi bi-trophy me-1"></i>Closed-Won: {{ proposal_counts.closed_won }}
-                </span>
+                </button>
                 {% endif %}
                 {% if proposal_counts.closed_lost %}
-                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_lost" style="cursor:pointer;">
+                <button type="button" class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_lost">
                     <i class="bi bi-x-circle me-1"></i>Closed-Lost: {{ proposal_counts.closed_lost }}
-                </span>
+                </button>
                 {% endif %}
                 {% if proposal_counts.closed_canceled %}
-                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_canceled" style="cursor:pointer;">
+                <button type="button" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_canceled">
                     <i class="bi bi-slash-circle me-1"></i>Closed-Canceled: {{ proposal_counts.closed_canceled }}
-                </span>
+                </button>
                 {% endif %}
             </div>
         </div>
@@ -547,8 +547,9 @@
         {% comment %}No lg-enter here: animating/compositing a card that wraps
            the whole 43-column table stalls first paint.{% endcomment %}
         <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="tracker">
-            <div class="sqr-tracker-wrap">
+            <div class="sqr-tracker-wrap" tabindex="0" role="region" aria-label="SQR tracker table; scroll horizontally for more columns">
                 <table class="sqr-tracker table-hover">
+                    <caption class="visually-hidden">Service Quotation Request tracker</caption>
                     <thead>
                         {# Row 1: Stage group headers #}
                         <tr>
@@ -1048,8 +1049,9 @@
                 <i class="bi bi-info-circle me-1"></i>
                 Display-only ESG Performance Tracker layout. Dash values represent columns from the reference tracker that are not stored in the current SQR schema.
             </div>
-            <div class="sqr-tracker-wrap">
+            <div class="sqr-tracker-wrap" tabindex="0" role="region" aria-label="ESG performance tracker table; scroll horizontally for more columns">
                 <table class="sqr-esg-table table-hover">
+                    <caption class="visually-hidden">ESG performance tracker</caption>
                     <thead>
                         <tr>
                             <th class="sqr-esg-sticky-0">Account Name</th>

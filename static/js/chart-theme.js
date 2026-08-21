@@ -120,23 +120,17 @@
         });
     }
 
-    // Re-theme existing charts when the dark-mode toggle flips the body class.
-    var toggle = document.getElementById('theme-checkbox');
     function refreshTheme() {
-        setTimeout(function () {
-            apply();
-            eachChart(function (chart) {
-                if (chart && typeof chart.update === 'function') {
-                    chart.update('none');
-                }
-            });
-            themeListeners.forEach(function (fn) {
-                try { fn(); } catch (_) { /* listener must not break theme */ }
-            });
-        }, 60);
+        apply();
+        eachChart(function (chart) {
+            if (chart && typeof chart.update === 'function') {
+                chart.update('none');
+            }
+        });
+        themeListeners.forEach(function (fn) {
+            try { fn(); } catch (_) { /* listener must not break theme */ }
+        });
     }
-    if (toggle) {
-        toggle.addEventListener('change', refreshTheme);
-    }
+    window.addEventListener('requesthub:theme-changed', refreshTheme);
     window.lgChartRefreshTheme = refreshTheme;
 }());

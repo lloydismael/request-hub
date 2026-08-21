@@ -1,5 +1,6 @@
-/* Smooth inertial scrolling — wheel ease-in/glide-out for the page (vertical)
-   and the SQR tracker tables (horizontal), plus pointer drag-to-scroll with fling.
+/* Native-first table scrolling plus optional page wheel easing.
+    Wide tables keep native wheel, trackpad, touch, keyboard, and scrollbar input.
+    Mouse drag-to-pan is frame-batched and stops immediately on release.
 
    Approach: wheel input accumulates a target offset; a single rAF loop eases the
    scroll position toward the target with exponential damping scaled by the real
@@ -323,7 +324,7 @@
         }, { passive: true });
     }
 
-    /* ---- Wide table horizontal wheel smoothing + drag fling ---- */
+    /* ---- Wide table native scrolling + direct mouse drag-to-pan ---- */
 
     function attachHorizontalScroll(wrap) {
         if (wrap.hasAttribute('data-drag-scroll-attached')) return;
@@ -394,8 +395,7 @@
             new ResizeObserver(invalidateGeometry).observe(wrap);
         }
 
-        /* Pointer drag-to-scroll with fling. Mouse only — touch keeps native
-           momentum which is already smooth. */
+        /* Pointer drag-to-scroll. Mouse only — touch keeps native momentum. */
         var dragState = {
             active: false,
             pending: false,
@@ -480,11 +480,12 @@
         });
 
         function endDrag(event, cancelled) {
-            if (event.pointerId !== dragState.pointerId) return;
+            if (event && event.pointerId !== dragState.pointerId) return;
+            var pointerId = dragState.pointerId;
             var wasActive = dragState.active;
             if (wasActive) {
-                // Flush any deltas still waiting for their frame before the fling
-                // reads the position, then stop the pending flush.
+                // Flush deltas still waiting for their frame, then stop. Direct
+                // manipulation must not continue moving after pointer release.
                 if (dragState.flushRaf) {
                     cancelAnimationFrame(dragState.flushRaf);
                     dragState.flushRaf = 0;
@@ -494,28 +495,49 @@
                     }
                 }
                 wrap.classList.remove('is-dragging');
-                var releaseAge = Math.max(event.timeStamp - dragState.lastTs, 0);
-                var releaseVelocity = releaseAge >= 100
-                    ? 0
-                    : dragState.velocity * Math.max(0, 1 - releaseAge / 100);
-                if (cancelled) {
-                    axis.halt();
-                } else {
-                    releaseVelocity = Math.max(-3200, Math.min(3200, releaseVelocity));
-                    axis.fling(releaseVelocity);
-                    beginMotion();
-                }
+                axis.halt();
+                beginMotion();
                 // Suppress the click that follows a real drag so cells/links don't fire.
                 dragState.justDragged = true;
                 window.setTimeout(function () { dragState.justDragged = false; }, 0);
             }
+            if (dragState.flushRaf) {
+                cancelAnimationFrame(dragState.flushRaf);
+                dragState.flushRaf = 0;
+            }
+            dragState.dxAcc = 0;
             dragState.pending = false;
             dragState.active = false;
             dragState.pointerId = null;
+            if (pointerId !== null && wrap.hasPointerCapture && wrap.hasPointerCapture(pointerId)) {
+                try { wrap.releasePointerCapture(pointerId); } catch (e) { /* noop */ }
+            }
+            if (cancelled) {
+                axis.halt();
+                window.clearTimeout(scrollIdleTimer);
+                motionActive = false;
+                wrap.classList.remove('is-dragging', 'is-scrolling-x');
+                if (!document.querySelector('.is-scrolling-x')) {
+                    document.body.classList.remove('table-scroll-active');
+                }
+                // A scroll event queued by the final frame can run after this
+                // handler. Clear its transient motion state once more afterward.
+                window.setTimeout(function () {
+                    window.clearTimeout(scrollIdleTimer);
+                    motionActive = false;
+                    wrap.classList.remove('is-dragging', 'is-scrolling-x');
+                    if (!document.querySelector('.is-scrolling-x')) {
+                        document.body.classList.remove('table-scroll-active');
+                    }
+                }, 0);
+            }
         }
 
         wrap.addEventListener('pointerup', function (event) { endDrag(event, false); });
         wrap.addEventListener('pointercancel', function (event) { endDrag(event, true); });
+        wrap.addEventListener('lostpointercapture', function (event) { endDrag(event, true); });
+        window.addEventListener('blur', function () { endDrag(null, true); });
+        window.addEventListener('pagehide', function () { endDrag(null, true); });
 
         wrap.addEventListener('scroll', function () {
             if (!internalScrollWrite && axis.raf) axis.halt();

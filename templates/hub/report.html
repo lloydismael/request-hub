@@ -4,13 +4,9 @@
 {% block body_class %}reports-page{% endblock %}
 {% block content %}
 
-<header class="rpt2-header lg-enter" data-lg-delay="0">
+<header class="rpt2-header lg-enter" data-lg-delay="0" data-navbar-surface="theme">
     <div class="rpt2-heading">
-        <span class="rpt2-eyebrow"><i class="bi bi-bar-chart-line-fill"></i> Analytics workspace</span>
         <h1 class="rpt2-page-title">Reports</h1>
-        <p class="rpt2-page-subtitle">
-            {% if report_view == 'activity' %}Engineer activity, utilization, and billable-hour insights.{% else %}Request volume, ownership, and delivery insights.{% endif %}
-        </p>
     </div>
     <div class="rpt2-header-actions">
         <div class="rpt-tab-group" role="group" aria-label="Report view toggle">
@@ -664,7 +660,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="{% static 'js/chart-theme.js' %}?v=3"></script>
+<script src="{% static 'js/chart-theme.js' %}?v=4"></script>
 <script>
 (function () {
     function hexToRgba(hex, alpha) {

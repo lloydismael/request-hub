@@ -7,9 +7,10 @@
 {% block content %}
 
 {# ── Page Header ── #}
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 lg-enter" data-lg-delay="0">
+<div class="glass-card management-header p-3 mb-3 lg-enter" data-lg-delay="0" data-navbar-surface="theme">
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
     <div>
-        <h1 class="h3 mb-1 fw-semibold">
+        <h1 class="h5 mb-0 fw-semibold">
             <i class="bi bi-shield-lock-fill me-2 text-primary"></i>Management
         </h1>
     </div>
@@ -40,6 +41,7 @@
         </span>
     </div>
 </div>
+</div>
 
 {# ── Tab Content ── #}
 <div class="tab-content">
@@ -50,11 +52,11 @@
 
         {# Toolbar: search + New User button #}
         <div class="glass-card overflow-hidden p-0 lg-enter" data-lg-delay="40">
-            <div class="mgmt-toolbar">
+            <div class="mgmt-toolbar management-dashboard-toolbar">
                 <form method="get" action="{% url 'hub:management' %}" class="mgmt-search-box" role="search">
                     <i class="bi bi-search mgmt-search-icon"></i>
                     <input type="text" id="user-search" name="user_q" class="mgmt-search-input"
-                           value="{{ user_search_query }}" placeholder="" autocomplete="off" aria-label="Search users">
+                           value="{{ user_search_query }}" placeholder="Search users..." autocomplete="off" aria-label="Search users">
                     <span class="mgmt-result-badge" id="user-count-badge">{% if users_page_obj %}{{ users_page_obj.paginator.count }} total{% endif %}</span>
                 </form>
                 <button type="button" class="btn btn-primary btn-sm lg-btn lg-btn--accent"
@@ -416,7 +418,7 @@
             {% endif %}
 
             {# Toolbar: search + save #}
-            <div class="mgmt-toolbar">
+            <div class="mgmt-toolbar management-dashboard-toolbar">
                 <div class="mgmt-search-box">
                     <i class="bi bi-search mgmt-search-icon"></i>
                     <input type="text" id="account-search" class="mgmt-search-input"

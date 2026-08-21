@@ -18,6 +18,14 @@
    -------------------------------------------------------------------------- */
 
 .ambient-mesh {
+    --ambient-sky: 72, 187, 255;
+    --ambient-violet: 151, 112, 255;
+    --ambient-blue: 29, 91, 224;
+    --ambient-rose: 244, 111, 185;
+    --ambient-teal: 52, 221, 210;
+    --ambient-amber: 255, 190, 86;
+    --ambient-mint: 77, 231, 164;
+    --ambient-grain-opacity: 0.045;
     position: fixed;
     inset: 0;
     z-index: -2;
@@ -63,12 +71,23 @@ body.dark-mode .ambient-mesh::after {
         rgba(5, 7, 15, 0) 78%);
 }
 
+body.dark-mode .ambient-mesh {
+    --ambient-sky: 55, 142, 255;
+    --ambient-violet: 126, 94, 232;
+    --ambient-blue: 27, 72, 180;
+    --ambient-rose: 192, 77, 143;
+    --ambient-teal: 39, 173, 164;
+    --ambient-amber: 205, 146, 55;
+    --ambient-mint: 53, 181, 127;
+    --ambient-grain-opacity: 0.032;
+}
+
 /* Film grain — static, breaks up gradient banding (cheap single paint) */
 .ambient-mesh__grain {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.035;
+    opacity: var(--ambient-grain-opacity);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -85,11 +104,11 @@ body.dark-mode .ambient-mesh::after {
     top: -14%;
     left: -9%;
     background: radial-gradient(circle at 40% 40%,
-        rgba(88, 190, 255, 0.55) 0%,
-        rgba(88, 190, 255, 0.24) 36%,
-        rgba(88, 190, 255, 0) 68%);
+        rgba(var(--ambient-sky), 0.64) 0%,
+        rgba(var(--ambient-sky), 0.29) 36%,
+        rgba(var(--ambient-sky), 0) 70%);
     animation-name: am-drift-1;
-    animation-duration: 56s;
+    animation-duration: 42s;
 }
 
 /* 2 — Violet (top-right) */
@@ -100,11 +119,11 @@ body.dark-mode .ambient-mesh::after {
     right: -11%;
     left: auto;
     background: radial-gradient(circle at 55% 40%,
-        rgba(150, 120, 255, 0.48) 0%,
-        rgba(150, 120, 255, 0.20) 38%,
-        rgba(150, 120, 255, 0) 68%);
+        rgba(var(--ambient-violet), 0.57) 0%,
+        rgba(var(--ambient-violet), 0.24) 38%,
+        rgba(var(--ambient-violet), 0) 70%);
     animation-name: am-drift-2;
-    animation-duration: 67s;
+    animation-duration: 49s;
     animation-delay: -12s;
 }
 
@@ -116,11 +135,11 @@ body.dark-mode .ambient-mesh::after {
     left: 16%;
     top: auto;
     background: radial-gradient(circle at 50% 35%,
-        rgba(20, 78, 210, 0.60) 0%,
-        rgba(20, 78, 210, 0.26) 40%,
-        rgba(20, 78, 210, 0) 70%);
+        rgba(var(--ambient-blue), 0.66) 0%,
+        rgba(var(--ambient-blue), 0.29) 40%,
+        rgba(var(--ambient-blue), 0) 72%);
     animation-name: am-drift-3;
-    animation-duration: 78s;
+    animation-duration: 58s;
     animation-delay: -27s;
 }
 
@@ -133,11 +152,11 @@ body.dark-mode .ambient-mesh::after {
     left: auto;
     top: auto;
     background: radial-gradient(circle at 45% 45%,
-        rgba(255, 122, 190, 0.40) 0%,
-        rgba(255, 122, 190, 0.16) 38%,
-        rgba(255, 122, 190, 0) 68%);
+        rgba(var(--ambient-rose), 0.43) 0%,
+        rgba(var(--ambient-rose), 0.17) 38%,
+        rgba(var(--ambient-rose), 0) 70%);
     animation-name: am-drift-4;
-    animation-duration: 61s;
+    animation-duration: 46s;
     animation-delay: -41s;
 }
 
@@ -148,11 +167,11 @@ body.dark-mode .ambient-mesh::after {
     top: 40%;
     left: -5%;
     background: radial-gradient(circle at 50% 50%,
-        rgba(64, 226, 210, 0.36) 0%,
-        rgba(64, 226, 210, 0.14) 40%,
-        rgba(64, 226, 210, 0) 68%);
+        rgba(var(--ambient-teal), 0.43) 0%,
+        rgba(var(--ambient-teal), 0.17) 40%,
+        rgba(var(--ambient-teal), 0) 70%);
     animation-name: am-drift-5;
-    animation-duration: 84s;
+    animation-duration: 61s;
     animation-delay: -8s;
 }
 
@@ -164,11 +183,11 @@ body.dark-mode .ambient-mesh::after {
     right: 6%;
     left: auto;
     background: radial-gradient(circle at 48% 42%,
-        rgba(255, 194, 75, 0.34) 0%,
-        rgba(255, 194, 75, 0.13) 40%,
-        rgba(255, 194, 75, 0) 68%);
+        rgba(var(--ambient-amber), 0.37) 0%,
+        rgba(var(--ambient-amber), 0.13) 40%,
+        rgba(var(--ambient-amber), 0) 70%);
     animation-name: am-drift-6;
-    animation-duration: 72s;
+    animation-duration: 54s;
     animation-delay: -55s;
 }
 
@@ -180,11 +199,11 @@ body.dark-mode .ambient-mesh::after {
     left: 10%;
     top: auto;
     background: radial-gradient(circle at 52% 48%,
-        rgba(90, 240, 176, 0.32) 0%,
-        rgba(90, 240, 176, 0.12) 40%,
-        rgba(90, 240, 176, 0) 68%);
+        rgba(var(--ambient-mint), 0.38) 0%,
+        rgba(var(--ambient-mint), 0.14) 40%,
+        rgba(var(--ambient-mint), 0) 70%);
     animation-name: am-drift-7;
-    animation-duration: 90s;
+    animation-duration: 66s;
     animation-delay: -33s;
 }
 
@@ -305,51 +324,51 @@ body.page-landing .ambient-mesh::after {
 
 @keyframes am-drift-1 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
-    25%      { transform: translate3d(16%, 10%, 0) scale(1.10); }
-    50%      { transform: translate3d(7%, 20%, 0) scale(0.96); }
-    75%      { transform: translate3d(-9%, 7%, 0) scale(1.05); }
+    25%      { transform: translate3d(27%, 14%, 0) scale(1.12); }
+    50%      { transform: translate3d(12%, 29%, 0) scale(0.96); }
+    75%      { transform: translate3d(-14%, 9%, 0) scale(1.07); }
 }
 
 @keyframes am-drift-2 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.04); }
-    20%      { transform: translate3d(-14%, 12%, 0) scale(0.94); }
-    45%      { transform: translate3d(-20%, -6%, 0) scale(1.12); }
-    70%      { transform: translate3d(6%, 14%, 0) scale(1.0); }
+    20%      { transform: translate3d(-23%, 16%, 0) scale(0.94); }
+    45%      { transform: translate3d(-31%, -9%, 0) scale(1.13); }
+    70%      { transform: translate3d(9%, 21%, 0) scale(1.0); }
 }
 
 @keyframes am-drift-3 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
-    30%      { transform: translate3d(-12%, -10%, 0) scale(1.08); }
-    55%      { transform: translate3d(10%, -16%, 0) scale(0.95); }
-    80%      { transform: translate3d(14%, 5%, 0) scale(1.06); }
+    30%      { transform: translate3d(-18%, -15%, 0) scale(1.09); }
+    55%      { transform: translate3d(16%, -24%, 0) scale(0.95); }
+    80%      { transform: translate3d(21%, 8%, 0) scale(1.07); }
 }
 
 @keyframes am-drift-4 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.06); }
-    25%      { transform: translate3d(-16%, -12%, 0) scale(1.14); }
-    50%      { transform: translate3d(-7%, 11%, 0) scale(0.92); }
-    75%      { transform: translate3d(9%, -7%, 0) scale(1.08); }
+    25%      { transform: translate3d(-25%, -18%, 0) scale(1.14); }
+    50%      { transform: translate3d(-11%, 18%, 0) scale(0.92); }
+    75%      { transform: translate3d(14%, -11%, 0) scale(1.08); }
 }
 
 @keyframes am-drift-5 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
-    22%      { transform: translate3d(18%, -14%, 0) scale(1.12); }
-    48%      { transform: translate3d(12%, 12%, 0) scale(0.94); }
-    72%      { transform: translate3d(-11%, 9%, 0) scale(1.08); }
+    22%      { transform: translate3d(29%, -20%, 0) scale(1.12); }
+    48%      { transform: translate3d(19%, 19%, 0) scale(0.94); }
+    72%      { transform: translate3d(-17%, 14%, 0) scale(1.08); }
 }
 
 @keyframes am-drift-6 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1); }
-    28%      { transform: translate3d(-13%, 15%, 0) scale(1.10); }
-    52%      { transform: translate3d(-19%, -9%, 0) scale(0.93); }
-    78%      { transform: translate3d(8%, -13%, 0) scale(1.07); }
+    28%      { transform: translate3d(-21%, 23%, 0) scale(1.10); }
+    52%      { transform: translate3d(-29%, -14%, 0) scale(0.93); }
+    78%      { transform: translate3d(13%, -20%, 0) scale(1.07); }
 }
 
 @keyframes am-drift-7 {
     0%, 100% { transform: translate3d(0%, 0%, 0) scale(1.05); }
-    24%      { transform: translate3d(14%, -11%, 0) scale(0.94); }
-    50%      { transform: translate3d(-10%, -16%, 0) scale(1.12); }
-    76%      { transform: translate3d(-16%, 8%, 0) scale(1.0); }
+    24%      { transform: translate3d(22%, -17%, 0) scale(0.94); }
+    50%      { transform: translate3d(-16%, -24%, 0) scale(1.12); }
+    76%      { transform: translate3d(-25%, 13%, 0) scale(1.0); }
 }
 
 /* --------------------------------------------------------------------------

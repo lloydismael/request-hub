@@ -28,6 +28,20 @@
     --lg-blur: 36px;
     --lg-blur-strong: 52px;
     --lg-saturate: 200%;
+    --lg-blur-feature: 18px;
+    --lg-blur-modal: 22px;
+    --lg-surface-feature-bg:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.76), rgba(245, 249, 255, 0.48));
+    --lg-surface-data-bg: linear-gradient(155deg, #e7edf6, #d8e2ef);
+    --lg-rim-light: rgba(255, 255, 255, 0.82);
+    --lg-border-feature: rgba(255, 255, 255, 0.58);
+    --lg-shadow-rest:
+        inset 0 1px 0 rgba(255, 255, 255, 0.76),
+        inset 0 -1px 0 rgba(116, 147, 190, 0.08),
+        0 12px 30px -18px rgba(6, 18, 46, 0.42);
+    --lg-shadow-raised:
+        inset 0 1px 0 rgba(255, 255, 255, 0.88),
+        0 18px 42px -20px rgba(6, 18, 46, 0.54);
 
     --lg-tint: rgba(255, 255, 255, 0.16);
     --lg-tint-strong: rgba(255, 255, 255, 0.28);
@@ -73,9 +87,36 @@
 
     --lg-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
         "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    /* Request Hub semantic theme — Notifications clarity baseline */
+    --rh-page-bg: #edf3fb;
+    --rh-surface-feature:
+        linear-gradient(135deg, rgba(239, 246, 255, 0.94), rgba(224, 231, 255, 0.78));
+    --rh-surface-panel: rgba(255, 255, 255, 0.92);
+    --rh-surface-solid: #ffffff;
+    --rh-surface-sunken: #f8fafc;
+    --rh-text-primary: #0f172a;
+    --rh-text-secondary: #334155;
+    --rh-text-muted: #64748b;
+    --rh-border: rgba(148, 163, 184, 0.24);
+    --rh-divider: rgba(15, 23, 42, 0.09);
+    --rh-shadow-panel: 0 18px 55px rgba(15, 23, 42, 0.09);
+    --rh-focus-ring: rgba(37, 99, 235, 0.28);
 }
 
 body.dark-mode {
+    --lg-surface-feature-bg:
+        linear-gradient(160deg, rgba(38, 50, 80, 0.82), rgba(18, 27, 48, 0.62));
+    --lg-surface-data-bg: linear-gradient(155deg, #192238, #10172a);
+    --lg-rim-light: rgba(218, 232, 255, 0.26);
+    --lg-border-feature: rgba(215, 230, 255, 0.18);
+    --lg-shadow-rest:
+        inset 0 1px 0 rgba(255, 255, 255, 0.13),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+        0 16px 38px -20px rgba(0, 0, 0, 0.72);
+    --lg-shadow-raised:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 22px 48px -22px rgba(0, 0, 0, 0.82);
     --lg-tint: rgba(120, 140, 180, 0.14);
     --lg-tint-strong: rgba(140, 160, 200, 0.20);
     --lg-tint-sunken: rgba(8, 12, 24, 0.34);
@@ -112,6 +153,20 @@ body.dark-mode {
         0 2px 4px rgba(0, 0, 0, 0.4),
         0 16px 40px rgba(0, 0, 0, 0.5),
         0 52px 92px -18px rgba(0, 0, 0, 0.7);
+
+    --rh-page-bg: #05070f;
+    --rh-surface-feature:
+        linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.72));
+    --rh-surface-panel: rgba(15, 23, 42, 0.82);
+    --rh-surface-solid: #141b2c;
+    --rh-surface-sunken: #10172a;
+    --rh-text-primary: #f8fafc;
+    --rh-text-secondary: #cbd5e1;
+    --rh-text-muted: #94a3b8;
+    --rh-border: rgba(148, 163, 184, 0.18);
+    --rh-divider: rgba(255, 255, 255, 0.09);
+    --rh-shadow-panel: 0 22px 70px rgba(0, 0, 0, 0.28);
+    --rh-focus-ring: rgba(96, 165, 250, 0.34);
 }
 
 /* --------------------------------------------------------------------------

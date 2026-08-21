@@ -75,7 +75,7 @@
                                         {% if item.engineer %}
                                             {% with engineer_name=item.engineer.get_full_name|default:item.engineer.username %}
                                                 {% with first=item.engineer.first_name last=item.engineer.last_name %}
-                                                <div class="table-cell-nowrap engineer-filter-cell" data-engineer-id="{{ item.engineer.pk }}" title="Click to highlight all requests for this engineer" style="cursor:pointer;">
+                                                <button type="button" class="table-cell-nowrap engineer-filter-cell" data-engineer-id="{{ item.engineer.pk }}" aria-pressed="false" title="Click to highlight all requests for this person">
                                                     {% if item.engineer.profile_photo %}
                                                         <img src="{{ item.engineer.profile_photo.url }}" alt="{{ engineer_name }}" class="table-avatar">
                                                     {% else %}
@@ -88,7 +88,7 @@
                                                                 {{ engineer_name }}
                                                             {% endif %}
                                                         </span>
-                                                </div>
+                                                </button>
                                                 {% endwith %}
                                             {% endwith %}
                                         {% else %}

@@ -22,7 +22,7 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v50.0`
+- **Current image tag:** `lloydismael12/request-hub:v50.1`
 - **App version shown in profile:** `v50.0`
 - **Latest update included:**
       - SQR Billing Stage labels/columns: Date, Billing Reference, Billing Status (`Billed` / `Not Yet Billed`), multi-line Remarks.

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load tz %}
 {% block title %}Request {{ request_obj.reference_code }} · Request Hub{% endblock %}
+{% block body_class %}request-detail-page{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-8">

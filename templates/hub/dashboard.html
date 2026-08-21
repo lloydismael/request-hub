@@ -290,8 +290,9 @@
                 <span>Showing {{ requests_displayed_count }} of {{ requests_total_count }} matching requests (limit {{ requests_list_limit }}). Narrow filters to find older rows.</span>
             </div>
             {% endif %}
-            <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}">
+                <div class="table-responsive dashboard-table-wrapper{% if is_requestor_ui %} dashboard-table-wrapper--requestor{% endif %}" tabindex="0" role="region" aria-label="Requests table; scroll horizontally for more columns">
                 <table class="table align-middle table-nowrap{% if is_requestor_ui %} table-hover table-requestor{% endif %}">
+                    <caption class="visually-hidden">Requests matching the selected dashboard filters</caption>
                     <thead>
                         <tr>
                             {% if role == 'admin' %}
@@ -627,6 +628,9 @@
                 if (window.initDashboardRequestSearch) {
                     window.initDashboardRequestSearch();
                 }
+                if (window.reapplyDashboardEngineerHighlight) {
+                    window.reapplyDashboardEngineerHighlight();
+                }
                 if (window.invalidateRequestHubScrollGeometry) {
                     window.invalidateRequestHubScrollGeometry(wrapper || document);
                 }
@@ -794,7 +798,7 @@
                         });
 
                     state.records.forEach(function (record) {
-                        record.row.style.display = "none";
+                        if (record.row.style.display !== "none") record.row.style.display = "none";
                     });
 
                     if (filtered.length === 0) {
@@ -803,7 +807,7 @@
                         state.emptyRow.style.display = "none";
                         const fragment = document.createDocumentFragment();
                         filtered.forEach(function (item) {
-                            item.record.row.style.display = "";
+                            if (item.record.row.style.display !== "") item.record.row.style.display = "";
                             fragment.appendChild(item.record.row);
                         });
                         state.tbody.appendChild(fragment);
@@ -865,16 +869,21 @@
             }
 
             table.classList.add("table--resizable");
-            // Fixed layout after first measure so drag widths stick cleanly.
+            let columnModel = null;
+            // Fixed layout backed by colgroup, so resizing updates one element
+            // instead of writing width/min/max-width to every cell in the column.
             const lockTableLayout = () => {
                 if (table.dataset.layoutLocked === "1") {
                     return;
                 }
+                columnModel = document.createElement("colgroup");
                 Array.from(headerRow.cells).forEach((th) => {
                     const w = Math.ceil(th.getBoundingClientRect().width);
-                    th.style.width = `${w}px`;
-                    th.style.maxWidth = `${w}px`;
+                    const col = document.createElement("col");
+                    col.style.width = `${w}px`;
+                    columnModel.appendChild(col);
                 });
+                table.insertBefore(columnModel, table.firstChild);
                 table.style.tableLayout = "fixed";
                 table.dataset.layoutLocked = "1";
             };
@@ -883,12 +892,9 @@
             const headers = Array.from(headerRow.cells);
 
             const applyWidth = (cellIndex, width) => {
-                const selector = `tr th:nth-child(${cellIndex}), tr td:nth-child(${cellIndex})`;
-                table.querySelectorAll(selector).forEach((cell) => {
-                    cell.style.width = `${width}px`;
-                    cell.style.minWidth = `${width}px`;
-                    cell.style.maxWidth = `${width}px`;
-                });
+                if (columnModel && columnModel.children[cellIndex - 1]) {
+                    columnModel.children[cellIndex - 1].style.width = `${width}px`;
+                }
                 if (window.invalidateRequestHubScrollGeometry) {
                     window.invalidateRequestHubScrollGeometry(wrapper);
                 }
@@ -948,12 +954,18 @@
                         document.removeEventListener("mouseup", stopDrag);
                         document.removeEventListener("touchmove", handleMove);
                         document.removeEventListener("touchend", stopDrag);
+                        document.removeEventListener("touchcancel", stopDrag);
+                        window.removeEventListener("blur", stopDrag);
+                        window.removeEventListener("pagehide", stopDrag);
                     };
 
                     document.addEventListener("mousemove", handleMove);
                     document.addEventListener("mouseup", stopDrag);
                     document.addEventListener("touchmove", handleMove, { passive: false });
                     document.addEventListener("touchend", stopDrag);
+                    document.addEventListener("touchcancel", stopDrag);
+                    window.addEventListener("blur", stopDrag);
+                    window.addEventListener("pagehide", stopDrag);
                 };
 
                 handle.addEventListener("mousedown", startDrag);
@@ -966,7 +978,7 @@
     {% if is_requestor_ui %}
         {{ request_report_data|json_script:"requestor-report-data" }}
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-        <script src="{% static 'js/chart-theme.js' %}"></script>
+        <script src="{% static 'js/chart-theme.js' %}?v=4"></script>
     {% endif %}
     <script src="{% static 'js/account-autocomplete.js' %}?v=1"></script>
     <script>
@@ -985,28 +997,23 @@
             const body = document.body;
             const dialog = modal.querySelector(".requestor-modal__dialog");
 
-            const lockScroll = () => {
-                body.classList.add("requestor-modal-open");
-            };
-
-            const unlockScroll = () => {
-                body.classList.remove("requestor-modal-open");
+            const syncScrollLock = () => {
+                const isOpen = modal.classList.contains("requestor-modal--visible");
+                body.classList.toggle("requestor-modal-open", isOpen);
+                modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
             };
 
             const openModal = () => {
                 modal.classList.add("requestor-modal--visible");
-                lockScroll();
+                syncScrollLock();
                 if (dialog) {
                     dialog.scrollTop = 0;
                 }
             };
 
             const closeModal = () => {
-                if (!modal.classList.contains("requestor-modal--visible")) {
-                    return;
-                }
                 modal.classList.remove("requestor-modal--visible");
-                unlockScroll();
+                syncScrollLock();
             };
 
             if (openBtn) {
@@ -1166,8 +1173,19 @@
                 }
             });
 
+            // BFCache restores and interrupted close paths can preserve a stale
+            // body class. Reconcile from the modal's actual visible state.
+            window.addEventListener("pageshow", syncScrollLock);
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) {
+                    syncScrollLock();
+                }
+            });
+
             if (modal.dataset.openOnLoad === "true") {
                 openModal();
+            } else {
+                syncScrollLock();
             }
 
             const reportDataNode = document.getElementById("requestor-report-data");
@@ -1280,7 +1298,7 @@
 {% if role == 'engineer' and active_tab == 'report' and engineer_report_data %}
     {{ engineer_report_data|json_script:"engineer-report-data" }}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="{% static 'js/chart-theme.js' %}"></script>
+    <script src="{% static 'js/chart-theme.js' %}?v=4"></script>
     <script>
         (function() {
             const reportDataNode = document.getElementById('engineer-report-data');
@@ -1551,24 +1569,13 @@
     </script>
 {% endif %}
 
-<style>
-/* Engineer filter highlight */
-.engineer-filter-name { text-decoration: none !important; }
-.engineer-filter-cell:hover .engineer-filter-name { text-decoration: none !important; color: inherit; }
-.engineer-filter-cell:hover .table-avatar--placeholder {
-    background: #6366f1;
-    color: #fff;
-}
-/* Rows dimmed when a filter is active and they don't match */
-tbody.engineer-filter-active tr { opacity: 0.25; transition: opacity 0.15s ease; }
-tbody.engineer-filter-active tr.engineer-row--highlighted { opacity: 1; }
-tbody.engineer-filter-active tr.engineer-row--highlighted { box-shadow: inset 3px 0 0 #6366f1; background-color: rgba(99,102,241,0.10) !important; }
-body.dark-mode tbody.engineer-filter-active tr.engineer-row--highlighted { background-color: rgba(99,102,241,0.18) !important; box-shadow: inset 3px 0 0 #818cf8; }
-</style>
-
 <script>
 (function() {
     var activeEngineerId = null;
+
+    function getDashboardBody() {
+        return document.getElementById('dashboard-live-tbody');
+    }
 
     document.addEventListener('click', function(e) {
         var cell = e.target.closest('.engineer-filter-cell');
@@ -1589,29 +1596,45 @@ body.dark-mode tbody.engineer-filter-active tr.engineer-row--highlighted { backg
     });
 
     function applyFilter(eid) {
+        var tbody = getDashboardBody();
+        if (!tbody) {
+            return;
+        }
         activeEngineerId = eid;
-        var tbodies = document.querySelectorAll('tbody');
-        tbodies.forEach(function(tbody) {
-            tbody.classList.add('engineer-filter-active');
-            tbody.querySelectorAll('tr[data-engineer-id]').forEach(function(row) {
-                if (row.dataset.engineerId === eid) {
-                    row.classList.add('engineer-row--highlighted');
-                } else {
-                    row.classList.remove('engineer-row--highlighted');
-                }
-            });
+        tbody.classList.add('engineer-filter-active');
+        tbody.querySelectorAll('tr[data-engineer-id]').forEach(function(row) {
+            row.classList.toggle('engineer-row--highlighted', row.dataset.engineerId === eid);
+        });
+        document.querySelectorAll('.engineer-filter-cell').forEach(function(trigger) {
+            trigger.setAttribute('aria-pressed', trigger.dataset.engineerId === eid ? 'true' : 'false');
         });
     }
 
     function clearFilter() {
         activeEngineerId = null;
-        document.querySelectorAll('tbody').forEach(function(tbody) {
+        var tbody = getDashboardBody();
+        if (tbody) {
             tbody.classList.remove('engineer-filter-active');
             tbody.querySelectorAll('tr').forEach(function(row) {
                 row.classList.remove('engineer-row--highlighted');
             });
+        }
+        document.querySelectorAll('.engineer-filter-cell').forEach(function(trigger) {
+            trigger.setAttribute('aria-pressed', 'false');
         });
     }
+
+    window.reapplyDashboardEngineerHighlight = function() {
+        if (activeEngineerId === null) {
+            return;
+        }
+        var tbody = getDashboardBody();
+        if (!tbody || !tbody.querySelector('tr[data-engineer-id="' + CSS.escape(activeEngineerId) + '"]')) {
+            clearFilter();
+            return;
+        }
+        applyFilter(activeEngineerId);
+    };
 })();
 </script>
 {% endblock %}

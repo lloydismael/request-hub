@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static tz %}
 {% block title %}Manage Request {{ object.reference_code }} · Request Hub{% endblock %}
+{% block body_class %}request-manager-page{% endblock %}
 
 {% block content %}
 
@@ -543,7 +544,7 @@
                                     {% if field.name == 'request_date' %}<i class="bi bi-calendar3"></i>{% elif field.name == 'activity_type' %}<i class="bi bi-tag"></i>{% elif field.name == 'request' %}<i class="bi bi-link-45deg"></i>{% elif field.name == 'account' %}<i class="bi bi-building"></i>{% elif field.name == 'actual_hours' %}<i class="bi bi-clock"></i>{% elif field.name == 'location' %}<i class="bi bi-geo-alt"></i>{% elif field.name == 'is_billable' %}<i class="bi bi-currency-dollar"></i>{% elif field.name == 'status' %}<i class="bi bi-check2-circle"></i>{% elif field.name == 'details' %}<i class="bi bi-card-text"></i>{% endif %}
                                     {{ field.label }}
                                     {% if field.name == 'request' or field.name == 'account' %}
-                                        <span class="act-form-optional" style="color:#1f2937 !important; font-weight:700 !important; opacity:1 !important; letter-spacing:0.01em;">optional</span>
+                                        <span class="act-form-optional">optional</span>
                                     {% endif %}
                                 </label>
                                 {{ field }}

@@ -416,14 +416,14 @@
                     
                     <div class="act-form-field">
                         <label class="act-form-label" for="{{ form.request.id_for_label }}">
-                            <i class="bi bi-link-45deg"></i> Related Request <span class="act-form-optional" style="color:#1f2937 !important; font-weight:700 !important; opacity:1 !important; letter-spacing:0.01em;">optional</span>
+                            <i class="bi bi-link-45deg"></i> Related Request <span class="act-form-optional">optional</span>
                         </label>
                         {{ form.request }}
                         {% if form.request.errors %}<div class="act-form-error">{{ form.request.errors|join:" " }}</div>{% endif %}
                     </div>
                     <div class="act-form-field">
                         <label class="act-form-label" for="{{ form.account.id_for_label }}">
-                            <i class="bi bi-building"></i> Account <span class="act-form-optional" style="color:#1f2937 !important; font-weight:700 !important; opacity:1 !important; letter-spacing:0.01em;">optional</span>
+                            <i class="bi bi-building"></i> Account <span class="act-form-optional">optional</span>
                         </label>
                         {{ form.account }}
                         {% if form.account.errors %}<div class="act-form-error">{{ form.account.errors|join:" " }}</div>{% endif %}
@@ -559,7 +559,7 @@
 
 {{ activity_report_data|json_script:"activity-report-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="{% static 'js/chart-theme.js' %}?v=2"></script>
+<script src="{% static 'js/chart-theme.js' %}?v=4"></script>
 <script>
     (function () {
         const dataNode = document.getElementById('activity-report-data');

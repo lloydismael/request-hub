@@ -28,6 +28,7 @@ from hub.forms import (
 from hub.models import (
     Account,
     EngineerActivityLog,
+    Notification,
     Request,
     RequestCommunication,
     SqrSubmission,
@@ -237,6 +238,16 @@ class RequestReportViewTests(TestCase):
         self.assertEqual(response.context["totals"]["completed"], 0)
         self.assertNotIn("Deleted Manager", response.context["account_manager_chart"]["labels"])
 
+    def test_report_header_declares_adaptive_navbar_surface(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("hub:report"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, " authenticated")
+        self.assertContains(response, 'class="rpt2-header lg-enter"')
+        self.assertContains(response, 'data-navbar-surface="theme"')
+
     def test_operational_charts_include_all_configured_categories(self):
         self._create_request(
             engagement_type=Request.Engagement.PROJECT_MANAGEMENT,
@@ -330,7 +341,64 @@ class RequestReportViewTests(TestCase):
         )
 
 
+class NotificationBadgeTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="notification_badge_admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+        )
+        self.client.force_login(self.admin)
+
+    def test_navbar_hides_notification_dot_when_count_is_zero(self):
+        response = self.client.get(reverse("hub:notifications"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "notification-dot--nav")
+        self.assertNotContains(response, "nav-link-with-dot")
+
+    def test_navbar_shows_notification_dot_for_unread_new_request(self):
+        Notification.objects.create(
+            recipient=self.admin,
+            message="A new request was submitted.",
+            source="New Request",
+        )
+
+        response = self.client.get(reverse("hub:notifications"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "notification-dot--nav")
+        self.assertContains(response, 'aria-label="1 new items"')
+
+
 class UserManagementSearchTests(TestCase):
+    def test_management_page_renders_themed_glass_header(self):
+        admin = User.objects.create_user(
+            username="management-header-admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("hub:management"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="glass-card management-header p-3 mb-3 lg-enter"')
+        self.assertContains(response, 'data-navbar-surface="theme"')
+
+    def test_notifications_page_declares_shared_theme_scope(self):
+        admin = User.objects.create_user(
+            username="notifications-theme-admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("hub:notifications"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "notifications-page authenticated")
+
     def test_user_search_prioritizes_best_matches_and_sorts_results(self):
         alina = User.objects.create_user(
             username="alina",
@@ -617,6 +685,34 @@ class DashboardViewTests(TestCase):
         self.assertIn('id="dashboard-request-count-badge"', content)
         self.assertIn('Search requests...', content)
 
+    def test_admin_dashboard_renders_accessible_person_highlight_hooks(self):
+        admin = User.objects.create_user(
+            username="admin_dashboard_highlight",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="admin.dashboard.highlight@example.com",
+        )
+        Request.objects.create(
+            requestor=self.requestor,
+            account=self.account,
+            account_manager="Regular Requestor",
+            product_category="Azure",
+            engagement_type=Request.Engagement.SUPPORT,
+            priority=Request.Priority.MEDIUM,
+            engineer=self.engineer,
+            description="Highlightable dashboard request",
+        )
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse("hub:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(f'data-engineer-id="{self.engineer.pk}"', content)
+        self.assertIn('class="table-cell-nowrap engineer-filter-cell"', content)
+        self.assertIn('aria-pressed="false"', content)
+        self.assertIn("window.reapplyDashboardEngineerHighlight", content)
+
     def test_dashboard_search_preserves_server_sort_when_query_is_empty(self):
         admin = User.objects.create_user(
             username="admin_dashboard_sort",
@@ -869,8 +965,11 @@ class DashboardLiveDataViewTests(TestCase):
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["changed"])
         self.assertIn(self.request_obj.reference_code, payload["html_rows"])
+        self.assertIn(f'data-engineer-id="{self.engineer.pk}"', payload["html_rows"])
+        self.assertIn('class="table-cell-nowrap engineer-filter-cell"', payload["html_rows"])
+        self.assertIn('aria-pressed="false"', payload["html_rows"])
         self.assertIn("dashboard-live-metrics", payload["html_metrics"])
-        self.assertIn("dashboard-live-status-pills", payload["html_status_pills"])
+        self.assertNotIn("html_status_pills", payload)
         self.assertTrue(payload["version"])
 
     def test_unchanged_version_short_circuits(self):

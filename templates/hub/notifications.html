@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% load tz %}
 {% block title %}Notifications · Request Hub{% endblock %}
+{% block body_class %}notifications-page{% endblock %}
 {% block content %}
 <div class="notif-page">
 
-    <section class="notif-hero" aria-labelledby="notifications-heading">
+    <section class="notif-hero" aria-labelledby="notifications-heading" data-navbar-surface="theme">
         <div class="notif-hero__content">
             <div class="notif-hero__meta">
                 <span class="notif-hero__icon" aria-hidden="true"><i class="bi bi-bell-fill"></i></span>
