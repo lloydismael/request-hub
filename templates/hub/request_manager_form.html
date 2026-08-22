@@ -64,13 +64,17 @@
             {% if lifecycle.backup_support_label %}
             <div class="rmf-progress__support"><strong>Backup support:</strong> {{ lifecycle.backup_support_label }}</div>
             {% endif %}
-            {% if lifecycle.can_acknowledge %}
+            {% if lifecycle.can_acknowledge or lifecycle.acknowledge_sent %}
             <form method="post" action="{{ lifecycle.acknowledge_url }}" class="mt-3">
                 {% csrf_token %}
                 <input type="hidden" name="assignment_revision" value="{{ lifecycle.assignment_revision }}">
-                <button class="btn btn-primary" type="submit">
+                <button
+                    class="btn btn-primary"
+                    type="submit"
+                    {% if lifecycle.acknowledge_sent %}disabled aria-disabled="true" title="Acknowledgement already sent for this assignment."{% endif %}
+                >
                     <i class="bi bi-envelope-check me-1" aria-hidden="true"></i>
-                    {% if lifecycle.acknowledge_again %}Send acknowledgement email{% else %}Acknowledge request{% endif %}
+                    {% if lifecycle.acknowledge_sent %}Acknowledgement sent{% else %}Acknowledge request{% endif %}
                 </button>
             </form>
             {% endif %}

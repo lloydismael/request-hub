@@ -271,6 +271,13 @@ def _action_label(request: Request) -> str:
     return labels[request.lifecycle_stage]
 
 
+def _current_assignment_acknowledged(request: Request) -> bool:
+    return request.lifecycle_events.filter(
+        event_type=RequestLifecycleEvent.EventType.ACKNOWLEDGED,
+        assignment_revision=request.assignment_revision,
+    ).exists()
+
+
 def build_lifecycle_context(request: Request, actor) -> dict:
     stages = []
     for value, label in Request.LifecycleStage.choices:
@@ -322,9 +329,19 @@ def build_lifecycle_context(request: Request, actor) -> dict:
                 Request.LifecycleStage.ACKNOWLEDGED,
                 Request.LifecycleStage.ONGOING,
             }
+            and not _current_assignment_acknowledged(request)
         ),
-        "acknowledge_again": request.lifecycle_stage
-        in {Request.LifecycleStage.ACKNOWLEDGED, Request.LifecycleStage.ONGOING},
+        "acknowledge_sent": bool(
+            request.engineer_id
+            and actor.pk == request.engineer_id
+            and _current_assignment_acknowledged(request)
+            and request.lifecycle_stage
+            in {
+                Request.LifecycleStage.ASSIGNED,
+                Request.LifecycleStage.ACKNOWLEDGED,
+                Request.LifecycleStage.ONGOING,
+            }
+        ),
         "acknowledge_url": reverse("hub:request-lifecycle-acknowledge", kwargs={"pk": request.pk}),
         "stages": stages,
         "events": events,

@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from hub.models import Account, EngineerActivityLog, Request, RequestCommunication, RequestLifecycleEvent
+from hub.models import Account, EngineerActivityLog, Request, RequestLifecycleEvent
 from hub.services import request_lifecycle
 
 
@@ -253,6 +253,19 @@ class RequestLifecycleManagePageTests(TestCase):
             last_name="Engineer",
             email="tracker.primary@example.com",
         )
+        self.secondary = User.objects.create_user(
+            username="tracker-secondary",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            first_name="Secondary",
+            last_name="Engineer",
+            email="tracker.secondary@example.com",
+        )
+        self.manager = User.objects.create_user(
+            username="tracker-manager",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+        )
         self.account = Account.objects.create(name="Tracker Account")
         self.request = Request.objects.create(
             requestor=self.requestor,
@@ -289,13 +302,8 @@ class RequestLifecycleManagePageTests(TestCase):
         self.request.refresh_from_db()
         self.assertEqual(self.request.lifecycle_stage, Request.LifecycleStage.ONGOING)
 
-    def test_acknowledge_relaunches_email_draft_after_existing_outlook_lock(self):
+    def test_acknowledge_button_disables_until_reassignment(self):
         self.request.refresh_from_db()
-        RequestCommunication.objects.create(
-            request=self.request,
-            user=self.primary,
-            channel=RequestCommunication.Channel.OUTLOOK,
-        )
         self.client.force_login(self.primary)
         first = self.client.post(
             reverse("hub:request-lifecycle-acknowledge", args=[self.request.pk]),
@@ -307,13 +315,29 @@ class RequestLifecycleManagePageTests(TestCase):
         second = self.client.post(
             reverse("hub:request-lifecycle-acknowledge", args=[self.request.pk]),
             {"assignment_revision": self.request.assignment_revision},
+            follow=True,
         )
-        self.assertEqual(second.status_code, 200)
-        self.assertContains(second, "Opening Mail Draft")
-        self.assertNotContains(second, "You already launched the Outlook draft for this request.")
+        self.assertContains(second, "This request is no longer awaiting acknowledgement.")
 
         manage_page = self.client.get(reverse("hub:request-manage-collab", args=[self.request.pk]))
-        self.assertContains(manage_page, "Send acknowledgement email")
+        self.assertContains(manage_page, "Acknowledgement sent")
+        self.assertContains(manage_page, 'disabled aria-disabled="true"')
+
+        previous_engineer_id = self.request.engineer_id
+        self.request.engineer = self.secondary
+        self.request.save()
+        request_lifecycle.record_assignment_change(
+            self.request.pk,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=None,
+            actor=self.manager,
+        )
+
+        self.client.force_login(self.secondary)
+        reassigned_page = self.client.get(reverse("hub:request-manage-collab", args=[self.request.pk]))
+        self.assertContains(reassigned_page, "Acknowledge request")
+        self.assertNotContains(reassigned_page, "Acknowledgement sent")
+        self.assertNotContains(reassigned_page, 'disabled aria-disabled="true"')
 
     def test_requestor_cannot_acknowledge(self):
         self.request.refresh_from_db()

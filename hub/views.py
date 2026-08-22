@@ -7340,20 +7340,9 @@ class RequestLifecycleAcknowledgeView(LoginRequiredMixin, View):
         except PermissionDenied as exc:
             messages.error(request, str(exc))
             return redirect("hub:request-manage-collab", pk=pk)
-        except request_lifecycle.LifecycleConflictError:
-            request_obj.refresh_from_db()
-            already_acknowledged = (
-                request_obj.engineer_id == request.user.id
-                and request_obj.lifecycle_stage
-                in {
-                    Request.LifecycleStage.ACKNOWLEDGED,
-                    Request.LifecycleStage.ONGOING,
-                    Request.LifecycleStage.COMPLETED,
-                }
-            )
-            if not already_acknowledged:
-                messages.error(request, "This request is no longer awaiting acknowledgement.")
-                return redirect("hub:request-manage-collab", pk=pk)
+        except request_lifecycle.LifecycleConflictError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("hub:request-manage-collab", pk=pk)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return redirect("hub:request-manage-collab", pk=pk)
