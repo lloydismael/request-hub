@@ -11,7 +11,7 @@
 Coordinate engineering work, enforce SLA timelines, and gain operational visibility � all from a single web portal.
 
 [![Docker](https://img.shields.io/badge/Docker-lloydismael12%2Frequest--hub-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/lloydismael12/request-hub)
-[![Latest Tag](https://img.shields.io/badge/Latest-v50.2-0ea5e9)](https://hub.docker.com/r/lloydismael12/request-hub/tags)
+[![Latest Tag](https://img.shields.io/badge/Latest-v50.3-0ea5e9)](https://hub.docker.com/r/lloydismael12/request-hub/tags)
 [![Django](https://img.shields.io/badge/Django-4.2-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Azure-336791?logo=postgresql)](https://azure.microsoft.com/en-us/products/postgresql/)
@@ -22,10 +22,10 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ## Latest Release Snapshot
 
-- **Current image tag:** `lloydismael12/request-hub:v50.2`
-- **App version shown in profile:** `v50.2`
+- **Current image tag:** `lloydismael12/request-hub:v50.3`
+- **App version shown in profile:** `v50.3`
 - **Latest update included:**
-      - Engineer Acknowledge request now opens the acknowledgement email draft and can relaunch it after an existing Outlook lock.
+      - Acknowledge request stays greyed out after the current engineer sends it, and becomes available again after reassignment.
 
 ---
 

@@ -413,7 +413,7 @@
             return !!(node && node.closest && node.closest(
                 'a, button, input, textarea, select, label, [contenteditable], ' +
                 '.resize-handle, .col-resize-handle, .column-resize-handle, ' +
-                'th .th-resize, [draggable="true"]'
+                'th .th-resize, [draggable="true"], .sqr-inline-input'
             ));
         }
 
@@ -430,7 +430,8 @@
             dragState.velocity = 0;
             dragState.pointerId = event.pointerId;
             axis.halt();
-            try { wrap.setPointerCapture(event.pointerId); } catch (e) { /* noop */ }
+            // Do not capture on pointerdown. Immediate capture retargets the
+            // following click onto the wrapper, so SQR inline cells never edit.
         });
 
         wrap.addEventListener('pointermove', function (event) {

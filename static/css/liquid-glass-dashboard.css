@@ -1574,12 +1574,14 @@ body.dark-mode.engineer-dashboard .table-cell-nowrap {
    11. Create-request modal
    -------------------------------------------------------------------------- */
 
-/* The dashboard navbar is sticky and visually prominent enough to remain
-    visible through the translucent modal backdrop. Remove it from the modal
-    interaction layer while preserving its layout position for a stable close. */
+/* The sticky navbar should not sit above a request modal dialog or header.
+   Hide it while any request modal is open so the dialog remains the active top layer.
+   Match both the dashboard and request manager pages. */
+body.requestor-modal-open .navbar,
+body.request-manager-page.requestor-modal-open .navbar,
 body.requestor-dashboard.requestor-modal-open .navbar {
-     visibility: hidden;
-     pointer-events: none;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .requestor-modal__backdrop {
