@@ -1149,7 +1149,7 @@ body.dark-mode .notification-toast {
     .notification-toast-region {
         top: auto;
         right: 1rem;
-        bottom: 1rem;
+        bottom: calc(var(--ai-chat-toggle-size, 60px) + 1.5rem + env(safe-area-inset-bottom, 0px));
         left: 1rem;
         width: auto;
     }
@@ -6476,6 +6476,9 @@ body:not(.dark-mode) .banner-swatch--custom .banner-swatch__label { color: #e2e8
         right: 0;
         left: 0;
         align-items: stretch;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
     }
 
     .ai-chat-window {
@@ -6489,12 +6492,46 @@ body:not(.dark-mode) .banner-swatch--custom .banner-swatch__label { color: #e2e8
         border-radius: 0 !important;
         margin: 0;
         z-index: 10000;
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+
+    .ai-chat-toggle-btn {
+        margin: 12px;
+        margin-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        margin-right: calc(12px + env(safe-area-inset-right, 0px));
     }
 
     .ai-chat-close-btn {
-        top: 14px;
+        top: max(14px, env(safe-area-inset-top, 0px));
         right: 14px;
     }
+}
+
+body.view-mobile:not(.view-mobile-preview) .ai-chat-widget {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+}
+
+body.view-mobile:not(.view-mobile-preview) .ai-chat-window {
+    position: fixed;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    border-radius: 0 !important;
+    margin: 0;
+    z-index: 10000;
+}
+
+body.view-mobile:not(.view-mobile-preview) .ai-chat-toggle-btn {
+    margin-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    margin-right: calc(12px + env(safe-area-inset-right, 0px));
 }
 
 /* Accessibility & High Contrast Enhancements */
@@ -6695,32 +6732,49 @@ body.dark-mode .ai-chat-close-btn {
 /* ── Chart expand button ── */
 
 /* ══════════════════════════════════════════════════════════
-   MOBILE VIEW MODE  (body.view-mobile)
+   MOBILE VIEW MODE  (body.view-mobile / body.view-mobile-preview)
    ──────────────────────────────────────────────────────────
-   All rules scoped to body.view-mobile.
-   Changing these has ZERO effect on desktop layout.
+   view-mobile          = shared phone skin (auto MQ ≤520 or Profile toggle).
+   view-mobile-preview  = 390px mock, only when Profile toggle is on AND
+                          the viewport is wider than 520px. Real phones
+                          never get the mock, dark stage, or inner 390 frame.
+   Desktop without these classes is unchanged.
    ══════════════════════════════════════════════════════════ */
 
-/* ── 1. Dark matte stage — phone "floats" on a near-black backdrop ── */
-body.view-mobile {
+/* ── 1. Real phones: full-bleed, clip horizontal overflow, safe-area ── */
+html:has(body.view-mobile:not(.view-mobile-preview)),
+body.view-mobile:not(.view-mobile-preview) {
+    overflow-x: hidden;
+    overflow-x: clip;
+    max-width: 100%;
+}
+
+body.view-mobile:not(.view-mobile-preview) > main.container {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+    min-height: calc(100dvh - 52px);
+    border-left: 0;
+    border-right: 0;
+    position: relative;
+}
+
+/* ── 2. Desktop Profile mock: dark stage + 390px inner frame ── */
+body.view-mobile-preview {
     background: #05111f !important;
 }
 
-/* ── 2. Strip navbar outer background; reapply gradient to inner container ── */
-/* Avatar dropdown: ensure it floats above all content and stays within the mobile frame */
-body.view-mobile .nav-avatar-menu {
-    z-index: 9999;
-    max-width: 230px;
-    min-width: 200px;
-}
-
-body.view-mobile > nav.navbar {
+body.view-mobile-preview > nav.navbar {
     background: transparent !important;
     box-shadow: none !important;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
 }
-body.view-mobile > nav.navbar > .container-fluid {
+
+body.view-mobile-preview > nav.navbar > .container-fluid {
     max-width: 390px !important;
     margin: 0 auto !important;
     background: linear-gradient(120deg, #1d4ed8, #3b82f6) !important;
@@ -6728,7 +6782,8 @@ body.view-mobile > nav.navbar > .container-fluid {
     box-shadow: 0 2px 14px rgba(15, 23, 42, 0.55);
 }
 
-body.page-login.view-mobile > nav.navbar > .container-fluid {
+body.page-login.view-mobile > nav.navbar > .container-fluid,
+body.page-login.view-mobile-preview > nav.navbar > .container-fluid {
     max-width: none !important;
     margin: 0 !important;
     background: transparent !important;
@@ -6736,13 +6791,54 @@ body.page-login.view-mobile > nav.navbar > .container-fluid {
     box-shadow: none !important;
 }
 
-/* ── 3. Force hamburger menu inside the narrow frame ── */
+body.page-login.view-mobile-preview {
+    background: unset !important;
+}
+
+body.page-login.view-mobile-preview > main.container {
+    max-width: none !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-left: 0;
+    border-right: 0;
+}
+
+body.view-mobile-preview:not(.page-login) > main.container {
+    max-width: 390px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    min-height: calc(100vh - 52px);
+    border-left: 1px solid rgba(99, 102, 241, 0.2);
+    border-right: 1px solid rgba(99, 102, 241, 0.2);
+    position: relative;
+}
+
+body.view-mobile-preview > main.container::before {
+    display: none;
+}
+
+/* ── 3. Avatar dropdown stays in the frame ── */
+body.view-mobile .nav-avatar-menu {
+    z-index: 9999;
+    max-width: min(230px, calc(100vw - 1.5rem));
+    min-width: min(200px, calc(100vw - 2rem));
+}
+
+/* ── 4. Force hamburger so the desktop mock still collapses (viewport still ≥ lg) ── */
 body.view-mobile .navbar-expand-lg {
     flex-wrap: wrap !important;
     justify-content: space-between !important;
 }
 body.view-mobile .navbar-expand-lg .navbar-toggler {
     display: inline-flex !important;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
 }
 body.view-mobile .navbar-expand-lg .navbar-collapse:not(.show):not(.collapsing) {
     display: none !important;
@@ -6757,25 +6853,7 @@ body.view-mobile .navbar-expand-lg .navbar-nav {
     flex-direction: column !important;
 }
 
-/* ── 4. Phone-width content column ── */
-body.view-mobile > main.container {
-    max-width: 390px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    padding-left: 10px !important;
-    padding-right: 10px !important;
-    min-height: calc(100vh - 52px);
-    border-left: 1px solid rgba(99, 102, 241, 0.2);
-    border-right: 1px solid rgba(99, 102, 241, 0.2);
-    position: relative;
-}
-
-/* ── 5. "Mobile Preview" label — hidden (auto screen-detection makes it unnecessary) ── */
-body.view-mobile > main.container::before {
-    display: none;
-}
-
-/* ── 6. Collapse ALL columns to full-width (fixes Bootstrap row-cols-* bare .col bug) ── */
+/* ── 5. Collapse ALL columns to full-width (fixes Bootstrap row-cols-* bare .col bug) ── */
 body.view-mobile .row {
     flex-direction: column;
 }
@@ -6788,7 +6866,7 @@ body.view-mobile .row > .col {
     padding-right: 0 !important;
 }
 
-/* ── 7. Dashboard metric cards — 2-column grid ── */
+/* ── 6. Dashboard metric cards — 2-column grid ── */
 body.view-mobile .dashboard-metrics {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -6819,7 +6897,22 @@ body.view-mobile .dashboard-metric-card__hint {
     font-size: 0.68rem;
 }
 
-/* ── 8. Glass cards ── */
+body.view-mobile .dashboard-toolbar {
+    width: 100%;
+    justify-content: flex-start !important;
+    margin-left: 0 !important;
+}
+body.view-mobile .dashboard-toolbar__search,
+body.view-mobile .dashboard-toolbar__actions {
+    width: 100%;
+}
+body.view-mobile .dashboard-toolbar .dashboard-request-search-box--toolbar {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+}
+
+/* ── 7. Glass cards ── */
 body.view-mobile .glass-card {
     border-radius: 16px;
     padding: 0.85rem 0.8rem !important;
@@ -6829,13 +6922,13 @@ body.view-mobile .glass-card .glass-card {
     padding: 0.6rem 0.7rem !important;
 }
 
-/* ── 9. Typography scale ── */
+/* ── 8. Typography scale ── */
 body.view-mobile h4, body.view-mobile .h4 { font-size: 1rem !important; }
 body.view-mobile h5, body.view-mobile .h5 { font-size: 0.88rem !important; }
 body.view-mobile h6, body.view-mobile .h6 { font-size: 0.8rem !important; }
 body.view-mobile p, body.view-mobile li  { font-size: 0.82rem; }
 
-/* ── 10. Dashboard stat pills — keep inline, allow horizontal scroll on their row ── */
+/* ── 9. Dashboard stat pills — keep inline, allow horizontal scroll on their row ── */
 body.view-mobile .dbd-stat-pill { min-width: 0; flex-shrink: 0; }
 body.view-mobile .dbd-stats-row {
     display: flex !important;
@@ -6849,7 +6942,7 @@ body.view-mobile .dbd-stats-row {
 }
 body.view-mobile .dbd-stats-row::-webkit-scrollbar { display: none; }
 
-/* ── 11. Dashboard action/filter bar (All, Ongoing … + Export CSV) ── */
+/* ── 10. Dashboard action/filter bar (All, Ongoing … + Export CSV) ── */
 body.view-mobile .d-flex:has(> .dbd-stat-pill) {
     flex-wrap: nowrap !important;
     overflow-x: auto;
@@ -6862,20 +6955,78 @@ body.view-mobile .d-flex:has(> .dbd-stat-pill) {
 }
 body.view-mobile .d-flex:has(> .dbd-stat-pill)::-webkit-scrollbar { display: none; }
 
-/* ── 12. Tables — horizontal scroll, compact ── */
+/* ── 11. Tables — horizontal scroll, compact. nowrap only on wide trackers ── */
 body.view-mobile .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 body.view-mobile table { min-width: 320px; font-size: 0.77rem; }
 body.view-mobile .table th,
-body.view-mobile .table td { padding: 0.38rem 0.5rem; white-space: nowrap; }
+body.view-mobile .table td { padding: 0.38rem 0.5rem; }
+body.view-mobile .dashboard-table-wrapper .table th,
+body.view-mobile .dashboard-table-wrapper .table td,
+body.view-mobile .sqr-tracker th,
+body.view-mobile .sqr-tracker td,
+body.view-mobile .rpt-activity-table th,
+body.view-mobile .rpt-activity-table td {
+    white-space: nowrap;
+}
 
-/* ── 13. Buttons & forms ── */
-body.view-mobile .btn        { font-size: 0.78rem; padding: 0.38rem 0.8rem; }
-body.view-mobile .btn-sm     { font-size: 0.72rem; padding: 0.3rem 0.6rem; }
+/* ── 12. Buttons & forms — 44px targets, 16px inputs (no iOS zoom) ── */
+body.view-mobile .btn {
+    font-size: 0.78rem;
+    padding: 0.38rem 0.8rem;
+    min-height: 44px;
+}
+body.view-mobile .btn-sm {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.6rem;
+    min-height: 44px;
+}
 body.view-mobile .form-control,
-body.view-mobile .form-select { font-size: 0.82rem; padding: 0.38rem 0.65rem; }
-body.view-mobile label        { font-size: 0.78rem; }
+body.view-mobile .form-select {
+    font-size: 16px;
+    padding: 0.5rem 0.65rem;
+    min-height: 44px;
+}
+body.view-mobile label { font-size: 0.78rem; }
+body.view-mobile .navbar-toggler {
+    min-width: 44px;
+    min-height: 44px;
+}
 
-/* ── 14. Profile page ── */
+body.view-mobile.request-detail-page .d-flex.justify-content-between.align-items-center.mb-4 {
+    flex-wrap: wrap !important;
+    gap: 0.75rem;
+    align-items: flex-start !important;
+}
+body.view-mobile.request-detail-page .row.g-3 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: unset !important;
+    gap: 0.75rem;
+}
+body.view-mobile.request-detail-page .row.g-3 > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: unset !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+body.view-mobile .mgmt-tabs.nav-pills,
+body.view-mobile.management-page .mgmt-tabs {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+}
+body.view-mobile .mgmt-tabs .nav-item { flex: 0 0 auto; }
+body.view-mobile .mgmt-tabs .nav-link {
+    min-height: 44px;
+    white-space: nowrap;
+}
+
+/* ── 13. Profile page ── */
 body.view-mobile .profile-page { max-width: 100% !important; }
 body.view-mobile .profile-hero__banner { height: 72px !important; }
 body.view-mobile .profile-hero__body { padding: 0 0.6rem 0.75rem; }
@@ -6903,6 +7054,7 @@ body.view-mobile .profile-tab {
     font-size: 0.75rem !important;
     white-space: nowrap;
     flex-shrink: 0;
+    min-height: 44px;
 }
 body.view-mobile .profile-tabs__vmt {
     flex-shrink: 0;
@@ -6915,7 +7067,7 @@ body.view-mobile .profile-avatar-preview,
 body.view-mobile .profile-avatar-preview--placeholder { width: 76px !important; height: 76px !important; }
 body.view-mobile .banner-swatch-grid { grid-template-columns: repeat(3, 1fr) !important; }
 
-/* ── 15. Reports KPI row — 2-column grid ── */
+/* ── 14. Reports KPI row — 2-column grid ── */
 body.view-mobile .rpt-kpi-row {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -6925,13 +7077,10 @@ body.view-mobile .rpt-kpi-row {
 body.view-mobile .rpt-kpi { min-width: 0; }
 
 /* ══════════════════════════════════════════════════════════
-   16. REPORTS PAGE — fully isolated mobile overrides
+   15. REPORTS PAGE — fully isolated mobile overrides
        (All rules prefixed body.view-mobile — zero desktop bleed)
    ══════════════════════════════════════════════════════════ */
 
-/* ─── Report page header ─── */
-/* Force the controls row (tab group + export) to sit directly under the title
-   and scroll horizontally when the 390px frame is too narrow */
 body.view-mobile .d-flex:has(.rpt-tab-group) {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -6942,7 +7091,6 @@ body.view-mobile .d-flex:has(.rpt-tab-group) {
 }
 body.view-mobile .d-flex:has(.rpt-tab-group)::-webkit-scrollbar { display: none; }
 
-/* ─── Tab group (Operational / Activity Logs) ─── */
 body.view-mobile .rpt-tab-group {
     flex-shrink: 0;
     padding: 2px;
@@ -6953,11 +7101,9 @@ body.view-mobile .rpt-tab {
     padding: 5px 10px;
     font-size: 0.75rem;
     white-space: nowrap;
+    min-height: 44px;
 }
 
-/* ─── KPI row: override the generic single-column row rule → 2-column grid ─── */
-/* Use > [class*="col-"] > .rpt-kpi-card to avoid matching outer wrapper rows
-   that only contain KPI cards as deeper descendants */
 body.view-mobile .row:has(> [class*="col-"] > .rpt-kpi-card) {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -6972,7 +7118,20 @@ body.view-mobile .row:has(> [class*="col-"] > .rpt-kpi-card) > [class*="col-"] {
     flex: unset !important;
 }
 
-/* ─── KPI cards — compact ─── */
+body.view-mobile .row:has(> [class*="col-"] > .rpt2-kpi) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: unset !important;
+    gap: 0.45rem;
+}
+body.view-mobile .row:has(> [class*="col-"] > .rpt2-kpi) > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    flex: unset !important;
+}
+
 body.view-mobile .rpt-kpi-card {
     padding: 0.85rem 0.75rem 0.7rem !important;
     border-radius: 14px;
@@ -6989,7 +7148,6 @@ body.view-mobile .rpt-kpi-value {
     margin-bottom: 0.1rem !important;
 }
 body.view-mobile .rpt-kpi-sub {
-    /* Hide the sub-label to save vertical space in mobile cards */
     display: none !important;
 }
 body.view-mobile .rpt-kpi-label {
@@ -6997,7 +7155,6 @@ body.view-mobile .rpt-kpi-label {
     letter-spacing: 0.04em !important;
 }
 
-/* ─── Chart cards — compact header, reduced canvas height ─── */
 body.view-mobile .rpt-chart-card {
     padding: 1rem 0.85rem !important;
 }
@@ -7020,17 +7177,14 @@ body.view-mobile .rpt-chart-title {
     margin-bottom: 0 !important;
 }
 body.view-mobile .rpt-chart-sub {
-    /* Hide long subtitle text on narrow mobile frame */
     display: none !important;
 }
 body.view-mobile .rpt-expand-btn {
-    /* Keep expand button but reduce size */
-    width: 24px !important;
-    height: 24px !important;
-    font-size: 0.7rem !important;
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 0.85rem !important;
 }
 
-/* ─── Chart canvases — reduce height so 2+ charts fit without too much scroll ─── */
 body.view-mobile .rpt-canvas-wrap {
     min-height: 195px !important;
     flex: none !important;
@@ -7041,19 +7195,15 @@ body.view-mobile .rpt-canvas-wrap--donut {
     height: 175px;
 }
 
-/* ─── Period badge ─── */
 body.view-mobile .rpt-period-badge {
     font-size: 0.72rem;
     padding: 0.25rem 0.6rem;
 }
 
-/* ─── Activity filter form ─── */
 body.view-mobile .rpt-activity-filter .row {
-    flex-direction: column !important; /* already handled by generic rule; reinforce */
+    flex-direction: column !important;
 }
 
-/* ─── Activity log table — hide non-essential columns to fit 390px ─── */
-/* Hidden: # (col 1) and Location (col 7) — reduces ~120px of horizontal space */
 body.view-mobile .rpt-activity-table th:nth-child(1),
 body.view-mobile .rpt-activity-table td:nth-child(1) { display: none; }   /* # */
 body.view-mobile .rpt-activity-table th:nth-child(7),
@@ -7061,7 +7211,7 @@ body.view-mobile .rpt-activity-table td:nth-child(7) { display: none; }   /* Loc
 
 body.view-mobile .rpt-activity-table {
     font-size: 0.72rem !important;
-    min-width: 420px;               /* allow horizontal scroll, but thinner than before */
+    min-width: 420px;
 }
 body.view-mobile .rpt-activity-table th,
 body.view-mobile .rpt-activity-table td {
@@ -7069,7 +7219,6 @@ body.view-mobile .rpt-activity-table td {
     white-space: nowrap;
 }
 
-/* ─── Eng avatar in activity table — smaller ─── */
 body.view-mobile .rpt-eng-avatar {
     width: 22px !important;
     height: 22px !important;
@@ -7080,25 +7229,22 @@ body.view-mobile .rpt-account-name { font-size: 0.72rem; }
 body.view-mobile .rpt-hours-badge { font-size: 0.72rem; padding: 0.15rem 0.45rem; }
 body.view-mobile .rpt-edit-btn { width: 22px; height: 22px; font-size: 0.7rem; }
 
-/* ─── Breakdown tables (Requestor / Engineer allocation) — compact ─── */
 body.view-mobile .rpt-table-head th {
     font-size: 0.65rem !important;
     padding: 0.3rem 0.45rem !important;
 }
 
-/* ─── Log count badge ─── */
 body.view-mobile .rpt-log-count-badge { font-size: 0.72rem; padding: 0.25rem 0.6rem; }
 
-/* ─── Pagination row — horizontal-scroll ─── */
 body.view-mobile .rpt-log-pagination {
     flex-direction: column;
     align-items: flex-start !important;
     gap: 0.5rem !important;
 }
 body.view-mobile .rpt-page-btn {
-    width: 28px !important;
-    height: 28px !important;
-    font-size: 0.72rem !important;
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 0.78rem !important;
     border-radius: 7px !important;
 }
 
@@ -7194,6 +7340,24 @@ body.dark-mode .rpt-chart-modal__close:hover { background: rgba(220,53,69,0.15);
     position: relative;
 }
 .rpt-chart-modal__canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+
+body.view-mobile .rpt-chart-modal {
+    padding: max(0.75rem, env(safe-area-inset-top, 0px)) 0.75rem max(0.75rem, env(safe-area-inset-bottom, 0px));
+    align-items: flex-end;
+}
+body.view-mobile .rpt-chart-modal__inner {
+    width: 100%;
+    max-height: 90dvh;
+}
+body.view-mobile .rpt-chart-modal__canvas-wrap {
+    min-height: min(70vh, 440px);
+}
+body.view-mobile .rpt-chart-modal__close {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+}
 
 .rpt-chart-icon {
     width: 32px;

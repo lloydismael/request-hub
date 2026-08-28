@@ -246,7 +246,7 @@
                         <i class="bi bi-pc-display"></i><span>Desktop</span>
                     </button>
                     <span class="profile-vmt__divider" aria-hidden="true"></span>
-                    <button class="profile-vmt__btn profile-vmt__btn--maintenance" data-vmt="mobile" type="button" title="Mobile view is temporarily unavailable — currently under maintenance." aria-pressed="false" aria-disabled="true" data-tooltip="Currently under maintenance" disabled>
+                    <button class="profile-vmt__btn" data-vmt="mobile" type="button" title="Mobile view" aria-pressed="false">
                         <i class="bi bi-phone-fill"></i><span>Mobile</span>
                     </button>
                 </div>
@@ -625,19 +625,11 @@
     const btns = document.querySelectorAll('#profile-vmt-clone [data-vmt]');
     if (!btns.length) return;
 
-    const mobileBtn = document.querySelector('#profile-vmt-clone [data-vmt="mobile"]');
-    if (mobileBtn) {
-        mobileBtn.disabled = true;
-        mobileBtn.setAttribute('aria-disabled', 'true');
-        mobileBtn.title = 'Mobile view is temporarily unavailable — currently under maintenance.';
-        mobileBtn.dataset.tooltip = 'Currently under maintenance';
-    }
-
     const applyMode = (mode) => {
-        if (mode === 'mobile') {
-            mode = 'desktop';
-        }
-        document.body.classList.toggle('view-mobile', mode === 'mobile');
+        const isPhone = window.matchMedia('(max-width: 520px)').matches;
+        const wantMobile = mode === 'mobile';
+        document.body.classList.toggle('view-mobile', wantMobile || isPhone);
+        document.body.classList.toggle('view-mobile-preview', wantMobile && !isPhone);
         try { localStorage.setItem(VMT_KEY, mode); } catch (_) {}
         btns.forEach((btn) => {
             const isActive = btn.dataset.vmt === mode;
@@ -650,12 +642,7 @@
     applyMode(saved === 'mobile' ? 'mobile' : 'desktop');
 
     btns.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            if (btn.dataset.vmt === 'mobile') {
-                return;
-            }
-            applyMode(btn.dataset.vmt);
-        });
+        btn.addEventListener('click', () => applyMode(btn.dataset.vmt));
     });
 }());
 </script>

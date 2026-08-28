@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}Request Hub{% endblock %}</title>
     <script>
         (function () {
@@ -29,9 +29,9 @@
     </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=22">
-    <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=12">
-    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=49">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=23">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=13">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=50">
     <!-- Ambient background layer renders below content; defer so it doesn't block first paint -->
     <link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=3" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=3"></noscript>
@@ -165,16 +165,24 @@
         }());
     </script>
     <script>
-        // Apply view-mobile class based on screen width (auto-detection) or saved preference.
-        // Screens ≤ 520 px always get the mobile layout; wider screens use the saved toggle.
+        // view-mobile: shared phone skin (auto on ≤520px, or saved Profile toggle).
+        // view-mobile-preview: 390px mock — only when the toggle is on AND width > 520.
         (function() {
             try {
                 var MQ = window.matchMedia('(max-width: 520px)');
                 function syncViewMode() {
-                    if (MQ.matches || localStorage.getItem('reqHubViewMode') === 'mobile') {
-                        document.body.classList.add('view-mobile');
+                    var preferMobile = localStorage.getItem('reqHubViewMode') === 'mobile';
+                    var isPhone = MQ.matches;
+                    var body = document.body;
+                    if (isPhone) {
+                        body.classList.add('view-mobile');
+                        body.classList.remove('view-mobile-preview');
+                    } else if (preferMobile) {
+                        body.classList.add('view-mobile');
+                        body.classList.add('view-mobile-preview');
                     } else {
-                        document.body.classList.remove('view-mobile');
+                        body.classList.remove('view-mobile');
+                        body.classList.remove('view-mobile-preview');
                     }
                 }
                 syncViewMode();

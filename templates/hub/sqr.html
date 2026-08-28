@@ -3,7 +3,7 @@
 {% block title %}SQR &middot; Request Hub{% endblock %}
 {% block body_class %}sqr-page{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=14">
+<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=15">
 {% endblock %}
 
 {% block content %}
@@ -881,7 +881,7 @@
                             {# AP: Billing Status — Billed / Not Yet Billed #}
                             <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_status" data-sgr-type="select" data-sgr-value="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}" title="Click to edit">
                                 <span class="sgr-display">
-                                {% if item.revenue_status == 'billed' %}
+                                {% if item.revenue_status == 'billed' or not item.revenue_status and item.revenue_date %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
                                 {% elif item.revenue_status == 'not_yet_billed' or not item.revenue_status %}
                                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Not Yet Billed</span>

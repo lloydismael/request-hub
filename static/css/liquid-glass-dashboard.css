@@ -75,7 +75,7 @@ body.dark-mode:not(.page-login) .navbar[data-nav-surface="light"] {
 body:not(.page-login) .navbar,
 body.dark-mode:not(.page-login) .navbar {
     position: sticky;
-    top: 0.75rem;
+    top: max(0.75rem, env(safe-area-inset-top, 0px));
     z-index: 1030;
     width: calc(100% - 3rem);
     max-width: none;
@@ -326,7 +326,7 @@ body.pref-reduce-motion:not(.page-login) .navbar::before {
     body:not(.page-login) .navbar,
     body.dark-mode:not(.page-login) .navbar {
         width: calc(100% - 1rem);
-        top: 0.5rem;
+        top: max(0.5rem, env(safe-area-inset-top, 0px));
         margin-bottom: 0.5rem;
         border-radius: 28px;
         padding: 0.5rem 0.6rem;
@@ -346,6 +346,11 @@ body.pref-reduce-motion:not(.page-login) .navbar::before {
     body:not(.page-login) .navbar .nav-link {
         width: 100%;
     }
+}
+
+body.view-mobile:not(.view-mobile-preview):not(.page-login) .navbar {
+    width: calc(100% - 1rem);
+    max-width: none;
 }
 
 /* --------------------------------------------------------------------------

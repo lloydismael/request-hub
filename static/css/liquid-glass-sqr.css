@@ -2088,3 +2088,32 @@ body.sqr-page .card-footer {
         animation: none !important;
     }
 }
+
+/* View-mobile: keep identity columns sticky (0-1 = 240px). Unstick 2-4 so
+   360/390 viewports are not eaten by the 384px+ ladder. Desktop unchanged. */
+body.view-mobile.sqr-page .sqr-tracker .col-sticky-2,
+body.view-mobile.sqr-page .sqr-tracker .col-sticky-3,
+body.view-mobile.sqr-page .sqr-tracker .col-sticky-4 {
+    position: static;
+    left: auto;
+    z-index: auto;
+}
+
+body.view-mobile.sqr-page .sqr-toolbar-search-wrap,
+body.view-mobile.sqr-page .sqr-toolbar-search-box {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+}
+
+body.view-mobile.sqr-page .form-control,
+body.view-mobile.sqr-page .form-select {
+    font-size: 16px;
+    min-height: 44px;
+}
+
+body.view-mobile.sqr-page .sqr-view-toggle .btn,
+body.view-mobile.sqr-page .sqr-toggle-btn {
+    min-height: 44px;
+}
