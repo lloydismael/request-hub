@@ -16,7 +16,6 @@
             <div class="lg-tile lg-surface lg-enter">
                 <h2 class="lg-tile__title">{{ card.label }}</h2>
                 <p class="lg-tile__desc">{{ card.description }}</p>
-                <p class="lg-tile__hint">Default login: <code>{{ default_username }}</code> / <code>{{ default_password }}</code></p>
                 <a class="lg-tile__cta" href="{% url 'login' %}?role={{ card.role }}">Continue as {{ card.label }}</a>
             </div>
         </div>

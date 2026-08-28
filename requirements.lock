@@ -1,9 +1,9 @@
-Django==4.2.30
+Django==5.2.17
 psycopg2-binary==2.9.10
 Pillow==12.3.0
 azure-communication-email==1.0.0
 msal==1.37.0
-cryptography==48.0.1
+cryptography==50.0.1
 msgpack==1.2.1
 requests==2.33.0
 python-dotenv==1.2.2

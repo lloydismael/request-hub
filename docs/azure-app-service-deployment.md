@@ -19,14 +19,13 @@ $env:DOCKER_BUILDKIT=1
 # Inspect existing tags to avoid duplicates
 docker images lloydismael12/request-hub --format "{{.Tag}}" | sort
 # Update this to the next unused version.
-# Patch tags are single digit only: v48.0 through v48.9, then v49.0.
-$nextVersion = "v48.3"
+# Patch tags are single digit only: v50.0 through v50.9, then v51.0.
+$nextVersion = "v50.6"
 $tag = "lloydismael12/request-hub:$nextVersion"
 docker build --pull --no-cache --build-arg APP_VERSION=$nextVersion -t $tag .
 docker scout cves $tag
 docker push $tag
-docker tag $tag lloydismael12/request-hub:latest
-docker push lloydismael12/request-hub:latest
+# Do not retag or push latest until CVE scans on this immutable tag are clean.
 ```
 
 > App Service will pull the tagged image directly from Docker Hub. Replace the registry path if you use Azure Container Registry (ACR). Do not create tags such as `v48.10`; after `v48.9`, roll over to `v49.0`. Only retag `latest` after the immutable version tag scans clean.
@@ -81,7 +80,9 @@ az webapp config appsettings set ^
 
 - `WEBSITES_PORT` tells App Service which port the container listens on (Gunicorn binds to 8000).
 - Leave `DJANGO_ALLOWED_HOSTS` empty to rely on the automatic `WEBSITE_HOSTNAME` detection added in `settings.py`. Provide extra hosts if needed (comma-separated).
-- If you connect to PostgreSQL, provide `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT` values here as well.
+- When `DJANGO_DEBUG=False`, `DJANGO_SECRET_KEY`, `DB_HOST`, and `DB_PASSWORD` are required or the app fails closed at boot.
+- If you connect to PostgreSQL, provide `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT` values here as well. Django 5.2 requires PostgreSQL 14+.
+- App Service already forwards `X-Forwarded-Proto`; production settings trust `HTTP_X_FORWARDED_PROTO=https`.
 - `ACS_EMAIL_CONNECTION_STRING` should point at the Request Hub Azure Communication Services endpoint `https://esgrequesthub.asiapacific.communication.azure.com`.
 - `ACS_EMAIL_SENDER` should be the verified sender address `DoNotReply@dreadops.site`.
 
@@ -122,8 +123,8 @@ az webapp restart --name $APP --resource-group $RESOURCE_GROUP
 
 ## Notes on Database Connectivity
 
-- The project defaults to SQLite; for production use Azure Database for PostgreSQL Flexible Server.
-- Expose credentials through app settings and ensure outbound access via VNet integration or public firewall rules.
+- Production uses Azure Database for PostgreSQL Flexible Server (PostgreSQL 14+ for Django 5.2).
+- Expose credentials through app settings (`DB_HOST` and `DB_PASSWORD` are required when `DJANGO_DEBUG=False`) and ensure outbound access via VNet integration or public firewall rules.
 - Run migrations manually if you disable automatic migrations in `entrypoint.sh`.
 
 With these steps, the Dockerized Request Hub application runs on Azure App Service with environment-specific configuration provided through Azure settings.

@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -120,7 +120,7 @@ class AssignmentEmailTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         messages = [message.message for message in get_messages(request)]
-        self.assertIn("Request submitted", messages)
+        self.assertTrue(any(str(message).startswith("Request submitted") for message in messages))
         self.assertTrue(any("assignment email could not be delivered" in message for message in messages))
 
     @staticmethod
@@ -157,6 +157,56 @@ class AuthenticationBackendTests(TestCase):
         self.assertIsNotNone(authenticated)
         self.assertEqual(authenticated.pk, canonical_admin.pk)
         self.assertEqual(authenticated.username, "Admin")
+
+
+class UserManagementPasswordResetTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="mgmt-admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+            email="mgmt-admin@example.com",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.target = User.objects.create_user(
+            username="mgmt-target",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="mgmt-target@example.com",
+        )
+
+    def test_management_page_does_not_expose_shared_default_password(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("hub:management"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("default_password", response.context)
+        html = response.content.decode()
+        self.assertNotIn("@Password", html)
+        self.assertNotIn("Reset to Default Password", html)
+        self.assertIn("Reset to Temporary Password", html)
+
+    def test_password_reset_issues_one_time_password_and_requires_change(self):
+        self.client.force_login(self.admin)
+        one_time = "TempPasswrdXY2345"
+
+        with patch.object(UserManagementView, "_generate_temporary_password", return_value=one_time):
+            response = self.client.post(
+                reverse("hub:management"),
+                {"user_action": f"reset_password:{self.target.pk}"},
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn(one_time, html)
+        self.assertNotIn("@Password", html)
+        self.target.refresh_from_db()
+        self.assertTrue(self.target.must_change_password)
+        self.assertIsNone(authenticate(username="mgmt-target", password="pass12345"))
+        self.assertIsNotNone(authenticate(username="mgmt-target", password=one_time))
 
 
 class RequestReportViewTests(TestCase):
@@ -390,6 +440,26 @@ class UserManagementSearchTests(TestCase):
         self.assertContains(response, 'class="glass-card management-header p-3 mb-3 lg-enter"')
         self.assertContains(response, 'data-navbar-surface="theme"')
 
+    def test_management_user_modals_use_requestor_modal(self):
+        admin = User.objects.create_user(
+            username="management-modal-admin",
+            password="pass12345",
+            role=User.Roles.ADMIN,
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("hub:management"))
+        html = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="create-user-modal"')
+        self.assertContains(response, 'id="manage-user-modal"')
+        self.assertContains(response, "requestor-modal")
+        self.assertContains(response, "requestor-modal__dialog--wide")
+        self.assertNotIn('data-bs-target="#create-user-modal"', html)
+        self.assertNotIn('data-bs-target="#manage-user-modal"', html)
+        self.assertNotIn("mgmt-modal", html)
+
     def test_notifications_page_declares_shared_theme_scope(self):
         admin = User.objects.create_user(
             username="notifications-theme-admin",
@@ -429,8 +499,8 @@ class UserManagementSearchTests(TestCase):
             last_name="Brown",
         )
 
-        alina.date_joined = timezone.datetime(2024, 1, 1, tzinfo=timezone.utc)
-        alice.date_joined = timezone.datetime(2024, 1, 3, tzinfo=timezone.utc)
+        alina.date_joined = datetime(2024, 1, 1, tzinfo=dt_timezone.utc)
+        alice.date_joined = datetime(2024, 1, 3, tzinfo=dt_timezone.utc)
         alina.save(update_fields=["date_joined"])
         alice.save(update_fields=["date_joined"])
 

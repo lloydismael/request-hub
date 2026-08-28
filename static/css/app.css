@@ -2865,6 +2865,10 @@ body.requestor-dashboard .dashboard-metric-card--active {
     --bs-body-color: #0f172a;
 }
 
+.requestor-modal__dialog--wide {
+    max-width: 720px;
+}
+
 .requestor-modal__header {
     padding: 1.25rem 1.5rem;
     display: flex;
@@ -7966,7 +7970,9 @@ body.pref-reduce-motion * {
     view-transition-name: request-hub-page;
 }
 
-body.theme-switching .request-hub-page {
+body.theme-switching .request-hub-page,
+body.modal-open .request-hub-page,
+body.requestor-modal-open .request-hub-page {
     view-transition-name: none;
 }
 

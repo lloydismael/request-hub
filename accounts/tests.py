@@ -1,5 +1,15 @@
-from django.test import TestCase
+import json
+from pathlib import Path
+
+from django.conf import settings
+from django.core.cache import cache
+from django.core import serializers as django_serializers
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase
 from django.urls import reverse
+
+from accounts.models import StoredFile, User
+from accounts.views import LOGIN_THROTTLE_LIMIT, LOGIN_THROTTLE_MESSAGE
 
 
 class LoginPageTests(TestCase):
@@ -41,7 +51,7 @@ class LoginPageTests(TestCase):
         self.assertContains(response, 'id="request-hub-page"')
         self.assertContains(response, 'class="request-hub-page"')
         self.assertContains(response, "/static/css/app.")
-        self.assertContains(response, "css?v=19")
+        self.assertContains(response, "css?v=22")
         self.assertContains(response, "/static/js/page-transitions.")
         self.assertContains(response, "js?v=1")
         self.assertContains(response, "reqHubPageTransitionDirection")
@@ -68,3 +78,55 @@ class LoginPageTests(TestCase):
         response = self.client.get(reverse("landing"))
 
         self.assertRedirects(response, reverse("login"))
+
+    def test_login_page_does_not_expose_credentials(self):
+        response = self.client.get(reverse("login"))
+        html = response.content.decode()
+
+        self.assertNotIn("@Password", html)
+        self.assertNotIn("Default login", html)
+        self.assertNotIn("default_password", html)
+
+
+class SecretHygieneTests(TestCase):
+    root = Path(__file__).resolve().parents[1]
+    secret_keys = {
+        "DJANGO_SECRET_KEY",
+        "DB_USER",
+        "DB_PASSWORD",
+        "ACS_EMAIL_CONNECTION_STRING",
+        "ACS_EMAIL_SENDER",
+        "PHILDATA_TENANT_ID",
+        "PHILDATA_CLIENT_ID",
+        "PHILDATA_CLIENT_SECRET",
+    }
+
+    def test_landing_template_does_not_document_default_login(self):
+        landing = (self.root / "templates" / "landing.html").read_text(encoding="utf-8")
+
+        self.assertNotIn("Default login", landing)
+        self.assertNotIn("default_password", landing)
+        self.assertNotIn("default_username", landing)
+
+    def test_settings_do_not_ship_a_shared_user_password(self):
+        self.assertFalse(hasattr(settings, "DEFAULT_USER_PASSWORD"))
+
+    def test_env_files_are_ignored_and_example_has_no_secret_values(self):
+        gitignore = (self.root / ".gitignore").read_text(encoding="utf-8")
+        dockerignore = (self.root / ".dockerignore").read_text(encoding="utf-8")
+        example = (self.root / ".env.example").read_text(encoding="utf-8")
+
+        self.assertIn(".env", gitignore)
+        self.assertIn(".env.*", gitignore)
+        self.assertIn("!.env.example", gitignore)
+        self.assertIn(".env", dockerignore)
+        self.assertIn(".env.*", dockerignore)
+        self.assertNotIn("DJANGO_DEFAULT_USER_PASSWORD", example)
+
+        for line in example.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            if key in self.secret_keys:
+                self.assertEqual(value, "", msg=f"{key} must be empty in .env.example")

@@ -43,6 +43,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.crypto import get_random_string
+from django.utils.html import format_html, json_script
 from django.views import View
 from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
 from urllib.parse import quote, urlencode
@@ -3169,22 +3171,29 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "sqr_reports_top_won": sqr_reports_top_won,
                 "sqr_reports_pipeline": sqr_reports_pipeline,
                 "sqr_reports_focus_items": sqr_reports_focus_items,
-                "sqr_pm_users_json": json.dumps(list(
+                "sqr_pm_users": list(
                     User.objects.filter(role=User.Roles.PM_ESG)
                     .values("pk", "first_name", "last_name", "username")
                     .order_by("first_name", "last_name")
-                )) if is_pm else "[]",
-                "sqr_sse_users_json": json.dumps(list(
+                ) if is_pm else [],
+                "sqr_sse_users": list(
                     User.objects.filter(role__in=[User.Roles.ENGINEER, User.Roles.ON_HOLD])
                     .values("pk", "first_name", "last_name", "username")
                     .order_by("first_name", "last_name")
-                )) if is_pm else "[]",
-                "sqr_rq_options_json": json.dumps(list(
+                ) if is_pm else [],
+                "sqr_rq_options": list(
                     Request.objects.order_by("-id")[:300]
                     .values("pk", "reference_code")
-                )) if is_pm else "[]",
+                ) if is_pm else [],
             }
         )
+        if is_pm:
+            context["sqr_json_scripts"] = format_html(
+                "{}{}{}",
+                json_script(context["sqr_pm_users"], "sgr-pm-users"),
+                json_script(context["sqr_sse_users"], "sgr-sse-users"),
+                json_script(context["sqr_rq_options"], "sgr-rq-options"),
+            )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -6983,7 +6992,6 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             "total_users": User.objects.count(),
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
-            "default_password": getattr(settings, "DEFAULT_USER_PASSWORD", "@Password"),
             "users": users_value,
             "users_page_obj": users_page_obj,
             "user_search_query": user_search_query,
@@ -7049,19 +7057,24 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         return removed
 
     def _reset_user_password(self, request, target_user: User):
-        default_password = getattr(settings, "DEFAULT_USER_PASSWORD", "@Password")
-        target_user.set_password(default_password)
+        temporary_password = self._generate_temporary_password()
+        target_user.set_password(temporary_password)
         target_user.must_change_password = True
         target_user.save(update_fields=["password", "must_change_password"])
         removed_sessions = self._clear_user_sessions(target_user)
         display_name = target_user.get_full_name() or target_user.username
         message = (
-            f"Reset password for {display_name}. The default password has been restored and they must set a new password on next sign-in."
+            f"Reset password for {display_name}. Temporary password: {temporary_password}. "
+            "They must set a new password on next sign-in."
         )
         if removed_sessions:
             message += f" Ended {removed_sessions} session{'s' if removed_sessions != 1 else ''}."
         messages.success(request, message)
         return redirect("hub:management")
+
+    @staticmethod
+    def _generate_temporary_password() -> str:
+        return get_random_string(16, allowed_chars="abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
 
     @staticmethod
     def _protected_delete_error_message(display_name: str, protected_records: set) -> str:

@@ -1,14 +1,23 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-development-key")
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
+if DEBUG:
+    if not SECRET_KEY:
+        SECRET_KEY = "insecure-development-key"
+elif not SECRET_KEY or SECRET_KEY == "insecure-development-key":
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set to a non-default value when DJANGO_DEBUG is False."
+    )
+
 APP_VERSION = os.getenv("APP_VERSION", "dev")
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 
@@ -20,16 +29,12 @@ website_hostname = os.getenv("WEBSITE_HOSTNAME")
 if website_hostname and website_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(website_hostname)
 
-# Allow common container metadata host seen in some environments (e.g., 169.254.x.x)
-metadata_host = "169.254.130.3"
-if metadata_host not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(metadata_host)
-
 csrf_hosts = [host.strip() for host in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if host.strip()]
 if website_hostname:
     csrf_hosts.append(f"https://{website_hostname}")
 if primary_domain:
-    for scheme in ("https", "http"):
+    schemes = ("https", "http") if DEBUG else ("https",)
+    for scheme in schemes:
         origin = f"{scheme}://{primary_domain}"
         if origin not in csrf_hosts:
             csrf_hosts.append(origin)
@@ -83,13 +88,16 @@ WSGI_APPLICATION = "request_hub.wsgi.application"
 ASGI_APPLICATION = "request_hub.asgi.application"
 
 DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER", "admin123")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "@Password123")
-DB_HOST = os.getenv("DB_HOST", "requesthub-postgre.postgres.database.azure.com")
+DB_USER = os.getenv("DB_USER", "postgres" if DEBUG else "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres" if DEBUG else "")
+DB_HOST = os.getenv("DB_HOST", "localhost" if DEBUG else "")
 DB_PORT = os.getenv("DB_PORT", "5432")
-DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
+DB_SSLMODE = os.getenv("DB_SSLMODE", "" if DEBUG else "require")
 DB_SSLROOTCERT = os.getenv("DB_SSLROOTCERT")
 DB_CONN_MAX_AGE = int(os.getenv("DB_CONN_MAX_AGE", "60"))
+
+if not DEBUG and (not DB_HOST or not DB_USER or not DB_PASSWORD):
+    raise ImproperlyConfigured("DB_HOST, DB_USER, and DB_PASSWORD are required when DJANGO_DEBUG is False.")
 
 db_options = {}
 if DB_SSLMODE:
@@ -128,7 +136,14 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 media_url_setting = os.getenv("DJANGO_MEDIA_URL", "media/").strip()
 if not media_url_setting.startswith("/"):
@@ -161,6 +176,18 @@ LOGOUT_REDIRECT_URL = "login"
 # capped at 8 hours (28 800 s) as a fallback for browsers that restore tabs.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 28800  # 8 hours in seconds
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.CaseInsensitiveUsernameBackend",
@@ -190,6 +217,11 @@ PHILDATA_GRAPH_SCOPE = [
 PROFILE_COMPLETION_EXEMPT_URLS = [
     "accounts:update",
     "logout",
+    "healthz",
 ]
 
-DEFAULT_USER_PASSWORD = os.getenv("DJANGO_DEFAULT_USER_PASSWORD", "@Password")
+if os.getenv("DJANGO_DEFAULT_USER_PASSWORD"):
+    raise ImproperlyConfigured(
+        "DJANGO_DEFAULT_USER_PASSWORD has been removed. Delete it from .env and platform settings. "
+        "Admin password resets now issue a one-time temporary password."
+    )

@@ -1,9 +1,9 @@
 from django import forms
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
+from django.core.cache import cache
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -21,14 +21,34 @@ from django.db import transaction
 
 from accounts.middleware import FORCE_PASSWORD_CHANGE_SESSION_KEY
 from accounts.models import StoredFile, User
+from hub.mixins import AdminRequiredMixin
 
 from .forms import (
     ProfileForm,
     ROLE_CHOICES,
-    ROLE_DEFAULT_USERNAMES,
     ROLE_LABELS,
     RoleAuthenticationForm,
 )
+
+_PROFILE_PHOTO_PREFIX = "profile_photos/"
+LOGIN_THROTTLE_LIMIT = 5
+LOGIN_THROTTLE_TIMEOUT = 15 * 60
+LOGIN_THROTTLE_MESSAGE = "Too many failed login attempts. Try again later."
+
+
+def _client_ip(request) -> str:
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
+    if forwarded:
+        return forwarded.split(",")[0].strip() or request.META.get("REMOTE_ADDR") or "unknown"
+    return request.META.get("REMOTE_ADDR") or "unknown"
+
+
+def _safe_download_filename(filename: str) -> str:
+    cleaned = (filename or "download").replace("\\", "/").split("/")[-1]
+    for char in ("\r", "\n", '"'):
+        cleaned = cleaned.replace(char, "")
+    cleaned = cleaned.strip() or "download"
+    return cleaned
 
 
 class ProfileUpdateView(LoginRequiredMixin, UpdateView):
@@ -132,14 +152,12 @@ _BACKUP_MODEL_LABELS = [
 ]
 
 
-class BackupDataView(LoginRequiredMixin, View):
+class BackupDataView(AdminRequiredMixin, View):
     """GET → download a JSON backup of all hub data."""
 
-    def get(self, request):
-        if request.user.role != User.Roles.ADMIN:
-            messages.error(request, "Access denied.")
-            return redirect("accounts:update")
+    required_role = User.Roles.ADMIN
 
+    def get(self, request):
         all_objects = []
         for label in _BACKUP_MODEL_LABELS:
             model = apps.get_model(label)
@@ -158,13 +176,14 @@ class BackupDataView(LoginRequiredMixin, View):
             json.dumps(payload, indent=2),
             content_type="application/json",
         )
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Content-Disposition"] = f'attachment; filename="{_safe_download_filename(filename)}"'
         return response
 
 
-class RestoreDataView(LoginRequiredMixin, View):
+class RestoreDataView(AdminRequiredMixin, View):
     """POST → restore hub data from an uploaded JSON backup file."""
 
+    required_role = User.Roles.ADMIN
     _BACK_URL = reverse_lazy("accounts:update")
 
     def _back(self, request, error=None, success=None):
@@ -175,9 +194,6 @@ class RestoreDataView(LoginRequiredMixin, View):
         return redirect(str(self._BACK_URL) + "#backup")
 
     def post(self, request):
-        if request.user.role != User.Roles.ADMIN:
-            return self._back(request, error="Access denied.")
-
         if request.POST.get("confirm_restore") != "1":
             return self._back(request, error="You must tick the confirmation checkbox before restoring.")
 
@@ -211,10 +227,6 @@ class RestoreDataView(LoginRequiredMixin, View):
                 for label in _BACKUP_MODEL_LABELS:
                     for obj in grouped.get(label, []):
                         obj.save()
-                for label, objs in grouped.items():
-                    if label not in _BACKUP_MODEL_LABELS:
-                        for obj in objs:
-                            obj.save()
 
         except Exception as exc:  # noqa: BLE001
             return self._back(request, error=f"Restore failed: {exc}")
@@ -249,9 +261,6 @@ class LandingView(TemplateView):
             }
             for role, _ in ROLE_CHOICES
         ]
-        context["default_username"] = "Admin"
-        context["default_password"] = getattr(settings, "DEFAULT_USER_PASSWORD", "@Password")
-        context["role_default_usernames"] = ROLE_DEFAULT_USERNAMES
         return context
 
 
@@ -261,6 +270,29 @@ class RoleLoginView(LoginView):
     authentication_form = RoleAuthenticationForm
     template_name = "accounts/login.html"
     redirect_authenticated_user = True
+
+    def _throttle_key(self) -> str:
+        username = (self.request.POST.get("username") or "").strip().lower()
+        return f"login-fail:{_client_ip(self.request)}:{username}"
+
+    def _failure_count(self) -> int:
+        try:
+            return int(cache.get(self._throttle_key()) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _is_throttled(self) -> bool:
+        return self._failure_count() >= LOGIN_THROTTLE_LIMIT
+
+    def _record_failure(self) -> int:
+        key = self._throttle_key()
+        if cache.add(key, 1, LOGIN_THROTTLE_TIMEOUT):
+            return 1
+        try:
+            return int(cache.incr(key))
+        except ValueError:
+            cache.set(key, 1, LOGIN_THROTTLE_TIMEOUT)
+            return 1
 
     def confirm_login_allowed(self, user):
         selected_role = self.cleaned_data.get("role")
@@ -272,19 +304,34 @@ class RoleLoginView(LoginView):
         super().confirm_login_allowed(user)
 
     def form_valid(self, form):
+        if self._is_throttled():
+            form.add_error(None, LOGIN_THROTTLE_MESSAGE)
+            return super().form_invalid(form)
+        cache.delete(self._throttle_key())
         response = super().form_valid(form)
         if self.request.user.show_login_banner:
             messages.success(self.request, "Login successful. Redirecting to your dashboard\u2026", extra_tags="login-success")
         return response
 
+    def form_invalid(self, form):
+        if self._is_throttled():
+            form.add_error(None, LOGIN_THROTTLE_MESSAGE)
+        else:
+            self._record_failure()
+            if self._is_throttled():
+                form.add_error(None, LOGIN_THROTTLE_MESSAGE)
+        return super().form_invalid(form)
+
 
 class StoredFileServeView(LoginRequiredMixin, View):
     def get(self, request, name):
+        if not name.startswith(_PROFILE_PHOTO_PREFIX):
+            raise Http404
         stored_file = get_object_or_404(StoredFile, name=name)
         if not stored_file.data:
             raise Http404
         response = HttpResponse(stored_file.data, content_type=stored_file.content_type or "application/octet-stream")
-        filename = stored_file.original_name or name.split("/")[-1]
-        response["Content-Disposition"] = f"inline; filename=\"{filename}\""
+        filename = _safe_download_filename(stored_file.original_name or name.split("/")[-1])
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
         response["Cache-Control"] = "private, max-age=86400"
         return response
