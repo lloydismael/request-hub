@@ -1979,7 +1979,12 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
                     normalizedValue = '0';
                 }
                 cell.dataset.sqrValue = normalizedValue;
-                displayEl.innerHTML = getDisplay(field, normalizedValue, cell);
+                var renderedValue = getDisplay(field, normalizedValue, cell);
+                if (field === 'status') {
+                    displayEl.innerHTML = renderedValue;
+                } else {
+                    displayEl.textContent = renderedValue;
+                }
                 cell.classList.add('sqr-saved');
                 setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
                 var row = cell.closest('tr');
