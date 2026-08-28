@@ -1749,6 +1749,26 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
             if (value === 'for_revision') return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">For Revision</span>';
             return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>';
         }
+
+    function renderStatusBadge(container, statusValue) {
+        if (!container) return;
+        container.textContent = '';
+        var badge = document.createElement('span');
+        badge.className = 'badge';
+
+        if (statusValue === 'reviewed') {
+            badge.className += ' bg-success-subtle text-success border border-success-subtle';
+            badge.textContent = 'Approved';
+        } else if (statusValue === 'for_revision') {
+            badge.className += ' bg-danger-subtle text-danger border border-danger-subtle';
+            badge.textContent = 'For Revision';
+        } else {
+            badge.className += ' bg-warning-subtle text-warning border border-warning-subtle';
+            badge.textContent = 'For Processing';
+        }
+
+        container.appendChild(badge);
+    }
         if (field === 'proposal_status') {
             if (value === 'submitted_pending')  return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted\u2013Pending</span>';
             if (value === 'negotiation_review') return '<span class="badge bg-info-subtle text-info border border-info-subtle">Negotiation</span>';
@@ -1981,7 +2001,7 @@ body:not(.dark-mode) .sqr-approval-choice-modal__dialog code {
                 cell.dataset.sqrValue = normalizedValue;
                 var renderedValue = getDisplay(field, normalizedValue, cell);
                 if (field === 'status') {
-                    displayEl.innerHTML = renderedValue;
+                    renderStatusBadge(displayEl, normalizedValue);
                 } else {
                     displayEl.textContent = renderedValue;
                 }
