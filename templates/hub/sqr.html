@@ -3,7 +3,7 @@
 {% block title %}SQR &middot; Request Hub{% endblock %}
 {% block body_class %}sqr-page{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=15">
+<link rel="stylesheet" href="{% static 'css/liquid-glass-sqr.css' %}?v=14">
 {% endblock %}
 
 {% block content %}
@@ -22,23 +22,23 @@
                             <i class="bi {% if active_sqr_tab == 'reports' %}bi-table{% else %}bi-bar-chart-line-fill{% endif %} me-1"></i>{% if active_sqr_tab == 'reports' %}To SQR Tracker{% else %}To Reports{% endif %}
                         </a>
                         {% if active_sqr_tab != 'reports' %}
-                        <div class="sgr-toolbar-search-wrap" aria-label="SQR quick search">
+                        <div class="sqr-toolbar-search-wrap" aria-label="SQR quick search">
                             <div class="mgmt-search-box sqr-toolbar-search-box" role="search" aria-label="Search SQR records">
                                 <i class="bi bi-search mgmt-search-icon"></i>
                                 <input type="text" id="sqr-header-search" class="mgmt-search-input" placeholder="Search SQR..." autocomplete="off" aria-label="Search SQR records">
-                                <span class="mgmt-result-badge" id="sgr-header-count-badge" role="status" aria-live="polite">0 total</span>
+                                <span class="mgmt-result-badge" id="sqr-header-count-badge" role="status" aria-live="polite">0 total</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary lg-btn lg-btn--ghost" data-bs-toggle="collapse" data-bs-target="#sgr-table-filter-panel" aria-expanded="false" aria-controls="sgr-table-filter-panel" id="sgr-table-filter-toggle">
+                        <button type="button" class="btn btn-sm btn-outline-secondary lg-btn lg-btn--ghost" data-bs-toggle="collapse" data-bs-target="#sqr-table-filter-panel" aria-expanded="false" aria-controls="sqr-table-filter-panel" id="sqr-table-filter-toggle">
                             <i class="bi bi-funnel-fill me-1"></i>Filter
                         </button>
                         {% endif %}
-                        <button type="button" class="btn btn-sm btn-outline-success lg-btn lg-btn--ghost" id="sgr-export-choice-btn">
+                        <button type="button" class="btn btn-sm btn-outline-success lg-btn lg-btn--ghost" id="sqr-export-choice-btn">
                             <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
                         </button>
                     {% endif %}
                     {% if is_admin and sqr_import_form %}
-                        <button type="button" class="btn btn-sm btn-outline-info lg-btn lg-btn--ghost" id="import-sgr-btn">
+                        <button type="button" class="btn btn-sm btn-outline-info lg-btn lg-btn--ghost" id="import-sqr-btn">
                             <i class="bi bi-upload me-1"></i>Import Data
                         </button>
                     {% endif %}
@@ -51,32 +51,32 @@
             </div>
             {% if active_sqr_tab != 'reports' %}
             <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                <div class="sgr-view-toggle" role="group" aria-label="SQR table view selector">
-                    <button type="button" class="btn btn-sm btn-primary" data-sgr-view-button="tracker" aria-pressed="true">
+                <div class="sqr-view-toggle" role="group" aria-label="SQR table view selector">
+                    <button type="button" class="btn btn-sm btn-primary" data-sqr-view-button="tracker" aria-pressed="true">
                         <i class="bi bi-table me-1"></i>SQR Tracker
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-sgr-view-button="esg" aria-pressed="false">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-sqr-view-button="esg" aria-pressed="false">
                         <i class="bi bi-kanban me-1"></i>ESG Performance Tracker <span class="badge rounded-pill text-bg-warning ms-1">Prototype</span>
                     </button>
                 </div>
             </div>
-            <div class="collapse" id="sgr-table-filter-panel">
-                <div class="sgr-filter-toolbar">
+            <div class="collapse" id="sqr-table-filter-panel">
+                <div class="sqr-filter-toolbar">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                         <div>
                             <div class="fw-semibold">SQR Table Filters</div>
-                            <div class="sgr-filter-toolbar__meta">Filter by keyword, workflow stage, delivery health, revenue details, dates, and amount range.</div>
+                            <div class="sqr-filter-toolbar__meta">Filter by keyword, workflow stage, delivery health, revenue details, dates, and amount range.</div>
                         </div>
-                            <div class="sgr-filter-toolbar__meta" id="sgr-filter-results-meta" role="status" aria-live="polite">Showing all rows</div>
+                            <div class="sqr-filter-toolbar__meta" id="sqr-filter-results-meta" role="status" aria-live="polite">Showing all rows</div>
                     </div>
                     <div class="row g-3 align-items-end">
                         <div class="col-12 col-lg-5">
-                            <label for="sgr-table-filter-search" class="form-label">Search table</label>
-                            <input type="search" class="form-control" id="sgr-table-filter-search" placeholder="Search SQR ID, account, project, requester, remarks...">
+                            <label for="sqr-table-filter-search" class="form-label">Search table</label>
+                            <input type="search" class="form-control" id="sqr-table-filter-search" placeholder="Search SQR ID, account, project, requester, remarks...">
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-status" class="form-label">SQR Status</label>
-                            <select class="form-select" id="sgr-table-filter-status">
+                            <label for="sqr-table-filter-status" class="form-label">SQR Status</label>
+                            <select class="form-select" id="sqr-table-filter-status">
                                 <option value="">All statuses</option>
                                 <option value="submitted">For Processing</option>
                                 <option value="for_revision">For Revision</option>
@@ -84,8 +84,8 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-proposal-status" class="form-label">Proposal Status</label>
-                            <select class="form-select" id="sgr-table-filter-proposal-status">
+                            <label for="sqr-table-filter-proposal-status" class="form-label">Proposal Status</label>
+                            <select class="form-select" id="sqr-table-filter-proposal-status">
                                 <option value="">All proposal statuses</option>
                                 <option value="submitted_pending">Submitted</option>
                                 <option value="negotiation_review">On Review</option>
@@ -95,8 +95,8 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-overall-status" class="form-label">Delivery Status</label>
-                            <select class="form-select" id="sgr-table-filter-overall-status">
+                            <label for="sqr-table-filter-overall-status" class="form-label">Delivery Status</label>
+                            <select class="form-select" id="sqr-table-filter-overall-status">
                                 <option value="">All delivery statuses</option>
                                 <option value="planning">Planning</option>
                                 <option value="in_progress">In Progress</option>
@@ -106,13 +106,13 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-1 d-grid">
-                            <button type="button" class="btn btn-outline-light lg-btn lg-btn--ghost" id="sgr-table-filter-reset">Reset</button>
+                            <button type="button" class="btn btn-outline-light lg-btn lg-btn--ghost" id="sqr-table-filter-reset">Reset</button>
                         </div>
                     </div>
                     <div class="row g-3 align-items-end mt-1">
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-health" class="form-label">Health Status</label>
-                            <select class="form-select" id="sgr-table-filter-health">
+                            <label for="sqr-table-filter-health" class="form-label">Health Status</label>
+                            <select class="form-select" id="sqr-table-filter-health">
                                 <option value="">All health statuses</option>
                                 <option value="on_track">On Track</option>
                                 <option value="off_track">Off Track</option>
@@ -122,8 +122,8 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-revenue-source" class="form-label">Billing Type</label>
-                            <select class="form-select" id="sgr-table-filter-revenue-source">
+                            <label for="sqr-table-filter-revenue-source" class="form-label">Billing Type</label>
+                            <select class="form-select" id="sqr-table-filter-revenue-source">
                                 <option value="">All billing types</option>
                                 <option value="internal">Internal</option>
                                 <option value="invoiced">Invoiced</option>
@@ -131,46 +131,46 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-date-from" class="form-label">SQR Date From</label>
-                            <input type="date" class="form-control" id="sgr-table-filter-date-from">
+                            <label for="sqr-table-filter-date-from" class="form-label">SQR Date From</label>
+                            <input type="date" class="form-control" id="sqr-table-filter-date-from">
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-date-to" class="form-label">SQR Date To</label>
-                            <input type="date" class="form-control" id="sgr-table-filter-date-to">
+                            <label for="sqr-table-filter-date-to" class="form-label">SQR Date To</label>
+                            <input type="date" class="form-control" id="sqr-table-filter-date-to">
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-group" class="form-label">Group Name</label>
-                            <input type="search" class="form-control" id="sgr-table-filter-group" placeholder="Filter by group">
+                            <label for="sqr-table-filter-group" class="form-label">Group Name</label>
+                            <input type="search" class="form-control" id="sqr-table-filter-group" placeholder="Filter by group">
                         </div>
                     </div>
                     <div class="row g-3 align-items-end mt-1">
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-amount-min" class="form-label">Min Total Price</label>
-                            <input type="number" min="0" step="0.01" class="form-control" id="sgr-table-filter-amount-min" placeholder="0.00">
+                            <label for="sqr-table-filter-amount-min" class="form-label">Min Total Price</label>
+                            <input type="number" min="0" step="0.01" class="form-control" id="sqr-table-filter-amount-min" placeholder="0.00">
                         </div>
                         <div class="col-12 col-md-6 col-lg-2">
-                            <label for="sgr-table-filter-amount-max" class="form-label">Max Total Price</label>
-                            <input type="number" min="0" step="0.01" class="form-control" id="sgr-table-filter-amount-max" placeholder="0.00">
+                            <label for="sqr-table-filter-amount-max" class="form-label">Max Total Price</label>
+                            <input type="number" min="0" step="0.01" class="form-control" id="sqr-table-filter-amount-max" placeholder="0.00">
                         </div>
                         <div class="col-12 col-lg-8">
                             <div class="d-flex flex-wrap gap-3 pt-lg-4">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="1" id="sgr-table-filter-linked-request">
-                                    <label class="form-check-label" for="sgr-table-filter-linked-request">With linked request only</label>
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-linked-request">
+                                    <label class="form-check-label" for="sqr-table-filter-linked-request">With linked request only</label>
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="1" id="sgr-table-filter-assigned-sse">
-                                    <label class="form-check-label" for="sgr-table-filter-assigned-sse">Assigned SSE only</label>
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-assigned-sse">
+                                    <label class="form-check-label" for="sqr-table-filter-assigned-sse">Assigned SSE only</label>
                                 </div>
                                 {% if is_pm_esg %}
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="1" id="sgr-table-filter-my-assigned"{% if default_my_assigned_filter %} checked{% endif %}>
-                                    <label class="form-check-label" for="sgr-table-filter-my-assigned">My Assigned SQR only</label>
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-my-assigned"{% if default_my_assigned_filter %} checked{% endif %}>
+                                    <label class="form-check-label" for="sqr-table-filter-my-assigned">My Assigned SQR only</label>
                                 </div>
                                 {% endif %}
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="1" id="sgr-table-filter-billed-only">
-                                    <label class="form-check-label" for="sgr-table-filter-billed-only">Billed only</label>
+                                    <input class="form-check-input" type="checkbox" value="1" id="sqr-table-filter-billed-only">
+                                    <label class="form-check-label" for="sqr-table-filter-billed-only">Billed only</label>
                                 </div>
                             </div>
                         </div>
@@ -179,46 +179,46 @@
             </div>
             {% endif %}
             {# Summary badges — clickable filters #}
-            <div class="d-flex flex-wrap gap-2 mt-3" id="sgr-badge-filters"
+            <div class="d-flex flex-wrap gap-2 mt-3" id="sqr-badge-filters"
                  data-default-my-assigned="{% if default_my_assigned_filter %}1{% else %}0{% endif %}"
                  data-current-user-id="{{ sqr_current_user_id|default:'' }}">
-                <button type="button" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sgr-filter="">Total: {{ proposal_counts.total }}</button>
+                <button type="button" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="">Total: {{ proposal_counts.total }}</button>
                 {% if is_pm_esg %}
-                <button type="button" class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sgr-filter="my_assigned" title="Show SQRs assigned to you as Approver">
+                <button type="button" class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="my_assigned" title="Show SQRs assigned to you as Approver">
                     <i class="bi bi-person-check-fill me-1"></i>My Assigned SQR: {{ my_assigned_sqr_count }}
                 </button>
                 {% endif %}
-                <button type="button" class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sgr-filter="status:submitted">
+                <button type="button" class="badge bg-warning-subtle text-warning border border-warning-subtle sqr-badge-filter" data-sqr-filter="status:submitted">
                     <i class="bi bi-hourglass-split me-1"></i>For Processing: {{ proposal_counts.processing }}
                 </button>
-                <button type="button" class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sgr-filter="status:for_revision">
+                <button type="button" class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="status:for_revision">
                     <i class="bi bi-pencil-square me-1"></i>For Revision: {{ proposal_counts.for_revision }}
                 </button>
-                <button type="button" class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sgr-filter="status:reviewed">
+                <button type="button" class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="status:reviewed">
                     <i class="bi bi-check2-circle me-1"></i>Approved: {{ proposal_counts.approved }}
                 </button>
                 {% if proposal_counts.submitted_pending %}
-                <button type="button" class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sgr-filter="proposal_status:submitted_pending">
+                <button type="button" class="badge bg-primary-subtle text-primary border border-primary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:submitted_pending">
                     <i class="bi bi-send me-1"></i>Submitted: {{ proposal_counts.submitted_pending }}
                 </button>
                 {% endif %}
                 {% if proposal_counts.negotiation %}
-                <button type="button" class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sgr-filter="proposal_status:negotiation_review">
+                <button type="button" class="badge bg-info-subtle text-info border border-info-subtle sqr-badge-filter" data-sqr-filter="proposal_status:negotiation_review">
                     <i class="bi bi-chat-dots me-1"></i>On Review: {{ proposal_counts.negotiation }}
                 </button>
                 {% endif %}
                 {% if proposal_counts.closed_won %}
-                <button type="button" class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sgr-filter="proposal_status:closed_won">
+                <button type="button" class="badge bg-success-subtle text-success border border-success-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_won">
                     <i class="bi bi-trophy me-1"></i>Closed-Won: {{ proposal_counts.closed_won }}
                 </button>
                 {% endif %}
                 {% if proposal_counts.closed_lost %}
-                <button type="button" class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sgr-filter="proposal_status:closed_lost">
+                <button type="button" class="badge bg-danger-subtle text-danger border border-danger-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_lost">
                     <i class="bi bi-x-circle me-1"></i>Closed-Lost: {{ proposal_counts.closed_lost }}
                 </button>
                 {% endif %}
                 {% if proposal_counts.closed_canceled %}
-                <button type="button" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sgr-filter="proposal_status:closed_canceled">
+                <button type="button" class="badge bg-secondary-subtle text-secondary border border-secondary-subtle sqr-badge-filter" data-sqr-filter="proposal_status:closed_canceled">
                     <i class="bi bi-slash-circle me-1"></i>Closed-Canceled: {{ proposal_counts.closed_canceled }}
                 </button>
                 {% endif %}
@@ -226,7 +226,7 @@
         </div>
 
         {% if is_pm and active_sqr_tab == 'reports' %}
-            <div id="sgr-reports-root" class="lg-enter" data-lg-delay="40" data-refresh-url="{% url 'hub:sqr-reports-data' %}">
+            <div id="sqr-reports-root" class="lg-enter" data-lg-delay="40" data-refresh-url="{% url 'hub:sqr-reports-data' %}">
                 {% include 'hub/partials/sqr_reports.html' %}
             </div>
 
@@ -405,7 +405,7 @@
                     }
 
                     window.initSqrReportsCharts = function () {
-                        var root = document.getElementById('sgr-reports-root');
+                        var root = document.getElementById('sqr-reports-root');
                         if (!root) return;
 
                         destroyCharts();
@@ -446,7 +446,7 @@
                             ]
                         };
 
-                        makeBar('sgrMonthlyTrendChart', readPayload('sgr-reports-monthly-chart-data'), {
+                        makeBar('sqrMonthlyTrendChart', readPayload('sqr-reports-monthly-chart-data'), {
                             type: 'line',
                             label: 'Submissions',
                             gradient: function (canvas) {
@@ -458,7 +458,7 @@
                             maxBarThickness: 32,
                             hideXGrid: true
                         }, theme, tooltipCfg);
-                        makeBar('sgrRevenueOverviewChart', readPayload('sgr-reports-revenue-chart-data'), {
+                        makeBar('sqrRevenueOverviewChart', readPayload('sqr-reports-revenue-chart-data'), {
                             label: 'Value',
                             indexAxis: 'y',
                             gradient: function (canvas) {
@@ -468,8 +468,8 @@
                             currencyMode: true,
                             maxYTicks: 4
                         }, theme, tooltipCfg);
-                        makeDonut('sgrDealStageChart', readPayload('sgr-reports-deal-chart-data'), false, theme, tooltipCfg, donutPalette);
-                        makeBar('sgrGroupDistributionChart', readPayload('sgr-reports-group-chart-data'), {
+                        makeDonut('sqrDealStageChart', readPayload('sqr-reports-deal-chart-data'), false, theme, tooltipCfg, donutPalette);
+                        makeBar('sqrGroupDistributionChart', readPayload('sqr-reports-group-chart-data'), {
                             label: 'Submissions',
                             indexAxis: 'y',
                             gradient: function (canvas) {
@@ -479,7 +479,7 @@
                             maxBarThickness: 28,
                             maxYTicks: 8
                         }, theme, tooltipCfg);
-                        makeBar('sgrFunnelChart', readPayload('sgr-reports-funnel-chart-data'), {
+                        makeBar('sqrFunnelChart', readPayload('sqr-reports-funnel-chart-data'), {
                             label: 'Count',
                             gradient: function (canvas) {
                                 return buildGradient(canvas, 'rgba(168,85,247,0.86)', 'rgba(59,130,246,0.35)');
@@ -495,7 +495,7 @@
             </script>
             <script>
                 (function () {
-                    var root = document.getElementById('sgr-reports-root');
+                    var root = document.getElementById('sqr-reports-root');
                     if (!root) return;
                     // Only poll while the reports tab is actually active — the
                     // whole point of the interval is live charts on this tab.
@@ -546,101 +546,101 @@
         {# ── Main Tracker Table ────────────────────────────────────────────── #}
         {% comment %}No lg-enter here: animating/compositing a card that wraps
            the whole 43-column table stalls first paint.{% endcomment %}
-        <div class="glass-card p-2 sqr-view-panel" data-sgr-view-panel="tracker">
-            <div class="sgr-tracker-wrap" tabindex="0" role="region" aria-label="SQR tracker table; scroll horizontally for more columns">
-                <table class="sgr-tracker table-hover">
+        <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="tracker">
+            <div class="sqr-tracker-wrap" tabindex="0" role="region" aria-label="SQR tracker table; scroll horizontally for more columns">
+                <table class="sqr-tracker table-hover">
                     <caption class="visually-hidden">Service Quotation Request tracker</caption>
                     <thead>
                         {# Row 1: Stage group headers #}
                         <tr>
                             {# A-E: individual sticky frozen cells (each must be its own <th> for correct sticky anchoring) #}
-                            <th class="sgr-stage-frozen col-sticky-0"></th>
-                            <th class="sgr-stage-frozen col-sticky-1"></th>
-                            <th class="sgr-stage-frozen col-sticky-2"></th>
-                            <th class="sgr-stage-frozen col-sticky-3"></th>
-                            <th class="sgr-stage-frozen col-sticky-4 col-sticky-border"></th>
+                            <th class="sqr-stage-frozen col-sticky-0"></th>
+                            <th class="sqr-stage-frozen col-sticky-1"></th>
+                            <th class="sqr-stage-frozen col-sticky-2"></th>
+                            <th class="sqr-stage-frozen col-sticky-3"></th>
+                            <th class="sqr-stage-frozen col-sticky-4 col-sticky-border"></th>
                             {# F(RQ ID) + G-W = 18 cols, Opportunity Stage #}
-                            <th colspan="18" class="sgr-stage-proposal text-center">
+                            <th colspan="18" class="sqr-stage-proposal text-center">
                                 <i class="bi bi-file-earmark-text me-1"></i>Opportunity Stage
                             </th>
                             {# X-AJ = cols 24-36 = 13 cols, Service Delivery Stage #}
-                            <th colspan="13" class="sgr-stage-delivery text-center">
+                            <th colspan="13" class="sqr-stage-delivery text-center">
                                 <i class="bi bi-tools me-1"></i>Service Delivery Stage
                             </th>
                             {# AK-AQ = cols 37-43 = 7 cols, Billing Stage #}
-                            <th colspan="7" class="sgr-stage-revenue text-center">
+                            <th colspan="7" class="sqr-stage-revenue text-center">
                                 <i class="bi bi-bar-chart-line-fill me-1"></i>Billing Stage
                             </th>
                             {# Action col #}
-                            <th class="sgr-stage-action text-center">Action</th>
+                            <th class="sqr-stage-action text-center">Action</th>
                         </tr>
                         {# Row 2: Column names #}
-                        <tr class="sgr-col-name">
+                        <tr class="sqr-col-name">
                             <th class="col-sticky-0">SQR Date</th>
                             <th class="col-sticky-1">SQR ID</th>
                             <th class="col-sticky-2">Account Name</th>
                             <th class="col-sticky-3">Service Description</th>
                             <th class="col-sticky-4 col-sticky-border">Scope of Services</th>
-                            <th class="sgr-stage-proposal">RQ ID</th>
-                            <th class="sgr-stage-proposal">Group Name</th>
-                            <th class="sgr-stage-proposal">Account Manager</th>
-                            <th class="sgr-stage-proposal">Requester Name</th>
-                            <th class="sgr-stage-proposal">Approver Name</th>
-                            <th class="sgr-stage-proposal">SQR Doc. Ref. Link</th>
-                            <th class="sgr-stage-proposal">SSE Man-hrs</th>
-                            <th class="sgr-stage-proposal">SSE Amount</th>
-                            <th class="sgr-stage-proposal">PM Man-hrs</th>
-                            <th class="sgr-stage-proposal">PM Amount</th>
-                            <th class="sgr-stage-proposal">Maintenance Amt.</th>
-                            <th class="sgr-stage-proposal">Discount Rate</th>
-                            <th class="sgr-stage-proposal">Discount Amount</th>
-                            <th class="sgr-stage-proposal">Total Price</th>
-                            <th class="sgr-stage-proposal">SQR Status</th>
-                            <th class="sgr-stage-proposal">Approval Date</th>
-                            <th class="sgr-stage-proposal">Validity Due Date</th>
-                            <th class="sgr-stage-proposal">Proposal Status</th>
-                            <th class="sgr-stage-delivery">Assigned PM</th>
-                            <th class="sgr-stage-delivery">Assigned SSE</th>
-                            <th class="sgr-stage-delivery">Start Date</th>
-                            <th class="sgr-stage-delivery">Target Finish Date</th>
-                            <th class="sgr-stage-delivery">Overall Status</th>
-                            <th class="sgr-stage-delivery">Health Status</th>
-                            <th class="sgr-stage-delivery">Overall Progress %</th>
-                            <th class="sgr-stage-delivery">Key Updates / Risks / Issues</th>
-                            <th class="sgr-stage-delivery">Actual Finish Date</th>
-                            <th class="sgr-stage-delivery">Completion Signed Date</th>
-                            <th class="sgr-stage-delivery">Completion Warranty End Date</th>
-                            <th class="sgr-stage-delivery">Maintenance Start Date</th>
-                            <th class="sgr-stage-delivery">Maintenance End Date</th>
-                            <th class="sgr-stage-revenue">PO / PNL Date</th>
-                            <th class="sgr-stage-revenue">PO Remarks</th>
-                            <th class="sgr-stage-revenue">Billing Type</th>
-                            <th class="sgr-stage-revenue">Billed Date</th>
-                            <th class="sgr-stage-revenue">Billing Reference</th>
-                            <th class="sgr-stage-revenue">Billing Status</th>
-                            <th class="sgr-stage-revenue">Billing Remarks</th>
+                            <th class="sqr-stage-proposal">RQ ID</th>
+                            <th class="sqr-stage-proposal">Group Name</th>
+                            <th class="sqr-stage-proposal">Account Manager</th>
+                            <th class="sqr-stage-proposal">Requester Name</th>
+                            <th class="sqr-stage-proposal">Approver Name</th>
+                            <th class="sqr-stage-proposal">SQR Doc. Ref. Link</th>
+                            <th class="sqr-stage-proposal">SSE Man-hrs</th>
+                            <th class="sqr-stage-proposal">SSE Amount</th>
+                            <th class="sqr-stage-proposal">PM Man-hrs</th>
+                            <th class="sqr-stage-proposal">PM Amount</th>
+                            <th class="sqr-stage-proposal">Maintenance Amt.</th>
+                            <th class="sqr-stage-proposal">Discount Rate</th>
+                            <th class="sqr-stage-proposal">Discount Amount</th>
+                            <th class="sqr-stage-proposal">Total Price</th>
+                            <th class="sqr-stage-proposal">SQR Status</th>
+                            <th class="sqr-stage-proposal">Approval Date</th>
+                            <th class="sqr-stage-proposal">Validity Due Date</th>
+                            <th class="sqr-stage-proposal">Proposal Status</th>
+                            <th class="sqr-stage-delivery">Assigned PM</th>
+                            <th class="sqr-stage-delivery">Assigned SSE</th>
+                            <th class="sqr-stage-delivery">Start Date</th>
+                            <th class="sqr-stage-delivery">Target Finish Date</th>
+                            <th class="sqr-stage-delivery">Overall Status</th>
+                            <th class="sqr-stage-delivery">Health Status</th>
+                            <th class="sqr-stage-delivery">Overall Progress %</th>
+                            <th class="sqr-stage-delivery">Key Updates / Risks / Issues</th>
+                            <th class="sqr-stage-delivery">Actual Finish Date</th>
+                            <th class="sqr-stage-delivery">Completion Signed Date</th>
+                            <th class="sqr-stage-delivery">Completion Warranty End Date</th>
+                            <th class="sqr-stage-delivery">Maintenance Start Date</th>
+                            <th class="sqr-stage-delivery">Maintenance End Date</th>
+                            <th class="sqr-stage-revenue">PO / PNL Date</th>
+                            <th class="sqr-stage-revenue">PO Remarks</th>
+                            <th class="sqr-stage-revenue">Billing Type</th>
+                            <th class="sqr-stage-revenue">Billed Date</th>
+                            <th class="sqr-stage-revenue">Billing Reference</th>
+                            <th class="sqr-stage-revenue">Billing Status</th>
+                            <th class="sqr-stage-revenue">Billing Remarks</th>
                             <th class="text-center" style="min-width:135px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr class="{% if item.status == 'for_revision' %}sgr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' or item.proposal_status == 'closed_canceled' %}sgr-row--closed-lost{% endif %}"
-                            data-sgr-status="{{ item.status }}"
-                            data-sgr-proposal-status="{{ item.proposal_status|default:'' }}"
-                            data-sgr-ref="{{ item.reference_code|default:'' }}"
-                            data-sgr-customer="{{ item.customer_name|default:''|escapejs }}"
-                            data-sgr-group="{{ item.customer_company|default:''|escapejs }}"
-                            data-sgr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
-                            data-sgr-approver-id="{{ item.pm_esg_reviewer_id|default:'' }}"
-                            data-sgr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
-                            data-sgr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
-                            data-sgr-overall-status="{{ item.overall_status|default:'' }}"
-                            data-sgr-health="{{ item.delivery_health|default:'' }}"
-                            data-sgr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
-                            data-sgr-revenue-source="{{ item.revenue_source|default:'' }}"
-                            data-sgr-revenue-status="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}"
-                            data-sgr-created-at="{{ item.created_at|date:'Y-m-d' }}"
-                            data-sgr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' or item.proposal_status == 'closed_canceled' %}sqr-row--closed-lost{% endif %}"
+                            data-sqr-status="{{ item.status }}"
+                            data-sqr-proposal-status="{{ item.proposal_status|default:'' }}"
+                            data-sqr-ref="{{ item.reference_code|default:'' }}"
+                            data-sqr-customer="{{ item.customer_name|default:''|escapejs }}"
+                            data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
+                            data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
+                            data-sqr-approver-id="{{ item.pm_esg_reviewer_id|default:'' }}"
+                            data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-overall-status="{{ item.overall_status|default:'' }}"
+                            data-sqr-health="{{ item.delivery_health|default:'' }}"
+                            data-sqr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
+                            data-sqr-revenue-source="{{ item.revenue_source|default:'' }}"
+                            data-sqr-revenue-status="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}"
+                            data-sqr-created-at="{{ item.created_at|date:'Y-m-d' }}"
+                            data-sqr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
                             data-engineer-email="{{ item.engineer.email|default:'' }}"
                             data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}"
                             data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
@@ -681,23 +681,23 @@
                                 {% endif %}
                             </td>
                             {# C: Account Name #}
-                            <td class="col-sticky-2{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sgr-pk="{{ item.pk }}" data-sgr-field="customer_name" data-sgr-type="text" data-sgr-value="{{ item.customer_name|escapejs }}"{% endif %}><span class="sgr-display">{{ item.customer_name }}</span></td>
+                            <td class="col-sticky-2{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_name" data-sqr-type="text" data-sqr-value="{{ item.customer_name|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_name }}</span></td>
                             {# D: Service Description #}
-                            <td class="col-sticky-3{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sgr-pk="{{ item.pk }}" data-sgr-field="project_title" data-sgr-type="text" data-sgr-value="{{ item.project_title|escapejs }}"{% endif %}><span class="sgr-display">{{ item.project_title }}</span></td>
+                            <td class="col-sticky-3{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_title" data-sqr-type="text" data-sqr-value="{{ item.project_title|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_title }}</span></td>
                             {# E: Scope of Services #}
-                            <td class="col-sticky-4 col-sticky-border{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sgr-pk="{{ item.pk }}" data-sgr-field="project_details" data-sgr-type="select" data-sgr-value="{{ item.project_details|default:''|escapejs }}"{% endif %}><span class="sgr-display">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</span></td>
+                            <td class="col-sticky-4 col-sticky-border{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="project_details" data-sqr-type="select" data-sqr-value="{{ item.project_details|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.project_details|truncatechars:50|default:"&ndash;" }}</span></td>
                             {# F: RQ ID — supplied by engineer; links to Request; editable inline by PM/Admin #}
-                            <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sgr-pk="{{ item.pk }}" data-sgr-field="linked_request" data-sgr-type="select" data-sgr-value="{{ item.linked_request_id|default:'' }}"{% endif %}>
-                                <span class="sgr-display">
+                            <td class="small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="linked_request" data-sqr-type="select" data-sqr-value="{{ item.linked_request_id|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
                                 {% if item.linked_request %}
                                     <a href="{% url 'hub:request-manage-collab' item.linked_request.pk %}" class="text-info" target="_blank">{{ item.linked_request.reference_code }}</a>
                                 {% else %}&ndash;{% endif %}
                                 </span>
                             </td>
                             {# G: Group Name #}
-                            <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sgr-pk="{{ item.pk }}" data-sgr-field="customer_company" data-sgr-type="select" data-sgr-value="{{ item.customer_company|default:''|escapejs }}"{% endif %}><span class="sgr-display">{{ item.customer_company|default:"&ndash;" }}</span></td>
+                            <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_company" data-sqr-type="select" data-sqr-value="{{ item.customer_company|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_company|default:"&ndash;" }}</span></td>
                             {# H: Account Manager #}
-                            <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sgr-pk="{{ item.pk }}" data-sgr-field="customer_contact" data-sgr-type="text" data-sgr-value="{{ item.customer_contact|default:''|escapejs }}"{% endif %}><span class="sgr-display">{{ item.customer_contact|default:"&ndash;" }}</span></td>
+                            <td class="small{% if is_admin %} sqr-inline-cell{% endif %}"{% if is_admin %} data-sqr-pk="{{ item.pk }}" data-sqr-field="customer_contact" data-sqr-type="text" data-sqr-value="{{ item.customer_contact|default:''|escapejs }}"{% endif %}><span class="sqr-display">{{ item.customer_contact|default:"&ndash;" }}</span></td>
                             {# I: Requester Name #}
                             <td class="small">{% if item.engineer %}{{ item.engineer.get_full_name|default:item.engineer.username }}{% else %}&ndash;{% endif %}</td>
                             {# J: Approver Name #}
@@ -711,24 +711,24 @@
                                 {% endif %}
                             </td>
                             {# L: SSE Man-hrs #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sgr-pk="{{ item.pk }}" data-sgr-field="sse_manhrs" data-sgr-type="number" data-sgr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sgr-display">{% if item.sse_manhrs != None %}{{ item.sse_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="sse_manhrs" data-sqr-type="number" data-sqr-value="{{ item.sse_manhrs|default:'' }}"{% endif %}><span class="sqr-display">{% if item.sse_manhrs != None %}{{ item.sse_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
                             {# M: SSE Amount #}
-                            <td class="text-end small" data-sgr-computed="sse_amount" data-sgr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="sse_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# N: PM Man-hrs #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sgr-pk="{{ item.pk }}" data-sgr-field="pm_manhrs" data-sgr-type="number" data-sgr-value="{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sgr-display">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="pm_manhrs" data-sqr-type="number" data-sqr-value="{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% endif %}"{% endif %}><span class="sqr-display">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:0 }}{% else %}&ndash;{% endif %}</span></td>
                             {# O: PM Amount #}
-                            <td class="text-end small" data-sgr-computed="pm_amount" data-sgr-row-pk="{{ item.pk }}">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="pm_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# P: Maintenance Amt. #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sgr-pk="{{ item.pk }}" data-sgr-field="managed_support_amount" data-sgr-type="number" data-sgr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sgr-display">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_amount" data-sqr-type="number" data-sqr-value="{{ item.managed_support_amount|default:'' }}"{% endif %}><span class="sqr-display">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</span></td>
                             {# Q: Discount Rate #}
-                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sgr-pk="{{ item.pk }}" data-sgr-field="discount_rate" data-sgr-type="number" data-sgr-value="{{ item.discount_rate|default:'0' }}"{% endif %}><span class="sgr-display">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</span></td>
+                            <td class="text-end small{% if is_pm %} sqr-inline-cell{% endif %}"{% if is_pm %} data-sqr-pk="{{ item.pk }}" data-sqr-field="discount_rate" data-sqr-type="number" data-sqr-value="{{ item.discount_rate|default:'0' }}"{% endif %}><span class="sqr-display">{% if item.discount_rate %}{{ item.discount_rate }}%{% else %}&ndash;{% endif %}</span></td>
                             {# R: Discount Amount #}
-                            <td class="text-end small" data-sgr-computed="discount_amount" data-sgr-row-pk="{{ item.pk }}">{% if item.computed_discount_amount %}&#8369;{{ item.computed_discount_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small" data-sqr-computed="discount_amount" data-sqr-row-pk="{{ item.pk }}">{% if item.computed_discount_amount %}&#8369;{{ item.computed_discount_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# S: Total Price #}
-                            <td class="text-end small fw-semibold" data-sgr-computed="total_price" data-sgr-row-pk="{{ item.pk }}">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="text-end small fw-semibold" data-sqr-computed="total_price" data-sqr-row-pk="{{ item.pk }}">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             {# T: SQR Status #}
-                            <td{% if is_pm %} class="sgr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="status" data-sgr-type="select" data-sgr-value="{{ item.status|default:'' }}"{% endif %}>
-                                <span class="sgr-display">
+                            <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="status" data-sqr-type="select" data-sqr-value="{{ item.status|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
                                 {% if item.status == 'submitted' %}
                                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle">For Processing</span>
                                 {% elif item.status == 'for_revision' %}
@@ -741,12 +741,12 @@
                                 </span>
                             </td>
                             {# U: Approval Date #}
-                            <td class="small" data-sgr-computed="reviewed_at">{{ item.reviewed_at|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small" data-sqr-computed="reviewed_at">{{ item.reviewed_at|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# V: Validity Due Date #}
-                            <td class="small" data-sgr-computed="validity_due_date">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
+                            <td class="small" data-sqr-computed="validity_due_date">{{ item.validity_due_date|date:"M d, Y"|default:"&ndash;" }}</td>
                             {# W: Proposal Status #}
-                            <td{% if is_pm %} class="sgr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="proposal_status" data-sgr-type="select" data-sgr-value="{{ item.proposal_status|default:'' }}"{% endif %}>
-                                <span class="sgr-display">
+                            <td{% if is_pm %} class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="proposal_status" data-sqr-type="select" data-sqr-value="{{ item.proposal_status|default:'' }}"{% endif %}>
+                                <span class="sqr-display">
                                 {% if item.proposal_status == 'submitted_pending' %}
                                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Submitted</span>
                                 {% elif item.proposal_status == 'negotiation_review' %}
@@ -765,16 +765,16 @@
                             {# Delivery stage starts with Assigned PM (PO/PNL Date moved to Billing) #}
                             {% if is_pm %}
                             {# Y: Assigned PM — defaults to col J (pm_esg_reviewer) on Approval; editable #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="assigned_pm" data-sgr-type="select" data-sgr-value="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"><span class="sgr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_pm" data-sqr-type="select" data-sqr-value="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"><span class="sqr-display">{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# Z: Assigned SSE — inline-editable by PM/Admin #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="assigned_sse" data-sgr-type="select" data-sgr-value="{{ item.assigned_sse_id|default:'' }}"><span class="sgr-display">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="assigned_sse" data-sqr-type="select" data-sqr-value="{{ item.assigned_sse_id|default:'' }}"><span class="sqr-display">{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% else %}&ndash;{% endif %}</span></td>
                             {# AA: Start Date #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="delivery_start_date" data-sgr-type="date" data-sgr-value="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"><span class="sgr-display">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_start_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_start_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_start_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AG: Target Finish Date #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="delivery_target_finish_date" data-sgr-type="date" data-sgr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sgr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_target_finish_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_target_finish_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AB: Overall Status #}
-                            <td class="sgr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="overall_status" data-sgr-type="select" data-sgr-value="{{ item.overall_status|default:'' }}">
-                                <span class="sgr-display">
+                            <td class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="overall_status" data-sqr-type="select" data-sqr-value="{{ item.overall_status|default:'' }}">
+                                <span class="sqr-display">
                                 {% if item.overall_status == 'on_hold' %}
                                     <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">On Hold</span>
                                 {% elif item.overall_status == 'planning' %}
@@ -791,8 +791,8 @@
                                 </span>
                             </td>
                             {# AC: Health Status #}
-                            <td class="sgr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="delivery_health" data-sgr-type="select" data-sgr-value="{{ item.delivery_health|default:'' }}">
-                                <span class="sgr-display">
+                            <td class="sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_health" data-sqr-type="select" data-sqr-value="{{ item.delivery_health|default:'' }}">
+                                <span class="sqr-display">
                                 {% if item.delivery_health == 'on_track' %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>On Track</span>
                                 {% elif item.delivery_health == 'off_track' %}
@@ -809,8 +809,8 @@
                                 </span>
                             </td>
                             {# AD: Overall Progress % #}
-                            <td class="sgr-inline-cell" style="min-width:120px;" data-sgr-pk="{{ item.pk }}" data-sgr-field="delivery_progress" data-sgr-type="number" data-sgr-value="{{ item.delivery_progress|default:'' }}">
-                                <span class="sgr-display">
+                            <td class="sqr-inline-cell" style="min-width:120px;" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_progress" data-sqr-type="number" data-sqr-value="{{ item.delivery_progress|default:'' }}">
+                                <span class="sqr-display">
                                 {% if item.delivery_progress is not None %}
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
@@ -828,15 +828,15 @@
                                 </span>
                             </td>
                             {# AE: Key Updates/Risks/Issues #}
-                            <td class="cell-wrap small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="key_updates_risks" data-sgr-type="text" data-sgr-value="{{ item.key_updates_risks|default:''|escapejs }}"><span class="sgr-display">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</span></td>
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="key_updates_risks" data-sqr-type="text" data-sqr-value="{{ item.key_updates_risks|default:''|escapejs }}"><span class="sqr-display">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</span></td>
                             {# AF: Actual Finish Date #}
                             <td class="small sqr-inline-cell"
-                                data-sgr-pk="{{ item.pk }}"
-                                data-sgr-field="delivery_actual_finish_date"
-                                data-sgr-type="date"
-                                data-sgr-value="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}"
-                                data-sgr-target-date="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}">
-                                <span class="sgr-display">
+                                data-sqr-pk="{{ item.pk }}"
+                                data-sqr-field="delivery_actual_finish_date"
+                                data-sqr-type="date"
+                                data-sqr-value="{{ item.delivery_actual_finish_date|date:'Y-m-d'|default:'' }}"
+                                data-sqr-target-date="{{ item.delivery_target_finish_date|date:'Y-m-d'|default:'' }}">
+                                <span class="sqr-display">
                                 {% if item.delivery_actual_finish_date %}
                                     {% if item.delivery_target_finish_date and item.delivery_actual_finish_date > item.delivery_target_finish_date %}
                                         <span class="text-danger">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
@@ -849,9 +849,9 @@
                                 </span>
                             </td>
                             {# AH: Completion Signed Date #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="delivery_completion_signed_date" data-sgr-type="date" data-sgr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sgr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="delivery_completion_signed_date" data-sqr-type="date" data-sqr-value="{{ item.delivery_completion_signed_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AI: Completion Warranty End Date — computed: Completion Signed Date + 30 days (Deployment scopes) #}
-                            <td class="small" data-sgr-computed="post_svc_warranty_end_date">
+                            <td class="small" data-sqr-computed="post_svc_warranty_end_date">
                                 {% if item.computed_post_svc_warranty_end_date %}
                                     {{ item.computed_post_svc_warranty_end_date|date:"M d, Y" }}
                                 {% else %}
@@ -859,9 +859,9 @@
                                 {% endif %}
                             </td>
                             {# AJ: Maintenance Start Date — scope + managed support amount required #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="managed_support_start_date" data-sgr-type="date" data-sgr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}" data-sgr-computed="support_start_date"><span class="sgr-display">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="managed_support_start_date" data-sqr-type="date" data-sqr-value="{{ item.managed_support_start_date|date:'Y-m-d'|default:'' }}" data-sqr-computed="support_start_date"><span class="sqr-display">{% if item.computed_support_start_date %}{{ item.computed_support_start_date|date:"M d, Y" }}{% else %}<span class="text-muted fst-italic">NA</span>{% endif %}</span></td>
                             {# AK: Maintenance End Date — computed: Col AJ + 365 days #}
-                            <td class="small" data-sgr-computed="managed_support_end_date">
+                            <td class="small" data-sqr-computed="managed_support_end_date">
                                 {% if item.computed_managed_support_end_date %}
                                     {{ item.computed_managed_support_end_date|date:"M d, Y" }}
                                 {% else %}
@@ -869,18 +869,18 @@
                                 {% endif %}
                             </td>
                             {# AK: PO/PNL Date — first billing-stage column #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="po_pnl_date" data-sgr-type="date" data-sgr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sgr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="po_pnl_date" data-sqr-type="date" data-sqr-value="{{ item.po_pnl_date|date:'Y-m-d'|default:'' }}"><span class="sqr-display">{{ item.po_pnl_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AL: PO Remarks — multi-line text #}
-                            <td class="cell-wrap small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_remarks" data-sgr-type="textarea" data-sgr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sgr-display">{{ item.revenue_remarks|linebreaksbr|default:"&ndash;" }}</span></td>
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_remarks" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_remarks|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_remarks|linebreaksbr|default:"&ndash;" }}</span></td>
                             {# AM: Billing Type — Internal / Invoiced / Unbilled #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_source" data-sgr-type="select" data-sgr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sgr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% elif item.revenue_source == 'unbilled' %}Unbilled{% else %}&ndash;{% endif %}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_source" data-sqr-type="select" data-sqr-value="{{ item.revenue_source|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% elif item.revenue_source == 'unbilled' %}Unbilled{% else %}&ndash;{% endif %}</span></td>
                             {# AN: Billed Date — inline calendar date input #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_date" data-sgr-type="date" data-sgr-value="{{ item.revenue_date|date:'Y-m-d'|default:'' }}" title="Click to edit"><span class="sgr-display">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_date" data-sqr-type="date" data-sqr-value="{{ item.revenue_date|date:'Y-m-d'|default:'' }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_date|date:"M d, Y"|default:"&ndash;" }}</span></td>
                             {# AO: Billing Reference — single-line SI/PNL/CFDM number #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_reference_no" data-sgr-type="text-upper" data-sgr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="{{ item.revenue_reference_no|upper|default:'SI / PNL / CFDM number' }}"><span class="sgr-display">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</span></td>
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_reference_no" data-sqr-type="text-upper" data-sqr-value="{{ item.revenue_reference_no|upper|default:''|escapejs }}" title="{{ item.revenue_reference_no|upper|default:'SI / PNL / CFDM number' }}"><span class="sqr-display">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</span></td>
                             {# AP: Billing Status — Billed / Not Yet Billed #}
-                            <td class="small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_status" data-sgr-type="select" data-sgr-value="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}" title="Click to edit">
-                                <span class="sgr-display">
+                            <td class="small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_status" data-sqr-type="select" data-sqr-value="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}" title="Click to edit">
+                                <span class="sqr-display">
                                 {% if item.revenue_status == 'billed' or not item.revenue_status and item.revenue_date %}
                                     <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
                                 {% elif item.revenue_status == 'not_yet_billed' or not item.revenue_status %}
@@ -891,7 +891,7 @@
                                 </span>
                             </td>
                             {# AQ: Billing Remarks — multi-line text #}
-                            <td class="cell-wrap small sqr-inline-cell" data-sgr-pk="{{ item.pk }}" data-sgr-field="revenue_overview" data-sgr-type="textarea" data-sgr-value="{{ item.revenue_overview|default:''|escapejs }}" title="Click to edit"><span class="sgr-display">{{ item.revenue_overview|linebreaksbr|default:"&ndash;" }}</span></td>
+                            <td class="cell-wrap small sqr-inline-cell" data-sqr-pk="{{ item.pk }}" data-sqr-field="revenue_overview" data-sqr-type="textarea" data-sqr-value="{{ item.revenue_overview|default:''|escapejs }}" title="Click to edit"><span class="sqr-display">{{ item.revenue_overview|linebreaksbr|default:"&ndash;" }}</span></td>
                             {% else %}
                             {# Non-PM/Engineer: read-only view of delivery + revenue columns #}
                             {# Y: Assigned PM #}
@@ -927,14 +927,11 @@
                                         <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
                                             <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
                                                  role="progressbar" style="width:{{ item.delivery_progress }}%"
-                                                 aria-valuenow="{{ item.delivery_progress }}"
-                                                 aria-valuemin="0" aria-valuemax="100"></div>
+                                                 aria-valuenow="{{ item.delivery_progress }}" aria-valuemin="0" aria-valuemax="100"></div>
                                         </div>
                                         <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
                                     </div>
-                                {% else %}
-                                    <span class="text-muted small">&ndash;</span>
-                                {% endif %}
+                                {% else %}<span class="text-muted small">&ndash;</span>{% endif %}
                             </td>
                             {# AE: Key Updates #}
                             <td class="cell-wrap small">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
@@ -946,9 +943,7 @@
                                     {% else %}
                                         <span class="text-success">{{ item.delivery_actual_finish_date|date:"M d, Y" }}</span>
                                     {% endif %}
-                                {% else %}
-                                    <span class="text-muted">&ndash;</span>
-                                {% endif %}
+                                {% else %}<span class="text-muted">&ndash;</span>{% endif %}
                             </td>
                             {# AH: Completion Signed Date #}
                             <td class="small">{{ item.delivery_completion_signed_date|date:"M d, Y"|default:"&ndash;" }}</td>
@@ -970,13 +965,9 @@
                             <td class="small" title="{{ item.revenue_reference_no|upper|default:'' }}">{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
                             {# AP: Billing Status #}
                             <td class="small">
-                                {% if item.revenue_status == 'billed' or not item.revenue_status and item.revenue_date %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
-                                {% elif item.revenue_status == 'not_yet_billed' or not item.revenue_status %}
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Not Yet Billed</span>
-                                {% else %}
-                                    &ndash;
-                                {% endif %}
+                                {% if item.revenue_status == 'billed' or not item.revenue_status and item.revenue_date %}<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle me-1"></i>Billed</span>
+                                {% elif item.revenue_status == 'not_yet_billed' or not item.revenue_status %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock me-1"></i>Not Yet Billed</span>
+                                {% else %}&ndash;{% endif %}
                             </td>
                             {# AQ: Billing Remarks #}
                             <td class="cell-wrap small">{{ item.revenue_overview|linebreaksbr|default:"&ndash;" }}</td>
@@ -988,11 +979,11 @@
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn"
                                                 data-history-url="{% url 'hub:sqr-history' item.pk %}"
-                                                data-sgr-ref="{{ item.reference_code|default:'' }}"
+                                                data-sqr-ref="{{ item.reference_code|default:'' }}"
                                                 title="View History">
                                             <i class="bi bi-clock-history me-1"></i>View History
                                         </button>
-                                        <a class="btn btn-sm btn-outline-danger py-0 px-2 sqr-delete-btn d-none"
+                                        <a class="btn btn-sm btn-outline-danger py-0 px-2"
                                            href="{% url 'hub:sqr-delete' item.pk %}" title="Delete">
                                             <i class="bi bi-trash"></i>
                                         </a>
@@ -1001,7 +992,7 @@
                                     <button type="button"
                                             class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn"
                                             data-history-url="{% url 'hub:sqr-history' item.pk %}"
-                                            data-sgr-ref="{{ item.reference_code|default:'' }}"
+                                            data-sqr-ref="{{ item.reference_code|default:'' }}"
                                             title="View History">
                                         <i class="bi bi-clock-history me-1"></i>View History
                                     </button>
@@ -1052,19 +1043,19 @@
            The <template> is a SIBLING of the panel (not a child): the HTML parser
            drops a hidden div that directly wraps a template containing a table,
            so we keep them separate and hydrate on demand.{% endcomment %}
-        <div class="glass-card p-2 sqr-view-panel" data-sgr-view-panel="esg" hidden></div>
-        <template id="sgr-esg-content">
-            <div class="sgr-esg-note small mb-2">
+        <div class="glass-card p-2 sqr-view-panel" data-sqr-view-panel="esg" hidden></div>
+        <template id="sqr-esg-content">
+            <div class="sqr-esg-note small mb-2">
                 <i class="bi bi-info-circle me-1"></i>
                 Display-only ESG Performance Tracker layout. Dash values represent columns from the reference tracker that are not stored in the current SQR schema.
             </div>
-            <div class="sgr-tracker-wrap" tabindex="0" role="region" aria-label="ESG performance tracker table; scroll horizontally for more columns">
-                <table class="sgr-esg-table table-hover">
+            <div class="sqr-tracker-wrap" tabindex="0" role="region" aria-label="ESG performance tracker table; scroll horizontally for more columns">
+                <table class="sqr-esg-table table-hover">
                     <caption class="visually-hidden">ESG performance tracker</caption>
                     <thead>
                         <tr>
-                            <th class="sgr-esg-sticky-0">Account Name</th>
-                            <th class="sgr-esg-sticky-1 sqr-esg-sticky-border">Service Description</th>
+                            <th class="sqr-esg-sticky-0">Account Name</th>
+                            <th class="sqr-esg-sticky-1 sqr-esg-sticky-border">Service Description</th>
                             <th>Project Name</th>
                             <th>SSE1</th>
                             <th>SSE2</th>
@@ -1098,36 +1089,36 @@
                     </thead>
                     <tbody>
                         {% for item in proposal_submissions %}
-                        <tr class="{% if item.status == 'for_revision' %}sgr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' or item.proposal_status == 'closed_canceled' %}sgr-row--closed-lost{% endif %}"
-                            data-sgr-status="{{ item.status }}"
-                            data-sgr-proposal-status="{{ item.proposal_status|default:'' }}"
-                            data-sgr-ref="{{ item.reference_code|default:'' }}"
-                            data-sgr-customer="{{ item.customer_name|default:''|escapejs }}"
-                            data-sgr-group="{{ item.customer_company|default:''|escapejs }}"
-                            data-sgr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
-                            data-sgr-approver-id="{{ item.pm_esg_reviewer_id|default:'' }}"
-                            data-sgr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
-                            data-sgr-assigned-pm-id="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"
-                            data-sgr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
-                            data-sgr-overall-status="{{ item.overall_status|default:'' }}"
-                            data-sgr-health="{{ item.delivery_health|default:'' }}"
-                            data-sgr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
-                            data-sgr-revenue-source="{{ item.revenue_source|default:'' }}"
-                            data-sgr-revenue-status="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}"
-                            data-sgr-created-at="{{ item.created_at|date:'Y-m-d' }}"
-                            data-sgr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
+                        <tr class="{% if item.status == 'for_revision' %}sqr-row--revision {% endif %}{% if item.proposal_status == 'closed_lost' or item.proposal_status == 'closed_canceled' %}sqr-row--closed-lost{% endif %}"
+                            data-sqr-status="{{ item.status }}"
+                            data-sqr-proposal-status="{{ item.proposal_status|default:'' }}"
+                            data-sqr-ref="{{ item.reference_code|default:'' }}"
+                            data-sqr-customer="{{ item.customer_name|default:''|escapejs }}"
+                            data-sqr-group="{{ item.customer_company|default:''|escapejs }}"
+                            data-sqr-linked-request="{% if item.linked_request_id %}yes{% else %}no{% endif %}"
+                            data-sqr-approver-id="{{ item.pm_esg_reviewer_id|default:'' }}"
+                            data-sqr-assigned-pm="{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username|escapejs }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-assigned-pm-id="{{ item.assigned_pm_id|default:item.pm_esg_reviewer_id|default:'' }}"
+                            data-sqr-assigned-sse="{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username|escapejs }}{% else %}{% endif %}"
+                            data-sqr-overall-status="{{ item.overall_status|default:'' }}"
+                            data-sqr-health="{{ item.delivery_health|default:'' }}"
+                            data-sqr-revenue-declaration="{{ item.revenue_declaration|default:'' }}"
+                            data-sqr-revenue-source="{{ item.revenue_source|default:'' }}"
+                            data-sqr-revenue-status="{% if item.revenue_status %}{{ item.revenue_status }}{% elif item.revenue_date %}billed{% else %}not_yet_billed{% endif %}"
+                            data-sqr-created-at="{{ item.created_at|date:'Y-m-d' }}"
+                            data-sqr-total-price="{% if item.computed_total_price %}{{ item.computed_total_price }}{% elif item.quotation_total_price %}{{ item.quotation_total_price }}{% else %}0{% endif %}"
                             data-engineer-email="{{ item.engineer.email|default:'' }}"
                             data-pm-email="{{ item.pm_esg_reviewer.email|default:'' }}"
                             data-engineer-name="{{ item.engineer.get_full_name|default:item.engineer.username|default:''|escapejs }}">
-                            <td class="sgr-esg-sticky-0 fw-semibold">{{ item.customer_name|default:"&ndash;" }}</td>
-                            <td class="sgr-esg-sticky-1 sqr-esg-sticky-border">{{ item.project_title|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-sticky-0 fw-semibold">{{ item.customer_name|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-sticky-1 sqr-esg-sticky-border">{{ item.project_title|default:"&ndash;" }}</td>
                             <td>{{ item.customer_name|default:"" }}{% if item.customer_name and item.project_title %} - {% endif %}{{ item.project_title|default:"&ndash;" }}</td>
                             <td>{% if item.assigned_sse %}{{ item.assigned_sse.get_full_name|default:item.assigned_sse.username }}{% elif item.engineer %}{{ item.engineer.get_full_name|default:item.engineer.username }}{% else %}&ndash;{% endif %}</td>
                             <td class="text-muted">&ndash;</td>
                             <td class="text-muted">&ndash;</td>
                             <td>{% if item.assigned_pm or item.pm_esg_reviewer or item.delivery_start_date %}Yes{% else %}No{% endif %}</td>
                             <td>{% if item.assigned_pm %}{{ item.assigned_pm.get_full_name|default:item.assigned_pm.username }}{% elif item.pm_esg_reviewer %}{{ item.pm_esg_reviewer.get_full_name|default:item.pm_esg_reviewer.username }}{% else %}&ndash;{% endif %}</td>
-                            <td class="sgr-esg-status">
+                            <td class="sqr-esg-status">
                                 {% if item.overall_status == 'on_hold' %}
                                     <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">ON HOLD</span>
                                 {% elif item.overall_status == 'completed' or item.delivery_health == 'completed' %}
@@ -1149,19 +1140,14 @@
                                 {% if item.delivery_progress is not None %}
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
-                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}"
-                                                 role="progressbar" style="width:{{ item.delivery_progress }}%"
-                                                 aria-valuenow="{{ item.delivery_progress }}"
-                                                 aria-valuemin="0" aria-valuemax="100"></div>
+                                            <div class="progress-bar {% if item.delivery_progress >= 100 %}bg-success{% elif item.delivery_progress >= 60 %}bg-info{% elif item.delivery_progress >= 30 %}bg-warning{% else %}bg-danger{% endif %}" style="width:{{ item.delivery_progress }}%"></div>
                                         </div>
                                         <span class="small fw-semibold">{{ item.delivery_progress }}%</span>
                                     </div>
-                                {% else %}
-                                    <span class="text-muted small">&ndash;</span>
-                                {% endif %}
+                                {% else %}&ndash;{% endif %}
                             </td>
-                            <td class="sgr-esg-wrap">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
-                            <td class="sgr-esg-wrap">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-wrap">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-wrap">{{ item.key_updates_risks|truncatechars:80|default:"&ndash;" }}</td>
                             <td>{% if item.project_details %}{{ item.project_details|truncatechars:35 }}{% else %}&ndash;{% endif %}</td>
                             <td>{% if item.delivery_target_finish_date %}{{ item.delivery_target_finish_date|date:"n/j/y" }}{% else %}&ndash;{% endif %}</td>
                             <td class="text-muted">&ndash;</td>
@@ -1170,19 +1156,18 @@
                             <td class="text-muted text-end">&ndash;</td>
                             <td class="text-end">{% if item.effective_pm_manhrs is not None %}{{ item.effective_pm_manhrs|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
                             <td class="text-muted text-end">&ndash;</td>
-                            <td class="sgr-esg-money">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                            <td class="sgr-esg-money">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                            <td class="sgr-esg-money">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                            <td class="sgr-esg-money fw-semibold">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money">{% if item.effective_pm_amount %}&#8369;{{ item.effective_pm_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money">{% if item.sse_amount %}&#8369;{{ item.sse_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money">{% if item.managed_support_amount %}&#8369;{{ item.managed_support_amount|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                            <td class="sqr-esg-money fw-semibold">{% if item.computed_total_price %}&#8369;{{ item.computed_total_price|floatformat:2|intcomma }}{% elif item.quotation_total_price %}&#8369;{{ item.quotation_total_price|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
                             <td>{% if item.revenue_date or item.revenue_declaration == 'declared' %}Yes{% else %}No{% endif %}</td>
                             <td>{% if item.revenue_source == 'internal' %}Internal{% elif item.revenue_source == 'invoiced' %}Invoiced{% else %}&ndash;{% endif %}</td>
                             <td>{{ item.revenue_reference_no|upper|default:"&ndash;" }}</td>
                             <td>{{ item.revenue_date|date:"j-M-y"|default:"&ndash;" }}</td>
-                            <td class="sgr-esg-wrap">{{ item.revenue_remarks|default:item.remarks|truncatechars:80|default:"&ndash;" }}</td>
+                            <td class="sqr-esg-wrap">{{ item.revenue_remarks|default:item.remarks|truncatechars:80|default:"&ndash;" }}</td>
                             <td class="text-center" style="min-width:135px;">
                                 {% if is_pm %}
-                                    <button type="button" class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn" data-history-url="{% url 'hub:sqr-history' item.pk %}" data-sgr-ref="{{ item.reference_code|default:'' }}"
-                                            title="View History">
+                                    <button type="button" class="btn btn-sm btn-outline-info py-0 px-2 sqr-history-btn" data-history-url="{% url 'hub:sqr-history' item.pk %}" data-sqr-ref="{{ item.reference_code|default:'' }}" title="View History">
                                         <i class="bi bi-clock-history me-1"></i>History
                                     </button>
                                 {% else %}
@@ -1207,75 +1192,77 @@
 </div>
 
 {% if is_pm %}
-<div class="requestor-modal" id="sgr-history-modal" aria-hidden="true">
-    <div class="requestor-modal__backdrop" id="sgr-history-backdrop"></div>
-    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sgr-history-title" style="max-width: 980px;">
+<div class="requestor-modal" id="sqr-history-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="sqr-history-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-history-title" style="max-width: 980px;">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-1" id="sgr-history-title"><i class="bi bi-clock-history me-2"></i>SQR History</h2>
-            <div class="small text-muted" id="sgr-history-subtitle">Loading history…</div>
-            <button type="button" class="btn-close" id="sgr-history-close" aria-label="Close"></button>
+            <div>
+                <h2 class="h5 mb-1" id="sqr-history-title"><i class="bi bi-clock-history me-2"></i>SQR History</h2>
+                <div class="small text-muted" id="sqr-history-subtitle">Loading history…</div>
+            </div>
+            <button type="button" class="btn-close" id="sqr-history-close" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
             <div class="alert alert-warning small mb-3" role="alert">
                 <i class="bi bi-exclamation-triangle me-1"></i>
                 Restore reverts only the selected recorded field snapshot. Emails, Teams chats, and other external side effects cannot be undone.
             </div>
-            <div class="alert alert-danger small d-none" id="sgr-history-error" role="alert"></div>
-            <div id="sgr-history-loading" class="text-center text-muted py-4">
+            <div class="alert alert-danger small d-none" id="sqr-history-error" role="alert"></div>
+            <div id="sqr-history-loading" class="text-center text-muted py-4">
                 <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading history…
             </div>
-            <div id="sgr-history-empty" class="text-center text-muted py-5 d-none">
+            <div id="sqr-history-empty" class="text-center text-muted py-5 d-none">
                 <i class="bi bi-inbox fs-2 d-block mb-2"></i>No history recorded for this SQR yet.
             </div>
-            <div id="sgr-history-list" class="d-flex flex-column gap-3"></div>
+            <div id="sqr-history-list" class="d-flex flex-column gap-3"></div>
         </div>
     </div>
 </div>
 {% endif %}
 
-<div id="sgr-undo-toast" class="position-fixed bottom-0 end-0 m-4 p-3 rounded-4 shadow-lg border bg-body text-body d-none" role="status" aria-live="polite" style="z-index:1085; max-width:380px;">
+<div id="sqr-undo-toast" class="position-fixed bottom-0 end-0 m-4 p-3 rounded-4 shadow-lg border bg-body text-body d-none" role="status" aria-live="polite" style="z-index:1085; max-width:380px;">
     <div class="d-flex align-items-start gap-3">
         <div class="text-primary fs-5"><i class="bi bi-shield-check"></i></div>
         <div class="flex-grow-1">
-            <div class="fw-semibold" data-sgr-undo-message>Saved.</div>
-            <div class="small text-warning-emphasis mt-1 d-none" data-sgr-undo-warning></div>
+            <div class="fw-semibold" data-sqr-undo-message>Saved.</div>
+            <div class="small text-warning-emphasis mt-1 d-none" data-sqr-undo-warning></div>
             <div class="d-flex gap-2 mt-3">
-                <button type="button" class="btn btn-sm btn-primary" data-sgr-undo-action>
+                <button type="button" class="btn btn-sm btn-primary" data-sqr-undo-action>
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-sgr-undo-close>Dismiss</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-sqr-undo-close>Dismiss</button>
             </div>
         </div>
     </div>
 </div>
 
 {% if is_pm %}
-<div class="sgr-approval-choice-modal" id="sgr-export-choice-modal" aria-hidden="true">
-    <div class="sgr-approval-choice-modal__backdrop" data-sgr-export-close="true"></div>
-    <div class="sgr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sgr-export-choice-title">
-        <span class="sgr-approval-choice-modal__eyebrow"><i class="bi bi-file-earmark-excel"></i> Export Excel</span>
-        <h3 class="h4 mt-3 mb-2" id="sgr-export-choice-title">What report do you want to export?</h3>
+<div class="sqr-approval-choice-modal" id="sqr-export-choice-modal" aria-hidden="true">
+    <div class="sqr-approval-choice-modal__backdrop" data-sqr-export-close="true"></div>
+    <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-export-choice-title">
+        <span class="sqr-approval-choice-modal__eyebrow"><i class="bi bi-file-earmark-excel"></i> Export Excel</span>
+        <h3 class="h4 mt-3 mb-2" id="sqr-export-choice-title">What report do you want to export?</h3>
         <p class="text-muted mb-0">Choose the Excel report format to download.</p>
-        <div class="sgr-approval-choice-modal__actions">
-            <button type="button" class="btn sqr-approval-option sqr-approval-option--draft" id="sgr-export-tracker-btn">
-                <span class="sgr-approval-option__icon"><i class="bi bi-clipboard-data"></i></span>
+        <div class="sqr-approval-choice-modal__actions">
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--draft" id="sqr-export-tracker-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-clipboard-data"></i></span>
                 <span>
-                    <span class="sgr-approval-option__label">SQR Tracker</span>
-                    <span class="sgr-approval-option__hint">Download the standard SQR tracker Excel file.</span>
+                    <span class="sqr-approval-option__label">SQR Tracker</span>
+                    <span class="sqr-approval-option__hint">Download the standard SQR tracker Excel file.</span>
                 </span>
-                <span class="sgr-approval-option__arrow"><i class="bi bi-download"></i></span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-download"></i></span>
             </button>
-            <button type="button" class="btn sqr-approval-option sqr-approval-option--eml" id="sgr-export-esg-btn">
-                <span class="sgr-approval-option__icon"><i class="bi bi-graph-up-arrow"></i></span>
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--eml" id="sqr-export-esg-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-graph-up-arrow"></i></span>
                 <span>
-                    <span class="sgr-approval-option__label">ESG Performance Tracker</span>
-                    <span class="sgr-approval-option__hint">Download the ESG performance tracker Excel file.</span>
+                    <span class="sqr-approval-option__label">ESG Performance Tracker</span>
+                    <span class="sqr-approval-option__hint">Download the ESG performance tracker Excel file.</span>
                 </span>
-                <span class="sgr-approval-option__arrow"><i class="bi bi-download"></i></span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-download"></i></span>
             </button>
         </div>
-        <div class="sgr-approval-choice-modal__footer">
-            <button type="button" class="btn btn-outline-secondary" id="sgr-export-cancel-btn">
+        <div class="sqr-approval-choice-modal__footer">
+            <button type="button" class="btn btn-outline-secondary" id="sqr-export-cancel-btn">
                 Cancel
             </button>
         </div>
@@ -1283,32 +1270,32 @@
 </div>
 {% endif %}
 
-<div class="sgr-approval-choice-modal" id="sgr-approval-choice-modal" aria-hidden="true">
-    <div class="sgr-approval-choice-modal__backdrop" data-sgr-approval-close="true"></div>
-    <div class="sgr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sgr-approval-choice-title">
-        <span class="sgr-approval-choice-modal__eyebrow"><i class="bi bi-check2-circle"></i> SQR Approved</span>
-        <h3 class="h4 mt-3 mb-2" id="sgr-approval-choice-title">Choose how to prepare the approval advisory</h3>
+<div class="sqr-approval-choice-modal" id="sqr-approval-choice-modal" aria-hidden="true">
+    <div class="sqr-approval-choice-modal__backdrop" data-sqr-approval-close="true"></div>
+    <div class="sqr-approval-choice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-approval-choice-title">
+        <span class="sqr-approval-choice-modal__eyebrow"><i class="bi bi-check2-circle"></i> SQR Approved</span>
+        <h3 class="h4 mt-3 mb-2" id="sqr-approval-choice-title">Choose how to prepare the approval advisory</h3>
         <p class="text-muted mb-0">Select the fastest editable draft or download the polished Outlook <code>.eml</code> template with Phil-Data branding and table layout.</p>
-        <div class="sgr-approval-choice-modal__actions">
-            <button type="button" class="btn sqr-approval-option sqr-approval-option--draft" id="sgr-approval-open-draft-btn">
-                <span class="sgr-approval-option__icon"><i class="bi bi-envelope-paper"></i></span>
+        <div class="sqr-approval-choice-modal__actions">
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--draft" id="sqr-approval-open-draft-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-envelope-paper"></i></span>
                 <span>
-                    <span class="sgr-approval-option__label">Use ready draft email body</span>
-                    <span class="sgr-approval-option__hint">Opens your mail app with a clean, table-style plain-text quotation ready to edit.</span>
+                    <span class="sqr-approval-option__label">Use ready draft email body</span>
+                    <span class="sqr-approval-option__hint">Opens your mail app with a clean, table-style plain-text quotation ready to edit.</span>
                 </span>
-                <span class="sgr-approval-option__arrow"><i class="bi bi-arrow-right-circle"></i></span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-arrow-right-circle"></i></span>
             </button>
-            <button type="button" class="btn sqr-approval-option sqr-approval-option--eml" id="sgr-approval-download-eml-btn">
-                <span class="sgr-approval-option__icon"><i class="bi bi-file-earmark-richtext"></i></span>
+            <button type="button" class="btn sqr-approval-option sqr-approval-option--eml" id="sqr-approval-download-eml-btn">
+                <span class="sqr-approval-option__icon"><i class="bi bi-file-earmark-richtext"></i></span>
                 <span>
-                    <span class="sgr-approval-option__label">Use formatted .eml template</span>
-                    <span class="sgr-approval-option__hint">Downloads the Outlook-ready branded template with logo, table, totals, and validity details.</span>
+                    <span class="sqr-approval-option__label">Use formatted .eml template</span>
+                    <span class="sqr-approval-option__hint">Downloads the Outlook-ready branded template with logo, table, totals, and validity details.</span>
                 </span>
-                <span class="sgr-approval-option__arrow"><i class="bi bi-download"></i></span>
+                <span class="sqr-approval-option__arrow"><i class="bi bi-download"></i></span>
             </button>
         </div>
-        <div class="sgr-approval-choice-modal__footer">
-            <button type="button" class="btn btn-outline-secondary" id="sgr-approval-cancel-btn">
+        <div class="sqr-approval-choice-modal__footer">
+            <button type="button" class="btn btn-outline-secondary" id="sqr-approval-cancel-btn">
                 Cancel
             </button>
         </div>
@@ -1319,11 +1306,11 @@
 <script>
 (function () {
     'use strict';
-    var exportBtn = document.getElementById('sgr-export-choice-btn');
-    var exportModal = document.getElementById('sgr-export-choice-modal');
-    var sqrTrackerBtn = document.getElementById('sgr-export-tracker-btn');
-    var esgTrackerBtn = document.getElementById('sgr-export-esg-btn');
-    var cancelBtn = document.getElementById('sgr-export-cancel-btn');
+    var exportBtn = document.getElementById('sqr-export-choice-btn');
+    var exportModal = document.getElementById('sqr-export-choice-modal');
+    var sqrTrackerBtn = document.getElementById('sqr-export-tracker-btn');
+    var esgTrackerBtn = document.getElementById('sqr-export-esg-btn');
+    var cancelBtn = document.getElementById('sqr-export-cancel-btn');
     var exportBaseUrl = '{% url "hub:sqr-export" %}';
 
     function setExportChoiceVisibility(isVisible) {
@@ -1347,12 +1334,12 @@
 
     if (exportBtn) exportBtn.addEventListener('click', openExportChoiceModal);
     if (cancelBtn) cancelBtn.addEventListener('click', closeExportChoiceModal);
-    if (sqrTrackerBtn) sqrTrackerBtn.addEventListener('click', function () { downloadReport('sgr'); });
+    if (sqrTrackerBtn) sqrTrackerBtn.addEventListener('click', function () { downloadReport('sqr'); });
     if (esgTrackerBtn) esgTrackerBtn.addEventListener('click', function () { downloadReport('esg'); });
 
     if (exportModal) {
         exportModal.addEventListener('click', function (event) {
-            if (event.target && event.target.getAttribute('data-sgr-export-close') === 'true') {
+            if (event.target && event.target.getAttribute('data-sqr-export-close') === 'true') {
                 closeExportChoiceModal();
             }
         });
@@ -1368,15 +1355,15 @@
 {% endif %}
 
 {% if is_admin and sqr_import_form %}
-<div class="requestor-modal" id="import-sgr-modal" aria-hidden="true">
-    <div class="requestor-modal__backdrop" id="import-sgr-backdrop"></div>
-    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="import-sgr-title" style="max-width: 560px;">
+<div class="requestor-modal" id="import-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="import-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="import-sqr-title" style="max-width: 560px;">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="import-sgr-title"><i class="bi bi-upload me-2"></i>Import SQR Data</h2>
-            <button type="button" class="btn-close" id="close-import-sgr-btn" aria-label="Close"></button>
+            <h2 class="h5 mb-0" id="import-sqr-title"><i class="bi bi-upload me-2"></i>Import SQR Data</h2>
+            <button type="button" class="btn-close" id="close-import-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form method="post" action="{% url 'hub:sqr-import' %}" enctype="multipart/form-data" id="import-sgr-form">
+            <form method="post" action="{% url 'hub:sqr-import' %}" enctype="multipart/form-data" id="import-sqr-form">
                 {% csrf_token %}
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="{{ sqr_import_form.import_file.id_for_label }}">{{ sqr_import_form.import_file.label }}</label>
@@ -1390,32 +1377,32 @@
                     This import will <strong>replace all current rows</strong> in the SQR table using the uploaded Excel file.
                 </div>
                 <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" value="1" id="import-sgr-confirm" name="confirm_overwrite">
-                    <label class="form-check-label small" for="import-sgr-confirm">
+                    <input class="form-check-input" type="checkbox" value="1" id="import-sqr-confirm" name="confirm_overwrite">
+                    <label class="form-check-label small" for="import-sqr-confirm">
                         I confirm that I want to proceed and overwrite the current SQR table.
                     </label>
                 </div>
-                <div class="alert alert-danger small d-none" id="import-sgr-error" role="alert"></div>
-                <div class="d-none" id="import-sgr-progress-wrap">
+                <div class="alert alert-danger small d-none" id="import-sqr-error" role="alert"></div>
+                <div class="d-none" id="import-sqr-progress-wrap">
                     <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
-                        <span id="import-sgr-progress-text">Preparing import…</span>
-                        <span id="import-sgr-progress-percent">0%</span>
+                        <span id="import-sqr-progress-text">Preparing import…</span>
+                        <span id="import-sqr-progress-percent">0%</span>
                     </div>
                     <div class="progress" style="height: 18px;">
                         <div
                             class="progress-bar progress-bar-striped progress-bar-animated bg-info"
-                            id="import-sgr-progress-bar"
+                            id="import-sqr-progress-bar"
                             role="progressbar"
                             style="width: 0%"
                             aria-valuenow="0"
                             aria-valuemin="0"
                             aria-valuemax="100"></div>
                     </div>
-                            <div class="small text-muted mt-2" id="import-sgr-progress-count">Rows added: 0</div>
+                            <div class="small text-muted mt-2" id="import-sqr-progress-count">Rows added: 0</div>
                 </div>
                 <div class="d-flex gap-2 justify-content-end mt-4">
-                    <button type="button" class="btn btn-outline-secondary" id="cancel-import-sgr-btn">Cancel</button>
-                    <button class="btn btn-info" type="submit" id="submit-import-sgr-btn">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-import-sqr-btn">Cancel</button>
+                    <button class="btn btn-info" type="submit" id="submit-import-sqr-btn">
                         <i class="bi bi-cloud-arrow-up me-1"></i>Import
                     </button>
                 </div>
@@ -1426,10 +1413,10 @@
 
 <script>
     (function () {
-    var approvalChoiceModal = document.getElementById('sgr-approval-choice-modal');
-    var approvalDraftBtn = document.getElementById('sgr-approval-open-draft-btn');
-    var approvalEmlBtn = document.getElementById('sgr-approval-download-eml-btn');
-    var approvalCancelBtn = document.getElementById('sgr-approval-cancel-btn');
+    var approvalChoiceModal = document.getElementById('sqr-approval-choice-modal');
+    var approvalDraftBtn = document.getElementById('sqr-approval-open-draft-btn');
+    var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
+    var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
     var approvalChoiceState = { draftUrl: '', emlUrl: '' };
     var pendingApprovalChange = null;
 
@@ -1465,7 +1452,7 @@
 
     if (approvalChoiceModal) {
         approvalChoiceModal.addEventListener('click', function (event) {
-            if (event.target && event.target.getAttribute('data-sgr-approval-close') === 'true') {
+            if (event.target && event.target.getAttribute('data-sqr-approval-close') === 'true') {
                 closeApprovalChoiceModal();
             }
         });
@@ -1529,21 +1516,21 @@
         }
     });
 
-        var modal = document.getElementById('import-sgr-modal');
+        var modal = document.getElementById('import-sqr-modal');
         if (!modal) return;
-        var openBtn = document.getElementById('import-sgr-btn');
-        var closeBtn = document.getElementById('close-import-sgr-btn');
-        var cancelBtn = document.getElementById('cancel-import-sgr-btn');
-        var backdrop = document.getElementById('import-sgr-backdrop');
-        var form = document.getElementById('import-sgr-form');
-        var submitBtn = document.getElementById('submit-import-sgr-btn');
-        var confirmInput = document.getElementById('import-sgr-confirm');
-        var errorBox = document.getElementById('import-sgr-error');
-        var progressWrap = document.getElementById('import-sgr-progress-wrap');
-        var progressBar = document.getElementById('import-sgr-progress-bar');
-        var progressText = document.getElementById('import-sgr-progress-text');
-        var progressPercent = document.getElementById('import-sgr-progress-percent');
-        var progressCount = document.getElementById('import-sgr-progress-count');
+        var openBtn = document.getElementById('import-sqr-btn');
+        var closeBtn = document.getElementById('close-import-sqr-btn');
+        var cancelBtn = document.getElementById('cancel-import-sqr-btn');
+        var backdrop = document.getElementById('import-sqr-backdrop');
+        var form = document.getElementById('import-sqr-form');
+        var submitBtn = document.getElementById('submit-import-sqr-btn');
+        var confirmInput = document.getElementById('import-sqr-confirm');
+        var errorBox = document.getElementById('import-sqr-error');
+        var progressWrap = document.getElementById('import-sqr-progress-wrap');
+        var progressBar = document.getElementById('import-sqr-progress-bar');
+        var progressText = document.getElementById('import-sqr-progress-text');
+        var progressPercent = document.getElementById('import-sqr-progress-percent');
+        var progressCount = document.getElementById('import-sqr-progress-count');
         var pollingTimer = null;
 
         function getCsrfToken() {
@@ -1727,15 +1714,15 @@
 (function () {
     'use strict';
     var CSRF = '{{ csrf_token }}';
-    var modal = document.getElementById('sgr-history-modal');
+    var modal = document.getElementById('sqr-history-modal');
     if (!modal) return;
-    var backdrop = document.getElementById('sgr-history-backdrop');
-    var closeBtn = document.getElementById('sgr-history-close');
-    var subtitle = document.getElementById('sgr-history-subtitle');
-    var errorBox = document.getElementById('sgr-history-error');
-    var loading = document.getElementById('sgr-history-loading');
-    var empty = document.getElementById('sgr-history-empty');
-    var list = document.getElementById('sgr-history-list');
+    var backdrop = document.getElementById('sqr-history-backdrop');
+    var closeBtn = document.getElementById('sqr-history-close');
+    var subtitle = document.getElementById('sqr-history-subtitle');
+    var errorBox = document.getElementById('sqr-history-error');
+    var loading = document.getElementById('sqr-history-loading');
+    var empty = document.getElementById('sqr-history-empty');
+    var list = document.getElementById('sqr-history-list');
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -1801,7 +1788,7 @@
 
     function loadHistory(button) {
         var url = button.dataset.historyUrl;
-        var ref = button.dataset.sgrRef || 'SQR';
+        var ref = button.dataset.sqrRef || 'SQR';
         if (subtitle) subtitle.textContent = ref;
         setError('');
         list.innerHTML = '';
@@ -1824,13 +1811,13 @@
             });
     }
 
-    document.querySelectorAll('.sgr-history-btn').forEach(function (button) {
+    document.querySelectorAll('.sqr-history-btn').forEach(function (button) {
         button.addEventListener('click', function () { loadHistory(button); });
     });
 
     if (list) {
         list.addEventListener('click', function (event) {
-            var button = event.target.closest('.sgr-history-restore-btn');
+            var button = event.target.closest('.sqr-history-restore-btn');
             if (!button) return;
             if (!confirm('Restore this recorded change?')) return;
             button.disabled = true;
@@ -1866,15 +1853,15 @@
 
 {# ── New SQR Submission Modal ──────────────────────────────────────────── #}
 {% if can_create_sqr %}
-<div class="requestor-modal" id="create-sgr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
-    <div class="requestor-modal__backdrop" id="create-sgr-backdrop"></div>
-    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-sgr-title">
+<div class="requestor-modal" id="create-sqr-modal" aria-hidden="true" data-open-on-load="{% if sqr_form_has_errors %}true{% else %}false{% endif %}">
+    <div class="requestor-modal__backdrop" id="create-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="create-sqr-title">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="create-sgr-title"><i class="bi bi-plus-circle me-2"></i>New SQR Submission</h2>
-            <button type="button" class="btn-close" id="close-sgr-btn" aria-label="Close"></button>
+            <h2 class="h5 mb-0" id="create-sqr-title"><i class="bi bi-plus-circle me-2"></i>New SQR Submission</h2>
+            <button type="button" class="btn-close" id="close-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form method="post" id="create-sgr-form">
+            <form method="post" id="create-sqr-form">
                 {% csrf_token %}
                 {% if sqr_form.errors %}
                     <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-2"></i>Please resolve the highlighted fields before submitting.</div>
@@ -1884,7 +1871,7 @@
                         <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.name == 'customer_name' %}
-                            <datalist id="sgr-account-name-options">
+                            <datalist id="sqr-account-name-options">
                                 {% for account_name in sqr_form.account_name_options %}
                                     <option value="{{ account_name }}"></option>
                                 {% endfor %}
@@ -1897,8 +1884,8 @@
                     </div>
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end mt-4">
-                    <button type="button" class="btn btn-outline-secondary" id="cancel-sgr-btn">Cancel</button>
-                    <button class="btn btn-primary" type="submit" id="submit-sgr-btn">
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-sqr-btn">Cancel</button>
+                    <button class="btn btn-primary" type="submit" id="submit-sqr-btn">
                         <i class="bi bi-send me-1"></i>Submit
                     </button>
                 </div>
@@ -1909,14 +1896,14 @@
 
 <script>
     (function () {
-        const modal = document.getElementById("create-sgr-modal");
+        const modal = document.getElementById("create-sqr-modal");
         if (!modal) return;
-        const openBtn = document.getElementById("new-sgr-btn");
-        const closeBtn = document.getElementById("close-sgr-btn");
-        const cancelBtn = document.getElementById("cancel-sgr-btn");
-        const backdrop = document.getElementById("create-sgr-backdrop");
-        const form = document.getElementById("create-sgr-form");
-        const submitBtn = document.getElementById("submit-sgr-btn");
+        const openBtn = document.getElementById("new-sqr-btn");
+        const closeBtn = document.getElementById("close-sqr-btn");
+        const cancelBtn = document.getElementById("cancel-sqr-btn");
+        const backdrop = document.getElementById("create-sqr-backdrop");
+        const form = document.getElementById("create-sqr-form");
+        const submitBtn = document.getElementById("submit-sqr-btn");
         const openModal = () => {
             modal.classList.add("requestor-modal--visible");
             modal.setAttribute("aria-hidden", "false");
@@ -2083,15 +2070,15 @@
 
 {# ── Edit SQR Submission Modal ────────────────────────────────────────── #}
 {% if sqr_edit_form %}
-<div class="requestor-modal" id="edit-sgr-modal" aria-hidden="true">
-    <div class="requestor-modal__backdrop" id="edit-sgr-backdrop"></div>
-    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="edit-sgr-title">
+<div class="requestor-modal" id="edit-sqr-modal" aria-hidden="true">
+    <div class="requestor-modal__backdrop" id="edit-sqr-backdrop"></div>
+    <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="edit-sqr-title">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="edit-sgr-title"><i class="bi bi-pencil-square me-2"></i>Edit SQR Submission</h2>
-            <button type="button" class="btn-close" id="close-edit-sgr-btn" aria-label="Close"></button>
+            <h2 class="h5 mb-0" id="edit-sqr-title"><i class="bi bi-pencil-square me-2"></i>Edit SQR Submission</h2>
+            <button type="button" class="btn-close" id="close-edit-sqr-btn" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
-            <form id="edit-sgr-form" method="post" action="" novalidate>
+            <form id="edit-sqr-form" method="post" action="" novalidate>
                 {% csrf_token %}
                 {% for field in sqr_edit_form %}
                     <div class="mb-3">
@@ -2108,7 +2095,7 @@
                     {% endif %}
                 {% endfor %}
                 <div class="d-flex gap-2 justify-content-end mt-4">
-                    <button type="button" class="btn btn-outline-secondary" id="cancel-edit-sgr-btn">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-edit-sqr-btn">Cancel</button>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save me-1"></i>Save Changes
                     </button>
@@ -2121,12 +2108,12 @@
 <script>
     // ── Edit SQR Modal ────────────────────────────────────────────────────
     (function () {
-        var editModal  = document.getElementById('edit-sgr-modal');
+        var editModal  = document.getElementById('edit-sqr-modal');
         if (!editModal) return;
-        var editForm   =
-        var backdrop   = document.getElementById('edit-sgr-backdrop');
-        var closeBtn   = document.getElementById('close-edit-sgr-btn');
-        var cancelBtn  = document.getElementById('cancel-edit-sgr-btn');
+        var editForm   = document.getElementById('edit-sqr-form');
+        var backdrop   = document.getElementById('edit-sqr-backdrop');
+        var closeBtn   = document.getElementById('close-edit-sqr-btn');
+        var cancelBtn  = document.getElementById('cancel-edit-sqr-btn');
         var activeRow  = null;
 
         function setVal(id, val) {
@@ -2195,7 +2182,7 @@
 
             // Reveal delete button in the row
             if (activeRow) {
-                var delBtn = activeRow.querySelector('.sgr-delete-btn');
+                var delBtn = activeRow.querySelector('.sqr-delete-btn');
                 if (delBtn) delBtn.classList.remove('d-none');
             }
         }
@@ -2205,13 +2192,13 @@
             editModal.setAttribute('aria-hidden', 'true');
             document.body.classList.remove('requestor-modal-open');
             if (activeRow) {
-                var delBtn = activeRow.querySelector('.sgr-delete-btn');
+                var delBtn = activeRow.querySelector('.sqr-delete-btn');
                 if (delBtn) delBtn.classList.add('d-none');
             }
             activeRow = null;
         }
 
-        document.querySelectorAll('.sgr-open-edit-btn').forEach(function (btn) {
+        document.querySelectorAll('.sqr-open-edit-btn').forEach(function (btn) {
             btn.addEventListener('click', function () { openEditModal(this); });
         });
         if (closeBtn)  closeBtn.addEventListener('click', closeEditModal);
@@ -2311,10 +2298,10 @@
 (function () {
     'use strict';
     var CSRF = '{{ csrf_token }}';
-    var approvalChoiceModal = document.getElementById('sgr-approval-choice-modal');
-    var approvalDraftBtn = document.getElementById('sgr-approval-open-draft-btn');
-    var approvalEmlBtn = document.getElementById('sgr-approval-download-eml-btn');
-    var approvalCancelBtn = document.getElementById('sgr-approval-cancel-btn');
+    var approvalChoiceModal = document.getElementById('sqr-approval-choice-modal');
+    var approvalDraftBtn = document.getElementById('sqr-approval-open-draft-btn');
+    var approvalEmlBtn = document.getElementById('sqr-approval-download-eml-btn');
+    var approvalCancelBtn = document.getElementById('sqr-approval-cancel-btn');
     var approvalChoiceState = { draftUrl: '', emlUrl: '' };
     var pendingApprovalChange = null;
     var CLOSED_LOST_LOCKED_FIELDS = new Set([
@@ -2357,7 +2344,7 @@
 
     if (approvalChoiceModal) {
         approvalChoiceModal.addEventListener('click', function (event) {
-            if (event.target && event.target.getAttribute('data-sgr-approval-close') === 'true') {
+            if (event.target && event.target.getAttribute('data-sqr-approval-close') === 'true') {
                 closeApprovalChoiceModal();
             }
         });
@@ -2425,13 +2412,13 @@
         if (!cell) return false;
         var row = cell.closest('tr');
         if (!row) return false;
-        var status = row.dataset.sgrProposalStatus || '';
+        var status = row.dataset.sqrProposalStatus || '';
         if (status !== 'closed_lost' && status !== 'closed_canceled') return false;
-        return CLOSED_LOST_LOCKED_FIELDS.has(cell.dataset.sgrField || '');
+        return CLOSED_LOST_LOCKED_FIELDS.has(cell.dataset.sqrField || '');
     }
 
     /* PM users for Assigned PM dropdown — from context */
-    var SQR_PM_USERS = JSON.parse(document.getElementById('sgr-pm-users').textContent);
+    var SQR_PM_USERS = {{ sqr_pm_users_json|default:"[]"|safe }};
     var PM_USER_CHOICES = [['', '\u2014 Select PM \u2014']];
     var PM_USER_MAP = {};
     SQR_PM_USERS.forEach(function(u) {
@@ -2441,7 +2428,7 @@
     });
 
     /* SSE (Engineer) users for Assigned SSE dropdown */
-    var SQR_SSE_USERS = JSON.parse(document.getElementById('sgr-sse-users').textContent);
+    var SQR_SSE_USERS = {{ sqr_sse_users_json|default:"[]"|safe }};
     var SSE_USER_CHOICES = [['', '\u2014 Select SSE \u2014']];
     var SSE_USER_MAP = {};
     SQR_SSE_USERS.forEach(function(u) {
@@ -2451,7 +2438,7 @@
     });
 
     /* Request options for RQ ID dropdown */
-    var SQR_RQ_OPTIONS = JSON.parse(document.getElementById('sgr-rq-options').textContent);
+    var SQR_RQ_OPTIONS = {{ sqr_rq_options_json|default:"[]"|safe }};
     var RQ_CHOICES = [['', '\u2014 Select RQ ID \u2014']];
     var RQ_MAP = {};
     SQR_RQ_OPTIONS.forEach(function(r) {
@@ -2583,7 +2570,7 @@
         if (field === 'delivery_actual_finish_date') {
             if (!value) return '<span class="text-muted">\u2013</span>';
             var actCell = arguments[2];
-            var targetDate = actCell ? (actCell.dataset.sgrTargetDate || '') : '';
+            var targetDate = actCell ? (actCell.dataset.sqrTargetDate || '') : '';
             var formatted = fmtDate(value);
             if (targetDate && value > targetDate) {
                 return '<span class="text-danger">' + formatted + '</span>';
@@ -2609,7 +2596,7 @@
         var w;
         if (CHOICES[field]) {
             w = document.createElement('select');
-            w.className = 'sgr-inline-input form-select form-select-sm';
+            w.className = 'sqr-inline-input form-select form-select-sm';
             CHOICES[field].forEach(function(c) {
                 var o = document.createElement('option');
                 o.value = c[0]; o.textContent = c[1];
@@ -2618,12 +2605,12 @@
             });
         } else if (field.indexOf('date') !== -1 && field !== 'key_updates_risks') {
             w = document.createElement('input');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.type = 'date'; w.value = currentValue || '';
             w.title = currentValue ? 'Press Delete or Backspace to clear the date.' : 'Choose a date.';
         } else if (field === 'revenue_reference_no') {
             w = document.createElement('input');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.type = 'text'; w.value = (currentValue || '').toUpperCase();
             w.maxLength = 100;
             w.placeholder = 'SI / PNL / CFDM number';
@@ -2631,7 +2618,7 @@
             w.addEventListener('input', function() { this.value = this.value.toUpperCase(); });
         } else if (field === 'revenue_remarks' || field === 'revenue_overview' || field === 'key_updates_risks') {
             w = document.createElement('textarea');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.rows = 3;
             w.value = currentValue || '';
             w.style.minWidth = '180px';
@@ -2640,7 +2627,7 @@
             w.style.whiteSpace = 'pre-wrap';
         } else if (field === 'managed_support_amount') {
             w = document.createElement('input');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.step = '0.01';
             w.style.width = '110px';
             w.value = currentValue || '';
@@ -2648,9 +2635,9 @@
             var presets = ['8', '16', '24', '32', '48'];
             var isCustomVal = currentValue !== '' && presets.indexOf(currentValue) === -1;
             var wrapper = document.createElement('div');
-            wrapper.className = 'sgr-composite-widget d-inline-flex gap-1 align-items-center';
+            wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
             var sel = document.createElement('select');
-            sel.className = 'sgr-inline-input form-select form-select-sm';
+            sel.className = 'sqr-inline-input form-select form-select-sm';
             sel.style.width = '85px';
             var emptyOpt = document.createElement('option');
             emptyOpt.value = ''; emptyOpt.textContent = '\u2014';
@@ -2667,7 +2654,7 @@
             sel.appendChild(customOpt);
             var inp = document.createElement('input');
             inp.type = 'number'; inp.min = '0'; inp.step = '1';
-            inp.className = 'sgr-inline-input';
+            inp.className = 'sqr-inline-input';
             inp.style.width = '65px';
             inp.style.display = isCustomVal ? '' : 'none';
             inp.value = isCustomVal ? currentValue : '';
@@ -2686,9 +2673,9 @@
             var drPresets = ['5', '10', '15'];
             var drCustom = currentValue !== '' && currentValue !== '0' && drPresets.indexOf(currentValue) === -1;
             var wrapper = document.createElement('div');
-            wrapper.className = 'sgr-composite-widget d-inline-flex gap-1 align-items-center';
+            wrapper.className = 'sqr-composite-widget d-inline-flex gap-1 align-items-center';
             var sel = document.createElement('select');
-            sel.className = 'sgr-inline-input form-select form-select-sm';
+            sel.className = 'sqr-inline-input form-select form-select-sm';
             sel.style.width = '90px';
             var emptyOpt = document.createElement('option');
             emptyOpt.value = ''; emptyOpt.textContent = '\u2014';
@@ -2705,7 +2692,7 @@
             sel.appendChild(customOpt);
             var inp = document.createElement('input');
             inp.type = 'number'; inp.min = '0'; inp.max = '100'; inp.step = '1';
-            inp.className = 'sgr-inline-input';
+            inp.className = 'sqr-inline-input';
             inp.style.width = '65px';
             inp.style.display = drCustom ? '' : 'none';
             inp.value = drCustom ? currentValue : '';
@@ -2722,7 +2709,7 @@
             w = wrapper;
         } else if (field === 'delivery_progress') {
             w = document.createElement('input');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.max = '100'; w.step = '1';
             w.style.width = '80px';
             w.value = currentValue || '';
@@ -2735,14 +2722,14 @@
             });
         } else if (field === 'sse_manhrs') {
             w = document.createElement('input');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.type = 'number'; w.min = '0'; w.step = '1';
             w.style.width = '80px';
             var normalizedSse = parseFloat(currentValue);
             w.value = isNaN(normalizedSse) ? (currentValue || '') : String(Math.round(normalizedSse));
         } else {
             w = document.createElement('input');
-            w.className = 'sgr-inline-input';
+            w.className = 'sqr-inline-input';
             w.type = 'text'; w.value = currentValue || '';
             w.style.minWidth = '120px';
         }
@@ -2764,21 +2751,21 @@
         }
         if (normalizedValue === null || normalizedValue === undefined) normalizedValue = '';
         normalizedValue = String(normalizedValue);
-        cell.dataset.sgrValue = normalizedValue;
+        cell.dataset.sqrValue = normalizedValue;
         displayEl.innerHTML = getDisplay(field, normalizedValue, cell);
-        cell.classList.add('sgr-saved');
-        setTimeout(function() { cell.classList.remove('sgr-saved'); }, 1200);
+        cell.classList.add('sqr-saved');
+        setTimeout(function() { cell.classList.remove('sqr-saved'); }, 1200);
         var row = cell.closest('tr');
 
         if (field === 'proposal_status' && row) {
             row.classList.toggle(
-                'sgr-row--closed-lost',
+                'sqr-row--closed-lost',
                 normalizedValue === 'closed_lost' || normalizedValue === 'closed_canceled'
             );
-            row.dataset.sgrProposalStatus = normalizedValue;
+            row.dataset.sqrProposalStatus = normalizedValue;
         }
         if (field === 'status' && row) {
-            row.classList.toggle('sgr-row--revision', normalizedValue === 'for_revision');
+            row.classList.toggle('sqr-row--revision', normalizedValue === 'for_revision');
             var dateCell = row.querySelector('td.col-sticky-0');
             if (dateCell) {
                 var dateText = dateCell.textContent.trim();
@@ -2792,20 +2779,20 @@
             }
         }
         if ('pm_manhrs' in data) {
-            var pmCell = row ? row.querySelector('[data-sgr-field="pm_manhrs"]') : null;
+            var pmCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : null;
             if (pmCell) {
-                pmCell.dataset.sgrValue = data.pm_manhrs;
-                var pmDisp = pmCell.querySelector('.sgr-display');
+                pmCell.dataset.sqrValue = data.pm_manhrs;
+                var pmDisp = pmCell.querySelector('.sqr-display');
                 if (pmDisp) pmDisp.innerHTML = getDisplay('pm_manhrs', data.pm_manhrs, pmCell);
             }
         }
         if ('pm_amount' in data) {
-            var pmSourceCell = row ? row.querySelector('[data-sgr-field="pm_manhrs"]') : cell;
+            var pmSourceCell = row ? row.querySelector('[data-sqr-field="pm_manhrs"]') : cell;
             var pmAmtCell = pmSourceCell ? pmSourceCell.nextElementSibling : null;
             if (pmAmtCell) pmAmtCell.textContent = pesoFmt(data.pm_amount);
         }
         if ('sse_amount' in data) {
-            var sseSourceCell = row ? row.querySelector('[data-sgr-field="sse_manhrs"]') : cell;
+            var sseSourceCell = row ? row.querySelector('[data-sqr-field="sse_manhrs"]') : cell;
             var sseAmtCell = sseSourceCell ? sseSourceCell.nextElementSibling : null;
             if (sseAmtCell) sseAmtCell.textContent = pesoFmt(data.sse_amount);
         }
@@ -2813,67 +2800,67 @@
             var rowEl = cell.closest('tr');
             if (rowEl) {
                 if ('computed_discount_amount' in data) {
-                    var daCell = rowEl.querySelector('[data-sgr-computed="discount_amount"]');
+                    var daCell = rowEl.querySelector('[data-sqr-computed="discount_amount"]');
                     if (daCell) daCell.textContent = pesoFmt(data.computed_discount_amount);
                 }
                 if ('computed_total_price' in data) {
-                    var tpCell = rowEl.querySelector('[data-sgr-computed="total_price"]');
+                    var tpCell = rowEl.querySelector('[data-sqr-computed="total_price"]');
                     if (tpCell) tpCell.textContent = pesoFmt(data.computed_total_price);
                 }
             }
         }
         if ('managed_support_amount' in data && row) {
-            var msaCell = row.querySelector('[data-sgr-field="managed_support_amount"]');
+            var msaCell = row.querySelector('[data-sqr-field="managed_support_amount"]');
             if (msaCell) {
                 var msaVal = data.managed_support_amount;
-                msaCell.dataset.sgrValue = msaVal;
-                var msaDisp = msaCell.querySelector('.sgr-display');
+                msaCell.dataset.sqrValue = msaVal;
+                var msaDisp = msaCell.querySelector('.sqr-display');
                 if (msaDisp) msaDisp.innerHTML = pesoFmt(msaVal);
             }
         }
         if ('support_start_date' in data && row) {
-            var ajCellComputed = row.querySelector('[data-sgr-computed="support_start_date"]');
-            if (ajCellComputed) ajCellComputed.querySelector('.sgr-display').innerHTML = data.support_start_date || '<span class="text-muted fst-italic">NA</span>';
+            var ajCellComputed = row.querySelector('[data-sqr-computed="support_start_date"]');
+            if (ajCellComputed) ajCellComputed.querySelector('.sqr-display').innerHTML = data.support_start_date || '<span class="text-muted fst-italic">NA</span>';
         }
         if ('managed_support_end_date' in data && row) {
-            var akCellComputed = row.querySelector('[data-sgr-computed="managed_support_end_date"]');
+            var akCellComputed = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
             if (akCellComputed) akCellComputed.innerHTML = data.managed_support_end_date || '<span class="text-muted fst-italic">NA</span>';
         }
         if (('reviewed_at' in data || 'validity_due_date' in data) && row) {
             if ('reviewed_at' in data) {
-                var raCell = row.querySelector('[data-sgr-computed="reviewed_at"]');
+                var raCell = row.querySelector('[data-sqr-computed="reviewed_at"]');
                 if (raCell) raCell.textContent = data.reviewed_at || '\u2013';
             }
             if ('validity_due_date' in data) {
-                var vddCell = row.querySelector('[data-sgr-computed="validity_due_date"]');
+                var vddCell = row.querySelector('[data-sqr-computed="validity_due_date"]');
                 if (vddCell) vddCell.textContent = data.validity_due_date || '\u2013';
             }
         }
         if (field === 'revenue_status' && row) {
-            row.dataset.sgrRevenueStatus = normalizedValue || (row.querySelector('[data-sgr-field="revenue_date"]') && row.querySelector('[data-sgr-field="revenue_date"]').dataset.sgrValue ? 'billed' : 'not_yet_billed');
+            row.dataset.sqrRevenueStatus = normalizedValue || (row.querySelector('[data-sqr-field="revenue_date"]') && row.querySelector('[data-sqr-field="revenue_date"]').dataset.sqrValue ? 'billed' : 'not_yet_billed');
         }
         if ('assigned_pm_pk' in data && row) {
-            var assignedPmCell = row.querySelector('[data-sgr-field="assigned_pm"]');
+            var assignedPmCell = row.querySelector('[data-sqr-field="assigned_pm"]');
             if (assignedPmCell) {
                 var pmPk = data.assigned_pm_pk ? String(data.assigned_pm_pk) : '';
                 var pmName = data.assigned_pm_name || '\u2013';
-                assignedPmCell.dataset.sgrValue = pmPk;
-                var assignedPmDisp = assignedPmCell.querySelector('.sgr-display');
+                assignedPmCell.dataset.sqrValue = pmPk;
+                var assignedPmDisp = assignedPmCell.querySelector('.sqr-display');
                 if (assignedPmDisp) assignedPmDisp.innerHTML = pmName;
             }
         }
         if ('assigned_sse_name' in data && row) {
-            var assignedSseCell = row.querySelector('[data-sgr-field="assigned_sse"]');
+            var assignedSseCell = row.querySelector('[data-sqr-field="assigned_sse"]');
             if (assignedSseCell) {
-                var assignedSseDisp = assignedSseCell.querySelector('.sgr-display');
+                var assignedSseDisp = assignedSseCell.querySelector('.sqr-display');
                 if (assignedSseDisp) assignedSseDisp.innerHTML = data.assigned_sse_name || '\u2013';
             }
         }
         if ((field === 'linked_request' || 'rq_pk' in data) && row) {
             var rqPk = data.rq_pk;
             var rqCode = data.rq_code || '';
-            var rqCell = row.querySelector('[data-sgr-field="linked_request"]') || cell;
-            var rqDisp = rqCell.querySelector('.sgr-display');
+            var rqCell = row.querySelector('[data-sqr-field="linked_request"]') || cell;
+            var rqDisp = rqCell.querySelector('.sqr-display');
             if (rqDisp) {
                 rqDisp.innerHTML = (rqPk && rqCode)
                     ? '<a href="/requests/' + rqPk + '/manage/collab/" class="text-info" target="_blank">' + rqCode + '</a>'
@@ -2893,18 +2880,18 @@
         }
         if (field === 'delivery_completion_signed_date' && row) {
             var naHtml = '<span class="text-muted fst-italic">NA</span>';
-            var aiCell = row.querySelector('[data-sgr-computed="post_svc_warranty_end_date"]');
+            var aiCell = row.querySelector('[data-sqr-computed="post_svc_warranty_end_date"]');
             if (aiCell) aiCell.innerHTML = data.post_svc_warranty_end_date || naHtml;
-            var ajCell = row.querySelector('[data-sgr-computed="support_start_date"] .sgr-display');
+            var ajCell = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
             if (ajCell) ajCell.innerHTML = data.support_start_date || naHtml;
-            var akCell = row.querySelector('[data-sgr-computed="managed_support_end_date"]');
+            var akCell = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
             if (akCell) akCell.innerHTML = data.managed_support_end_date || naHtml;
         }
         if (field === 'managed_support_start_date' && row) {
             var naHtml2 = '<span class="text-muted fst-italic">NA</span>';
-            var ajCell2 = row.querySelector('[data-sgr-computed="support_start_date"] .sgr-display');
+            var ajCell2 = row.querySelector('[data-sqr-computed="support_start_date"] .sqr-display');
             if (ajCell2) ajCell2.innerHTML = data.support_start_date || naHtml2;
-            var akCell2 = row.querySelector('[data-sgr-computed="managed_support_end_date"]');
+            var akCell2 = row.querySelector('[data-sqr-computed="managed_support_end_date"]');
             if (akCell2) akCell2.innerHTML = data.managed_support_end_date || naHtml2;
         }
         if (typeof window.refreshSqrReports === 'function') {
@@ -2914,12 +2901,12 @@
 
     var undoToastTimer = null;
     function showUndoToast(context) {
-        var toast = document.getElementById('sgr-undo-toast');
+        var toast = document.getElementById('sqr-undo-toast');
         if (!toast || !context || !context.data || !context.data.undo_url) return;
-        var message = toast.querySelector('[data-sgr-undo-message]');
-        var warning = toast.querySelector('[data-sgr-undo-warning]');
-        var undoBtn = toast.querySelector('[data-sgr-undo-action]');
-        var closeBtn = toast.querySelector('[data-sgr-undo-close]');
+        var message = toast.querySelector('[data-sqr-undo-message]');
+        var warning = toast.querySelector('[data-sqr-undo-warning]');
+        var undoBtn = toast.querySelector('[data-sqr-undo-action]');
+        var closeBtn = toast.querySelector('[data-sqr-undo-close]');
         if (message) message.textContent = 'Saved ' + fieldLabel(context.field) + '.';
         if (warning) {
             warning.textContent = context.data.workflow_side_effect_message || '';
@@ -2969,8 +2956,8 @@
     }
 
     function saveField(pk, field, value, cell, displayEl, reviewNotes, options) {
-        var url = '/sgr/' + pk + '/inline-update/';
-        cell.classList.add('sgr-saving');
+        var url = '/sqr/' + pk + '/inline-update/';
+        cell.classList.add('sqr-saving');
         var payload = {field: field, value: value};
         if (reviewNotes !== undefined && reviewNotes !== null) payload.review_notes = reviewNotes;
         options = options || {};
@@ -2982,29 +2969,29 @@
         })
         .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
         .then(function(result) {
-            cell.classList.remove('sgr-saving');
+            cell.classList.remove('sqr-saving');
             if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'Unable to save this change.');
             applyInlineUpdateResponse(pk, field, value, cell, displayEl, result.data, options);
             showUndoToast({pk: pk, field: field, cell: cell, displayEl: displayEl, data: result.data});
         })
         .catch(function() {
-            cell.classList.remove('sgr-saving');
-            cell.classList.add('sgr-error');
-            setTimeout(function() { cell.classList.remove('sgr-error'); }, 2500);
+            cell.classList.remove('sqr-saving');
+            cell.classList.add('sqr-error');
+            setTimeout(function() { cell.classList.remove('sqr-error'); }, 2500);
         });
     }
 
     function activateCell(cell) {
-        if (cell.classList.contains('sgr-editing')) return;
+        if (cell.classList.contains('sqr-editing')) return;
         if (isClosedLostLockedCell(cell)) return;
-        var field = cell.dataset.sgrField;
-        var pk = cell.dataset.sgrPk;
+        var field = cell.dataset.sqrField;
+        var pk = cell.dataset.sqrPk;
         if (!field || !pk) return;
 
-        var displayEl = cell.querySelector('.sgr-display');
-        var currentValue = cell.dataset.sgrValue || '';
+        var displayEl = cell.querySelector('.sqr-display');
+        var currentValue = cell.dataset.sqrValue || '';
 
-        cell.classList.add('sgr-editing');
+        cell.classList.add('sqr-editing');
         if (displayEl) displayEl.style.display = 'none';
 
         var widget = buildWidget(field, currentValue);
@@ -3012,7 +2999,7 @@
 
         function commit() {
             var newVal = widget.value;
-            cell.classList.remove('sgr-editing');
+            cell.classList.remove('sqr-editing');
             widget.remove();
             if (displayEl) displayEl.style.display = '';
             if (newVal !== currentValue) {
@@ -3026,7 +3013,7 @@
             }
         }
 
-        if (widget.classList && widget.classList.contains('sgr-composite-widget')) {
+        if (widget.classList && widget.classList.contains('sqr-composite-widget')) {
             var cmpSel = widget.querySelector('select');
             var cmpInp = widget.querySelector('input[type="number"]');
             if (cmpSel) cmpSel.focus();
@@ -3040,13 +3027,13 @@
                     if (cmpSel.value !== '__custom__') setTimeout(function() { commit(); }, 50);
                 });
                 cmpSel.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') { cell.classList.remove('sgr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
+                    if (e.key === 'Escape') { cell.classList.remove('sqr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
                 });
             }
             if (cmpInp) {
                 cmpInp.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') { e.preventDefault(); commit(); }
-                    if (e.key === 'Escape') { cell.classList.remove('sgr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
+                    if (e.key === 'Escape') { cell.classList.remove('sqr-editing'); widget.remove(); if (displayEl) displayEl.style.display = ''; }
                 });
             }
         } else if (widget.tagName === 'SELECT') {
@@ -3076,7 +3063,7 @@
                 }
                 if (e.key === 'Enter' && widget.tagName !== 'TEXTAREA') { e.preventDefault(); commit(); }
                 if (e.key === 'Escape') {
-                    cell.classList.remove('sgr-editing');
+                    cell.classList.remove('sqr-editing');
                     widget.remove();
                     if (displayEl) displayEl.style.display = '';
                 }
@@ -3085,18 +3072,18 @@
     }
 
     function openRevisionModal(pk, statusVal, cell, displayEl, triggerCell) {
-        var modal     = document.getElementById('sgr-revision-modal');
-        var notesArea = document.getElementById('sgr-revision-notes');
-        var confirmBtn = document.getElementById('sgr-revision-confirm');
-        var cancelBtn  = document.getElementById('sgr-revision-cancel');
-        var closeBtn   = document.getElementById('sgr-revision-close');
-        var backdrop   = document.getElementById('sgr-revision-backdrop');
+        var modal     = document.getElementById('sqr-revision-modal');
+        var notesArea = document.getElementById('sqr-revision-notes');
+        var confirmBtn = document.getElementById('sqr-revision-confirm');
+        var cancelBtn  = document.getElementById('sqr-revision-cancel');
+        var closeBtn   = document.getElementById('sqr-revision-close');
+        var backdrop   = document.getElementById('sqr-revision-backdrop');
         if (!modal || !notesArea) return;
 
         // Gather row metadata for Teams GC deep-link
         var row = (triggerCell || cell).closest('tr');
-        var sqrRef       = row ? (row.dataset.sgrRef || '') : '';
-        var customerName = row ? (row.dataset.sgrCustomer || '') : '';
+        var sqrRef       = row ? (row.dataset.sqrRef || '') : '';
+        var customerName = row ? (row.dataset.sqrCustomer || '') : '';
         var engineerEmail = row ? (row.dataset.engineerEmail || '') : '';
         var pmEmail       = row ? (row.dataset.pmEmail || '') : '';
         var engineerName  = row ? (row.dataset.engineerName || '') : '';
@@ -3147,7 +3134,7 @@
         if (backdrop) backdrop.addEventListener('click', onCancel);
     }
 
-    document.querySelectorAll('.sgr-inline-cell').forEach(function(cell) {
+    document.querySelectorAll('.sqr-inline-cell').forEach(function(cell) {
         cell.title = isClosedLostLockedCell(cell)
             ? 'Locked because Proposal Status is Closed Lost'
             : 'Click to edit';
@@ -3157,7 +3144,7 @@
                 e.stopPropagation();
                 return;
             }
-            if (!cell.classList.contains('sgr-editing')) activateCell(cell);
+            if (!cell.classList.contains('sqr-editing')) activateCell(cell);
         });
     });
 
@@ -3168,10 +3155,10 @@
 {# ── Hover preview popover — all users ───────────────────────────────── #}
 <script>
 (function() {
-    var preview = document.getElementById('sgr-cell-preview');
+    var preview = document.getElementById('sqr-cell-preview');
     if (!preview) {
         preview = document.createElement('div');
-        preview.id = 'sgr-cell-preview';
+        preview.id = 'sqr-cell-preview';
         document.body.appendChild(preview);
     }
 
@@ -3184,7 +3171,7 @@
     function isClipped(td) {
         if (clippedCache && clippedCache.has(td)) return clippedCache.get(td);
         var clipped = td.scrollWidth > td.offsetWidth;
-        var span = td.querySelector('.sgr-display') || td;
+        var span = td.querySelector('.sqr-display') || td;
         clipped = clipped || span.scrollHeight > span.offsetHeight + 2;
         clipped = clipped || span.scrollWidth > span.offsetWidth;
         if (clippedCache) clippedCache.set(td, clipped);
@@ -3192,9 +3179,9 @@
     }
 
     function showPreview(td, e) {
-        var span = td.querySelector('.sgr-display') || td;
-        var fullText = td.dataset.sgrValue !== undefined
-            ? td.dataset.sgrValue
+        var span = td.querySelector('.sqr-display') || td;
+        var fullText = td.dataset.sqrValue !== undefined
+            ? td.dataset.sqrValue
             : span.textContent.trim();
         if (!fullText || fullText === '\u2013' || fullText === 'NA') return;
         preview.textContent = fullText;
@@ -3229,17 +3216,17 @@
     // Event delegation — avoid N listeners per cell across dual large tables
     var previewRoot = document.querySelector('main.container') || document.body;
     previewRoot.addEventListener('mouseover', function (e) {
-        var td = e.target.closest('.sgr-tracker td, .sgr-esg-table td');
+        var td = e.target.closest('.sqr-tracker td, .sqr-esg-table td');
         if (!td || !previewRoot.contains(td)) return;
-        var wrap = td.closest('.sgr-tracker-wrap');
+        var wrap = td.closest('.sqr-tracker-wrap');
         if (wrap && wrap.classList.contains('is-scrolling-x')) return;
         if (td === activeCell) return;
         clearTimeout(hoverTimer);
-        if (td.classList.contains('sgr-editing')) return;
+        if (td.classList.contains('sqr-editing')) return;
         var evt = e;
         hoverTimer = setTimeout(function () {
-            if (!td.isConnected || td.classList.contains('sgr-editing')) return;
-            var currentWrap = td.closest('.sgr-tracker-wrap');
+            if (!td.isConnected || td.classList.contains('sqr-editing')) return;
+            var currentWrap = td.closest('.sqr-tracker-wrap');
             if (currentWrap && currentWrap.classList.contains('is-scrolling-x')) return;
             if (isClipped(td)) showPreview(td, evt);
         }, 350);
@@ -3248,7 +3235,7 @@
         if (activeCell) positionPreview(e);
     });
     previewRoot.addEventListener('mouseout', function (e) {
-        var td = e.target.closest('.sgr-tracker td, .sgr-esg-table td');
+        var td = e.target.closest('.sqr-tracker td, .sqr-esg-table td');
         if (!td) return;
         var toEl = e.relatedTarget;
         if (toEl && td.contains(toEl)) return;
@@ -3256,7 +3243,7 @@
         if (activeCell === td) hidePreview();
     });
     previewRoot.addEventListener('click', function (e) {
-        if (!e.target.closest('.sgr-tracker td, .sgr-esg-table td')) return;
+        if (!e.target.closest('.sqr-tracker td, .sqr-esg-table td')) return;
         clearTimeout(hoverTimer);
         hidePreview();
     });
@@ -3275,8 +3262,8 @@
 // ── SQR table view toggle ────────────────────────────────────────────────
 (function () {
     var storageKey = 'requestHub.sqr.tableView';
-    var buttons = document.querySelectorAll('[data-sgr-view-button]');
-    var panels = document.querySelectorAll('[data-sgr-view-panel]');
+    var buttons = document.querySelectorAll('[data-sqr-view-button]');
+    var panels = document.querySelectorAll('[data-sqr-view-panel]');
     if (!buttons.length || !panels.length) return;
 
     // The ESG panel ships its table inside an inert <template> (a sibling of
@@ -3285,41 +3272,41 @@
     // a saved 'esg' view is restored on load before applySqrTableFilter()
     // reads the visible panel.
     function hydrateEsgPanel(panel) {
-        if (!panel || panel.dataset.sgrEsgHydrated === '1') return;
-        var tpl = document.getElementById('sgr-esg-content');
+        if (!panel || panel.dataset.sqrEsgHydrated === '1') return;
+        var tpl = document.getElementById('sqr-esg-content');
         if (!tpl) return;
         panel.appendChild(tpl.content.cloneNode(true));
         tpl.remove();
-        panel.dataset.sgrEsgHydrated = '1';
+        panel.dataset.sqrEsgHydrated = '1';
         if (typeof window.initRequestHubSmoothScroll === 'function') {
             window.initRequestHubSmoothScroll(panel);
         }
         if (typeof window.invalidateRequestHubScrollGeometry === 'function') {
             window.invalidateRequestHubScrollGeometry(panel);
         }
-        panel.dispatchEvent(new CustomEvent('sgr:panel-hydrated', { bubbles: true }));
+        panel.dispatchEvent(new CustomEvent('sqr:panel-hydrated', { bubbles: true }));
     }
 
     function setView(viewName) {
         var activeView = viewName === 'esg' ? 'esg' : 'tracker';
         buttons.forEach(function (button) {
-            var isActive = button.dataset.sgrViewButton === activeView;
+            var isActive = button.dataset.sqrViewButton === activeView;
             button.classList.toggle('btn-primary', isActive);
             button.classList.toggle('btn-outline-primary', !isActive);
             button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
         panels.forEach(function (panel) {
-            if (panel.dataset.sgrViewPanel === 'esg' && activeView === 'esg') {
+            if (panel.dataset.sqrViewPanel === 'esg' && activeView === 'esg') {
                 hydrateEsgPanel(panel);
             }
-            panel.hidden = panel.dataset.sgrViewPanel !== activeView;
+            panel.hidden = panel.dataset.sqrViewPanel !== activeView;
         });
         try { window.localStorage.setItem(storageKey, activeView); } catch (error) {}
     }
 
     buttons.forEach(function (button) {
         button.addEventListener('click', function () {
-            setView(button.dataset.sgrViewButton);
+            setView(button.dataset.sqrViewButton);
             if (typeof window.applySqrTableFilter === 'function') {
                 window.applySqrTableFilter();
             }
@@ -3335,29 +3322,29 @@
 <script>
 // ── Badge filter ──────────────────────────────────────────────────────────
 (function () {
-    var badgeRoot = document.getElementById('sgr-badge-filters');
+    var badgeRoot = document.getElementById('sqr-badge-filters');
     var defaultMyAssigned = !!(badgeRoot && badgeRoot.dataset.defaultMyAssigned === '1');
     var currentUserId = badgeRoot ? String(badgeRoot.dataset.currentUserId || '') : '';
     var activeFilter = defaultMyAssigned ? 'my_assigned' : '';   // '' = show all
-    var toolbarSearchInput = document.getElementById('sgr-header-search');
-    var searchInput = document.getElementById('sgr-table-filter-search') || toolbarSearchInput;
-    var headerCountBadge = document.getElementById('sgr-header-count-badge');
-    var statusSelect = document.getElementById('sgr-table-filter-status');
-    var proposalStatusSelect = document.getElementById('sgr-table-filter-proposal-status');
-    var overallStatusSelect = document.getElementById('sgr-table-filter-overall-status');
-    var healthSelect = document.getElementById('sgr-table-filter-health');
-    var revenueSourceSelect = document.getElementById('sgr-table-filter-revenue-source');
-    var sqrDateFromInput = document.getElementById('sgr-table-filter-date-from');
-    var sqrDateToInput = document.getElementById('sgr-table-filter-date-to');
-    var groupInput = document.getElementById('sgr-table-filter-group');
-    var amountMinInput = document.getElementById('sgr-table-filter-amount-min');
-    var amountMaxInput = document.getElementById('sgr-table-filter-amount-max');
-    var linkedRequestCheckbox = document.getElementById('sgr-table-filter-linked-request');
-    var assignedSseCheckbox = document.getElementById('sgr-table-filter-assigned-sse');
-    var myAssignedCheckbox = document.getElementById('sgr-table-filter-my-assigned');
-    var billedOnlyCheckbox = document.getElementById('sgr-table-filter-billed-only');
-    var resetButton = document.getElementById('sgr-table-filter-reset');
-    var resultsMeta = document.getElementById('sgr-filter-results-meta');
+    var toolbarSearchInput = document.getElementById('sqr-header-search');
+    var searchInput = document.getElementById('sqr-table-filter-search') || toolbarSearchInput;
+    var headerCountBadge = document.getElementById('sqr-header-count-badge');
+    var statusSelect = document.getElementById('sqr-table-filter-status');
+    var proposalStatusSelect = document.getElementById('sqr-table-filter-proposal-status');
+    var overallStatusSelect = document.getElementById('sqr-table-filter-overall-status');
+    var healthSelect = document.getElementById('sqr-table-filter-health');
+    var revenueSourceSelect = document.getElementById('sqr-table-filter-revenue-source');
+    var sqrDateFromInput = document.getElementById('sqr-table-filter-date-from');
+    var sqrDateToInput = document.getElementById('sqr-table-filter-date-to');
+    var groupInput = document.getElementById('sqr-table-filter-group');
+    var amountMinInput = document.getElementById('sqr-table-filter-amount-min');
+    var amountMaxInput = document.getElementById('sqr-table-filter-amount-max');
+    var linkedRequestCheckbox = document.getElementById('sqr-table-filter-linked-request');
+    var assignedSseCheckbox = document.getElementById('sqr-table-filter-assigned-sse');
+    var myAssignedCheckbox = document.getElementById('sqr-table-filter-my-assigned');
+    var billedOnlyCheckbox = document.getElementById('sqr-table-filter-billed-only');
+    var resetButton = document.getElementById('sqr-table-filter-reset');
+    var resultsMeta = document.getElementById('sqr-filter-results-meta');
 
     function normalizeText(value) {
         return (value || '').toString().trim().toLowerCase();
@@ -3420,8 +3407,8 @@
     }
 
     function updateBadgeState() {
-        document.querySelectorAll('.sgr-badge-filter').forEach(function (badge) {
-            var badgeFilter = badge.dataset.sgrFilter || '';
+        document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
+            var badgeFilter = badge.dataset.sqrFilter || '';
             var isActive = false;
             if (badgeFilter === 'my_assigned') {
                 isActive = isMyAssignedActive();
@@ -3457,13 +3444,13 @@
 
     function getActiveTableRows() {
         // Prefer the visible panel only — hidden ESG/tracker still in DOM but skip it
-        var activePanel = document.querySelector('[data-sgr-view-panel]:not([hidden])');
+        var activePanel = document.querySelector('[data-sqr-view-panel]:not([hidden])');
         if (activePanel) {
             return { panel: activePanel, rows: activePanel.querySelectorAll('tbody tr') };
         }
         return {
             panel: document,
-            rows: document.querySelectorAll('.sgr-tracker tbody tr, .sgr-esg-table tbody tr')
+            rows: document.querySelectorAll('.sqr-tracker tbody tr, .sqr-esg-table tbody tr')
         };
     }
 
@@ -3478,15 +3465,15 @@
                 row: row,
                 searchText: null,
                 indexedText: normalizeText([
-                    row.dataset.sgrRef,
-                    row.dataset.sgrCustomer,
-                    row.dataset.sgrGroup,
-                    row.dataset.sgrAssignedPm,
-                    row.dataset.sgrAssignedSse,
+                    row.dataset.sqrRef,
+                    row.dataset.sqrCustomer,
+                    row.dataset.sqrGroup,
+                    row.dataset.sqrAssignedPm,
+                    row.dataset.sqrAssignedSse,
                     row.dataset.engineerName
                 ].join(' ')),
-                group: normalizeText(row.dataset.sgrGroup || ''),
-                totalPrice: parseAmount(row.dataset.sgrTotalPrice || '0') || 0
+                group: normalizeText(row.dataset.sqrGroup || ''),
+                totalPrice: parseAmount(row.dataset.sqrTotalPrice || '0') || 0
             };
         });
         if (rowCache) rowCache.set(panel, records);
@@ -3505,26 +3492,38 @@
         var query = normalizeText(searchInput && searchInput.value ? searchInput.value : '');
         var statusValue = statusSelect ? statusSelect.value : '';
         var proposalValue = proposalStatusSelect ? proposalStatusSelect.value : '';
-        var overallStatusValue = overallStatusSelect ? overallStatus
+        var overallStatusValue = overallStatusSelect ? overallStatusSelect.value : '';
+        var healthValue = healthSelect ? healthSelect.value : '';
+        var revenueSourceValue = revenueSourceSelect ? revenueSourceSelect.value : '';
+        var groupValue = normalizeText(groupInput && groupInput.value ? groupInput.value : '');
+        var sqrDateFrom = sqrDateFromInput ? sqrDateFromInput.value : '';
+        var sqrDateTo = sqrDateToInput ? sqrDateToInput.value : '';
+        var amountMin = parseAmount(amountMinInput ? amountMinInput.value : '');
+        var amountMax = parseAmount(amountMaxInput ? amountMaxInput.value : '');
+        var linkedRequestOnly = !!(linkedRequestCheckbox && linkedRequestCheckbox.checked);
+        var assignedSseOnly = !!(assignedSseCheckbox && assignedSseCheckbox.checked);
+        var myAssignedOnly = isMyAssignedActive();
+        var billedOnly = !!(billedOnlyCheckbox && billedOnlyCheckbox.checked);
+        var visibleCount = 0;
         records.forEach(function (record) {
             var row = record.row;
             var matchesStatus = !statusValue || (row.dataset.sqrStatus || '') === statusValue;
             var matchesProposal = !proposalValue || (row.dataset.sqrProposalStatus || '') === proposalValue;
-            var matchesOverallStatus = !overallStatusValue || (row.dataset.sgrOverallStatus || '') === overallStatusValue;
-            var matchesHealth = !healthValue || (row.dataset.sgrHealth || '') === healthValue;
-            var matchesRevenueSource = !revenueSourceValue || (row.dataset.sgrRevenueSource || '') === revenueSourceValue;
+            var matchesOverallStatus = !overallStatusValue || (row.dataset.sqrOverallStatus || '') === overallStatusValue;
+            var matchesHealth = !healthValue || (row.dataset.sqrHealth || '') === healthValue;
+            var matchesRevenueSource = !revenueSourceValue || (row.dataset.sqrRevenueSource || '') === revenueSourceValue;
             var matchesGroup = !groupValue || record.group.indexOf(groupValue) !== -1;
-            var createdAt = row.dataset.sgrCreatedAt || '';
+            var createdAt = row.dataset.sqrCreatedAt || '';
             var matchesDateFrom = !sqrDateFrom || (createdAt && createdAt >= sqrDateFrom);
-            var matchesDateTo = !sgrDateTo || (createdAt && createdAt <= sqrDateTo);
+            var matchesDateTo = !sqrDateTo || (createdAt && createdAt <= sqrDateTo);
             var matchesAmountMin = amountMin === null || record.totalPrice >= amountMin;
             var matchesAmountMax = amountMax === null || record.totalPrice <= amountMax;
-            var matchesLinkedRequest = !linkedRequestOnly || (row.dataset.sgrLinkedRequest || '') === 'yes';
-            var matchesAssignedSse = !assignedSseOnly || !!normalizeText(row.dataset.sgrAssignedSse || '');
+            var matchesLinkedRequest = !linkedRequestOnly || (row.dataset.sqrLinkedRequest || '') === 'yes';
+            var matchesAssignedSse = !assignedSseOnly || !!normalizeText(row.dataset.sqrAssignedSse || '');
             var matchesMyAssigned = !myAssignedOnly || (
-                !!currentUserId && String(row.dataset.sgrApproverId || '') === currentUserId
+                !!currentUserId && String(row.dataset.sqrApproverId || '') === currentUserId
             );
-            var matchesBilled = !billedOnly || (row.dataset.sgrRevenueStatus || '') === 'billed';
+            var matchesBilled = !billedOnly || (row.dataset.sqrRevenueStatus || '') === 'billed';
             var matchesQuery = true;
             if (query) {
                 matchesQuery = record.indexedText.indexOf(query) !== -1;
@@ -3575,7 +3574,7 @@
     }
     window.applySqrTableFilter = applyFilter;
 
-    document.addEventListener('sgr:panel-hydrated', function (event) {
+    document.addEventListener('sqr:panel-hydrated', function (event) {
         if (rowCache) rowCache.delete(event.target);
         applyFilter();
     });
@@ -3585,9 +3584,9 @@
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(applyFilter, 180);
     }
-    document.querySelectorAll('.sgr-badge-filter').forEach(function (badge) {
+    document.querySelectorAll('.sqr-badge-filter').forEach(function (badge) {
         badge.addEventListener('click', function () {
-            var filter = badge.dataset.sgrFilter || '';
+            var filter = badge.dataset.sqrFilter || '';
             // Total badge always shows full list (clears My Assigned + status presets).
             if (filter === '') {
                 activeFilter = '';
@@ -3706,13 +3705,13 @@
 {# ── For Revision Comments Modal (PM/Admin inline edit) ───────────────── #}
 {% if is_pm %}
 <div class="requestor-modal" id="sqr-revision-modal" aria-hidden="true">
-    <div class="requestor-modal__backdrop" id="sgr-revision-backdrop"></div>
+    <div class="requestor-modal__backdrop" id="sqr-revision-backdrop"></div>
     <div class="requestor-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="sqr-revision-title" style="max-width:500px;">
         <div class="requestor-modal__header">
-            <h2 class="h5 mb-0" id="sgr-revision-title">
+            <h2 class="h5 mb-0" id="sqr-revision-title">
                 <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>For Revision &mdash; Add Comments
             </h2>
-            <button type="button" class="btn-close" id="sgr-revision-close" aria-label="Close"></button>
+            <button type="button" class="btn-close" id="sqr-revision-close" aria-label="Close"></button>
         </div>
         <div class="requestor-modal__body">
             <p class="text-muted small mb-3">
@@ -3720,18 +3719,18 @@
                 These will be saved to the SQR and included in the email notification sent to them.
             </p>
             <div class="mb-4">
-                <label class="form-label fw-semibold" for="sgr-revision-notes">
+                <label class="form-label fw-semibold" for="sqr-revision-notes">
                     <i class="bi bi-chat-left-text me-1"></i>Revision Comments <span class="text-danger">*</span>
                 </label>
-                <textarea id="sgr-revision-notes" class="form-control" rows="6"
+                <textarea id="sqr-revision-notes" class="form-control" rows="6"
                     placeholder="e.g. Please update the project scope and revise the SSE man-hours. The current estimate appears underquoted for an Implementation engagement. Ensure the documentation links are also attached before resubmitting."></textarea>
                 <div class="form-text">These notes will be saved to the SQR record and emailed to the engineer.</div>
             </div>
             <div class="d-flex gap-2 justify-content-end">
-                <button type="button" class="btn btn-outline-secondary" id="sgr-revision-cancel">
+                <button type="button" class="btn btn-outline-secondary" id="sqr-revision-cancel">
                     <i class="bi bi-x me-1"></i>Cancel
                 </button>
-                <button type="button" class="btn btn-danger" id="sgr-revision-confirm">
+                <button type="button" class="btn btn-danger" id="sqr-revision-confirm">
                     <i class="bi bi-send me-1"></i>Submit &amp; Notify Engineer
                 </button>
             </div>
