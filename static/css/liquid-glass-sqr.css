@@ -193,6 +193,39 @@ body.sqr-page a.sqr-toggle-btn.btn-outline-primary.lg-btn--ghost:hover {
     filter: none !important;
 }
 
+body.sqr-page:not(.dark-mode) .lg-btn--ghost,
+body.sqr-page:not(.dark-mode) .btn-outline-secondary.lg-btn,
+body.sqr-page:not(.dark-mode) .btn-outline-primary.lg-btn,
+body.sqr-page:not(.dark-mode) .btn-outline-success.lg-btn,
+body.sqr-page:not(.dark-mode) .btn-outline-info.lg-btn,
+body.sqr-page:not(.dark-mode) .btn-outline-light.lg-btn {
+    overflow: hidden;
+    background-clip: padding-box;
+    border: 1px solid color-mix(in srgb, #64748b 18%, transparent) !important;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.62)),
+        linear-gradient(155deg, var(--lg-tint-strong), var(--lg-tint)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+
+body.sqr-page:not(.dark-mode) .lg-btn--ghost:hover,
+body.sqr-page:not(.dark-mode) .btn-outline-secondary.lg-btn:hover,
+body.sqr-page:not(.dark-mode) .btn-outline-primary.lg-btn:hover,
+body.sqr-page:not(.dark-mode) .btn-outline-success.lg-btn:hover,
+body.sqr-page:not(.dark-mode) .btn-outline-info.lg-btn:hover {
+    border-color: color-mix(in srgb, #64748b 28%, transparent) !important;
+}
+
+body.sqr-page:not(.dark-mode) .lg-btn--accent,
+body.sqr-page:not(.dark-mode) .btn-primary.lg-btn,
+body.sqr-page:not(.dark-mode) .sqr-toggle-btn.btn-primary,
+body.sqr-page:not(.dark-mode) a.sqr-toggle-btn.btn-outline-primary.lg-btn--ghost,
+body.sqr-page:not(.dark-mode) a.sqr-toggle-btn.btn-outline-primary.lg-btn--ghost:hover {
+    overflow: hidden;
+    background-clip: padding-box;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
+}
+
 /* --------------------------------------------------------------------------
    3. Forms
    -------------------------------------------------------------------------- */
@@ -256,7 +289,22 @@ body.sqr-page .sqr-toolbar-search-box {
     min-height: 2rem;
     height: 2rem;
     padding: 0.28rem 0.7rem;
-    border-radius: 12px;
+    border-radius: 999px;
+}
+
+body.sqr-page:not(.dark-mode) .sqr-toolbar-search-box {
+    overflow: hidden;
+    background-clip: padding-box;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.78));
+    border: 1px solid color-mix(in srgb, #64748b 18%, transparent) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+body.sqr-page:not(.dark-mode) .sqr-toolbar-search-box:focus-within {
+    border-color: color-mix(in srgb, var(--lg-accent) 45%, transparent) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 0 0 3px color-mix(in srgb, var(--lg-accent) 18%, transparent) !important;
 }
 
 body.sqr-page .sqr-toolbar-search-box .mgmt-search-input {
@@ -268,6 +316,11 @@ body.sqr-page .sqr-toolbar-search-box .mgmt-result-badge {
     padding: 0.12rem 0.5rem;
 }
 
+body.sqr-page:not(.dark-mode) .sqr-toolbar-search-box .mgmt-result-badge {
+    border-color: color-mix(in srgb, #64748b 16%, transparent);
+    background: color-mix(in srgb, #64748b 10%, transparent);
+}
+
 body.sqr-page .sqr-toolbar-search-box .mgmt-search-icon {
     font-size: 0.8rem;
 }
@@ -276,7 +329,7 @@ body.sqr-page .sqr-view-toggle {
     display: inline-flex;
     gap: 0.25rem;
     padding: 4px;
-    border-radius: var(--lg-radius-sm);
+    border-radius: 999px;
     background: var(--lg-tint-sunken);
     border: 1px solid var(--lg-hairline-soft);
     -webkit-backdrop-filter: blur(16px) saturate(1.7);
@@ -284,7 +337,7 @@ body.sqr-page .sqr-view-toggle {
 }
 
 body.sqr-page .sqr-view-toggle .btn {
-    border-radius: 9px !important;
+    border-radius: 999px !important;
     padding-inline: 0.95rem;
     font-weight: 550;
     letter-spacing: -0.01em;
@@ -302,6 +355,18 @@ body.sqr-page .sqr-view-toggle .btn-primary {
     background: var(--lg-tint-strong) !important;
     border-color: var(--lg-hairline) !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 12px -8px rgba(6, 18, 46, 0.35) !important;
+}
+
+body.sqr-page:not(.dark-mode) .sqr-view-toggle {
+    background: rgba(148, 163, 184, 0.14);
+    border-color: color-mix(in srgb, #64748b 18%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+body.sqr-page:not(.dark-mode) .sqr-view-toggle .btn-primary {
+    background: rgba(255, 255, 255, 0.92) !important;
+    border-color: color-mix(in srgb, #64748b 16%, transparent) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 body.dark-mode.sqr-page .sqr-view-toggle .btn-primary {
@@ -348,6 +413,7 @@ body.sqr-page .sqr-badge-filter {
     gap: 0.3rem;
     padding: 0.42rem 0.78rem !important;
     border-radius: 999px !important;
+    white-space: nowrap;
     font-size: 0.78rem !important;
     font-weight: 650 !important;
     letter-spacing: -0.01em;
@@ -389,8 +455,60 @@ body.sqr-page .sqr-badge-filter[aria-pressed="true"] {
             color-mix(in srgb, var(--lg-accent-deep) 92%, #0b3a7a)) !important;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.35),
-        0 0 0 3px color-mix(in srgb, var(--lg-accent) 22%, transparent),
-        0 8px 18px -10px color-mix(in srgb, var(--lg-accent) 70%, transparent);
+        0 0 0 3px color-mix(in srgb, var(--lg-accent) 22%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   4a. Light mode only - restore distinct semantic colors on the filter badges.
+   The base glass rule flattens every Bootstrap `-subtle` utility background
+   into a near-white pill. Layer a soft pastel tint + colored text/border per
+   status so each filter is legible. Dark mode untouched -
+   `body.dark-mode.sqr-page .sqr-badge-filter` still wins there.
+   Color identity drives from a single per-group --lg-badge-accent.
+   -------------------------------------------------------------------------- */
+
+body.sqr-page:not(.dark-mode) .sqr-badge-filter {
+    --lg-badge-accent: #64748b; /* slate -> secondary/total/cancelled */
+    overflow: hidden;
+    background-clip: padding-box;
+    color: color-mix(in srgb, var(--lg-badge-accent) 74%, #0b1220) !important;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.62)),
+        color-mix(in srgb, var(--lg-badge-accent) 14%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--lg-badge-accent) 20%, rgba(148, 163, 184, 0.28)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.bg-primary-subtle   { --lg-badge-accent: #2563eb; }
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.bg-warning-subtle   { --lg-badge-accent: #d97706; }
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.bg-danger-subtle    { --lg-badge-accent: #dc2626; }
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.bg-success-subtle   { --lg-badge-accent: #16a34a; }
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.bg-info-subtle      { --lg-badge-accent: #0891b2; }
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.bg-secondary-subtle { --lg-badge-accent: #64748b; }
+
+body.sqr-page:not(.dark-mode) .sqr-badge-filter:hover {
+    transform: none;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.72)),
+        color-mix(in srgb, var(--lg-badge-accent) 22%, transparent) !important;
+    border-color: color-mix(in srgb, var(--lg-badge-accent) 30%, rgba(148, 163, 184, 0.28)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+body.sqr-page:not(.dark-mode) .sqr-badge-filter.is-active,
+body.sqr-page:not(.dark-mode) .sqr-badge-filter[aria-pressed="true"] {
+    color: #fff !important;
+    border-color: color-mix(in srgb, var(--lg-badge-accent) 48%, rgba(255, 255, 255, 0.4)) !important;
+    background:
+        linear-gradient(180deg,
+            color-mix(in srgb, var(--lg-badge-accent) 88%, #ffffff),
+            color-mix(in srgb, var(--lg-badge-accent) 80%, #0b2a4a)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+body.sqr-page:not(.dark-mode) .sqr-badge-filter:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--lg-badge-accent) 60%, transparent);
+    outline-offset: 2px;
 }
 
 body.sqr-page .sqr-esg-note {
@@ -734,12 +852,7 @@ body.sqr-page .sqr-stage-delivery {
 body.sqr-page .sqr-stage-revenue {
     background: linear-gradient(180deg, #d8c0f2, #c4b5fd) !important;
     color: #4c1d95 !important;
-    font-weight: 750;
-}
-body.sqr-page .sqr-stage-action {
-    background: linear-gradient(180deg, #c5d0e4, #b4c2db) !important;
-    color: #0f172a !important;
-    font-weight: 750;
+    font-weight: 700;
 }
 
 body.dark-mode.sqr-page .sqr-stage-frozen,

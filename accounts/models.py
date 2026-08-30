@@ -75,7 +75,7 @@ class User(AbstractUser):
     ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
-    show_chatbot = models.BooleanField(default=True, verbose_name="Show AI Chatbot")
+    show_chatbot = models.BooleanField(default=False, verbose_name="Show AI Chatbot")
     idle_timeout_enabled = models.BooleanField(default=True, verbose_name="5-Minute Idle Timeout")
     show_login_banner = models.BooleanField(default=True, verbose_name="Welcome Banner on Login")
 

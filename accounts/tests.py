@@ -88,6 +88,13 @@ class LoginPageTests(TestCase):
         self.assertNotIn("default_password", html)
 
 
+class AccountSettingsTests(TestCase):
+    def test_new_users_have_chatbot_disabled_by_default(self):
+        user = User.objects.create_user(username="chatbot_default_user", password="TestPass123!")
+
+        self.assertFalse(user.show_chatbot)
+
+
 class SecretHygieneTests(TestCase):
     root = Path(__file__).resolve().parents[1]
     secret_keys = {

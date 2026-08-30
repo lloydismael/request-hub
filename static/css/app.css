@@ -2843,8 +2843,9 @@ body.requestor-dashboard .dashboard-metric-card--active {
 .requestor-modal__backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(4px);
+    background: rgba(15, 23, 42, 0.42);
+    -webkit-backdrop-filter: blur(10px) saturate(1.35);
+    backdrop-filter: blur(10px) saturate(1.35);
 }
 
 .requestor-modal__dialog {
@@ -2854,11 +2855,16 @@ body.requestor-dashboard .dashboard-metric-card--active {
     max-height: min(1000px, 88vh);
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.98);
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.8), rgba(244, 247, 255, 0.68));
     border-radius: 18px;
-    box-shadow: 0 25px 60px rgba(15, 23, 42, 0.35);
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 18px 48px rgba(15, 23, 42, 0.18),
+        0 38px 80px -30px rgba(15, 23, 42, 0.28);
+    border: 1px solid rgba(148, 163, 184, 0.24);
     overflow: hidden;
+    -webkit-backdrop-filter: blur(22px) saturate(1.65);
+    backdrop-filter: blur(22px) saturate(1.65);
     /* Force dark text — body color is light (#e2e8f0) for dark bg, breaks white modal */
     color: #0f172a;
     --bs-heading-color: #0f172a;
@@ -2925,7 +2931,11 @@ body.requestor-dashboard .dashboard-metric-card--active {
 }
 
 body.dark-mode .requestor-modal__dialog {
-    background: rgba(9, 11, 15, 0.98);
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.68));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 18px 48px rgba(2, 6, 23, 0.42),
+        0 38px 80px -30px rgba(2, 6, 23, 0.6);
     color: #e5e7eb;
     border-color: rgba(148, 163, 184, 0.25);
 }
@@ -3088,7 +3098,7 @@ body.dark-mode .acct-dropdown__hint {
     max-width: 760px;
     max-height: min(840px, 92vh);
     margin: 4vh auto;
-    background: rgba(255, 255, 255, 0.86);
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(244, 247, 255, 0.68));
     border-color: rgba(148, 163, 184, 0.22);
     color: #0f172a;
 }
@@ -3310,6 +3320,7 @@ body.dark-mode .act-form-label .act-form-optional {
 
 /* ── Dark mode ── */
 body.dark-mode .requestor-modal__dialog--act {
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.68));
     color: #e5e7eb;
 }
 body.dark-mode .act-modal-header {
