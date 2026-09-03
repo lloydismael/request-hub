@@ -89,6 +89,7 @@ from .models import (
     SqrSubmissionHistory,
     StatusLog,
 )
+from .constants import ACCOUNT_MANAGERS
 from .mixins import (
     AdminOrEngineerRequiredMixin,
     AdminOrPmEsgRequiredMixin,
@@ -116,6 +117,12 @@ SQR_APPROVAL_INCLUDED_SERVICES = [
     "Monthly System Status Report",
     "Advisory Support",
 ]
+SQR_APPROVAL_HUB_EMAIL = "ESGRequestHub@phildata.com"
+SQR_ACCOUNT_MANAGER_EMAILS = {
+    manager["name"].strip().casefold(): manager["email"]
+    for manager in ACCOUNT_MANAGERS
+    if manager.get("name") and manager.get("email")
+}
 
 
 def _format_sqr_approval_greeting(requestor_name: str) -> str:
@@ -153,6 +160,53 @@ def _get_sqr_service_component(submission: "SqrSubmission") -> str:
     return SQR_APPROVAL_SERVICE_COMPONENT
 
 
+def _normalize_sqr_person_name(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").replace(",", " ").strip()).casefold()
+
+
+def _resolve_sqr_account_manager_email(submission: "SqrSubmission") -> str:
+    manager_name = (submission.customer_contact or "").strip()
+    if not manager_name:
+        return ""
+
+    roster_email = SQR_ACCOUNT_MANAGER_EMAILS.get(manager_name.casefold())
+    if roster_email:
+        return roster_email.strip()
+
+    normalized_name = _normalize_sqr_person_name(manager_name)
+    for user in User.objects.exclude(email="").only("first_name", "last_name", "username", "email"):
+        candidates = [
+            user.get_full_name(),
+            f"{user.last_name} {user.first_name}".strip(),
+            user.username,
+        ]
+        if any(_normalize_sqr_person_name(candidate) == normalized_name for candidate in candidates if candidate):
+            return (user.email or "").strip()
+    return ""
+
+
+def _unique_sqr_approval_emails(*emails: str) -> list[str]:
+    unique_emails: list[str] = []
+    seen = set()
+    for email in emails:
+        cleaned = (email or "").strip()
+        key = cleaned.casefold()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        unique_emails.append(cleaned)
+    return unique_emails
+
+
+def _get_sqr_approval_to_emails(submission: "SqrSubmission") -> list[str]:
+    engineer_email = (getattr(submission.engineer, "email", "") or "").strip()
+    return _unique_sqr_approval_emails(
+        engineer_email,
+        _resolve_sqr_account_manager_email(submission),
+        SQR_APPROVAL_HUB_EMAIL,
+    )
+
+
 def _get_sqr_logo_attachment() -> Optional[dict]:
     try:
         logo_bytes = SQR_APPROVAL_LOGO_PATH.read_bytes()
@@ -180,10 +234,8 @@ def _build_sqr_approval_mime_message(context: dict, sender_email: str, *, mark_a
     message["Subject"] = Header(context["subject"], "windows-1252")
     message["From"] = sender_email
     recipients = context.get("recipients") or []
-    if recipients[:1]:
-        message["To"] = recipients[0]
-    if recipients[1:]:
-        message["Cc"] = ", ".join(recipients[1:])
+    if recipients:
+        message["To"] = ", ".join(recipients)
     if mark_as_unsent:
         message["X-Unsent"] = "1"
 
@@ -232,6 +284,13 @@ def _format_sqr_approval_validity_date(submission: "SqrSubmission") -> str:
     return submission.validity_due_date.strftime("%B %d, %Y") if submission.validity_due_date else "—"
 
 
+def _format_sqr_approval_currency(value: object) -> str:
+    if value is None:
+        return "—"
+    amount = value if isinstance(value, Decimal) else Decimal(str(value))
+    return f"PHP {amount:,.2f}"
+
+
 def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: str) -> list[str]:
     service_component = _get_sqr_service_component(submission)
     total_price = _format_sqr_approval_total_price(submission)
@@ -241,27 +300,19 @@ def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: 
     service_description = (submission.project_title or "").strip() or "—"
     account_manager = (submission.customer_contact or "").strip() or "—"
     scope_of_services = (submission.project_details or "").strip() or "—"
-    summary_rows = [
-        ("SQR ID", submission.reference_code or "—"),
-        ("Customer Name", customer_name),
-        ("Service Description", service_description),
-        ("Account Manager", account_manager),
-        ("Scope of Services", scope_of_services),
-    ]
-    summary_width = max(len(label) for label, _ in summary_rows) + 2
-
-    def format_label_value(label: str, value: str) -> str:
-        return f"{label:<{summary_width}}: {value}"
+    investment_total = _format_sqr_approval_currency(
+        submission.computed_total_price if submission.computed_total_price is not None else submission.quotation_total_price
+    )
 
     return [
         "Submitted SQR is now approved, please refer to the ff. details below.",
         "",
-        format_label_value("SQR ID", submission.reference_code or "—"),
-        format_label_value("Customer Name", customer_name),
-        format_label_value("Service Description", service_description),
-        format_label_value("Account Manager", account_manager),
-        format_label_value("Scope of Services", scope_of_services),
-        format_label_value("Add-On Service", service_component),
+        f"SQR ID : {submission.reference_code or '—'}",
+        f"Customer Name : {customer_name}",
+        f"Service Description : {service_description}",
+        f"Account Manager : {account_manager}",
+        f"Scope of Services : {scope_of_services}",
+        f"Add-On Service : {service_component}",
         "Included Services:",
         "• Proactive System Health Checks",
         "• System/Platform Patching (scheduled)",
@@ -269,11 +320,15 @@ def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: 
         "• Basic Troubleshooting and Issue Isolation",
         "• Monthly System Status Report",
         "• Advisory Support",
+        "Quantity: 1 Lot",
+        f"Approval Date : {approval_date}",
+        f"Quotation Validity Until: {validity_date}",
         "",
-        format_label_value("Quantity", "1 Lot"),
-        format_label_value("Total Price", total_price),
-        format_label_value("Approval Date", approval_date),
-        format_label_value("Quotation Validity Until", validity_date),
+        "Professional Services Investment Summary",
+        f"Project Implementation: {_format_sqr_approval_currency(submission.sse_amount)}",
+        f"Project Management: {_format_sqr_approval_currency(submission.pm_amount)}",
+        f"Systems Support & Maintenance Service - 1 Year (Optional): {_format_sqr_approval_currency(submission.managed_support_amount)}",
+        f"Total Professional Services Investment: {investment_total}",
         "",
         "**TERMS AND CONDITIONS**",
         "VAT: This quote excludes Value Added Tax (VAT).",
@@ -297,26 +352,19 @@ def _build_sqr_approval_draft_html(submission: "SqrSubmission", requestor_name: 
 
 
 def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name: str, *, logo_src: str) -> str:
-    summary_rows = [
-        ("SQR ID", submission.reference_code or "—"),
-        ("Account / Customer", submission.customer_name or "—"),
-        ("Service Description", (submission.project_title or "").strip() or "—"),
-        ("Account Manager", (submission.customer_contact or "").strip() or "—"),
-    ]
     service_component = html.escape(_get_sqr_service_component(submission))
     approval_date = html.escape(_format_sqr_approval_date(submission))
     total_price = html.escape(_format_sqr_approval_total_price(submission))
     validity_date = html.escape(_format_sqr_approval_validity_date(submission))
     greeting = html.escape(_format_sqr_approval_greeting(requestor_name))
     logo_url = html.escape(logo_src)
-
-    summary_headers_html = "".join(
-        f'<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">{html.escape(label)}</span></div></th>'
-        for label, _value in summary_rows
-    )
-    summary_values_html = "".join(
-        f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{html.escape(value)}</div></td>'
-        for _label, value in summary_rows
+    project_implementation = html.escape(_format_sqr_approval_currency(submission.sse_amount))
+    project_management = html.escape(_format_sqr_approval_currency(submission.pm_amount))
+    maintenance_amount = html.escape(_format_sqr_approval_currency(submission.managed_support_amount))
+    professional_total = html.escape(
+        _format_sqr_approval_currency(
+            submission.computed_total_price if submission.computed_total_price is not None else submission.quotation_total_price
+        )
     )
 
     return "".join(
@@ -326,44 +374,72 @@ def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name:
             '<div class="elementToProof" style="background-color:rgb(255,255,255);margin:0 auto;border-width:1px;border-style:solid;border-color:rgb(215,222,232);max-width:860px;">',
             '<div class="elementToProof" style="padding:28px 30px 32px;">',
             f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 12px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">{greeting}</span></p>',
-            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 22px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">Submitted SQR is now approved. Please refer to the quotation details below.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 22px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">Submitted SQR is now approved, please refer to the ff. details below.</span></p>',
             '<div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:rgb(16,24,40);">',
             f'<img width="193" height="80" style="width:193.667px;height:80px;max-width:1070px;" src="{logo_url}" alt="Phil-Data">',
             '</div>',
             '<table role="presentation" style="direction:ltr;margin:0 0 18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
-            '<tbody><tr>',
+            '<tbody>',
+            '<tr>',
             '<td style="direction:ltr;vertical-align:bottom;">',
-            '<div class="elementToProof" style="direction:ltr;letter-spacing:0.08em;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgb(71,84,103);"><span style="letter-spacing:0.08em;">Date</span></div>',
-            f'<div class="elementToProof" style="direction:ltr;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);">{approval_date}</div>',
+            '<div class="elementToProof" style="direction:ltr;letter-spacing:0.08em;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgb(71,84,103);"><span style="letter-spacing:0.08em;">SQR ID</span></div>',
+            f'<div class="elementToProof" style="direction:ltr;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);">{html.escape(submission.reference_code or "—")}</div>',
             '</td>',
             '<td style="direction:ltr;text-align:right;vertical-align:bottom;">',
             '<div class="elementToProof" style="direction:ltr;text-align:right;letter-spacing:0.05em;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:700;color:rgb(17,24,39);"><span style="letter-spacing:0.05em;">SERVICE QUOTATION</span></div>',
             '</td>',
-            '</tr></tbody></table>',
+            '</tr>',
+            '</tbody></table>',
             '<table role="presentation" style="direction:ltr;width:100%;table-layout:fixed;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
             '<tbody>',
-            f'<tr>{summary_headers_html}</tr>',
-            f'<tr>{summary_values_html}</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>SQR ID</b> : ' + html.escape(submission.reference_code or "—") + '</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Customer Name</b> : ' + html.escape(submission.customer_name or "—") + '</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Service Description</b> : ' + html.escape((submission.project_title or "").strip() or "—") + '</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Account Manager</b> : ' + html.escape((submission.customer_contact or "").strip() or "—") + '</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td colspan="2" style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Scope of Services</b> : ' + html.escape((submission.project_details or "").strip() or "—") + '</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td colspan="2" style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Add-On Service</b> : ' + service_component + '</div></td>',
+            '</tr>',
             '</tbody></table>',
-            '<table role="presentation" style="direction:ltr;margin-top:18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<div class="elementToProof" style="direction:ltr;margin-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);"><div style="font-weight:700;">Included Services:</div><ul style="margin:8px 0 0 18px;padding:0;line-height:1.7;">',
+            '<li>Proactive System Health Checks</li>',
+            '<li>System/Platform Patching (scheduled)</li>',
+            '<li>Incident Support</li>',
+            '<li>Basic Troubleshooting and Issue Isolation</li>',
+            '<li>Monthly System Status Report</li>',
+            '<li>Advisory Support</li>',
+            '</ul></div>',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:12px 0 0;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><b>Quantity</b>: 1 Lot</span></p>',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:8px 0 0;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><b>Approval Date</b> : {approval_date}</span></p>',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:8px 0 0;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><b>Quotation Validity Until</b>: {validity_date}</span></p>',
+            '<div class="elementToProof" style="margin-top:24px;">',
+            '<div class="elementToProof" style="direction:ltr;margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:rgb(16,24,40);"><span style="font-weight:700;">Professional Services Investment Summary</span></div>',
+            '<table role="presentation" style="direction:ltr;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
             '<tbody>',
             '<tr>',
-            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Service Component</span></div></th>',
-            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:120px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Qty</span></div></th>',
-            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:180px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Total Price</span></div></th>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">Project Implementation</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{project_implementation}</div></td>',
             '</tr>',
             '<tr>',
-            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{service_component}</div></td>',
-            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">1 lot</div></td>',
-            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{total_price}</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">Project Management</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{project_management}</div></td>',
             '</tr>',
             '<tr>',
-            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;"></td>',
-            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">Total</span></div></td>',
-            f'<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">{total_price}</span></div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">Systems Support &amp; Maintenance Service - 1 Year (Optional)</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{maintenance_amount}</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Total Professional Services Investment</b></div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>{professional_total}</b></div></td>',
             '</tr>',
             '</tbody></table>',
-            f'<p class="elementToProof" style="direction:ltr;margin:14px 0 0;font-size:13px;color:rgb(71,84,103);"><span style="font-family:Arial,Helvetica,sans-serif;">Quotation Validity Until: </span><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);"><b>{validity_date}</b></span></p>',
+            '</div>',
             '<div class="elementToProof" style="margin-top:24px;">',
             '<div class="elementToProof" style="direction:ltr;margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:rgb(16,24,40);"><span style="font-weight:700;">Terms and Conditions</span></div>',
             '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">VAT: This quote excludes Value Added Tax (VAT).</span></p>',
@@ -1370,6 +1446,7 @@ def _send_sqr_approved_email(
     body_lines = _build_sqr_approval_body_lines(submission, engineer_name)
     plain_text = "\n".join(body_lines)
     html_text = _build_sqr_approval_html(submission, engineer_name)
+    to_emails = _get_sqr_approval_to_emails(submission)
 
     try:
         from azure.communication.email import EmailClient
@@ -1378,10 +1455,7 @@ def _send_sqr_approved_email(
         message = {
             "senderAddress": settings.ACS_EMAIL_SENDER,
             "recipients": {
-                "to": [
-                    {"address": engineer_email},
-                    {"address": "ESGRequestHub@phildata.com"},
-                ]
+                "to": [{"address": email} for email in to_emails]
             },
             "content": {
                 "subject": subject,
@@ -1393,7 +1467,7 @@ def _send_sqr_approved_email(
         poller.result()
         logger.info(
             "SQR approved email sent to %s for %s",
-            engineer_email,
+            ", ".join(to_emails),
             submission.reference_code,
         )
     except Exception as exc:  # noqa: BLE001
@@ -1407,9 +1481,8 @@ def _send_sqr_approved_email(
 
 def _get_sqr_approval_email_context(submission: SqrSubmission) -> dict:
     engineer = submission.engineer
-    engineer_email = (getattr(engineer, "email", "") or "").strip()
     engineer_name = (engineer.get_full_name() or engineer.username or "").strip() if engineer else ""
-    recipients = [email for email in (engineer_email, "ESGRequestHub@phildata.com") if email]
+    recipients = _get_sqr_approval_to_emails(submission)
     logo_attachment = _get_sqr_logo_attachment()
     attachments = [logo_attachment] if logo_attachment else []
     return {
@@ -1459,14 +1532,10 @@ def _create_sqr_approval_graph_draft_json(context: dict, sender_email: str, acce
         },
         "toRecipients": [
             {"emailAddress": {"address": email}}
-            for email in recipients[:1]
+            for email in recipients
             if email
         ],
-        "ccRecipients": [
-            {"emailAddress": {"address": email}}
-            for email in recipients[1:]
-            if email
-        ],
+        "ccRecipients": [],
     }
     attachments = context.get("attachments") or []
     if attachments:
@@ -1541,8 +1610,8 @@ def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[
 
 def _build_sqr_approval_mailto_url(context: dict) -> str:
     recipients = context.get("recipients") or []
-    to_recipient = recipients[0] if recipients else ""
-    cc_recipients = ";".join(recipients[1:])
+    to_recipient = ";".join(recipients)
+    cc_recipients = ""
     mailto_parts = [
         f"mailto:{quote(to_recipient)}",
         f"subject={quote(context['subject'])}",

@@ -43,6 +43,10 @@ from hub.views import (
     RequestCollaborativeManageView,
     SqrListView,
     UserManagementView,
+    _build_sqr_approval_body_lines,
+    _get_sqr_approval_email_context,
+    _resolve_sqr_account_manager_email,
+    _send_sqr_approved_email,
     clear_engineer_outlook_lock_on_reassignment,
     notify_engineer_assignment_email,
 )
@@ -1396,6 +1400,125 @@ class RequestActivityLogEditModalTests(TestCase):
         self.assertContains(response, 'id="activity-log-form"')
         self.assertContains(response, 'name="form_type" value="activity_log"')
         self.assertContains(response, f'name="log_id" value="{self.activity_log.pk}"')
+
+
+class SqrApprovalEmailTemplateTests(TestCase):
+    def setUp(self):
+        self.engineer = User.objects.create_user(
+            username="sqr_approval_engineer",
+            password="pass12345",
+            role=User.Roles.ENGINEER,
+            email="sqr.approval.engineer@example.com",
+            first_name="SQR",
+            last_name="Engineer",
+        )
+        self.pm = User.objects.create_user(
+            username="sqr_approval_pm",
+            password="pass12345",
+            role=User.Roles.PM_ESG,
+            email="sqr.approval.pm@example.com",
+            first_name="SQR",
+            last_name="PM",
+        )
+        self.submission = SqrSubmission.objects.create(
+            engineer=self.engineer,
+            pm_esg_reviewer=self.pm,
+            customer_name="Acme Systems",
+            customer_company="Acme",
+            customer_contact="Jane Customer",
+            project_title="Cloud Migration",
+            project_details="Infrastructure assessment, migration planning, support handoff",
+            sse_manhrs=Decimal("20"),
+            pm_manhrs=Decimal("8"),
+            sse_amount=Decimal("40000.00"),
+            pm_amount=Decimal("24000.00"),
+            managed_support_amount=Decimal("15000.00"),
+            quotation_total_price=Decimal("79000.00"),
+            validity_due_date=date(2026, 12, 31),
+            reviewed_at=datetime(2026, 9, 4, 0, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_approval_body_includes_requested_summary_sections(self):
+        lines = _build_sqr_approval_body_lines(self.submission, "sqr_engineer")
+        text = "\n".join(lines)
+
+        self.assertIn("Submitted SQR is now approved, please refer to the ff. details below.", text)
+        self.assertIn(f"SQR ID : {self.submission.reference_code}", text)
+        self.assertIn("Customer Name : Acme Systems", text)
+        self.assertIn("Service Description : Cloud Migration", text)
+        self.assertIn("Account Manager : Jane Customer", text)
+        self.assertIn("Scope of Services : Infrastructure assessment, migration planning, support handoff", text)
+        self.assertIn("Add-On Service : Systems Support & Maintenance Service - 1 Year", text)
+        self.assertIn("Quantity: 1 Lot", text)
+        self.assertIn("Approval Date : September 04, 2026", text)
+        self.assertIn("Quotation Validity Until: December 31, 2026", text)
+        self.assertIn("Professional Services Investment Summary", text)
+        self.assertIn("Project Implementation: PHP 40,000.00", text)
+        self.assertIn("Project Management: PHP 24,000.00", text)
+        self.assertIn("Systems Support & Maintenance Service - 1 Year (Optional): PHP 15,000.00", text)
+        self.assertIn("Total Professional Services Investment: PHP 79,000.00", text)
+
+    def test_approval_recipients_include_assigned_account_manager(self):
+        User.objects.create_user(
+            username="jimlyn",
+            password="pass12345",
+            role=User.Roles.REQUESTOR,
+            email="JimlynE@phildata.com",
+            first_name="Jimlyn",
+            last_name="Espinosa",
+        )
+        self.submission.customer_contact = "Jimlyn Espinosa"
+        self.submission.save(update_fields=["customer_contact"])
+
+        context = _get_sqr_approval_email_context(self.submission)
+
+        self.assertEqual(
+            context["recipients"],
+            [
+                "sqr.approval.engineer@example.com",
+                "JimlynE@phildata.com",
+                "ESGRequestHub@phildata.com",
+            ],
+        )
+        self.assertEqual(
+            _resolve_sqr_account_manager_email(self.submission),
+            "JimlynE@phildata.com",
+        )
+
+    def test_approval_acs_to_field_includes_assigned_account_manager(self):
+        self.submission.customer_contact = "Jimlyn Espinosa"
+        self.submission.save(update_fields=["customer_contact"])
+        captured = {}
+
+        class FakePoller:
+            def result(self):
+                return None
+
+        class FakeEmailClient:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            @classmethod
+            def from_connection_string(cls, *_args, **_kwargs):
+                return cls()
+
+            def begin_send(self, message):
+                captured["message"] = message
+                return FakePoller()
+
+        with patch("hub.views.settings.ACS_EMAIL_CONNECTION_STRING", "endpoint=https://example/;accesskey=test"), \
+             patch("hub.views.settings.ACS_EMAIL_SENDER", "noreply@example.com"), \
+             patch.dict("sys.modules", {"azure.communication.email": type("mod", (), {"EmailClient": FakeEmailClient})}):
+            _send_sqr_approved_email(self.submission, "SQR PM")
+
+        self.assertEqual(
+            captured["message"]["recipients"]["to"],
+            [
+                {"address": "sqr.approval.engineer@example.com"},
+                {"address": "JimlynE@phildata.com"},
+                {"address": "ESGRequestHub@phildata.com"},
+            ],
+        )
 
 
 class SqrEngineerLinkedRequestAccessTests(TestCase):
