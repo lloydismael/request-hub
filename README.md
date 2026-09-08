@@ -117,26 +117,18 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 ## Workflow
 
 ```
-+---------------------------------------------------------------------+
-                       REQUEST LIFECYCLE                             
-                                                                     
-  Requestor / PM          Admin / PM-ESG           Engineer          
-  -------------           -------------           ---------          
-  Create Request  ------? Review & Assign  ------? Work on Request   
-  (with priority,         (engineer + due           (view in        
-   engagement type,        date + status             assigned tab)   
-   product category)       updates)                                  
-                                                                     
-                          Monitor SLA     ------? Log Activity       
-                          (overdue flags,           (hours, type,    
-                           daily check_sla)          location,       
-                                                     billable Y/N)   
-                                                                     
-                          Mark Completed  ?------  Submit SQR        
-                          (end_date set)            (post-engagement 
-                                                     quality report) 
-+---------------------------------------------------------------------+
+Create  ──────▶  Review & Assign  ──────▶  Acknowledge  ──────▶  Work  ──────▶  Complete  ──────▶  SQR
+(requestor       (Admin / PM-ESG:          (engineer      (assigned tab:          (end_date   (post-engagement
+ roles:           engineer + due date,      confirms       log activity,           set,        quotation + revenue
+ requestor,       lifecycle                assignment)     comms via               lifecycle     tracking, submitted
+ requestor-ess,   created → assigned)                      Outlook / Teams,        completed)    → reviewed)
+ PM-ESS,
+ PM-ESG)
 ```
+
+- **SLA** is auto-calculated at assignment (Medium = 5 days, High = 3 days); `check_sla` flags overdue daily.
+- **Assignment capacity**: max 5 ongoing per engineer; max 3 while a deployment is active.
+- **Status updates** are recorded on every save (StatusLog) and notify assignees; completion is restricted to Admin / PM-ESG and the assigned engineer.
 
 ---
 
@@ -144,17 +136,19 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 | Permission | Requestor | Requestor-ESS | PM-ESS | PM-ESG | Engineer | On Hold | Admin |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Create request | ? | ? | ? | ? | ? | ? | ? |
-| View own requests | ? | ? | ? | ? | | | ? |
-| View all requests | ? | ? | ? (all + mine tabs) | ? | ? | ? | ? |
-| Assign engineers | ? | ? | ? | ? | ? | ? | ? |
-| Update request status | ? | ? | ? | ? | ? | ? | ? |
-| View assigned requests | ? | ? | ? | ? | ? | ? (read-only) | ? |
-| Log engineer activity | ? | ? | ? | ? | ? | ? | ? |
-| Submit SQR | ? | ? | ? | ? | ? | ? | ? |
-| Access reports | ? | ? | ? | ? | ? (own graph) | ? | ? |
-| Manage users | ? | ? | ? | ? | ? | ? | ? |
-| Export CSV | ? | ? | ? | ? | ? | ? | ? |
+| Create request | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| View own requests | ✅ | ✅ | ✅ | ✅ | ✅ (assigned) | ➖ (read-only) | ✅ |
+| View all requests | ❌ | ❌ | ➖ (all + mine tabs) | ✅ | ❌ (assigned only) | ❌ | ✅ |
+| Assign engineers | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| Update request status | ➖ (own only) | ➖ (own only) | ➖ (own only) | ✅ | ✅ (assigned) | ❌ | ✅ |
+| View assigned requests | ❌ | ❌ | ✅ | ✅ | ✅ | ➖ (read-only) | ✅ |
+| Log engineer activity | ❌ | ❌ | ❌ | ❌ | ✅ | ➖ | ❌ |
+| Submit SQR | ❌ | ❌ | ❌ | ✅ | ✅ | ➖ | ✅ |
+| Access reports | ❌ | ❌ | ❌ | ✅ | ➖ (own graph) | ❌ | ✅ |
+| Manage users | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Export CSV | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
+
+> ✅ full access · ➖ scoped or restricted · ❌ no access. All checks are enforced server-side (see `hub/mixins.py`).
 
 > **PM-ESS** = Project Manager (ESS division) sees both "All Requests" and "My Requests" tabs.  
 > **PM-ESG** = Project Manager (ESG division) full admin-level request management.  
@@ -165,58 +159,45 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 ## Data Model
 
 ```
-+--------------+        +-------------------------------------------------+
-    User                                Request                       
---------------       -------------------------------------------------
- username     ?------? reference_code  (auto, unique)                 
- email          1:N   requestor       ? User (requestor roles)        
- role                 account         ? Account                       
- phone_number         engineer        ? User (engineer roles)         
- profile_photo        backup_engineer ? User (engineer roles)         
- banner_grad..        priority        Medium | High                   
- must_change..        engagement_type Opportunity | Training | Support 
-+--------------+                        Inquiry | Deployment | PM        
-                        product_category Azure | M365 | VMware |       
-+--------------+        status          Ongoing | Completed              
-   Account           due_date        SLA auto-calculated               
---------------        description                                       
- name        ?------- teams_chat_topic                                  
-+--------------+        +-------------------------------------------------+
-                                  1                        1
-                    +-------------+              +-----------+
-                    ? N                           ? N
-        +----------------------+     +----------------------------+
-           StatusLog                RequestCommunication     
-       ----------------------    ----------------------------
-        status (ongoing/done)     channel  Teams|Email|Phone 
-        note                     direction Inbound|Outbound 
-        author ? User            summary                    
-        created_at               logged_by ? User           
-        +----------------------+     +----------------------------+
+User (accounts/models.py) ── roles: requestor | requestor_ess | pm_ess | pm_esg | engineer | on_hold | admin
+  username · email · phone_number · department · banner_gradient · profile_photo → StoredFile
+  ├─ 1:N  Request.requestor ───────── (requestor, requestor_ess, pm_ess, pm_esg)
+  ├─ 1:N  Request.engineer / backup_engineer ── (engineer only)
+  ├─ 1:N  EngineerActivityLog · StatusLog · RequestCommunication · Notification
+  └─ 1:1  StoredFile (profile photo, DB-backed binary: name, data, content_type, size)
 
-        +----------------------------------------------------------+
-                         EngineerActivityLog                     
-       ----------------------------------------------------------
-        engineer      ? User                                     
-        account       ? Account                                  
-        request_date                                             
-        activity_type  Customer-Facing | Internal | Learning | 
-        location       On-site | Remote | Mixed                  
-        actual_hours                                             
-        is_billable   Boolean                                    
-        details                                                  
-        +----------------------------------------------------------+
+Account ── 1:N Request · 1:N EngineerActivityLog
+  name (unique)
 
-        +----------------------------------------------------------+
-                           SQRSubmission                         
-       ----------------------------------------------------------
-        request       ? Request (1:1)                            
-        submitted_by  ? User                                     
-        status        Draft | Submitted | Reviewed               
-        resolution_notes                                         
-        sse_manhours                                             
-        revenue_tracker fields                                   
-        +----------------------------------------------------------+
+Request (hub/models.py)
+  reference_code (auto, unique) · account → Account · account_manager
+  priority: medium | high (SLA +5 / +3 days)
+  engagement: opportunity | training | support | inquiry | deployment | project_management | certification
+  product_category: Azure | M365 | VMware | Omnissa | Hybrid | Dell | HP | Network | Veeam | Others
+  status: ongoing | completed · lifecycle_stage: created | assigned | acknowledged | ongoing | completed
+  engineer / backup_engineer → User · start_date · due_date · end_date · description · teams_chat_topic
+  is_deleted (soft delete) · assignment_revision
+  ├─ 1:N  RequestLifecycleEvent ── stage transitions (actor, owner labels, idempotency_key)
+  ├─ 1:N  StatusLog ── author → User, message
+  ├─ 1:N  RequestCommunication ── user → User, channel: outlook | teams
+  └─ 1:N  EngineerActivityLog (optional link) · Notification · SqrSubmission (linked_request)
+
+EngineerActivityLog
+  engineer → User · account → Account · request → Request (optional)
+  activity_type: learning | internal_support | on-call_support | pre-sales | project_management | training | deployment
+  location: wfa | office | onsite · actual_hours · is_billable · details
+  status: planned | in_progress | completed
+
+SqrSubmission (+ SqrSubmissionChange / SqrSubmissionHistory audit trail)
+  reference_code (auto, unique) · linked_request → Request
+  submitted_by / engineer / pm_esg_reviewer → User · customer + project fields
+  status: submitted (For Processing) | for_revision (For Revision) | reviewed (Approved)
+  proposal: submitted_pending | negotiation_review | closed_won | closed_lost | closed_canceled
+  delivery: on_track | off_track | at_risk | completed | cancelled
+  amounts: quotation_total · discount_rate · sse / pm / managed_support · hourly_rate
+  dates: validity_due · po_pnl · delivery milestones · sqr_folder_link · revenue_overview
+
+Notification ── recipient → User · related_request → Request · event: system | new_request | assignment · is_read
 ```
 
 ---
@@ -225,41 +206,26 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 ```
 Browser Request
-     
-      ?
- Django URL Router (request_hub/urls.py)
-     
-      +-? /accounts/*   -- AccountsApp  (login, profile, notifications)
-                            
-                             +- Middleware: MustChangePasswordMiddleware
-                                            ProfileCompleteMiddleware
-     
-      +-? /dashboard/   -- DashboardView (role-dispatched)
-                            
-                             +- Admin/PM-ESG  ? full request table + filters
-                             +- Engineer      ? assigned/backup tabs + graph
-                             +- Requestor/PM  ? personal metrics + request list
-     
-      +-? /requests/*   -- RequestDetailView, RequestAdminUpdateView
-                            
-                             +- StatusLog writes on every save
-                             +- SLA check on due_date
-                             +- Notification signals (hub/signals.py)
-     
-      +-? /reports/     -- ReportView (operational / activity tabs)
-                            
-                             +- Chart.js 4.4 stacked bar + doughnut
-                             +- EngineerActivityLog CRUD
-                             +- SQR form integration
-                             +- CSV export endpoint
-     
-      +-? /admin/       -- Django admin (superusers only)
+  │
+  ▼
+Django URL Router (request_hub/urls.py)
+  ├─▶ /accounts/* ── login, profile, notifications
+  │     Middleware: PasswordChangeRequiredMiddleware · ProfileCompletionMiddleware
+  ├─▶ /dashboard/ ── DashboardView (role-dispatched)
+  │     Admin/PM-ESG → full request table + filters
+  │     Engineer → assigned/backup tabs + personal graph
+  │     Requestor/PM → personal metrics + request list
+  ├─▶ /requests/* ── RequestDetailView · RequestAdminUpdateView (Admin/PM-ESG) · RequestUpdateView (creators, own)
+  │     StatusLog write on every save · SLA check on due_date · Notification signals (hub/signals.py)
+  ├─▶ /reports/ ── RequestReportView (Admin/PM-ESG; operational / activity tabs)
+  │     Chart.js 4.4 stacked bar + doughnut · EngineerActivityLog CRUD · SQR integration · CSV export
+  ├─▶ /sqr/* ── SQR tracker, proposal / revenue / delivery updates, .eml download + Outlook draft
+  └─▶ /admin/ ── Django admin (superusers only)
 
 Signals & Background Jobs
-     
-      +- post_save Request  ? create Notification for assigned engineer
-      +- check_sla (cron)   ? mark overdue, send email via ACS
-      +- fetch_phildata_users (management cmd) ? sync users from MS Graph
+  ├── post_save Request → Notification for assignees
+  ├── check_sla (daily) → mark overdue, send email via ACS
+  └── fetch_phildata_users (management cmd) → sync users from MS Graph
 ```
 
 ---
@@ -272,7 +238,7 @@ Signals & Background Jobs
 | **Database** | PostgreSQL (Azure Flexible Server in production) |
 | **Frontend** | Django Templates Bootstrap 5.3 Bootstrap Icons Chart.js 4.4 |
 | **Auth** | Django `AbstractUser` custom role system MSAL (Microsoft Graph) |
-| **Email** | Azure Communication Services (ACS) `DoNotReply@dreadops.site` |
+| **Email** | Azure Communication Services (ACS); sender address comes from `ACS_EMAIL_SENDER` |
 | **Containerisation** | Docker Docker Compose Gunicorn (WSGI) |
 | **Media Storage** | Database-backed `StoredFile` model (no S3/blob required) |
 | **Deployment** | Azure App Service (container) see [docs/azure-app-service-deployment.md](docs/azure-app-service-deployment.md) |
@@ -285,27 +251,29 @@ Signals & Background Jobs
 ```
 request-hub/
 
-+-- accounts/                   # User management app
-   +-- models.py               #   User (AbstractUser + roles + profile photo)
++-- accounts/                   # Users, auth, profile media
+   +-- models.py               #   User (roles, profile photo) + StoredFile (DB media)
    +-- views.py                #   Login, profile, notifications
    +-- backends.py             #   Email-or-username auth backend
-   +-- middleware.py           #   Password-change & profile-complete guards
+   +-- middleware.py           #   Password-change + profile-completion guards
    +-- storage.py              #   DatabaseMediaStorage for profile photos
-   +-- migrations/
+   +-- forms.py · urls.py · admin.py · tests.py · migrations/
 
-+-- hub/                        # Core business logic app
-   +-- models.py               #   Request, Account, StatusLog, SQR, ActivityLog
-   +-- views.py                #   Dashboard, Detail, Reports, SQR, ActivityLog
-   +-- forms.py                #   RequestForm, AdminForm, ActivityLogForm
++-- hub/                        # Core business logic
+   +-- models.py               #   Request, Account, RequestLifecycleEvent, StatusLog,
+                               #   RequestCommunication, EngineerActivityLog,
+                               #   SqrSubmission (+Change/History), Notification
+   +-- views.py                #   Dashboard, detail, reports, SQR, activity, exports
+   +-- forms.py                #   Request, admin, activity, SQR forms
    +-- mixins.py               #   Role-based access mixins
    +-- signals.py              #   Notification triggers
    +-- constants.py            #   Shared choices / constants
    +-- urls.py
-   +-- services/
-     +-- microsoft_graph.py  #   MS Graph API integration
+   +-- services/               #   microsoft_graph, notifications, request_lifecycle
    +-- management/commands/
        +-- check_sla.py        #   Daily SLA overdue checker
        +-- fetch_phildata_users.py  # MS Graph user sync
+   +-- tests.py · test_lifecycle.py · test_migrations.py
 
 +-- request_hub/                # Django project config
    +-- settings.py
@@ -319,9 +287,9 @@ request-hub/
    +-- hub/                    # Dashboard, detail, report, SQR templates
 
 +-- static/
-   +-- css/app.css             # All custom styles (glass-card, rpt-*, dbd-*, rmf-*)
-   +-- js/
-   +-- img/
+   +-- css/app.css             # Custom styles (glass-card, rpt-*, dbd-*, rmf-*)
+   +-- js/                     # Theme, charts, navbar, toasts, transitions
+   +-- img/                    # Logos and backgrounds
 
 +-- docs/
    +-- azure-app-service-deployment.md
@@ -331,6 +299,8 @@ request-hub/
 +-- entrypoint.sh
 +-- manage.py
 +-- requirements.txt
++-- requirements.lock
++-- LICENSE
 ```
 
 ---
@@ -415,7 +385,7 @@ docker compose exec web python manage.py migrate
 | `PHILDATA_TENANT_ID` | Microsoft Entra tenant ID |
 | `PHILDATA_CLIENT_ID` | App registration client ID |
 | `PHILDATA_CLIENT_SECRET` | App registration client secret |
-| `PHILDATA_DOMAIN` | Default `phildata.com` |
+| `PHILDATA_DOMAIN` | Default company domain (see `.env.example`) |
 | `PHILDATA_GRAPH_SCOPE` | Default `https://graph.microsoft.com/.default` |
 
 > Never commit real secrets, tokens, passwords, or connection strings to source control.
@@ -462,7 +432,7 @@ Schedule with Windows Task Scheduler, Linux `cron`, or Azure Container Apps sche
 # Fetch up to 25 users, sample 10
 python manage.py fetch_phildata_users --limit 25 --sample 10
 
-# Include all users (not only @phildata.com domain)
+# Include all users (not only the default company domain)
 python manage.py fetch_phildata_users --include-non-domain
 ```
 
@@ -492,8 +462,8 @@ Full Azure App Service container deployment guide:
 - Login failures are throttled at 5 attempts / 15 minutes per IP+username
 - Database media files are served only under the `profile_photos/` prefix; other prefixes 404
 - Admin password reset issues a one-time temporary password and sets `must_change_password`
-- `MustChangePasswordMiddleware` enforces password rotation on flagged accounts
-- `ProfileCompleteMiddleware` blocks access until profile fields are filled
+- `PasswordChangeRequiredMiddleware` enforces password rotation on flagged accounts
+- `ProfileCompletionMiddleware` blocks access until profile fields are filled
 - All role checks are enforced server-side via `LoginRequiredMixin` + custom role mixins
 - PostgreSQL connections use SSL in production (enforced by Azure Flexible Server)
 - Static files served by WhiteNoise, no user-uploaded files exposed via the filesystem
