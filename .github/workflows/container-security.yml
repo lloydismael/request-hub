@@ -99,7 +99,7 @@ jobs:
           output-file: request-hub-sbom.spdx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: request-hub-sbom
           path: request-hub-sbom.spdx.json
