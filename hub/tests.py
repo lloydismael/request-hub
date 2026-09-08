@@ -44,6 +44,7 @@ from hub.views import (
     SqrListView,
     UserManagementView,
     _build_sqr_approval_body_lines,
+    _build_sqr_approval_html,
     _get_sqr_approval_email_context,
     _resolve_sqr_account_manager_email,
     _send_sqr_approved_email,
@@ -1453,10 +1454,16 @@ class SqrApprovalEmailTemplateTests(TestCase):
         self.assertIn("Approval Date : September 04, 2026", text)
         self.assertIn("Quotation Validity Until: December 31, 2026", text)
         self.assertIn("Professional Services Investment Summary", text)
+        self.assertNotIn("**Professional Services Investment Summary**", text)
         self.assertIn("Project Implementation: PHP 40,000.00", text)
         self.assertIn("Project Management: PHP 24,000.00", text)
         self.assertIn("Systems Support & Maintenance Service - 1 Year (Optional): PHP 15,000.00", text)
         self.assertIn("Total Professional Services Investment: PHP 79,000.00", text)
+        self.assertNotIn("**Total Professional Services Investment: PHP 79,000.00**", text)
+
+        html = _build_sqr_approval_html(self.submission, "sqr_engineer")
+        self.assertIn('font-weight:700;">Professional Services Investment Summary</span>', html)
+        self.assertIn('<b>Total Professional Services Investment</b>', html)
 
     def test_approval_recipients_include_assigned_account_manager(self):
         User.objects.create_user(
