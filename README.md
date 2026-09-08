@@ -15,6 +15,7 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 [![Django](https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Azure-336791?logo=postgresql)](https://azure.microsoft.com/en-us/products/postgresql/)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-lightgrey)](./LICENSE)
 
 </div>
 
@@ -46,6 +47,7 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 - [Scheduled Jobs](#scheduled-jobs)
 - [Deployment](#deployment)
 - [Security](#security)
+- [License](#license)
 
 ---
 
@@ -55,27 +57,27 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 
 | Page | Description |
 |------|-------------|
-| ?? **Login** | Clean auth page with branded background and forced password-change flow |
-| ?? **Dashboard** | Filterable request table with SLA indicators, stat pills, and status badges |
-| ?? **Request Detail** | Full lifecycle view status log, communication actions, SQR submission |
-| ?? **Manage Request** | Admin/PM form for assigning engineers, changing status, and writing updates |
-| ?? **Reports Operational** | Charts for requestor volume, engineer load, engagement types, product categories |
-| ?? **Reports Activity** | Billable vs non-billable hours, location mix, engineer hour breakdown |
-| ?? **Profile** | User profile page with avatar, banner gradient, and contact details |
-| ?? **Notifications** | In-app notification center for assignments and workflow events |
+| 🔐 **Login** | Clean auth page with branded background and forced password-change flow |
+| 📊 **Dashboard** | Filterable request table with SLA indicators, stat pills, and status badges |
+| 📄 **Request Detail** | Full lifecycle view status log, communication actions, SQR submission |
+| 🛠️ **Manage Request** | Admin/PM form for assigning engineers, changing status, and writing updates |
+| 📈 **Reports Operational** | Charts for requestor volume, engineer load, engagement types, product categories |
+| ⏱️ **Reports Activity** | Billable vs non-billable hours, location mix, engineer hour breakdown |
+| 👤 **Profile** | User profile page with avatar, banner gradient, and contact details |
+| 🔔 **Notifications** | In-app notification center for assignments and workflow events |
 
 ---
 
 ## Features
 
-### ?? Request Management
+### 📝 Request Management
 - Create requests with reference codes, priority (Medium / High), engagement type, and product category
 - Assign primary and backup engineers with capacity enforcement (max 5 ongoing; max 3 when a deployment is active)
 - SLA due-date auto-calculation (Medium = 5 days, High = 3 days)
 - Overdue detection and visual indicators on the dashboard
 - Status log history and admin-authored request updates
 
-### ?? Dashboard & Reporting
+### 📊 Dashboard & Reporting
 - **Admin/PM dashboard**: filterable, sortable request table with stat pills (All / Ongoing / Completed / Overdue)
 - **Engineer dashboard**: Assigned vs Backup tabs, personal activity report graph
 - **Requestor dashboard**: personal metrics, request creation, and progress tracking
@@ -83,12 +85,12 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
 - **Reports page (Activity)**: billable vs non-billable hours, work location mix (donut), activity type breakdown, paginated engineer log
 - Chart **expand button** on every chart card for full-screen view
 
-### ?? Notifications & Communication
+### 🔔 Notifications & Communication
 - In-app notification center for assignment events and workflow changes
 - Communication action log (Teams, Outlook, Phone) with channel tagging
 - Optional Teams chat topic field per request
 
-### ?? SQR (Service Quotation Request)
+### 🧾 SQR (Service Quotation Request)
 - Engineers and reviewers manage SQR entries directly from the tracker
 - Tracks quotation details, SSE/PM man-hours, managed support amount, discounting, approval metadata, and revenue fields
 - Status labels in the tracker:
@@ -104,7 +106,7 @@ Coordinate engineering work, enforce SLA timelines, and gain operational visibil
       - `AK` = Support end date (`AJ + 365 days`)
       - `AJ` and `AK` show `NA` when column `P` has no managed support value
 
-### ?? User & Profile Management
+### 👤 User & Profile Management
 - Profile photos stored in the database (no external media bucket required)
 - Configurable banner gradient (Blue, Sunset, Forest, Crimson, Slate, Aurora, Rose, Teal)
 - Forced password-change on first login or admin reset
@@ -496,6 +498,15 @@ Full Azure App Service container deployment guide:
 - PostgreSQL connections use SSL in production (enforced by Azure Flexible Server)
 - Static files served by WhiteNoise, no user-uploaded files exposed via the filesystem
 - `GET /healthz/` returns `ok` for container probes without authentication
+
+---
+
+## License
+
+Copyright © 2026 Phil-Data Business Systems Inc. All rights reserved.
+
+This software is proprietary. See [LICENSE](./LICENSE) for the full terms.
+Visibility of this repository does not grant any right to use, copy, modify, or distribute the software.
 
 ---
 
