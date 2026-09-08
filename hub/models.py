@@ -7,7 +7,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
@@ -22,8 +22,15 @@ class Account(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @classmethod
+    def used_queryset(cls):
+        """Accounts linked to any request row, including soft-deleted requests."""
+        request_exists = Exists(Request.all_objects.filter(account_id=OuterRef("pk")))
+        return cls.objects.filter(request_exists).order_by("name")
+
 
 class Request(models.Model):
+
     class Priority(models.TextChoices):
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"
@@ -38,6 +45,13 @@ class Request(models.Model):
         CERTIFICATION = "certification", "Certification"
 
     class Status(models.TextChoices):
+        ONGOING = "ongoing", "Ongoing"
+        COMPLETED = "completed", "Completed"
+
+    class LifecycleStage(models.TextChoices):
+        CREATED = "created", "Created"
+        ASSIGNED = "assigned", "Assigned"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
         ONGOING = "ongoing", "Ongoing"
         COMPLETED = "completed", "Completed"
 
@@ -93,6 +107,13 @@ class Request(models.Model):
     )
     teams_chat_topic = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)
+    lifecycle_stage = models.CharField(
+        max_length=20,
+        choices=LifecycleStage.choices,
+        default=LifecycleStage.CREATED,
+        db_index=True,
+    )
+    assignment_revision = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -117,8 +138,19 @@ class Request(models.Model):
     def clean(self):
         super().clean()
         bypass_capacity = getattr(self, "_allow_capacity_override", False)
+        engineer_is_changing = True
+        if self.pk:
+            previous_engineer_id = (
+                type(self).all_objects.filter(pk=self.pk).values_list("engineer_id", flat=True).first()
+            )
+            engineer_is_changing = previous_engineer_id != self.engineer_id
 
-        if self.engineer and self.status == self.Status.ONGOING and not bypass_capacity:
+        if (
+            self.engineer
+            and self.status == self.Status.ONGOING
+            and not bypass_capacity
+            and engineer_is_changing
+        ):
             assigned = Request.objects.filter(
                 engineer=self.engineer,
                 status=self.Status.ONGOING,
@@ -152,6 +184,10 @@ class Request(models.Model):
 
     def save(self, *args, **kwargs):
         creating = self.pk is None
+        if self.assignment_revision is None:
+            self.assignment_revision = 0
+        if not self.lifecycle_stage:
+            self.lifecycle_stage = self.LifecycleStage.CREATED
         if creating and not self.start_date:
             self.start_date = timezone.now().date()
         if self.due_date is None:
@@ -303,7 +339,7 @@ class Request(models.Model):
         )
         if not engineer_email or not manager_email:
             return ""
-        participant_set = {engineer_email, manager_email, "JeanM@phildata.com"}
+        participant_set = {engineer_email, manager_email}
         if backup_email:
             participant_set.add(backup_email)
         participants = ",".join(sorted(email for email in participant_set if email))
@@ -334,6 +370,89 @@ class Request(models.Model):
         if account_name:
             return f"{reference} · {account_name}"
         return reference
+
+
+class RequestLifecycleEvent(models.Model):
+    """Immutable audit entry for a request lifecycle transition."""
+
+    class EventType(models.TextChoices):
+        CREATED = "created", "Created"
+        ASSIGNED = "assigned", "Assigned"
+        UNASSIGNED = "unassigned", "Unassigned"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        STARTED = "started", "Work started"
+        COMPLETED = "completed", "Completed"
+        REOPENED = "reopened", "Reopened"
+
+    request = models.ForeignKey(
+        Request,
+        on_delete=models.CASCADE,
+        related_name="lifecycle_events",
+    )
+    sequence = models.PositiveIntegerField()
+    stage = models.CharField(max_length=20, choices=Request.LifecycleStage.choices)
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    previous_stage = models.CharField(
+        max_length=20,
+        choices=Request.LifecycleStage.choices,
+        blank=True,
+        default="",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="request_lifecycle_actions",
+        blank=True,
+        null=True,
+    )
+    primary_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="request_lifecycle_primary_snapshots",
+        blank=True,
+        null=True,
+    )
+    backup_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="request_lifecycle_backup_snapshots",
+        blank=True,
+        null=True,
+    )
+    actor_label = models.CharField(max_length=255, blank=True, default="")
+    primary_owner_label = models.CharField(max_length=255, blank=True, default="")
+    backup_owner_label = models.CharField(max_length=255, blank=True, default="")
+    assignment_revision = models.PositiveIntegerField(default=0)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=120, blank=True, default="")
+    is_synthetic = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict, blank=True)
+    idempotency_key = models.CharField(max_length=160)
+
+    class Meta:
+        ordering = ["sequence"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["request", "sequence"],
+                name="uniq_req_lifecycle_sequence",
+            ),
+            models.UniqueConstraint(
+                fields=["request", "idempotency_key"],
+                name="uniq_req_lifecycle_key",
+            ),
+            models.CheckConstraint(
+                check=Q(sequence__gte=1),
+                name="req_lifecycle_sequence_gte_1",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["request", "occurred_at"], name="req_life_req_time_idx"),
+            models.Index(fields=["primary_owner", "stage"], name="req_life_owner_stage_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.request.reference_code} · {self.get_event_type_display()}"
 
 
 class RequestCommunication(models.Model):
@@ -431,10 +550,11 @@ class SqrSubmission(models.Model):
         APPROVED = "reviewed", "Approved"
 
     class ProposalStatus(models.TextChoices):
-        SUBMITTED_PENDING = "submitted_pending", "Submitted \u2013 Pending"
-        NEGOTIATION_REVIEW = "negotiation_review", "Negotiation / Review"
-        CLOSED_WON = "closed_won", "Closed Won"
-        CLOSED_LOST = "closed_lost", "Closed Lost"
+        SUBMITTED_PENDING = "submitted_pending", "Submitted"
+        NEGOTIATION_REVIEW = "negotiation_review", "On Review"
+        CLOSED_WON = "closed_won", "Closed-Won"
+        CLOSED_LOST = "closed_lost", "Closed-Lost"
+        CLOSED_CANCELED = "closed_canceled", "Closed-Canceled"
 
     class DeliveryHealth(models.TextChoices):
         ON_TRACK = "on_track", "On Track"
@@ -451,9 +571,8 @@ class SqrSubmission(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     class RevenueStatus(models.TextChoices):
-        INVOICED = "invoiced", "Invoiced"
-        PARTIAL = "partial", "Partial"
-        PENDING = "pending", "Pending"
+        BILLED = "billed", "Billed"
+        NOT_YET_BILLED = "not_yet_billed", "Not Yet Billed"
 
     class RevenueDeclaration(models.TextChoices):
         DECLARED = "declared", "Declared"
@@ -530,7 +649,7 @@ class SqrSubmission(models.Model):
     validity_due_date = models.DateField(blank=True, null=True)
     po_attachment_link = models.URLField(blank=True)
     po_attached_at = models.DateTimeField(blank=True, null=True)
-    revenue_overview = models.TextField(blank=True)
+    revenue_overview = models.TextField(blank=True, verbose_name="Billing Remarks")
     # Proposal Stage – deal tracking (set by PM after internal approval)
     proposal_status = models.CharField(
         max_length=25, choices=ProposalStatus.choices, blank=True, default=""
@@ -566,17 +685,26 @@ class SqrSubmission(models.Model):
         max_length=20, choices=OverallStatus.choices, blank=True, default=""
     )
     key_updates_risks = models.TextField(blank=True)
-    warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Post-service Warranty End Date")
-    managed_support_start_date = models.DateField(blank=True, null=True)
-    managed_support_end_date = models.DateField(blank=True, null=True)
-    # Revenue Stage – columns (AL–AQ in Excel)
-    revenue_date = models.DateField(blank=True, null=True, verbose_name="SI/Revenue Date")
-    revenue_source = models.CharField(max_length=100, blank=True)
-    revenue_reference_no = models.CharField(max_length=100, blank=True)
-    revenue_status = models.CharField(
-        max_length=20, choices=RevenueStatus.choices, blank=True, default=""
+    warranty_end_date = models.DateField(blank=True, null=True, verbose_name="Completion Warranty End Date")
+    managed_support_start_date = models.DateField(blank=True, null=True, verbose_name="Maintenance Start Date")
+    managed_support_end_date = models.DateField(blank=True, null=True, verbose_name="Maintenance End Date")
+    # Billing Stage – columns (AL–AQ in Excel)
+    revenue_date = models.DateField(blank=True, null=True, verbose_name="Billed Date")
+    revenue_source = models.CharField(
+        max_length=100,
+        blank=True,
+        choices=[
+            ("internal", "Internal"),
+            ("invoiced", "Invoiced"),
+            ("unbilled", "Unbilled"),
+        ],
+        verbose_name="Billing Type",
     )
-    revenue_remarks = models.TextField(blank=True)
+    revenue_reference_no = models.CharField(max_length=100, blank=True, verbose_name="Billing Reference")
+    revenue_status = models.CharField(
+        max_length=20, choices=RevenueStatus.choices, blank=True, default="", verbose_name="Billing Status"
+    )
+    revenue_remarks = models.TextField(blank=True, verbose_name="PO Remarks")
     revenue_declaration = models.CharField(
         max_length=20, choices=RevenueDeclaration.choices, blank=True, default=""
     )
@@ -599,6 +727,13 @@ class SqrSubmission(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["linked_request"],
+                condition=Q(linked_request__isnull=False),
+                name="unique_sqrsubmission_linked_request",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.reference_code or f"SQR draft #{self.pk}"
@@ -665,11 +800,23 @@ class SqrSubmission(models.Model):
         discount = Decimal(self.discount_rate or 0) / Decimal("100")
         return (gross * (Decimal("1") - discount)).quantize(Decimal("0.01"))
 
-    _IMPL_SCOPES = frozenset(["Implementation", "Implementation and Project Management"])
+    _IMPL_SCOPES = frozenset([
+        "Deployment Only",
+        "Deployment and Project Management",
+        # Legacy values kept for existing rows until remapped.
+        "Implementation",
+        "Implementation and Project Management",
+    ])
     _WARRANTY_SCOPES = frozenset([
+        "Deployment Only",
+        "Deployment and Project Management",
+        "Maintenance",
+        "On-Call Services",
+        # Legacy values kept for existing rows until remapped.
         "Implementation",
         "Implementation and Project Management",
         "Managed Support and Maintenance Service",
+        "Support",
     ])
     _PM_MANHOUR_BUCKETS = frozenset([
         Decimal("8"),
@@ -740,23 +887,12 @@ class SqrSubmission(models.Model):
             return Decimal("32")
         return Decimal("48")
 
-    @classmethod
-    def _should_use_bucketed_pm_manhrs(cls, pm_manhrs):
-        if pm_manhrs is None:
-            return True
-        try:
-            return Decimal(str(pm_manhrs)) in cls._PM_MANHOUR_BUCKETS
-        except (ArithmeticError, ValueError, TypeError):
-            return False
-
     @property
     def effective_pm_manhrs(self):
-        recommended = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
-        if recommended is None:
+        """Return the saved PM man-hours, defaulting only when blank."""
+        if self.pm_manhrs is not None:
             return self.pm_manhrs
-        if self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
-            return recommended
-        return self.pm_manhrs
+        return self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
 
     @property
     def effective_pm_amount(self):
@@ -770,8 +906,9 @@ class SqrSubmission(models.Model):
         if creating and not self.year:
             self.year = timezone.now().astimezone(MANILA_TZ).year
 
-        # Keep PM man-hours aligned to the SSE bucket for blank or bucket-based values.
-        if self.sse_manhrs is not None and self._should_use_bucketed_pm_manhrs(self.pm_manhrs):
+        # Default PM man-hours from SSE only while the PM value is blank.
+        # Do not overwrite manually chosen bucket values such as 8/16/24/32/48.
+        if self.sse_manhrs is not None and self.pm_manhrs is None:
             self.pm_manhrs = self.recommended_pm_manhrs_for_sse(self.sse_manhrs)
 
         # Auto-compute SSE Amount (col M = col L × 2000) and PM Amount (col O = col N × 3000)
@@ -803,17 +940,133 @@ class SqrSubmission(models.Model):
             self.reference_code = reference_code
 
 
+class SqrSubmissionChange(models.Model):
+    """Server-backed undo snapshot for inline SQR tracker edits."""
+
+    submission = models.ForeignKey(
+        SqrSubmission,
+        on_delete=models.CASCADE,
+        related_name="field_changes",
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_field_changes",
+    )
+    field = models.CharField(max_length=100)
+    old_values = models.JSONField()
+    new_values = models.JSONField()
+    changed_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    undone_at = models.DateTimeField(blank=True, null=True)
+    undone_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_field_changes_undone",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-changed_at"]
+        indexes = [
+            models.Index(fields=["submission", "field", "changed_at"]),
+            models.Index(fields=["undone_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Undo snapshot for {self.submission} · {self.field}"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_undone(self) -> bool:
+        return self.undone_at is not None
+
+
+class SqrSubmissionHistory(models.Model):
+    """Permanent user-visible history entry for SQR field and workflow changes."""
+
+    class Action(models.TextChoices):
+        UPDATED = "updated", "Updated"
+        RESTORED = "restored", "Restored"
+
+    submission = models.ForeignKey(
+        SqrSubmission,
+        on_delete=models.CASCADE,
+        related_name="history_entries",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_history_entries",
+    )
+    action = models.CharField(max_length=40, choices=Action.choices, default=Action.UPDATED)
+    field = models.CharField(max_length=100, blank=True)
+    old_values = models.JSONField(default=dict, blank=True)
+    new_values = models.JSONField(default=dict, blank=True)
+    summary = models.TextField(blank=True)
+    source = models.CharField(max_length=120, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    restored_at = models.DateTimeField(blank=True, null=True)
+    restored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sqr_history_restores",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [
+            models.Index(fields=["submission", "-created_at"]),
+            models.Index(fields=["actor", "-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        action = self.get_action_display() if self.action else "History"
+        field = f" · {self.field}" if self.field else ""
+        return f"{action} for {self.submission}{field}"
+
+    @property
+    def is_restored(self) -> bool:
+        return self.restored_at is not None
+
+
 class Notification(models.Model):
+    class EventType(models.TextChoices):
+        SYSTEM = "system", "System"
+        NEW_REQUEST = "new_request", "New Request"
+        ASSIGNMENT = "assignment", "Assignment"
+
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     message = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     is_read = models.BooleanField(default=False)
     related_request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="notifications", null=True, blank=True)
     actor = models.CharField(max_length=255, blank=True)
     source = models.CharField(max_length=255, blank=True)
+    event_type = models.CharField(max_length=32, choices=EventType.choices, default=EventType.SYSTEM, db_index=True)
+    event_key = models.CharField(max_length=160, blank=True, default="")
+    event_revision = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipient", "event_key"],
+                condition=~models.Q(event_key=""),
+                name="uniq_notif_recipient_event_key",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["recipient", "event_type", "id"], name="notif_rec_evt_id"),
+        ]
 
     def __str__(self) -> str:
         return self.message
@@ -825,6 +1078,8 @@ class Notification(models.Model):
 
     @property
     def category_key(self) -> str:
+        if self.event_type != self.EventType.SYSTEM:
+            return self.event_type
         message_lower = (self.message or "").lower()
         source_lower = (self.source or "").lower()
         if "nudge" in source_lower or "reminder" in message_lower:

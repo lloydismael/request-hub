@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% block body_class %}request-form-page{% endblock %}
+{% load static %}
 {% block title %}Edit Request · Request Hub{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
@@ -109,5 +111,11 @@
         syncPriorityVisibility();
         syncPreferredAssignee();
     })();
+</script>
+<script src="{% static 'js/account-autocomplete.js' %}?v=1"></script>
+<script>
+    if (window.initAccountAutocompletes) {
+        window.initAccountAutocompletes();
+    }
 </script>
 {% endblock %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-{% load tz %}
+{% load static tz %}
 {% block title %}Manage Request {{ object.reference_code }} · Request Hub{% endblock %}
+{% block body_class %}request-manager-page{% endblock %}
 
 {% block content %}
 
@@ -30,19 +31,90 @@
     </div>
 </div>
 
+{% if lifecycle %}
+<section class="rmf-card rmf-progress-card mb-4" aria-labelledby="request-progress-title">
+    <div class="rmf-card__header">
+        <div class="rmf-card__header-icon rmf-card__header-icon--progress">
+            <i class="bi bi-signpost-split" aria-hidden="true"></i>
+        </div>
+        <div>
+            <h2 class="rmf-card__header-title mb-0" id="request-progress-title">Request progress</h2>
+            <div class="rmf-card__header-sub">Current stage: <strong>{{ lifecycle.current_stage_label }}</strong></div>
+        </div>
+    </div>
+    <div class="rmf-progress__body">
+        <ol class="rmf-progress__list" aria-label="Request lifecycle stages">
+            {% for stage in lifecycle.stages %}
+            <li class="rmf-progress__step rmf-progress__step--{{ stage.state }}"{% if stage.is_current %} aria-current="step"{% endif %}>
+                <span class="rmf-progress__marker" aria-hidden="true">
+                    {% if stage.is_complete %}<i class="bi bi-check-lg"></i>{% else %}{{ forloop.counter }}{% endif %}
+                </span>
+                <span class="rmf-progress__content">
+                    <span class="rmf-progress__label">{{ stage.label }}</span>
+                    <span class="rmf-progress__state">{{ stage.state_label }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ol>
+
+        <aside class="rmf-progress__action" aria-labelledby="current-action-title">
+            <div class="rmf-progress__eyebrow" id="current-action-title">Current action</div>
+            <p class="rmf-progress__action-text">{{ lifecycle.current_action_label }}</p>
+            <div class="rmf-progress__owner"><i class="bi bi-person-circle" aria-hidden="true"></i><span><strong>Owner:</strong> {{ lifecycle.current_owner_label }}</span></div>
+            {% if lifecycle.backup_support_label %}
+            <div class="rmf-progress__support"><strong>Backup support:</strong> {{ lifecycle.backup_support_label }}</div>
+            {% endif %}
+            {% if lifecycle.can_acknowledge or lifecycle.acknowledge_sent %}
+            <form method="post" action="{{ lifecycle.acknowledge_url }}" class="mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="assignment_revision" value="{{ lifecycle.assignment_revision }}">
+                <button
+                    class="btn btn-primary"
+                    type="submit"
+                    {% if lifecycle.acknowledge_sent %}disabled aria-disabled="true" title="Acknowledgement already sent for this assignment."{% endif %}
+                >
+                    <i class="bi bi-envelope-check me-1" aria-hidden="true"></i>
+                    {% if lifecycle.acknowledge_sent %}Acknowledgement sent{% else %}Acknowledge request{% endif %}
+                </button>
+            </form>
+            {% endif %}
+        </aside>
+
+        {% if lifecycle.events %}
+        <details class="rmf-progress-history">
+            <summary>Progress history ({{ lifecycle.events|length }})</summary>
+            <ol class="rmf-progress-history__list">
+                {% for event in lifecycle.events %}
+                <li>
+                    <div class="rmf-progress-history__heading">
+                        <strong>{{ event.label }}</strong>
+                        <time datetime="{{ event.occurred_at|date:'c' }}">{{ event.occurred_at|timezone:"Asia/Manila"|date:"M d, Y · h:i A" }}</time>
+                    </div>
+                    <div class="rmf-progress-history__meta">
+                        By {{ event.actor_label }}{% if event.owner_label %} · Owner: {{ event.owner_label }}{% endif %}
+                        {% if event.is_inferred %}<span class="rmf-progress-history__inferred">Inferred from existing data</span>{% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+        </details>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
 {# ── Two-column layout ── #}
-<div class="row g-4 align-items-stretch">
+<div class="row g-4 align-items-start">
 
     {# ── LEFT: Details form ── #}
     <div class="col-lg-7 d-flex flex-column">
-        <div class="rmf-card flex-grow-1">
+        <div class="rmf-card rmf-card--details">
             <div class="rmf-card__header">
                 <div class="rmf-card__header-icon">
                     <i class="bi bi-pencil-square"></i>
                 </div>
                 <div>
                     <div class="rmf-card__header-title">Request Details</div>
-                    <div class="rmf-card__header-sub">Update the fields below and save your changes</div>
                 </div>
             </div>
 
@@ -60,16 +132,24 @@
                     </datalist>
                 {% endif %}
 
-                {# ── Read-only info strip ── #}
+                {# ── Info strip ── #}
                 <div class="rmf-info-strip">
-                    {# Account: from form field if available, else from the request object #}
-                    <div class="rmf-info-item">
+                    {# Account: admins/PM-ESG can change it; engineers keep current value; others edit below #}
+                    <div class="rmf-info-item{% if can_change_account and form.account_name %} rmf-info-item--editable{% endif %}">
                         <span class="rmf-info-item__label"><i class="bi bi-building me-1"></i>Account</span>
-                        <span class="rmf-info-item__value">
-                            {% if form.account_name %}{{ form.account_name.value|default_if_none:"—" }}{% else %}{{ object.account.name|default:"—" }}{% endif %}
-                        </span>
-                        {% if form.account_name and request.user.is_engineer_access_role %}
-                            <input type="hidden" name="account_name" value="{{ form.account_name.value|default_if_none:'' }}">
+                        {% if can_change_account and form.account_name %}
+                            <div class="rmf-info-item__control">
+                                {{ form.account_name }}
+                                {% if form.account_name.help_text %}<div class="form-text">{{ form.account_name.help_text }}</div>{% endif %}
+                                {% if form.account_name.errors %}<div class="invalid-feedback d-block">{{ form.account_name.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% else %}
+                            <span class="rmf-info-item__value">
+                                {% if form.account_name %}{{ form.account_name.value|default_if_none:"—" }}{% else %}{{ object.account.name|default:"—" }}{% endif %}
+                            </span>
+                            {% if form.account_name and request.user.is_engineer_access_role %}
+                                <input type="hidden" name="account_name" value="{{ form.account_name.value|default_if_none:'' }}">
+                            {% endif %}
                         {% endif %}
                     </div>
                     {% for field in form %}
@@ -92,8 +172,8 @@
                 <div class="rmf-fields">
                     {% for field in form %}
                         {% if field.name == 'account_name' or field.name == 'request_date' or field.name == 'needed_by' %}
-                            {# Already rendered in info strip or handled separately #}
-                            {% if not request.user.is_engineer_access_role and field.name == 'account_name' %}
+                            {# Account is rendered in the info strip for admins; requestors still edit it here #}
+                            {% if not can_change_account and not request.user.is_engineer_access_role and field.name == 'account_name' %}
                                 <div class="rmf-field-group">
                                     <label class="rmf-label" for="id_{{ field.name }}">{{ field.label }}</label>
                                     {{ field }}
@@ -208,7 +288,7 @@
                 </div>
                 </div>{# /rmf-fields-wrap #}
 
-                <div class="rmf-form-actions">
+                <div class="rmf-form-actions mt-3">
                     <button class="btn btn-primary rmf-btn-save" type="submit">
                         <i class="bi bi-floppy-fill me-1"></i>Save changes
                     </button>
@@ -273,7 +353,6 @@
                 </div>
                 <div>
                     <div class="rmf-card__header-title">Updates</div>
-                    <div class="rmf-card__header-sub">Activity &amp; status notes</div>
                 </div>
             </div>
 
@@ -330,9 +409,7 @@
                 </div>
                 <div>
                     <div class="rmf-card__header-title">Related Activity Logs</div>
-                    <div class="rmf-card__header-sub">Actual hours recorded for this request</div>
                 </div>
-                <span class="rmf-status-badge ms-auto">{{ related_activity_summary.total_hours|floatformat:1 }} hrs</span>
             </div>
 
             <div class="px-3 pb-3">
@@ -357,46 +434,188 @@
                     </div>
                 </div>
 
+                <div class="d-flex justify-content-end mb-3">
+                    <a href="{% url 'hub:activity-logs' %}?request={{ object.pk }}" class="btn btn-primary btn-sm request-activity-empty-state__action">
+                        <i class="bi bi-plus-circle me-1"></i>Add Activity Logs
+                    </a>
+                </div>
+
                 {% if related_activity_logs %}
                     <div class="table-responsive request-activity-table-wrap">
                         <table class="table table-sm align-middle mb-0 request-activity-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Engineer</th>
-                                    <th>Activity</th>
-                                    <th>Hours</th>
-                                    <th>Billing</th>
-                                    <th>Details</th>
+                                    <th class="request-activity-col request-activity-col--date">Date</th>
+                                    <th class="request-activity-col request-activity-col--engineer">Engineer</th>
+                                    <th class="request-activity-col request-activity-col--activity">Activity</th>
+                                    <th class="request-activity-col request-activity-col--hours">Hours</th>
+                                    <th class="request-activity-col request-activity-col--billing">Billing</th>
+                                    <th class="request-activity-col request-activity-col--details">Details</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for activity_log in related_activity_logs %}
-                                    <tr>
-                                        <td>{{ activity_log.request_date|date:"M d, Y" }}</td>
-                                        <td>{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}</td>
-                                        <td>{{ activity_log.get_activity_type_display }}</td>
-                                        <td>{{ activity_log.actual_hours|floatformat:1 }}</td>
-                                        <td>
+                                    <tr
+                                        {% if request.user.is_engineer_access_role and activity_log.engineer_id == request.user.id %}
+                                            class="request-activity-row request-activity-row--clickable"
+                                            data-href="{% url 'hub:request-manage-collab' object.pk %}?edit_activity={{ activity_log.pk }}"
+                                            role="link"
+                                            tabindex="0"
+                                            title="Open activity log to edit"
+                                        {% elif request.user.role == 'admin' or request.user.role == 'pm_esg' %}
+                                            class="request-activity-row request-activity-row--clickable"
+                                            data-href="{% url 'hub:request-manage-collab' object.pk %}?edit_activity={{ activity_log.pk }}"
+                                            role="link"
+                                            tabindex="0"
+                                            title="Open activity log to edit"
+                                        {% else %}
+                                            class="request-activity-row"
+                                        {% endif %}
+                                    >
+                                        <td class="request-activity-col request-activity-col--date">{{ activity_log.request_date|date:"M d, Y" }}</td>
+                                        <td class="request-activity-col request-activity-col--engineer">
+                                            <span class="request-activity-cell-text" title="{{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}">
+                                                {{ activity_log.engineer.get_full_name|default:activity_log.engineer.username }}
+                                            </span>
+                                        </td>
+                                        <td class="request-activity-col request-activity-col--activity">
+                                            <span class="request-activity-cell-text" title="{{ activity_log.get_activity_type_display }}">
+                                                {{ activity_log.get_activity_type_display }}
+                                            </span>
+                                        </td>
+                                        <td class="request-activity-col request-activity-col--hours">{{ activity_log.actual_hours|floatformat:1 }}</td>
+                                        <td class="request-activity-col request-activity-col--billing">
                                             {% if activity_log.is_billable %}
                                                 <span class="badge text-bg-success">Billable</span>
                                             {% else %}
                                                 <span class="badge text-bg-secondary">Not Billable</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ activity_log.details|default:"—" }}</td>
+                                        <td class="request-activity-col request-activity-col--details">
+                                            {% if activity_log.details %}
+                                                <span class="request-activity-detail-preview" title="{{ activity_log.details }}">{{ activity_log.details }}</span>
+                                            {% else %}
+                                                <span class="request-activity-detail-preview request-activity-detail-preview--empty">—</span>
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-muted small">No activity logs are linked to this request yet.</div>
+                    <div class="request-activity-empty-state">
+                        <div class="text-muted small">No activity logs are linked to this request yet.</div>
+                    </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<div class="requestor-modal" id="request-activity-edit-modal" aria-hidden="true" data-open-on-load="{% if editing_activity_log and activity_form %}true{% else %}false{% endif %}">
+    <div class="requestor-modal__backdrop" id="request-activity-edit-backdrop"></div>
+    <div class="requestor-modal__dialog requestor-modal__dialog--act" role="dialog" aria-modal="true" aria-labelledby="request-activity-edit-title">
+        <div class="act-modal-header">
+            <div class="act-modal-header__icon">
+                <i class="bi bi-journal-text"></i>
+            </div>
+            <div class="act-modal-header__text">
+                <h2 class="act-modal-header__title" id="request-activity-edit-title">Edit Activity Report</h2>
+            </div>
+            <button type="button" class="act-modal-close" id="request-activity-edit-close" aria-label="Close">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <div class="requestor-modal__body act-modal-body">
+            {% if editing_activity_log and activity_form %}
+                <form method="post" action="{% url 'hub:request-manage-collab' object.pk %}" novalidate id="activity-log-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="activity_log">
+                    <input type="hidden" name="log_id" value="{{ editing_activity_log.pk }}">
+
+                    {% if activity_form.non_field_errors %}
+                        <div class="alert alert-danger rounded-3 py-2 mb-3 d-flex align-items-center gap-2" role="alert" style="font-size:0.85rem;">
+                            <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+                            <span>{{ activity_form.non_field_errors|join:" " }}</span>
+                        </div>
+                    {% endif %}
+
+                    <div class="act-form-grid">
+                        {% for field in activity_form %}
+                            <div class="act-form-field{% if field.name == 'details' %} act-form-field--full{% endif %}">
+                                <label class="act-form-label" for="{{ field.id_for_label }}">
+                                    {% if field.name == 'request_date' %}<i class="bi bi-calendar3"></i>{% elif field.name == 'activity_type' %}<i class="bi bi-tag"></i>{% elif field.name == 'request' %}<i class="bi bi-link-45deg"></i>{% elif field.name == 'account' %}<i class="bi bi-building"></i>{% elif field.name == 'actual_hours' %}<i class="bi bi-clock"></i>{% elif field.name == 'location' %}<i class="bi bi-geo-alt"></i>{% elif field.name == 'is_billable' %}<i class="bi bi-currency-dollar"></i>{% elif field.name == 'status' %}<i class="bi bi-check2-circle"></i>{% elif field.name == 'details' %}<i class="bi bi-card-text"></i>{% endif %}
+                                    {{ field.label }}
+                                    {% if field.name == 'request' or field.name == 'account' %}
+                                        <span class="act-form-optional">optional</span>
+                                    {% endif %}
+                                </label>
+                                {{ field }}
+                                {% if field.errors %}<div class="act-form-error">{{ field.errors|join:" " }}</div>{% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="act-form-actions">
+                        <button type="button" class="act-form-cancel" id="request-activity-cancel-btn">Cancel</button>
+                        <button type="submit" class="act-form-submit">
+                            <i class="bi bi-check2"></i>
+                            Update Activity
+                        </button>
+                    </div>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const modal = document.getElementById('request-activity-edit-modal');
+        if (!modal) {
+            return;
+        }
+
+        const body = document.body;
+        const dialog = modal.querySelector('.requestor-modal__dialog');
+        const closeButtons = [
+            document.getElementById('request-activity-edit-close'),
+            document.getElementById('request-activity-cancel-btn'),
+            document.getElementById('request-activity-edit-backdrop'),
+        ].filter(Boolean);
+
+        const openModal = () => {
+            modal.classList.add('requestor-modal--visible');
+            body.classList.add('requestor-modal-open');
+            if (dialog) {
+                dialog.scrollTop = 0;
+            }
+        };
+
+        const closeModal = () => {
+            modal.classList.remove('requestor-modal--visible');
+            body.classList.remove('requestor-modal-open');
+            const currentUrl = new URL(window.location.href);
+            if (currentUrl.searchParams.has('edit_activity')) {
+                currentUrl.searchParams.delete('edit_activity');
+                const query = currentUrl.searchParams.toString();
+                const nextUrl = `${currentUrl.pathname}${query ? `?${query}` : ''}${currentUrl.hash}`;
+                window.location.href = nextUrl;
+            }
+        };
+
+        closeButtons.forEach((button) => {
+            button.addEventListener('click', closeModal, { passive: true });
+        });
+
+        if (modal.dataset.openOnLoad === 'true') {
+            openModal();
+        }
+    })();
+</script>
+
 <script>
     (function () {
         const detailsFormInput = document.querySelector('form[method="post"][novalidate] input[name="form_type"][value="details"]');
@@ -544,6 +763,47 @@
         syncDeploymentVisibility();
         syncPreferredAssignee();
         updateDeploymentSummary();
+    })();
+</script>
+<script src="{% static 'js/account-autocomplete.js' %}?v=2"></script>
+<script>
+    if (window.initAccountAutocompletes) {
+        window.initAccountAutocompletes();
+    }
+</script>
+<script>
+    (function () {
+        const table = document.querySelector('.request-activity-table');
+        if (!table) {
+            return;
+        }
+
+        const openRow = (row) => {
+            const href = row && row.getAttribute('data-href');
+            if (href) {
+                window.location.href = href;
+            }
+        };
+
+        table.addEventListener('click', (event) => {
+            const row = event.target.closest('tr.request-activity-row--clickable');
+            if (!row || !table.contains(row)) {
+                return;
+            }
+            openRow(row);
+        });
+
+        table.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+            const row = event.target.closest('tr.request-activity-row--clickable');
+            if (!row || !table.contains(row)) {
+                return;
+            }
+            event.preventDefault();
+            openRow(row);
+        });
     })();
 </script>
 <script>

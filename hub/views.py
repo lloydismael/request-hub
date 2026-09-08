@@ -1,12 +1,14 @@
 import csv
 import base64
 import html
+from django.db import IntegrityError
 import json
 import logging
 import mimetypes
 import re
 import threading
 import uuid
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date, datetime, timedelta
@@ -28,16 +30,21 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections
 from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
-from django.db.models import Count, Min, Q, Sum
+from django.db.models import Count, Max, Min, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.db.models.functions import TruncMonth
 from django.forms import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.crypto import get_random_string
+from django.utils.html import format_html, json_script
 from django.views import View
 from django.views.generic import DetailView, DeleteView, ListView, TemplateView, UpdateView
 from urllib.parse import quote, urlencode
@@ -71,7 +78,6 @@ from .forms import (
     SqrSubmissionForm,
     StatusLogForm,
 )
-from .constants import ACCOUNT_NAME_RAW
 from .models import (
     Account,
     EngineerActivityLog,
@@ -79,13 +85,21 @@ from .models import (
     Request,
     RequestCommunication,
     SqrSubmission,
+    SqrSubmissionChange,
+    SqrSubmissionHistory,
     StatusLog,
 )
+from .constants import ACCOUNT_MANAGERS
 from .mixins import (
     AdminOrEngineerRequiredMixin,
     AdminOrPmEsgRequiredMixin,
     AdminRequiredMixin,
     EngineerRequiredMixin,
+)
+from .services import request_lifecycle
+from .services.notifications import (
+    queue_assignment_notifications,
+    queue_new_request_notifications,
 )
 
 MANILA_TZ = ZoneInfo("Asia/Manila")
@@ -103,6 +117,12 @@ SQR_APPROVAL_INCLUDED_SERVICES = [
     "Monthly System Status Report",
     "Advisory Support",
 ]
+SQR_APPROVAL_HUB_EMAIL = "ESGRequestHub@phildata.com"
+SQR_ACCOUNT_MANAGER_EMAILS = {
+    manager["name"].strip().casefold(): manager["email"]
+    for manager in ACCOUNT_MANAGERS
+    if manager.get("name") and manager.get("email")
+}
 
 
 def _format_sqr_approval_greeting(requestor_name: str) -> str:
@@ -140,6 +160,53 @@ def _get_sqr_service_component(submission: "SqrSubmission") -> str:
     return SQR_APPROVAL_SERVICE_COMPONENT
 
 
+def _normalize_sqr_person_name(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").replace(",", " ").strip()).casefold()
+
+
+def _resolve_sqr_account_manager_email(submission: "SqrSubmission") -> str:
+    manager_name = (submission.customer_contact or "").strip()
+    if not manager_name:
+        return ""
+
+    roster_email = SQR_ACCOUNT_MANAGER_EMAILS.get(manager_name.casefold())
+    if roster_email:
+        return roster_email.strip()
+
+    normalized_name = _normalize_sqr_person_name(manager_name)
+    for user in User.objects.exclude(email="").only("first_name", "last_name", "username", "email"):
+        candidates = [
+            user.get_full_name(),
+            f"{user.last_name} {user.first_name}".strip(),
+            user.username,
+        ]
+        if any(_normalize_sqr_person_name(candidate) == normalized_name for candidate in candidates if candidate):
+            return (user.email or "").strip()
+    return ""
+
+
+def _unique_sqr_approval_emails(*emails: str) -> list[str]:
+    unique_emails: list[str] = []
+    seen = set()
+    for email in emails:
+        cleaned = (email or "").strip()
+        key = cleaned.casefold()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        unique_emails.append(cleaned)
+    return unique_emails
+
+
+def _get_sqr_approval_to_emails(submission: "SqrSubmission") -> list[str]:
+    engineer_email = (getattr(submission.engineer, "email", "") or "").strip()
+    return _unique_sqr_approval_emails(
+        engineer_email,
+        _resolve_sqr_account_manager_email(submission),
+        SQR_APPROVAL_HUB_EMAIL,
+    )
+
+
 def _get_sqr_logo_attachment() -> Optional[dict]:
     try:
         logo_bytes = SQR_APPROVAL_LOGO_PATH.read_bytes()
@@ -167,10 +234,8 @@ def _build_sqr_approval_mime_message(context: dict, sender_email: str, *, mark_a
     message["Subject"] = Header(context["subject"], "windows-1252")
     message["From"] = sender_email
     recipients = context.get("recipients") or []
-    if recipients[:1]:
-        message["To"] = recipients[0]
-    if recipients[1:]:
-        message["Cc"] = ", ".join(recipients[1:])
+    if recipients:
+        message["To"] = ", ".join(recipients)
     if mark_as_unsent:
         message["X-Unsent"] = "1"
 
@@ -219,32 +284,53 @@ def _format_sqr_approval_validity_date(submission: "SqrSubmission") -> str:
     return submission.validity_due_date.strftime("%B %d, %Y") if submission.validity_due_date else "—"
 
 
+def _format_sqr_approval_currency(value: object) -> str:
+    if value is None:
+        return "—"
+    amount = value if isinstance(value, Decimal) else Decimal(str(value))
+    return f"PHP {amount:,.2f}"
+
+
 def _build_sqr_approval_body_lines(submission: "SqrSubmission", requestor_name: str) -> list[str]:
-    scope_items = _get_sqr_scope_items(submission)
     service_component = _get_sqr_service_component(submission)
+    total_price = _format_sqr_approval_total_price(submission)
+    approval_date = _format_sqr_approval_date(submission)
+    validity_date = _format_sqr_approval_validity_date(submission)
+    customer_name = submission.customer_name or "—"
+    service_description = (submission.project_title or "").strip() or "—"
+    account_manager = (submission.customer_contact or "").strip() or "—"
+    scope_of_services = (submission.project_details or "").strip() or "—"
+    investment_total = _format_sqr_approval_currency(
+        submission.computed_total_price if submission.computed_total_price is not None else submission.quotation_total_price
+    )
+
     return [
-        _format_sqr_approval_greeting(requestor_name),
+        "Submitted SQR is now approved, please refer to the ff. details below.",
         "",
-        "Submitted SQR is now approved. Please refer to the quotation details below.",
+        f"SQR ID : {submission.reference_code or '—'}",
+        f"Customer Name : {customer_name}",
+        f"Service Description : {service_description}",
+        f"Account Manager : {account_manager}",
+        f"Scope of Services : {scope_of_services}",
+        f"Add-On Service : {service_component}",
+        "Included Services:",
+        "• Proactive System Health Checks",
+        "• System/Platform Patching (scheduled)",
+        "• Incident Support",
+        "• Basic Troubleshooting and Issue Isolation",
+        "• Monthly System Status Report",
+        "• Advisory Support",
+        "Quantity: 1 Lot",
+        f"Approval Date : {approval_date}",
+        f"Quotation Validity Until: {validity_date}",
         "",
-        f"Date: {_format_sqr_approval_date(submission)}",
-        "SERVICE QUOTATION",
+        "Professional Services Investment Summary",
+        f"Project Implementation: {_format_sqr_approval_currency(submission.sse_amount)}",
+        f"Project Management: {_format_sqr_approval_currency(submission.pm_amount)}",
+        f"Systems Support & Maintenance Service - 1 Year (Optional): {_format_sqr_approval_currency(submission.managed_support_amount)}",
+        f"Total Professional Services Investment: {investment_total}",
         "",
-        f"SQR ID: {submission.reference_code or ''}",
-        f"Account / Customer: {submission.customer_name or ''}",
-        f"Service Description: {(submission.project_title or '').strip()}",
-        f"Account Manager: {(submission.customer_contact or '').strip()}",
-        "",
-        "SCOPE OF SERVICES",
-        *[f"• {item}" for item in scope_items],
-        "",
-        "Service Component | Qty | Total Price",
-        f"{service_component} | 1 lot | {_format_sqr_approval_total_price(submission)}",
-        f"Total: {_format_sqr_approval_total_price(submission)}",
-        "",
-        f"Quotation Validity Until: {_format_sqr_approval_validity_date(submission)}",
-        "",
-        "Terms and Conditions",
+        "**TERMS AND CONDITIONS**",
         "VAT: This quote excludes Value Added Tax (VAT).",
         "For P&L documentation purposes, a VAT-inclusive total may be applied. Internal billing and revenue reporting remain VAT-exclusive.",
         "This is a budgetary quote.",
@@ -266,31 +352,19 @@ def _build_sqr_approval_draft_html(submission: "SqrSubmission", requestor_name: 
 
 
 def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name: str, *, logo_src: str) -> str:
-    summary_rows = [
-        ("SQR ID", submission.reference_code or "—"),
-        ("Account / Customer", submission.customer_name or "—"),
-        ("Service Description", (submission.project_title or "").strip() or "—"),
-        ("Account Manager", (submission.customer_contact or "").strip() or "—"),
-    ]
-    scope_items = _get_sqr_scope_items(submission)
     service_component = html.escape(_get_sqr_service_component(submission))
     approval_date = html.escape(_format_sqr_approval_date(submission))
     total_price = html.escape(_format_sqr_approval_total_price(submission))
     validity_date = html.escape(_format_sqr_approval_validity_date(submission))
     greeting = html.escape(_format_sqr_approval_greeting(requestor_name))
     logo_url = html.escape(logo_src)
-
-    summary_headers_html = "".join(
-        f'<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">{html.escape(label)}</span></div></th>'
-        for label, _value in summary_rows
-    )
-    summary_values_html = "".join(
-        f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{html.escape(value)}</div></td>'
-        for _label, value in summary_rows
-    )
-    scope_items_html = "".join(
-        f'<li style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);direction:ltr;line-height:1.6;margin:0 0 8px;"><span style="line-height:1.6;" role="presentation">{html.escape(item)}</span></li>'
-        for item in scope_items
+    project_implementation = html.escape(_format_sqr_approval_currency(submission.sse_amount))
+    project_management = html.escape(_format_sqr_approval_currency(submission.pm_amount))
+    maintenance_amount = html.escape(_format_sqr_approval_currency(submission.managed_support_amount))
+    professional_total = html.escape(
+        _format_sqr_approval_currency(
+            submission.computed_total_price if submission.computed_total_price is not None else submission.quotation_total_price
+        )
     )
 
     return "".join(
@@ -300,50 +374,72 @@ def _build_sqr_approval_html_markup(submission: "SqrSubmission", requestor_name:
             '<div class="elementToProof" style="background-color:rgb(255,255,255);margin:0 auto;border-width:1px;border-style:solid;border-color:rgb(215,222,232);max-width:860px;">',
             '<div class="elementToProof" style="padding:28px 30px 32px;">',
             f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 12px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">{greeting}</span></p>',
-            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 22px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">Submitted SQR is now approved. Please refer to the quotation details below.</span></p>',
+            '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 22px;font-size:14px;"><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);">Submitted SQR is now approved, please refer to the ff. details below.</span></p>',
             '<div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:rgb(16,24,40);">',
             f'<img width="193" height="80" style="width:193.667px;height:80px;max-width:1070px;" src="{logo_url}" alt="Phil-Data">',
             '</div>',
             '<table role="presentation" style="direction:ltr;margin:0 0 18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
-            '<tbody><tr>',
+            '<tbody>',
+            '<tr>',
             '<td style="direction:ltr;vertical-align:bottom;">',
-            '<div class="elementToProof" style="direction:ltr;letter-spacing:0.08em;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgb(71,84,103);"><span style="letter-spacing:0.08em;">Date</span></div>',
-            f'<div class="elementToProof" style="direction:ltr;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);">{approval_date}</div>',
+            '<div class="elementToProof" style="direction:ltr;letter-spacing:0.08em;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgb(71,84,103);"><span style="letter-spacing:0.08em;">SQR ID</span></div>',
+            f'<div class="elementToProof" style="direction:ltr;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);">{html.escape(submission.reference_code or "—")}</div>',
             '</td>',
             '<td style="direction:ltr;text-align:right;vertical-align:bottom;">',
             '<div class="elementToProof" style="direction:ltr;text-align:right;letter-spacing:0.05em;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:700;color:rgb(17,24,39);"><span style="letter-spacing:0.05em;">SERVICE QUOTATION</span></div>',
             '</td>',
-            '</tr></tbody></table>',
+            '</tr>',
+            '</tbody></table>',
             '<table role="presentation" style="direction:ltr;width:100%;table-layout:fixed;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
             '<tbody>',
-            f'<tr>{summary_headers_html}</tr>',
-            f'<tr>{summary_values_html}</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>SQR ID</b> : ' + html.escape(submission.reference_code or "—") + '</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Customer Name</b> : ' + html.escape(submission.customer_name or "—") + '</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Service Description</b> : ' + html.escape((submission.project_title or "").strip() or "—") + '</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Account Manager</b> : ' + html.escape((submission.customer_contact or "").strip() or "—") + '</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td colspan="2" style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Scope of Services</b> : ' + html.escape((submission.project_details or "").strip() or "—") + '</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td colspan="2" style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Add-On Service</b> : ' + service_component + '</div></td>',
+            '</tr>',
             '</tbody></table>',
-            '<div class="elementToProof" style="margin-top:18px;">',
-            '<div class="elementToProof" style="background-color:rgb(255,255,255);border-width:1px;border-style:solid;border-color:rgb(207,216,227);">',
-            '<div class="elementToProof" style="direction:ltr;background-color:rgb(255,255,255);padding-top:14px;padding-right:16px;padding-left:16px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgb(16,24,40);"><span style="letter-spacing:0.04em;font-weight:700;">SCOPE OF SERVICES</span></div>',
-            f'<ul style="direction:ltr;margin:10px 0 0;padding-right:24px;padding-bottom:16px;padding-left:34px;">{scope_items_html}</ul>',
-            '</div>',
-            '</div>',
-            '<table role="presentation" style="direction:ltr;margin-top:18px;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
+            '<div class="elementToProof" style="direction:ltr;margin-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgb(16,24,40);"><div style="font-weight:700;">Included Services:</div><ul style="margin:8px 0 0 18px;padding:0;line-height:1.7;">',
+            '<li>Proactive System Health Checks</li>',
+            '<li>System/Platform Patching (scheduled)</li>',
+            '<li>Incident Support</li>',
+            '<li>Basic Troubleshooting and Issue Isolation</li>',
+            '<li>Monthly System Status Report</li>',
+            '<li>Advisory Support</li>',
+            '</ul></div>',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:12px 0 0;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><b>Quantity</b>: 1 Lot</span></p>',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:8px 0 0;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><b>Approval Date</b> : {approval_date}</span></p>',
+            f'<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:8px 0 0;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;"><b>Quotation Validity Until</b>: {validity_date}</span></p>',
+            '<div class="elementToProof" style="margin-top:24px;">',
+            '<div class="elementToProof" style="direction:ltr;margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:rgb(16,24,40);"><span style="font-weight:700;">Professional Services Investment Summary</span></div>',
+            '<table role="presentation" style="direction:ltr;width:100%;box-sizing:border-box;border-collapse:collapse;border-spacing:0;">',
             '<tbody>',
             '<tr>',
-            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Service Component</span></div></th>',
-            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:120px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Qty</span></div></th>',
-            '<th style="direction:ltr;text-align:left;border-width:1px;border-style:solid;border-color:rgb(15,77,103);background-color:rgb(21,96,130);padding:12px 14px;color:rgb(255,255,255);width:180px;"><div class="elementToProof" style="direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="font-weight:700;">Total Price</span></div></th>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">Project Implementation</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{project_implementation}</div></td>',
             '</tr>',
             '<tr>',
-            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{service_component}</div></td>',
-            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">1 lot</div></td>',
-            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{total_price}</div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">Project Management</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{project_management}</div></td>',
             '</tr>',
             '<tr>',
-            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;"></td>',
-            '<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">Total</span></div></td>',
-            f'<td style="direction:ltr;border-right:1px solid rgb(207,216,227);border-bottom:1px solid rgb(207,216,227);border-left:1px solid rgb(207,216,227);padding:14px;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><span style="font-weight:700;">{total_price}</span></div></td>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">Systems Support &amp; Maintenance Service - 1 Year (Optional)</div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;">{maintenance_amount}</div></td>',
+            '</tr>',
+            '<tr>',
+            '<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>Total Professional Services Investment</b></div></td>',
+            f'<td style="direction:ltr;border-width:1px;border-style:solid;border-color:rgb(207,216,227);padding:14px;vertical-align:top;color:rgb(16,24,40);text-align:right;"><div class="elementToProof" style="direction:ltr;font-family:Arial,Helvetica,sans-serif;font-size:13px;"><b>{professional_total}</b></div></td>',
             '</tr>',
             '</tbody></table>',
-            f'<p class="elementToProof" style="direction:ltr;margin:14px 0 0;font-size:13px;color:rgb(71,84,103);"><span style="font-family:Arial,Helvetica,sans-serif;">Quotation Validity Until: </span><span style="font-family:Arial,Helvetica,sans-serif;color:rgb(16,24,40);"><b>{validity_date}</b></span></p>',
+            '</div>',
             '<div class="elementToProof" style="margin-top:24px;">',
             '<div class="elementToProof" style="direction:ltr;margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:rgb(16,24,40);"><span style="font-weight:700;">Terms and Conditions</span></div>',
             '<p class="elementToProof" style="direction:ltr;line-height:1.6;margin:0 0 8px;font-size:13px;color:rgb(16,24,40);"><span style="font-family:Arial,Helvetica,sans-serif;">VAT: This quote excludes Value Added Tax (VAT).</span></p>',
@@ -553,6 +649,23 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
         edit_id = request.GET.get("edit")
         editing_log = None
         form = None
+        prefill_request_id = request.GET.get("request")
+        initial = {}
+
+        if prefill_request_id:
+            try:
+                selected_request_id = int(prefill_request_id)
+            except (TypeError, ValueError):
+                selected_request_id = None
+            if selected_request_id is not None:
+                allowed_request_ids = set(
+                    Request.objects.filter(
+                        Q(engineer=request.user) | Q(backup_engineer=request.user)
+                    ).values_list("id", flat=True)
+                )
+                if selected_request_id in allowed_request_ids:
+                    initial["request"] = selected_request_id
+
         if edit_id:
             try:
                 editing_log = self.get_queryset().get(pk=edit_id)
@@ -560,6 +673,9 @@ class EngineerActivityLogView(EngineerRequiredMixin, LoginRequiredMixin, Templat
                 messages.error(request, "We could not find that activity log to edit.")
                 return redirect("hub:activity-logs")
             form = self.form_class(engineer=request.user, instance=editing_log)
+        else:
+            form = self.form_class(engineer=request.user, initial=initial)
+
         context = self.get_context_data(form=form, editing_log=editing_log)
         return self.render_to_response(context)
 
@@ -679,7 +795,17 @@ class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         return response
 
     def _export_activity_logs(self):
-        filename = f"activity-logs-{timezone.now().strftime('%Y%m%d-%H%M%S')}.csv"
+        # Reuse RequestReportView month-filter helpers so CSV matches the UI.
+        # Bind a temporary report view so instance helpers (_normalize_month_value, etc.) resolve.
+        report_view = RequestReportView()
+        report_view.request = self.request
+        month_filters = report_view._resolve_activity_month_filters()
+        start_month = month_filters.get("start_month") or ""
+        end_month = month_filters.get("end_month") or ""
+        range_slug = ""
+        if start_month or end_month:
+            range_slug = f"-{start_month or 'start'}_to_{end_month or 'end'}"
+        filename = f"activity-logs{range_slug}-{timezone.now().strftime('%Y%m%d-%H%M%S')}.csv"
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
@@ -703,6 +829,10 @@ class ReportExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             EngineerActivityLog.objects.select_related("engineer", "account", "request")
             .order_by("-request_date", "-created_at")
         )
+        if month_filters.get("start_month_date"):
+            logs = logs.filter(request_date__gte=month_filters["start_month_date"])
+        if month_filters.get("end_exclusive_date"):
+            logs = logs.filter(request_date__lt=month_filters["end_exclusive_date"])
         activity_labels = dict(EngineerActivityLog.ActivityType.choices)
         location_labels = dict(EngineerActivityLog.Location.choices)
         for log in logs:
@@ -1015,29 +1145,12 @@ def notify_engineer_assignment_notification(
     previous_backup_id: int | None = None,
 ) -> None:
     """Create in-app notifications when an engineer or backup is newly assigned."""
-
-    recipients: dict[int, User] = {}
-    if request_obj.engineer and request_obj.engineer_id != previous_engineer_id:
-        recipients[request_obj.engineer_id] = request_obj.engineer
-    if request_obj.backup_engineer and request_obj.backup_engineer_id != previous_backup_id:
-        recipients[request_obj.backup_engineer_id] = request_obj.backup_engineer
-
-    recipients.pop(actor_user.pk, None)
-
-    if not recipients:
-        return
-
-    actor_name = actor_user.get_full_name() or actor_user.username or "Request Hub"
-    account_name = request_obj.account.name if request_obj.account else "Account"
-    engagement = request_obj.get_engagement_type_display()
-    for recipient in recipients.values():
-        Notification.objects.create(
-            recipient=recipient,
-            message=f"You were assigned to {request_obj.reference_code} · {account_name} ({engagement}).",
-            related_request=request_obj,
-            actor=actor_name,
-            source="Assignment",
-        )
+    queue_assignment_notifications(
+        request_obj,
+        actor_user=actor_user,
+        previous_engineer_id=previous_engineer_id,
+        previous_backup_id=previous_backup_id,
+    )
 
 
 def clear_engineer_outlook_lock_on_reassignment(
@@ -1333,6 +1446,7 @@ def _send_sqr_approved_email(
     body_lines = _build_sqr_approval_body_lines(submission, engineer_name)
     plain_text = "\n".join(body_lines)
     html_text = _build_sqr_approval_html(submission, engineer_name)
+    to_emails = _get_sqr_approval_to_emails(submission)
 
     try:
         from azure.communication.email import EmailClient
@@ -1341,10 +1455,7 @@ def _send_sqr_approved_email(
         message = {
             "senderAddress": settings.ACS_EMAIL_SENDER,
             "recipients": {
-                "to": [
-                    {"address": engineer_email},
-                    {"address": "ESGRequestHub@phildata.com"},
-                ]
+                "to": [{"address": email} for email in to_emails]
             },
             "content": {
                 "subject": subject,
@@ -1356,7 +1467,7 @@ def _send_sqr_approved_email(
         poller.result()
         logger.info(
             "SQR approved email sent to %s for %s",
-            engineer_email,
+            ", ".join(to_emails),
             submission.reference_code,
         )
     except Exception as exc:  # noqa: BLE001
@@ -1370,9 +1481,8 @@ def _send_sqr_approved_email(
 
 def _get_sqr_approval_email_context(submission: SqrSubmission) -> dict:
     engineer = submission.engineer
-    engineer_email = (getattr(engineer, "email", "") or "").strip()
     engineer_name = (engineer.get_full_name() or engineer.username or "").strip() if engineer else ""
-    recipients = [email for email in (engineer_email, "ESGRequestHub@phildata.com") if email]
+    recipients = _get_sqr_approval_to_emails(submission)
     logo_attachment = _get_sqr_logo_attachment()
     attachments = [logo_attachment] if logo_attachment else []
     return {
@@ -1422,14 +1532,10 @@ def _create_sqr_approval_graph_draft_json(context: dict, sender_email: str, acce
         },
         "toRecipients": [
             {"emailAddress": {"address": email}}
-            for email in recipients[:1]
+            for email in recipients
             if email
         ],
-        "ccRecipients": [
-            {"emailAddress": {"address": email}}
-            for email in recipients[1:]
-            if email
-        ],
+        "ccRecipients": [],
     }
     attachments = context.get("attachments") or []
     if attachments:
@@ -1504,8 +1610,8 @@ def _create_sqr_approval_graph_draft(context: dict, sender_email: str) -> tuple[
 
 def _build_sqr_approval_mailto_url(context: dict) -> str:
     recipients = context.get("recipients") or []
-    to_recipient = recipients[0] if recipients else ""
-    cc_recipients = ";".join(recipients[1:])
+    to_recipient = ";".join(recipients)
+    cc_recipients = ""
     mailto_parts = [
         f"mailto:{quote(to_recipient)}",
         f"subject={quote(context['subject'])}",
@@ -1540,6 +1646,22 @@ def _admin_sort_date_key(value):
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "hub/dashboard.html"
+    # Cap rendered table rows so heavy filters stay light in the browser.
+    # Metrics/reports still use the full filtered set before this limit.
+    LIST_ROW_LIMIT = 100
+
+    @staticmethod
+    def _limit_dashboard_rows(requests: list[Request], limit: int | None = None) -> tuple[list[Request], dict]:
+        """Return display rows capped at LIST_ROW_LIMIT plus list-meta context."""
+        row_limit = DashboardView.LIST_ROW_LIMIT if limit is None else limit
+        total = len(requests)
+        display_rows = requests[:row_limit]
+        return display_rows, {
+            "requests_total_count": total,
+            "requests_displayed_count": len(display_rows),
+            "requests_list_limited": total > row_limit,
+            "requests_list_limit": row_limit,
+        }
 
     @staticmethod
     def _build_request_report_data(requests: list[Request]) -> dict:
@@ -1668,6 +1790,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        session = getattr(self.request, "session", None)
+        context["request_success_reference"] = (
+            session.pop("request_success_reference", "") if session is not None else ""
+        )
         if user.role in ADMIN_PANEL_ROLES:
             context["role"] = User.Roles.ADMIN
         elif user.role in ENGINEER_ACCESS_ROLES:
@@ -1740,7 +1866,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 request_tab_links[key] = f"?{encoded}" if encoded else "?"
 
-            context["requests"] = filtered_requests
+            display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+            context["requests"] = display_requests
+            context.update(list_meta)
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
@@ -1805,7 +1933,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 request_tab_links[key] = f"?{encoded}" if encoded else "?"
 
-            context["requests"] = filtered_requests
+            display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+            context["requests"] = display_requests
+            context.update(list_meta)
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = metric_filter
@@ -1862,11 +1992,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             teams_limited.add(comm.request_id)
             for req in requests:
                 setattr(req, "outlook_limit_reached", req.pk in outlook_limited)
-                setattr(req, "teams_limit_reached", req.pk in teams_limited)
-
-            self._annotate_acknowledgement_status(requests)
-            self._annotate_engineer_activity(requests)
-
             today = timezone.now().astimezone(MANILA_TZ).date()
             metrics = {
                 "ongoing": sum(1 for req in requests if req.status == Request.Status.ONGOING),
@@ -1912,6 +2037,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 filtered_requests = [req for req in requests if req.status == Request.Status.COMPLETED]
                 filtered_requests = sorted(filtered_requests, key=lambda req: req.created_at, reverse=True)
 
+            display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+            self._annotate_acknowledgement_status(display_requests)
+            self._annotate_engineer_activity(display_requests)
+
             metric_links = {}
             for key in ("ongoing", "due_soon", "overdue", "completed"):
                 params = self.request.GET.copy()
@@ -1923,7 +2052,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 encoded = params.urlencode()
                 metric_links[key] = f"?{encoded}" if encoded else "?"
 
-            context["requests"] = filtered_requests
+            context["requests"] = display_requests
+            context.update(list_meta)
             context["metrics"] = metrics
             context["metric_links"] = metric_links
             context["active_metric_filter"] = effective_metric_filter
@@ -1933,155 +2063,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 source__icontains="assignment",
             ).count()
         else:
-            metric_keys = [
-                "open",
-                "overdue",
-                "due_soon",
-                "completed",
-                "new_this_week",
-            ]
-            metric_filter = self.request.GET.get("metric_filter")
-            if not metric_filter or metric_filter not in metric_keys:
-                metric_filter = "open"
-
-            pm_esg_tab = ""
-            if user.role == PM_ESG_ROLE:
-                pm_esg_tab = (self.request.GET.get("pm_esg_tab") or "all").strip().lower()
-                if pm_esg_tab not in {"all", "assigned", "my_requests"}:
-                    pm_esg_tab = "all"
-
-            queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
-            if pm_esg_tab == "assigned":
-                queryset = queryset.filter(engineer=user)
-            elif pm_esg_tab == "my_requests":
-                queryset = queryset.filter(requestor=user)
-            filter_form = AdminRequestFilterForm(self.request.GET or None)
-            filtered_queryset = filter_form.filter_queryset(queryset)
-            requests = filter_form.filter_sequence(filtered_queryset)
-            filters_active = filter_form.has_active_filters()
-            show_filters = self.request.GET.get("show_filters") == "1"
-
-            if not isinstance(requests, list):
-                requests = list(requests)
-
-            sort_map = {
-                "reference_code": lambda req: (req.reference_code or "").lower(),
-                "account": lambda req: (req.account.name.lower() if req.account else ""),
-                "account_manager": _admin_sort_account_manager_key,
-                "engineer": _admin_sort_engineer_key,
-                "backup_engineer": _admin_sort_backup_engineer_key,
-                "engagement": lambda req: req.engagement_type or "",
-                "product_category": lambda req: req.product_category or "",
-                "status": lambda req: req.status or "",
-                "created": lambda req: req.created_at,
-                "end_date": lambda req: _admin_sort_date_key(req.end_date),
-                "days": lambda req: req.days_since_creation,
-                "due": lambda req: _admin_sort_date_key(req.due_date),
-            }
-
-            default_sort = "created"
-            default_direction = "desc"
-            sort_key = self.request.GET.get("sort", default_sort)
-            direction = self.request.GET.get("direction", default_direction)
-            if sort_key not in sort_map:
-                sort_key = default_sort
-            if direction not in {"asc", "desc"}:
-                direction = default_direction
-            reverse = direction == "desc"
-
-            key_fn = sort_map[sort_key]
-            requests.sort(key=key_fn, reverse=reverse)
-
-            null_field_map = {"end_date": "end_date", "due": "due_date"}
-            if sort_key in null_field_map:
-                field_name = null_field_map[sort_key]
-                ordered = [req for req in requests if getattr(req, field_name) is not None]
-                ordered.extend(req for req in requests if getattr(req, field_name) is None)
-                requests = ordered
-
-            self._annotate_acknowledgement_status(requests)
-
-            today = timezone.now().astimezone(MANILA_TZ).date()
-            all_requests = list(requests)
-            filtered_requests = self._filter_requests_by_metric(all_requests, metric_filter, today)
-
-            overdue_count = sum(1 for req in all_requests if req.admin_days_overdue)
-            status_counts = {
-                "all": len(all_requests),
-                "ongoing": sum(1 for req in all_requests if req.status == Request.Status.ONGOING),
-                "completed": sum(1 for req in all_requests if req.status == Request.Status.COMPLETED),
-            }
-
-            columns = list(sort_map.keys())
-            next_directions = {}
-            for column in columns:
-                if column == sort_key:
-                    next_directions[column] = "asc" if direction == "desc" else "desc"
-                else:
-                    next_directions[column] = "asc"
-
-            base_params = self.request.GET.copy()
-            base_params.pop("sort", None)
-            base_params.pop("direction", None)
-            sort_links = {}
-            for column in columns:
-                params = base_params.copy()
-                params["sort"] = column
-                params["direction"] = next_directions[column]
-                encoded = params.urlencode()
-                sort_links[column] = f"?{encoded}" if encoded else "?"
-
-            toggle_params = self.request.GET.copy()
-            if show_filters:
-                toggle_params.pop("show_filters", None)
-            else:
-                toggle_params["show_filters"] = "1"
-            toggle_encoded = toggle_params.urlencode()
-            filter_toggle_link = f"?{toggle_encoded}" if toggle_encoded else ("?" if show_filters else "?show_filters=1")
-
-            metric_links = {}
-            metric_buckets = {}
-            for key in metric_keys:
-                params = self.request.GET.copy()
-                if params.get("metric_filter") == key:
-                    params.pop("metric_filter", None)
-                else:
-                    params["metric_filter"] = key
-                encoded_params = params.urlencode()
-                metric_links[key] = f"?{encoded_params}" if encoded_params else "?"
-                metric_buckets[key] = self._filter_requests_by_metric(all_requests, key, today)
-
-            context["requests"] = filtered_requests
-            context["overdue_count"] = overdue_count
-            context["status_counts"] = status_counts
-            context["new_ticket_count"] = user.notifications.filter(
-                is_read=False,
-                source__icontains="new request",
-            ).count()
-            context["current_sort"] = sort_key
-            context["current_direction"] = direction
-            context["sort_next"] = next_directions
-            context["sort_links"] = sort_links
-            context["filter_form"] = filter_form
-            context["filters_active"] = filters_active or (metric_filter and metric_filter != "open")
-            context["show_filters"] = show_filters
-            context["filter_toggle_link"] = filter_toggle_link
-            context["metrics"] = {key: len(metric_buckets[key]) for key in metric_keys}
-            context["metric_links"] = metric_links
-            context["active_metric_filter"] = metric_filter
-
-            pm_esg_tab_links = {}
-            if user.role == PM_ESG_ROLE:
-                for key in ("all", "assigned", "my_requests"):
-                    params = self.request.GET.copy()
-                    if key == "all":
-                        params.pop("pm_esg_tab", None)
-                    else:
-                        params["pm_esg_tab"] = key
-                    encoded = params.urlencode()
-                    pm_esg_tab_links[key] = f"?{encoded}" if encoded else "?"
-            context["pm_esg_tab"] = pm_esg_tab
-            context["pm_esg_tab_links"] = pm_esg_tab_links
+            context.update(self._build_admin_dashboard_context(user))
 
         if context.get("can_create_request") and "form" not in context:
             form = kwargs.get("form")
@@ -2285,6 +2267,195 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             req.ack_first_iso = ack_time.isoformat() if ack_time else ""
             req.is_acknowledged = bool(ack_time)
 
+    def _build_admin_dashboard_context(self, user) -> dict:
+        """Shared admin/PM-ESG dashboard table + metrics context (full page + live poll)."""
+        metric_keys = [
+            "open",
+            "overdue",
+            "due_soon",
+            "completed",
+            "new_this_week",
+        ]
+        metric_filter = self.request.GET.get("metric_filter")
+        if not metric_filter or metric_filter not in metric_keys:
+            metric_filter = "open"
+
+        pm_esg_tab = ""
+        if user.role == PM_ESG_ROLE:
+            pm_esg_tab = (self.request.GET.get("pm_esg_tab") or "all").strip().lower()
+            if pm_esg_tab not in {"all", "assigned", "my_requests"}:
+                pm_esg_tab = "all"
+
+        queryset = Request.objects.select_related("account", "engineer", "backup_engineer", "requestor")
+        if pm_esg_tab == "assigned":
+            queryset = queryset.filter(engineer=user)
+        elif pm_esg_tab == "my_requests":
+            queryset = queryset.filter(requestor=user)
+        filter_form = AdminRequestFilterForm(self.request.GET or None)
+        filtered_queryset = filter_form.filter_queryset(queryset)
+        requests = filter_form.filter_sequence(filtered_queryset)
+        filters_active = filter_form.has_active_filters()
+        show_filters = self.request.GET.get("show_filters") == "1"
+
+        if not isinstance(requests, list):
+            requests = list(requests)
+
+        sort_map = {
+            "reference_code": lambda req: (req.reference_code or "").lower(),
+            "account": lambda req: (req.account.name.lower() if req.account else ""),
+            "account_manager": _admin_sort_account_manager_key,
+            "engineer": _admin_sort_engineer_key,
+            "backup_engineer": _admin_sort_backup_engineer_key,
+            "engagement": lambda req: req.engagement_type or "",
+            "product_category": lambda req: req.product_category or "",
+            "status": lambda req: req.status or "",
+            "created": lambda req: req.created_at,
+            "end_date": lambda req: _admin_sort_date_key(req.end_date),
+            "days": lambda req: req.days_since_creation,
+            "due": lambda req: _admin_sort_date_key(req.due_date),
+        }
+
+        default_sort = "created"
+        default_direction = "desc"
+        sort_key = self.request.GET.get("sort", default_sort)
+        direction = self.request.GET.get("direction", default_direction)
+        if sort_key not in sort_map:
+            sort_key = default_sort
+        if direction not in {"asc", "desc"}:
+            direction = default_direction
+        reverse = direction == "desc"
+
+        key_fn = sort_map[sort_key]
+        requests.sort(key=key_fn, reverse=reverse)
+
+        null_field_map = {"end_date": "end_date", "due": "due_date"}
+        if sort_key in null_field_map:
+            field_name = null_field_map[sort_key]
+            ordered = [req for req in requests if getattr(req, field_name) is not None]
+            ordered.extend(req for req in requests if getattr(req, field_name) is None)
+            requests = ordered
+
+        today = timezone.now().astimezone(MANILA_TZ).date()
+        all_requests = list(requests)
+        filtered_requests = self._filter_requests_by_metric(all_requests, metric_filter, today)
+        display_requests, list_meta = self._limit_dashboard_rows(filtered_requests)
+        # Annotate only rows that will render — keeps live poll/table HTML light.
+        self._annotate_acknowledgement_status(display_requests)
+
+        overdue_count = sum(1 for req in all_requests if req.admin_days_overdue)
+        status_counts = {
+            "all": len(all_requests),
+            "ongoing": sum(1 for req in all_requests if req.status == Request.Status.ONGOING),
+            "completed": sum(1 for req in all_requests if req.status == Request.Status.COMPLETED),
+        }
+
+        columns = list(sort_map.keys())
+        next_directions = {}
+        for column in columns:
+            if column == sort_key:
+                next_directions[column] = "asc" if direction == "desc" else "desc"
+            else:
+                next_directions[column] = "asc"
+
+        base_params = self.request.GET.copy()
+        base_params.pop("sort", None)
+        base_params.pop("direction", None)
+        base_params.pop("version", None)
+        sort_links = {}
+        for column in columns:
+            params = base_params.copy()
+            params["sort"] = column
+            params["direction"] = next_directions[column]
+            encoded = params.urlencode()
+            sort_links[column] = f"?{encoded}" if encoded else "?"
+
+        toggle_params = self.request.GET.copy()
+        toggle_params.pop("version", None)
+        if show_filters:
+            toggle_params.pop("show_filters", None)
+        else:
+            toggle_params["show_filters"] = "1"
+        toggle_encoded = toggle_params.urlencode()
+        filter_toggle_link = f"?{toggle_encoded}" if toggle_encoded else ("?" if show_filters else "?show_filters=1")
+
+        metric_links = {}
+        metric_buckets = {}
+        for key in metric_keys:
+            params = self.request.GET.copy()
+            params.pop("version", None)
+            if params.get("metric_filter") == key:
+                params.pop("metric_filter", None)
+            else:
+                params["metric_filter"] = key
+            encoded_params = params.urlencode()
+            metric_links[key] = f"?{encoded_params}" if encoded_params else "?"
+            metric_buckets[key] = self._filter_requests_by_metric(all_requests, key, today)
+
+        pm_esg_tab_links = {}
+        if user.role == PM_ESG_ROLE:
+            for key in ("all", "assigned", "my_requests"):
+                params = self.request.GET.copy()
+                params.pop("version", None)
+                if key == "all":
+                    params.pop("pm_esg_tab", None)
+                else:
+                    params["pm_esg_tab"] = key
+                encoded = params.urlencode()
+                pm_esg_tab_links[key] = f"?{encoded}" if encoded else "?"
+
+        live_version = self._admin_dashboard_live_version(user)
+
+        return {
+            "role": User.Roles.ADMIN,
+            "is_admin_ui": True,
+            "is_pm_esg": user.role == PM_ESG_ROLE,
+            "requests": display_requests,
+            "overdue_count": overdue_count,
+            "status_counts": status_counts,
+            "new_ticket_count": user.notifications.filter(
+                is_read=False,
+                source__icontains="new request",
+            ).count(),
+            "current_sort": sort_key,
+            "current_direction": direction,
+            "sort_next": next_directions,
+            "sort_links": sort_links,
+            "filter_form": filter_form,
+            "filters_active": filters_active or (metric_filter and metric_filter != "open"),
+            "show_filters": show_filters,
+            "filter_toggle_link": filter_toggle_link,
+            "metrics": {key: len(metric_buckets[key]) for key in metric_keys},
+            "metric_links": metric_links,
+            "active_metric_filter": metric_filter,
+            "pm_esg_tab": pm_esg_tab,
+            "pm_esg_tab_links": pm_esg_tab_links,
+            "dashboard_live_version": live_version,
+            **list_meta,
+        }
+
+    @staticmethod
+    def _admin_dashboard_live_version(user) -> str:
+        """Fingerprint active + deleted request watermarks so soft-delete/restore poll correctly."""
+
+        def _iso(value) -> str:
+            return value.isoformat() if value else ""
+
+        active_stats = Request.objects.aggregate(max_updated=Max("updated_at"), total=Count("id"))
+        deleted_stats = Request.all_objects.filter(is_deleted=True).aggregate(
+            max_deleted=Max("deleted_at"),
+            max_updated=Max("updated_at"),
+            total=Count("id"),
+        )
+        parts = [
+            str(active_stats.get("total") or 0),
+            _iso(active_stats.get("max_updated")),
+            str(deleted_stats.get("total") or 0),
+            _iso(deleted_stats.get("max_deleted")),
+            _iso(deleted_stats.get("max_updated")),
+            str(getattr(user, "pk", "") or ""),
+        ]
+        return "|".join(parts)
+
     def _annotate_engineer_activity(self, requests: list[Request]) -> None:
         """Attach status-log and recent-change hints used by the engineer dashboard."""
         if not requests:
@@ -2365,6 +2536,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if request.user.role in ADMIN_PANEL_ROLES:
                 req._allow_capacity_override = True
             req.save()
+            lifecycle_result = request_lifecycle.record_created(
+                req.pk,
+                actor=request.user,
+                source="Dashboard · New Request",
+            )
+            req = lifecycle_result.request
             notify_engineer_assignment_notification(req, actor_user=request.user)
             assignment_email_result = notify_engineer_assignment_email(
                 req,
@@ -2372,7 +2549,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 request=request,
             )
             self._notify_admins_new_request(req)
-            messages.success(request, "Request submitted", extra_tags="request-success")
+            request.session["request_success_reference"] = req.reference_code
+            messages.success(request, f"Request submitted · {req.reference_code}", extra_tags="request-success")
             flash_assignment_email_feedback(
                 request,
                 assignment_email_result,
@@ -2385,24 +2563,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     @staticmethod
     def _notify_admins_new_request(request_obj):
-        actor = request_obj.requestor.get_full_name() or request_obj.requestor.username
-        priority_label = request_obj.get_priority_display()
-        category_label = request_obj.get_product_category_display()
-        due_display = request_obj.due_date.strftime("%b %d, %Y") if request_obj.due_date else "No due date"
-        message = (
-            f"New {priority_label} ticket {request_obj.reference_code} for {request_obj.account.name} "
-            f"({category_label}) submitted by {actor}. Due {due_display}."
-        )
-        for admin in User.objects.filter(role__in=ADMIN_PANEL_ROLES):
-            if admin.pk == request_obj.requestor_id:
-                continue
-            Notification.objects.create(
-                recipient=admin,
-                message=message,
-                related_request=request_obj,
-                actor=actor,
-                source="Dashboard · New Request",
-            )
+        queue_new_request_notifications(request_obj, actor_user=request_obj.requestor)
 
 
 def _refresh_sqr_request_account_map(form):
@@ -2437,7 +2598,7 @@ def _get_sqr_export_columns():
         ("SSE Amount", lambda s: float(s.sse_amount) if s.sse_amount is not None else ""),
         ("PM Man-hrs", lambda s: float(s.pm_manhrs) if s.pm_manhrs is not None else ""),
         ("PM Amount", lambda s: float(s.pm_amount) if s.pm_amount is not None else ""),
-        ("Managed Support Svc. Amt.", lambda s: float(s.managed_support_amount) if s.managed_support_amount is not None else ""),
+        ("Maintenance Amt.", lambda s: float(s.managed_support_amount) if s.managed_support_amount is not None else ""),
         ("Discount Rate (%)", lambda s: float(s.discount_rate) if s.discount_rate is not None else ""),
         ("Discount Amount", lambda s: float(s.computed_discount_amount) if s.computed_discount_amount is not None else ""),
         ("Total Price", lambda s: float(s.computed_total_price) if s.computed_total_price is not None else ""),
@@ -2445,7 +2606,6 @@ def _get_sqr_export_columns():
         ("Approval Date", lambda s: _date(s.reviewed_at.date()) if s.reviewed_at else ""),
         ("Validity Due Date", lambda s: _date(s.validity_due_date)),
         ("Proposal Status", lambda s: s.get_proposal_status_display() if hasattr(s, "get_proposal_status_display") else (s.proposal_status or "")),
-        ("PO / PNL Date", lambda s: _date(s.po_pnl_date)),
         ("Assigned PM", lambda s: _name(s.assigned_pm) or _name(s.pm_esg_reviewer)),
         ("Assigned SSE", lambda s: _name(s.assigned_sse)),
         ("Start Date", lambda s: _date(s.delivery_start_date)),
@@ -2456,15 +2616,121 @@ def _get_sqr_export_columns():
         ("Key Updates / Risks", lambda s: s.key_updates_risks or ""),
         ("Actual Finish Date", lambda s: _date(s.delivery_actual_finish_date)),
         ("Completion Signed Date", lambda s: _date(s.delivery_completion_signed_date)),
-        ("Post-svc Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
-        ("Support Start Date", lambda s: _date(s.computed_support_start_date)),
-        ("Support End Date", lambda s: _date(s.computed_managed_support_end_date)),
-        ("SI / Revenue Date", lambda s: _date(s.revenue_date)),
-        ("Source", lambda s: s.revenue_source or ""),
-        ("Reference No.", lambda s: (s.revenue_reference_no or "").upper()),
-        ("Revenue Status", lambda s: "Billed" if s.revenue_date else "For Billing"),
-        ("Remarks", lambda s: s.revenue_remarks or ""),
-        ("Revenue Declaration", lambda s: s.get_revenue_declaration_display() if s.revenue_declaration else ""),
+        ("Completion Warranty End Date", lambda s: _date(s.computed_post_svc_warranty_end_date)),
+        ("Maintenance Start Date", lambda s: _date(s.computed_support_start_date)),
+        ("Maintenance End Date", lambda s: _date(s.computed_managed_support_end_date)),
+        ("PO / PNL Date", lambda s: _date(s.po_pnl_date)),
+        ("PO Remarks", lambda s: s.revenue_remarks or ""),
+        (
+            "Billing Type",
+            lambda s: (
+                {"internal": "Internal", "invoiced": "Invoiced", "unbilled": "Unbilled"}.get(
+                    s.revenue_source, s.revenue_source or ""
+                )
+            ),
+        ),
+        ("Billed Date", lambda s: _date(s.revenue_date)),
+        ("Billing Reference", lambda s: (s.revenue_reference_no or "").upper()),
+        (
+            "Billing Status",
+            lambda s: (
+                s.get_revenue_status_display()
+                if s.revenue_status
+                else ("Billed" if s.revenue_date else "Not Yet Billed")
+            ),
+        ),
+        ("Billing Remarks", lambda s: s.revenue_overview or ""),
+    ]
+
+
+def _get_sqr_esg_export_columns():
+    def _name(u):
+        return (u.get_full_name() or u.username) if u else ""
+
+    def _date_short(d):
+        return f"{d.month}/{d.day}/{str(d.year)[-2:]}" if d else ""
+
+    def _date_medium_safe(d):
+        return f"{d.day}-{d.strftime('%b')}-{str(d.year)[-2:]}" if d else ""
+
+    def _project_name(s):
+        if s.customer_name and s.project_title:
+            return f"{s.customer_name} - {s.project_title}"
+        return s.customer_name or s.project_title or ""
+
+    def _sse1(s):
+        return _name(s.assigned_sse) or _name(s.engineer)
+
+    def _pm(s):
+        return _name(s.assigned_pm) or _name(s.pm_esg_reviewer)
+
+    def _project_flag(s):
+        return "Yes" if s.assigned_pm or s.pm_esg_reviewer or s.delivery_start_date else "No"
+
+    def _status(s):
+        if s.overall_status == "on_hold":
+            return "ON HOLD"
+        if s.overall_status == "completed" or s.delivery_health == "completed":
+            return "COMPLETED"
+        if s.delivery_start_date or s.overall_status == "in_progress" or s.proposal_status == "closed_won":
+            return "ONGOING"
+        if s.status == "for_revision":
+            return "FOR REVISION"
+        return "NOT STARTED"
+
+    def _start_finish_dates(s):
+        if not (s.delivery_start_date or s.delivery_target_finish_date or s.delivery_actual_finish_date):
+            return ""
+        start = _date_short(s.delivery_start_date) or "TBD"
+        finish = _date_short(s.delivery_actual_finish_date) or _date_short(s.delivery_target_finish_date) or "TBD"
+        return f"{start}-{finish}"
+
+    def _money(value):
+        return float(value) if value is not None else ""
+
+    def _total_revenue(s):
+        return _money(s.computed_total_price if s.computed_total_price is not None else s.quotation_total_price)
+
+    def _revenue_source(s):
+        if s.revenue_source == "internal":
+            return "Internal"
+        if s.revenue_source == "invoiced":
+            return "Invoiced"
+        if s.revenue_source == "unbilled":
+            return "Unbilled"
+        return ""
+    return [
+        ("Account Name", lambda s: s.customer_name or ""),
+        ("Service Description", lambda s: s.project_title or ""),
+        ("Project Name", _project_name),
+        ("SSE1", _sse1),
+        ("SSE2", lambda s: ""),
+        ("SSE3", lambda s: ""),
+        ("Project?", _project_flag),
+        ("PM", _pm),
+        ("Status", _status),
+        ("Start and Finish Dates", _start_finish_dates),
+        ("% Complete", lambda s: s.delivery_progress if s.delivery_progress is not None else ""),
+        ("Key Updates", lambda s: s.key_updates_risks or ""),
+        ("Active Risks/Issues", lambda s: s.key_updates_risks or ""),
+        ("Scope Status", lambda s: s.project_details or ""),
+        ("Schedule Status", lambda s: _date_short(s.delivery_target_finish_date)),
+        ("Budget Status", lambda s: ""),
+        ("Folder", lambda s: s.sqr_folder_link or ""),
+        ("Quoted SSE hrs", lambda s: float(s.sse_manhrs) if s.sse_manhrs is not None else ""),
+        ("Billed SSE hrs", lambda s: ""),
+        ("Quoted PM hrs", lambda s: float(s.effective_pm_manhrs) if s.effective_pm_manhrs is not None else ""),
+        ("Billed PM hrs", lambda s: ""),
+        ("Project Management", lambda s: _money(s.effective_pm_amount)),
+        ("Deployment", lambda s: _money(s.sse_amount)),
+        ("On-Call", lambda s: _money(s.managed_support_amount)),
+        ("Total Revenue", _total_revenue),
+        ("Revenue?", lambda s: "Yes" if s.revenue_date or s.revenue_declaration == "declared" else "No"),
+        ("SI Type", _revenue_source),
+        ("SI Reference", lambda s: (s.revenue_reference_no or "").upper()),
+        ("SI Date", lambda s: _date_medium_safe(s.revenue_date)),
+        ("Remarks", lambda s: s.revenue_remarks or s.remarks or ""),
+        ("Action", lambda s: "History"),
     ]
 
 
@@ -2487,15 +2753,11 @@ def _build_choice_import_map(choices) -> dict[str, str]:
 
 
 def _make_sqr_edit_form(user):
-    """Return a SqrSubmissionForm for the edit modal scoped to the engineer's assigned requests.
-
-    Excludes requests already linked to ANY SQR; the current submission's linked
-    request is injected dynamically by the modal JS so the engineer can keep it.
-    """
+    """Return a SqrSubmissionForm for the edit modal scoped to engineer-accessible requests."""
     used_req_ids = SqrSubmission.objects.exclude(linked_request_id=None).values_list("linked_request_id", flat=True)
     form = SqrSubmissionForm(auto_id="edit_%s")
     form.fields["linked_request"].queryset = (
-        Request.objects.filter(engineer=user)
+        Request.objects.filter(Q(engineer=user) | Q(backup_engineer=user))
         .exclude(id__in=used_req_ids)
         .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
     )
@@ -2506,8 +2768,8 @@ def _make_sqr_edit_form(user):
 class SqrListView(LoginRequiredMixin, TemplateView):
     template_name = "hub/sqr.html"
 
-    VALID_TABS = {"proposal", "delivery", "revenue-report"}
-    PM_ONLY_TABS = {"delivery", "revenue-report"}
+    VALID_TABS = {"proposal", "delivery", "revenue-report", "reports"}
+    PM_ONLY_TABS = {"delivery", "revenue-report", "reports"}
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -2526,7 +2788,8 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "assigned_pm",
             "assigned_sse",
             "linked_request",
-        ).order_by("-created_at")
+            "linked_request__account",
+        ).order_by("-created_at", "-pk")
         if self.request.user.role in ENGINEER_ACCESS_ROLES:
             return queryset.filter(engineer=self.request.user)
         return queryset
@@ -2538,6 +2801,35 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         can_review = user.role in ADMIN_PANEL_ROLES
         is_pm = user.role in ADMIN_PANEL_ROLES
         is_admin = user.role == User.Roles.ADMIN
+
+        def decimal_to_float(value):
+            return float(value or Decimal("0"))
+
+        def submission_discounted_value(submission):
+            return (
+                submission.computed_total_price
+                or submission.discounted_price
+                or submission.quotation_total_price
+                or Decimal("0")
+            )
+
+        def submission_gross_value(submission):
+            return (
+                submission.computed_gross_total
+                or submission.quotation_total_price
+                or submission.computed_total_price
+                or submission.discounted_price
+                or Decimal("0")
+            )
+
+        def compact_currency(value: Decimal) -> str:
+            amount = decimal_to_float(value)
+            abs_amount = abs(amount)
+            if abs_amount >= 1_000_000:
+                return f"₱{amount / 1_000_000:.2f}M"
+            if abs_amount >= 1_000:
+                return f"₱{amount / 1_000:.1f}K"
+            return f"₱{amount:,.2f}"
 
         active_tab = (self.request.GET.get("tab") or "proposal").strip().lower()
         if active_tab not in self.VALID_TABS:
@@ -2582,6 +2874,10 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 1 for s in all_submissions
                 if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
             ),
+            "closed_canceled": sum(
+                1 for s in all_submissions
+                if s.proposal_status == SqrSubmission.ProposalStatus.CLOSED_CANCELED
+            ),
         }
 
         # ── Service Delivery Stage ───────────────────────────────────────────
@@ -2611,14 +2907,14 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         total_with_deal_status = sum(
             1 for s in all_submissions if s.proposal_status
         ) if is_pm else 0
-        won_total_price = sum(s.quotation_total_price or Decimal("0") for s in won_submissions)
-        won_discounted_total = sum(s.discounted_price or Decimal("0") for s in won_submissions)
-        lost_total_price = sum(s.quotation_total_price or Decimal("0") for s in lost_submissions)
+        won_total_price = sum(submission_gross_value(s) for s in won_submissions)
+        won_discounted_total = sum(submission_discounted_value(s) for s in won_submissions)
+        lost_total_price = sum(submission_discounted_value(s) for s in lost_submissions)
         win_rate = (
             round(len(won_submissions) / total_with_deal_status * 100, 1)
             if total_with_deal_status > 0 else 0
         )
-        top_won = sorted(won_submissions, key=lambda s: s.quotation_total_price or Decimal("0"), reverse=True)[:5]
+        top_won = sorted(won_submissions, key=submission_discounted_value, reverse=True)[:5]
 
         revenue_data = {
             "won_count": len(won_submissions),
@@ -2633,12 +2929,293 @@ class SqrListView(LoginRequiredMixin, TemplateView):
             "revenue_submissions": [s for s in all_submissions if s.status == SqrSubmission.Status.APPROVED] if is_pm else [],
         }
 
+        sqr_reports_summary = None
+        sqr_reports_status_chart = {"labels": [], "totals": []}
+        sqr_reports_deal_chart = {"labels": [], "totals": []}
+        sqr_reports_delivery_chart = {"labels": [], "totals": []}
+        sqr_reports_group_chart = {"labels": [], "totals": []}
+        sqr_reports_scope_chart = {"labels": [], "totals": []}
+        sqr_reports_funnel_chart = {"labels": [], "totals": []}
+        sqr_reports_monthly_chart = {"labels": [], "totals": []}
+        sqr_reports_revenue_chart = {"labels": [], "totals": []}
+        sqr_reports_quick_overview_chart = {"labels": [], "totals": []}
+        sqr_reports_top_accounts = []
+        sqr_reports_top_won = []
+        sqr_reports_pipeline = {}
+        sqr_reports_focus_items = []
+
+        if is_pm:
+            approved_submissions = [
+                submission for submission in all_submissions
+                if submission.status == SqrSubmission.Status.APPROVED
+            ]
+            billed_submissions = [
+                submission for submission in approved_submissions if submission.revenue_date
+            ]
+            for_billing_submissions = [
+                submission for submission in approved_submissions if not submission.revenue_date
+            ]
+            at_risk_submissions = [
+                submission for submission in delivery_submissions
+                if submission.delivery_health == SqrSubmission.DeliveryHealth.AT_RISK
+            ]
+            off_track_submissions = [
+                submission for submission in delivery_submissions
+                if submission.delivery_health == SqrSubmission.DeliveryHealth.OFF_TRACK
+            ]
+            on_track_submissions = [
+                submission for submission in delivery_submissions
+                if submission.delivery_health == SqrSubmission.DeliveryHealth.ON_TRACK
+            ]
+            pending_approval_count = proposal_counts["processing"] + proposal_counts["for_revision"]
+
+            status_rows = [
+                ("For Processing", proposal_counts["processing"]),
+                ("For Revision", proposal_counts["for_revision"]),
+                ("Approved", proposal_counts["approved"]),
+            ]
+            sqr_reports_status_chart = {
+                "labels": [label for label, total in status_rows if total],
+                "totals": [total for _, total in status_rows if total],
+            }
+
+            deal_rows = [
+                ("Submitted", proposal_counts["submitted_pending"]),
+                ("On Review", proposal_counts["negotiation"]),
+                ("Closed-Won", proposal_counts["closed_won"]),
+                ("Closed-Lost", proposal_counts["closed_lost"]),
+                ("Closed-Canceled", proposal_counts.get("closed_canceled", 0)),
+            ]
+            sqr_reports_deal_chart = {
+                "labels": [label for label, total in deal_rows if total],
+                "totals": [total for _, total in deal_rows if total],
+            }
+
+            sqr_reports_delivery_chart = {
+                "labels": [label for value, label in SqrSubmission.DeliveryHealth.choices if delivery_health_counts.get(value)],
+                "totals": [delivery_health_counts.get(value, 0) for value, _ in SqrSubmission.DeliveryHealth.choices if delivery_health_counts.get(value)],
+            }
+
+            group_counter = Counter(
+                ((submission.customer_company or "Unspecified").strip() or "Unspecified")
+                for submission in all_submissions
+            )
+            sorted_group_rows = sorted(group_counter.items(), key=lambda item: (-item[1], item[0]))[:8]
+            sqr_reports_group_chart = {
+                "labels": [label for label, _ in sorted_group_rows],
+                "totals": [total for _, total in sorted_group_rows],
+            }
+
+            scope_counter = Counter(
+                ((submission.project_details or "Unspecified").strip() or "Unspecified")
+                for submission in all_submissions
+            )
+            sorted_scope_rows = sorted(scope_counter.items(), key=lambda item: (-item[1], item[0]))[:8]
+            sqr_reports_scope_chart = {
+                "labels": [label for label, _ in sorted_scope_rows],
+                "totals": [total for _, total in sorted_scope_rows],
+            }
+
+            sqr_reports_funnel_chart = {
+                "labels": ["Total SQR", "Approved", "Closed Won", "Billed"],
+                "totals": [
+                    proposal_counts["total"],
+                    proposal_counts["approved"],
+                    len(won_submissions),
+                    len(billed_submissions),
+                ],
+            }
+            sqr_reports_quick_overview_chart = {
+                "labels": ["Pending", "Approved", "Won", "Billed"],
+                "totals": [
+                    pending_approval_count,
+                    proposal_counts["approved"],
+                    len(won_submissions),
+                    len(billed_submissions),
+                ],
+            }
+
+            monthly_counter = Counter()
+            monthly_labels = {}
+            for submission in all_submissions:
+                localized_created = timezone.localtime(submission.created_at, MANILA_TZ)
+                month_key = localized_created.strftime("%Y-%m")
+                monthly_counter[month_key] += 1
+                monthly_labels[month_key] = localized_created.strftime("%b %Y")
+
+            sorted_month_keys = sorted(monthly_counter.keys())
+            sqr_reports_monthly_chart = {
+                "labels": [monthly_labels[key] for key in sorted_month_keys],
+                "totals": [monthly_counter[key] for key in sorted_month_keys],
+            }
+
+            total_managed_support = sum(
+                submission.managed_support_amount or Decimal("0")
+                for submission in all_submissions
+            )
+            revenue_rows = [
+                ("Won Gross", won_total_price),
+                ("Won Discounted", won_discounted_total),
+                ("Lost Value", lost_total_price),
+                ("Managed Support", total_managed_support),
+            ]
+            sqr_reports_revenue_chart = {
+                "labels": [label for label, value in revenue_rows if value and value > 0],
+                "totals": [decimal_to_float(value) for _, value in revenue_rows if value and value > 0],
+            }
+
+            account_totals = defaultdict(lambda: {"count": 0, "value": Decimal("0")})
+            for submission in won_submissions:
+                account_name = (submission.customer_name or "Unspecified Account").strip() or "Unspecified Account"
+                account_totals[account_name]["count"] += 1
+                account_totals[account_name]["value"] += submission_discounted_value(submission)
+
+            sqr_reports_top_accounts = [
+                {
+                    "name": account_name,
+                    "count": metrics["count"],
+                    "value": metrics["value"],
+                }
+                for account_name, metrics in sorted(
+                    account_totals.items(),
+                    key=lambda item: (-item[1]["value"], -item[1]["count"], item[0]),
+                )[:6]
+            ]
+
+            sqr_reports_top_won = [
+                {
+                    "reference_code": submission.reference_code,
+                    "customer_name": submission.customer_name,
+                    "group_name": submission.customer_company or "—",
+                    "discounted_price": submission_discounted_value(submission),
+                    "status": submission.get_delivery_health_display() if submission.delivery_health else "Awaiting delivery setup",
+                }
+                for submission in top_won
+            ]
+
+            approval_lead_days = [
+                max(
+                    (timezone.localtime(submission.reviewed_at, MANILA_TZ).date() - timezone.localtime(submission.created_at, MANILA_TZ).date()).days,
+                    0,
+                )
+                for submission in approved_submissions
+                if submission.reviewed_at
+            ]
+            avg_approval_days = (
+                round(sum(approval_lead_days) / len(approval_lead_days), 1)
+                if approval_lead_days else 0
+            )
+            avg_won_value = (
+                won_discounted_total / len(won_submissions)
+                if won_submissions else Decimal("0")
+            )
+
+            approval_rate = (
+                round((proposal_counts["approved"] / proposal_counts["total"]) * 100, 1)
+                if proposal_counts["total"] else 0
+            )
+            billed_conversion_rate = (
+                round((len(billed_submissions) / proposal_counts["approved"]) * 100, 1)
+                if proposal_counts["approved"] else 0
+            )
+            win_from_approved_rate = (
+                round((len(won_submissions) / proposal_counts["approved"]) * 100, 1)
+                if proposal_counts["approved"] else 0
+            )
+            sqr_reports_summary = {
+                "total_submissions": proposal_counts["total"],
+                "approval_rate": approval_rate,
+                "win_rate": win_rate,
+                "active_delivery": len(
+                    [
+                        submission for submission in delivery_submissions
+                        if submission.delivery_health in {
+                            SqrSubmission.DeliveryHealth.ON_TRACK,
+                            SqrSubmission.DeliveryHealth.OFF_TRACK,
+                            SqrSubmission.DeliveryHealth.AT_RISK,
+                        }
+                    ]
+                ),
+                "won_discounted_total": won_discounted_total,
+                "won_discounted_total_label": compact_currency(won_discounted_total),
+                "lost_total_price": lost_total_price,
+                "lost_total_price_label": compact_currency(lost_total_price),
+                "managed_support_total": total_managed_support,
+                "managed_support_total_label": compact_currency(total_managed_support),
+                "billed_count": len(billed_submissions),
+                "for_billing_count": len(for_billing_submissions),
+                "at_risk_count": len(at_risk_submissions),
+                "off_track_count": len(off_track_submissions),
+                "on_track_count": len(on_track_submissions),
+                "pending_approval_count": pending_approval_count,
+                "avg_won_value_label": compact_currency(avg_won_value),
+                "avg_approval_days": avg_approval_days,
+                "billed_conversion_rate": billed_conversion_rate,
+                "win_from_approved_rate": win_from_approved_rate,
+            }
+
+            sqr_reports_pipeline = {
+                "pending_approval_count": pending_approval_count,
+                "approved_count": proposal_counts["approved"],
+                "negotiation_count": proposal_counts["negotiation"],
+                "won_count": len(won_submissions),
+                "lost_count": len(lost_submissions),
+                "billed_count": len(billed_submissions),
+                "for_billing_count": len(for_billing_submissions),
+                "at_risk_count": len(at_risk_submissions),
+                "off_track_count": len(off_track_submissions),
+                "on_track_count": len(on_track_submissions),
+                "avg_won_value_label": compact_currency(avg_won_value),
+                "avg_approval_days": avg_approval_days,
+            }
+
+            sqr_reports_focus_items = [
+                {
+                    "title": "Pending internal action",
+                    "value": pending_approval_count,
+                    "description": "SQRs still waiting for processing or revision closure.",
+                    "icon": "bi-hourglass-split",
+                    "tone": "warning",
+                },
+                {
+                    "title": "Revenue still pending",
+                    "value": len(for_billing_submissions),
+                    "description": "Approved quotations not yet billed in the revenue stage.",
+                    "icon": "bi-receipt-cutoff",
+                    "tone": "primary",
+                },
+                {
+                    "title": "Delivery watchlist",
+                    "value": len(at_risk_submissions) + len(off_track_submissions),
+                    "description": "Won projects marked at risk or off track and needing attention.",
+                    "icon": "bi-exclamation-diamond",
+                    "tone": "danger",
+                },
+                {
+                    "title": "Average won deal size",
+                    "value": compact_currency(avg_won_value),
+                    "description": "Typical discounted value of each successfully won quotation.",
+                    "icon": "bi-cash-stack",
+                    "tone": "success",
+                },
+            ]
+
+        my_assigned_sqr_count = sum(
+            1 for submission in all_submissions if submission.pm_esg_reviewer_id == user.id
+        )
+        # Approvers (PM-ESG) default to "My Assigned SQR"; Total still shows the full list.
+        default_my_assigned_filter = user.role == PM_ESG_ROLE
+
         context.update(
             {
                 "can_create_sqr": can_create,
                 "can_review_sqr": can_review,
                 "is_pm": is_pm,
                 "is_admin": is_admin,
+                "is_pm_esg": user.role == PM_ESG_ROLE,
+                "my_assigned_sqr_count": my_assigned_sqr_count,
+                "default_my_assigned_filter": default_my_assigned_filter,
+                "sqr_current_user_id": user.pk,
                 "sqr_form": form,
                 "sqr_import_form": SqrImportForm() if is_admin else None,
                 "sqr_edit_form": _make_sqr_edit_form(user) if can_create else None,
@@ -2649,22 +3226,43 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "delivery_submissions": delivery_submissions,
                 "delivery_health_counts": delivery_health_counts,
                 "revenue_data": revenue_data,
-                "sqr_pm_users_json": json.dumps(list(
+                "sqr_reports_summary": sqr_reports_summary,
+                "sqr_reports_status_chart": sqr_reports_status_chart,
+                "sqr_reports_deal_chart": sqr_reports_deal_chart,
+                "sqr_reports_delivery_chart": sqr_reports_delivery_chart,
+                "sqr_reports_group_chart": sqr_reports_group_chart,
+                "sqr_reports_scope_chart": sqr_reports_scope_chart,
+                "sqr_reports_funnel_chart": sqr_reports_funnel_chart,
+                "sqr_reports_monthly_chart": sqr_reports_monthly_chart,
+                "sqr_reports_revenue_chart": sqr_reports_revenue_chart,
+                "sqr_reports_quick_overview_chart": sqr_reports_quick_overview_chart,
+                "sqr_reports_top_accounts": sqr_reports_top_accounts,
+                "sqr_reports_top_won": sqr_reports_top_won,
+                "sqr_reports_pipeline": sqr_reports_pipeline,
+                "sqr_reports_focus_items": sqr_reports_focus_items,
+                "sqr_pm_users": list(
                     User.objects.filter(role=User.Roles.PM_ESG)
                     .values("pk", "first_name", "last_name", "username")
                     .order_by("first_name", "last_name")
-                )) if is_pm else "[]",
-                "sqr_sse_users_json": json.dumps(list(
+                ) if is_pm else [],
+                "sqr_sse_users": list(
                     User.objects.filter(role__in=[User.Roles.ENGINEER, User.Roles.ON_HOLD])
                     .values("pk", "first_name", "last_name", "username")
                     .order_by("first_name", "last_name")
-                )) if is_pm else "[]",
-                "sqr_rq_options_json": json.dumps(list(
+                ) if is_pm else [],
+                "sqr_rq_options": list(
                     Request.objects.order_by("-id")[:300]
                     .values("pk", "reference_code")
-                )) if is_pm else "[]",
+                ) if is_pm else [],
             }
         )
+        if is_pm:
+            context["sqr_json_scripts"] = format_html(
+                "{}{}{}",
+                json_script(context["sqr_pm_users"], "sgr-pm-users"),
+                json_script(context["sqr_sse_users"], "sgr-sse-users"),
+                json_script(context["sqr_rq_options"], "sgr-rq-options"),
+            )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2678,36 +3276,173 @@ class SqrListView(LoginRequiredMixin, TemplateView):
         )
         _refresh_sqr_request_account_map(form)
         if form.is_valid():
-            submission = form.save(commit=False)
-            submission.engineer = request.user
-            submission.status = SqrSubmission.Status.FOR_PROCESSING
-            # Auto-compute Managed Support Service Amount (col P) per business rules
-            _MANAGED_SCOPES = frozenset([
-                "Implementation",
-                "Implementation and Project Management",
-                "Managed Support and Maintenance Service",
-            ])
-            scope = form.cleaned_data.get("project_details", "") or ""
-            group = form.cleaned_data.get("customer_company", "") or ""
-            if scope in _MANAGED_SCOPES:
-                submission.managed_support_amount = (
-                    Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
-                )
-            else:
-                submission.managed_support_amount = None
-            submission.save()
+            linked_request = form.cleaned_data.get("linked_request")
+            if linked_request and SqrSubmission.objects.filter(linked_request=linked_request).exists():
+                form.add_error("linked_request", "An SQR already exists for the selected Request ID.")
+                context = self.get_context_data(form=form)
+                return self.render_to_response(context)
+
+            try:
+                with transaction.atomic():
+                    if linked_request:
+                        Request.objects.select_for_update().filter(pk=linked_request.pk).first()
+                        if SqrSubmission.objects.select_for_update().filter(linked_request=linked_request).exists():
+                            form.add_error("linked_request", "An SQR already exists for the selected Request ID.")
+                            context = self.get_context_data(form=form)
+                            return self.render_to_response(context)
+
+                    submission = form.save(commit=False)
+                    submission.engineer = request.user
+                    submission.status = SqrSubmission.Status.FOR_PROCESSING
+                    # Auto-compute Managed Support Service Amount (col P) per business rules
+                    _MANAGED_SCOPES = frozenset([
+                        "Deployment Only", "Deployment and Project Management", "Maintenance", "On-Call Services", "Implementation", "Implementation and Project Management", "Managed Support and Maintenance Service",
+                    ])
+                    scope = form.cleaned_data.get("project_details", "") or ""
+                    group = form.cleaned_data.get("customer_company", "") or ""
+                    if scope in _MANAGED_SCOPES:
+                        submission.managed_support_amount = (
+                            Decimal("149000.00") if group == "ESS" else Decimal("192000.00")
+                        )
+                    else:
+                        submission.managed_support_amount = None
+                    submission.save()
+            except IntegrityError:
+                form.add_error("linked_request", "An SQR already exists for the selected Request ID.")
+                context = self.get_context_data(form=form)
+                return self.render_to_response(context)
             # Reload with reviewer to ensure email field is populated
             submission = (
                 SqrSubmission.objects.select_related("engineer", "pm_esg_reviewer")
                 .get(pk=submission.pk)
             )
             _send_sqr_new_submission_email(submission, http_request=request)
-            self._notify_sqr_submission(submission)
+            SqrReportsDataView._notify_sqr_submission(submission)
             messages.success(request, f"SQR submitted successfully ({submission.reference_code}).")
             return redirect("hub:sqr")
 
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
+
+
+class DashboardLiveDataView(LoginRequiredMixin, View):
+    """AJAX endpoint: admin dashboard table rows + metrics partials for polling."""
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        client_version = (request.GET.get("version") or "").strip()
+        live_version = DashboardView._admin_dashboard_live_version(request.user)
+        if client_version and client_version == live_version:
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "changed": False,
+                    "version": live_version,
+                }
+            )
+
+        dashboard = DashboardView()
+        dashboard.request = request
+        dashboard.args = args
+        dashboard.kwargs = kwargs
+        context = dashboard._build_admin_dashboard_context(request.user)
+        context.setdefault("role", User.Roles.ADMIN)
+        context.setdefault("is_admin_ui", True)
+        context.setdefault("is_requestor_ui", False)
+        context.setdefault("is_pm_ess", False)
+        context.setdefault("is_pm_esg", request.user.role == PM_ESG_ROLE)
+        context.setdefault("can_create_request", request.user.role in REQUEST_CREATOR_ROLES)
+
+        html_metrics = render_to_string(
+            "hub/partials/dashboard_admin_metrics.html",
+            context,
+            request=request,
+        )
+        html_rows = render_to_string(
+            "hub/partials/dashboard_admin_rows.html",
+            context,
+            request=request,
+        )
+        return JsonResponse(
+            {
+                "ok": True,
+                "changed": True,
+                "version": context.get("dashboard_live_version") or live_version,
+                "request_count": len(context.get("requests") or []),
+                "html_metrics": html_metrics,
+                "html_rows": html_rows,
+            }
+        )
+
+
+class NotificationToastDataView(LoginRequiredMixin, View):
+    """Return new request/assignment events for the signed-in user's toast queue."""
+
+    PAGE_SIZE = 50
+
+    def get(self, request, *args, **kwargs):
+        queryset = (
+            Notification.objects.filter(
+                recipient=request.user,
+                event_type__in=[
+                    Notification.EventType.NEW_REQUEST,
+                    Notification.EventType.ASSIGNMENT,
+                ],
+                related_request__isnull=False,
+            )
+            .select_related("related_request")
+            .order_by("id")
+        )
+        raw_cursor = request.GET.get("cursor")
+        if raw_cursor in (None, ""):
+            baseline = queryset.aggregate(value=Max("id"))["value"] or 0
+            return JsonResponse({"ok": True, "events": [], "next_cursor": baseline, "has_more": False})
+        try:
+            cursor = max(int(raw_cursor), 0)
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Invalid cursor"}, status=400)
+
+        rows = list(queryset.filter(id__gt=cursor)[: self.PAGE_SIZE + 1])
+        has_more = len(rows) > self.PAGE_SIZE
+        rows = rows[: self.PAGE_SIZE]
+        events = [
+            {
+                "id": item.pk,
+                "type": item.event_type,
+                "request_id": item.related_request_id,
+                "reference_code": item.related_request.reference_code,
+                "message": item.message,
+                "created_at": item.created_at.isoformat(),
+                "manage_url": reverse("hub:notification-follow", args=[item.pk]),
+            }
+            for item in rows
+        ]
+        return JsonResponse(
+            {
+                "ok": True,
+                "events": events,
+                "next_cursor": rows[-1].pk if rows else cursor,
+                "has_more": has_more,
+            }
+        )
+
+
+class SqrReportsDataView(LoginRequiredMixin, View):
+    """AJAX endpoint that returns the latest SQR reports fragment for live refresh."""
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        report_view = SqrListView()
+        report_view.request = request
+        report_view.args = args
+        report_view.kwargs = kwargs
+        context = report_view.get_context_data()
+        html = render_to_string("hub/partials/sqr_reports.html", context, request=request)
+        return JsonResponse({"ok": True, "html": html})
 
     @staticmethod
     def _notify_sqr_submission(submission: SqrSubmission) -> None:
@@ -2763,7 +3498,11 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
         else:
             qs = (
                 Request.objects
-                .filter(engineer=self.request.user)
+                .filter(
+                    Q(engineer=self.request.user)
+                    | Q(backup_engineer=self.request.user)
+                    | Q(pk=obj.linked_request_id)
+                )
                 .exclude(id__in=others_used_ids)
                 .select_related("account").only("id", "reference_code", "account__name").order_by("-id")
             )
@@ -2783,7 +3522,23 @@ class SqrEngineerUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def form_valid(self, form):
+        original = SqrSubmission.objects.get(pk=self.object.pk)
         response = super().form_valid(form)
+        changed_fields = []
+        for field in form.changed_data:
+            if hasattr(self.object, field):
+                changed_fields.append(field)
+        if changed_fields:
+            old_values = SqrInlineFieldUpdateView._snapshot_values(original, changed_fields)
+            new_values = SqrInlineFieldUpdateView._snapshot_values(self.object, changed_fields)
+            record_sqr_history(
+                self.object,
+                self.request.user,
+                field=changed_fields[0] if len(changed_fields) == 1 else "",
+                old_values=old_values,
+                new_values=new_values,
+                source="engineer_edit",
+            )
         messages.success(self.request, f"SQR {self.object.reference_code} updated.")
         return response
 
@@ -2816,6 +3571,132 @@ class SqrEngineerDeleteView(LoginRequiredMixin, DeleteView):
         return response
 
 
+SQR_HISTORY_FIELD_LABELS = {
+    "customer_name": "Account Name",
+    "customer_company": "Group Name",
+    "customer_contact": "Account Manager",
+    "project_title": "Service Description",
+    "project_details": "Scope of Services",
+    "linked_request": "RQ ID",
+    "sse_manhrs": "SSE Man-hrs",
+    "sse_amount": "SSE Amount",
+    "pm_manhrs": "PM Man-hrs",
+    "pm_amount": "PM Amount",
+    "managed_support_amount": "Maintenance Amt.",
+    "discount_rate": "Discount Rate",
+    "status": "SQR Status",
+    "reviewed_at": "Approval Date",
+    "reviewed_by": "Reviewed By",
+    "review_notes": "Review Notes",
+    "validity_due_date": "Validity Due Date",
+    "proposal_status": "Proposal Status",
+    "po_pnl_date": "PO / PNL Date",
+    "assigned_pm": "Assigned PM",
+    "assigned_sse": "Assigned SSE",
+    "delivery_start_date": "Start Date",
+    "delivery_target_finish_date": "Target Finish Date",
+    "overall_status": "Overall Status",
+    "delivery_health": "Health Status",
+    "delivery_progress": "Overall Progress %",
+    "key_updates_risks": "Key Updates / Risks / Issues",
+    "delivery_actual_finish_date": "Actual Finish Date",
+    "delivery_completion_signed_date": "Completion Signed Date",
+    "warranty_end_date": "Completion Warranty End Date",
+    "managed_support_start_date": "Maintenance Start Date",
+    "revenue_date": "Billed Date",
+    "revenue_source": "Billing Type",
+    "revenue_reference_no": "Billing Reference",
+    "revenue_status": "Billing Status",
+    "revenue_remarks": "PO Remarks",
+    "revenue_overview": "Billing Remarks",
+    "revenue_declaration": "Revenue Declaration",
+}
+
+SQR_HISTORY_CHOICE_LABELS = {
+    "status": dict(SqrSubmission.Status.choices),
+    "proposal_status": dict(SqrSubmission.ProposalStatus.choices),
+    "delivery_health": dict(SqrSubmission.DeliveryHealth.choices),
+    "overall_status": dict(SqrSubmission.OverallStatus.choices),
+    "revenue_declaration": dict(SqrSubmission.RevenueDeclaration.choices),
+    "revenue_status": dict(SqrSubmission.RevenueStatus.choices),
+    "revenue_source": {"internal": "Internal", "invoiced": "Invoiced", "unbilled": "Unbilled"},
+    "project_details": {
+        "Deployment Only": "Deployment Only",
+        "On-Call Services": "On-Call Services",
+        "Maintenance": "Maintenance",
+        "Project Management": "Project Management",
+        "Deployment and Project Management": "Deployment and Project Management",
+    },
+}
+
+
+def get_sqr_history_field_label(field: str) -> str:
+    return SQR_HISTORY_FIELD_LABELS.get(field, (field or "SQR").replace("_", " ").title())
+
+
+def format_sqr_history_value(field: str, value) -> str:
+    if value in (None, ""):
+        return "—"
+    if field in SQR_HISTORY_CHOICE_LABELS:
+        return SQR_HISTORY_CHOICE_LABELS[field].get(value, str(value))
+    if field in {"assigned_pm", "assigned_sse", "reviewed_by"}:
+        user = User.objects.filter(pk=value).first()
+        return (user.get_full_name() or user.username) if user else str(value)
+    if field == "linked_request":
+        request_obj = Request.objects.filter(pk=value).first()
+        return request_obj.reference_code if request_obj else str(value)
+    if field == "discount_rate":
+        return f"{value}%" if str(value) != "0" else "No Discount"
+    if field.endswith("_amount") or field in {"quotation_total_price", "computed_total_price", "computed_discount_amount"}:
+        try:
+            amount = Decimal(str(value))
+            return f"₱{amount:,.2f}"
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def build_sqr_history_summary(field: str, old_values: dict, new_values: dict, action: str = "updated") -> str:
+    changed = [key for key in new_values.keys() if old_values.get(key) != new_values.get(key)]
+    primary = field if field in changed else (changed[0] if changed else field)
+    label = get_sqr_history_field_label(primary)
+    if action == SqrSubmissionHistory.Action.RESTORED:
+        return f"Restored {label}."
+    if not changed:
+        return f"Saved {label}."
+    old_display = format_sqr_history_value(primary, old_values.get(primary))
+    new_display = format_sqr_history_value(primary, new_values.get(primary))
+    extra = len(changed) - 1
+    suffix = f" and {extra} related value{'s' if extra != 1 else ''}" if extra > 0 else ""
+    return f"Changed {label} from {old_display} to {new_display}{suffix}."
+
+
+def record_sqr_history(
+    submission: SqrSubmission,
+    actor: User,
+    *,
+    field: str,
+    old_values: dict,
+    new_values: dict,
+    action: str = SqrSubmissionHistory.Action.UPDATED,
+    source: str = "inline",
+    metadata: dict | None = None,
+) -> SqrSubmissionHistory | None:
+    if old_values == new_values:
+        return None
+    return SqrSubmissionHistory.objects.create(
+        submission=submission,
+        actor=actor,
+        action=action,
+        field=field or "",
+        old_values=old_values or {},
+        new_values=new_values or {},
+        summary=build_sqr_history_summary(field, old_values or {}, new_values or {}, action),
+        source=source,
+        metadata=metadata or {},
+    )
+
+
 class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
     """AJAX endpoint for inline cell editing of SQR submissions (Admin / PM-ESG)."""
 
@@ -2826,15 +3707,17 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
-        "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
+        "warranty_end_date", "revenue_date", "revenue_source", "revenue_reference_no",
+        "revenue_status", "revenue_remarks", "revenue_overview", "revenue_declaration",
+        "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _PM_ESG_ALLOWED = frozenset([
-        "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
+        "project_details", "sse_manhrs", "pm_manhrs", "discount_rate", "status", "proposal_status",
         "po_pnl_date", "delivery_start_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_target_finish_date",
         "delivery_actual_finish_date", "delivery_completion_signed_date",
-        "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source", "revenue_reference_no", "revenue_remarks",
+        "warranty_end_date", "managed_support_start_date", "revenue_date", "revenue_source",
+        "revenue_reference_no", "revenue_status", "revenue_remarks", "revenue_overview",
         "revenue_declaration", "managed_support_amount", "assigned_pm", "assigned_sse", "linked_request",
     ])
     _DATE_FIELDS = frozenset([
@@ -2850,16 +3733,149 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
         "delivery_target_finish_date", "overall_status", "delivery_health",
         "delivery_progress", "key_updates_risks", "delivery_actual_finish_date",
         "delivery_completion_signed_date", "managed_support_start_date",
-        "revenue_date", "revenue_source", "revenue_reference_no",
-        "revenue_remarks", "revenue_declaration",
+        "revenue_date", "revenue_source", "revenue_reference_no", "revenue_status",
+        "revenue_remarks", "revenue_overview", "revenue_declaration",
     ])
+    _SERIALIZED_FK_FIELDS = _FK_FIELDS | frozenset(["reviewed_by"])
+    _UNDO_RETENTION = timedelta(hours=24)
+    _PRICE_TRIGGERS = frozenset(["pm_amount", "sse_amount", "managed_support_amount", "discount_rate"])
+
+    @classmethod
+    def _allowed_fields_for_user(cls, user):
+        if user.role == User.Roles.ADMIN:
+            return cls._ADMIN_ALLOWED
+        if user.role == User.Roles.PM_ESG:
+            return cls._PM_ESG_ALLOWED
+        return None
+
+    @classmethod
+    def _tracked_fields_for_change(cls, field, save_fields=None):
+        tracked = set(save_fields or []) | {field}
+        if field == "sse_manhrs":
+            tracked.update(["sse_amount", "pm_manhrs", "pm_amount"])
+        if field == "pm_manhrs":
+            tracked.add("pm_amount")
+        if field in ("project_details", "customer_company"):
+            tracked.add("managed_support_amount")
+        if field == "status":
+            tracked.update(["reviewed_at", "reviewed_by", "validity_due_date", "review_notes", "assigned_pm"])
+        return sorted(tracked)
+
+    @classmethod
+    def _serialize_field_value(cls, submission, field):
+        if field in cls._SERIALIZED_FK_FIELDS:
+            value = getattr(submission, f"{field}_id", None)
+        else:
+            value = getattr(submission, field)
+        if isinstance(value, Decimal):
+            normalized = value.normalize()
+            return format(normalized, "f")
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
+
+    @classmethod
+    def _snapshot_values(cls, submission, fields):
+        return {field: cls._serialize_field_value(submission, field) for field in fields}
+
+    @classmethod
+    def _apply_serialized_field_value(cls, submission, field, value):
+        if field in cls._DATE_FIELDS or field == "validity_due_date":
+            restored = date.fromisoformat(value) if value else None
+        elif field == "reviewed_at":
+            restored = datetime.fromisoformat(value) if value else None
+        elif field in cls._INT_FIELDS:
+            restored = int(value) if value not in ("", None) else None
+            if field == "discount_rate" and restored is None:
+                restored = 0
+        elif field in cls._DECIMAL_FIELDS or field in ("sse_amount", "pm_amount"):
+            restored = Decimal(str(value)) if value not in ("", None) else None
+        else:
+            restored = value
+
+        if field in cls._SERIALIZED_FK_FIELDS:
+            setattr(submission, f"{field}_id", restored)
+        else:
+            setattr(submission, field, restored)
+
+    @staticmethod
+    def _fmt_date_display(value):
+        return value.strftime("%b %d, %Y") if value else ""
+
+    @classmethod
+    def _build_inline_response(cls, submission, field, save_fields, request=None, change=None, undone=False, approval_urls=None):
+        response_data = {
+            "ok": True,
+            "field": field,
+            "field_value": cls._serialize_field_value(submission, field),
+        }
+        approval_urls = approval_urls or {}
+        if approval_urls.get("draft"):
+            response_data["approval_email_draft_url"] = approval_urls["draft"]
+        if approval_urls.get("eml"):
+            response_data["approval_email_eml_url"] = approval_urls["eml"]
+        if change is not None:
+            response_data["change_id"] = change.pk
+            response_data["undo_url"] = reverse("hub:sqr-inline-undo", args=[submission.pk, change.pk])
+            response_data["undo_expires_at"] = change.expires_at.isoformat()
+        if undone:
+            response_data["undone"] = True
+        if field == "status":
+            response_data["workflow_side_effect_warning"] = True
+            response_data["workflow_side_effect_message"] = (
+                "Status was reverted in Request Hub. Emails, Teams chats, or Outlook drafts already opened cannot be undone."
+                if undone else
+                "This status change can be reverted in Request Hub, but emails, Teams chats, or Outlook drafts cannot be undone."
+            )
+
+        save_fields = set(save_fields or [])
+        if "pm_amount" in save_fields:
+            response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
+        if "pm_manhrs" in save_fields:
+            response_data["pm_manhrs"] = str(int(submission.pm_manhrs)) if submission.pm_manhrs is not None else ""
+        if "sse_amount" in save_fields:
+            response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
+        if any(f in save_fields for f in cls._PRICE_TRIGGERS) or field in cls._PRICE_TRIGGERS:
+            da = submission.computed_discount_amount
+            tp = submission.computed_total_price
+            response_data["computed_discount_amount"] = str(da) if da is not None else ""
+            response_data["computed_total_price"] = str(tp) if tp is not None else ""
+        if "managed_support_amount" in save_fields:
+            msa = submission.managed_support_amount
+            response_data["managed_support_amount"] = str(msa) if msa is not None else ""
+        if "reviewed_at" in save_fields:
+            rat = submission.reviewed_at
+            rat_manila = rat.astimezone(MANILA_TZ) if rat else None
+            response_data["reviewed_at"] = rat_manila.strftime("%b %d, %Y") if rat_manila else ""
+        if "validity_due_date" in save_fields:
+            vdd = submission.validity_due_date
+            response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""
+        if "assigned_pm" in save_fields:
+            pm = submission.assigned_pm
+            response_data["assigned_pm_pk"] = pm.pk if pm else ""
+            response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
+        if field == "assigned_sse" or "assigned_sse" in save_fields:
+            sse = submission.assigned_sse
+            response_data["assigned_sse_name"] = (sse.get_full_name() or sse.username) if sse else ""
+        if field == "linked_request" or "linked_request" in save_fields:
+            req = submission.linked_request
+            response_data["rq_pk"] = req.pk if req else ""
+            response_data["rq_code"] = req.reference_code if req else ""
+
+        if field == "delivery_completion_signed_date" or "delivery_completion_signed_date" in save_fields:
+            response_data["post_svc_warranty_end_date"] = cls._fmt_date_display(submission.computed_post_svc_warranty_end_date)
+            response_data["support_start_date"] = cls._fmt_date_display(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = cls._fmt_date_display(submission.computed_managed_support_end_date)
+        if field in ("project_details", "customer_company", "managed_support_start_date", "managed_support_amount") or save_fields.intersection({"project_details", "customer_company", "managed_support_start_date", "managed_support_amount"}):
+            response_data["support_start_date"] = cls._fmt_date_display(submission.computed_support_start_date)
+            response_data["managed_support_end_date"] = cls._fmt_date_display(submission.computed_managed_support_end_date)
+        return response_data
 
     def post(self, request, pk):
-        if request.user.role == User.Roles.ADMIN:
-            allowed = self._ADMIN_ALLOWED
-        elif request.user.role == User.Roles.PM_ESG:
-            allowed = self._PM_ESG_ALLOWED
-        else:
+        allowed = self._allowed_fields_for_user(request.user)
+        if allowed is None:
             return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
 
         try:
@@ -2878,15 +3894,19 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             SqrSubmission.objects.select_related("engineer"), pk=pk
         )
         old_status = submission.status
+        original_submission = SqrSubmission.objects.get(pk=pk)
 
         if (
-            submission.proposal_status == SqrSubmission.ProposalStatus.CLOSED_LOST
+            submission.proposal_status in (
+                SqrSubmission.ProposalStatus.CLOSED_LOST,
+                SqrSubmission.ProposalStatus.CLOSED_CANCELED,
+            )
             and field in self._CLOSED_LOST_LOCKED_FIELDS
         ):
             return JsonResponse(
                 {
                     "ok": False,
-                    "error": "Delivery and revenue fields are locked when Proposal Status is Closed Lost",
+                    "error": "Delivery and billing fields are locked when Proposal Status is Closed-Lost or Closed-Canceled",
                 },
                 status=400,
             )
@@ -2939,9 +3959,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
 
         # Auto-recompute Managed Support Svc. Amt. (col P) when scope or group changes
         _MANAGED_SCOPES = frozenset([
-            "Implementation",
-            "Implementation and Project Management",
-            "Managed Support and Maintenance Service",
+            "Deployment Only", "Deployment and Project Management", "Maintenance", "On-Call Services", "Implementation", "Implementation and Project Management", "Managed Support and Maintenance Service",
         ])
         if field in ("project_details", "customer_company"):
             scope = coerced if field == "project_details" else submission.project_details
@@ -2958,7 +3976,7 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 now = timezone.now()
                 if not submission.reviewed_at:
                     submission.reviewed_at = now
-                submission.validity_due_date = submission.reviewed_at.date() + timedelta(days=90)
+                submission.validity_due_date = submission.reviewed_at.date() + timedelta(days=45)
                 submission.reviewed_by = request.user
                 save_fields += ["reviewed_at", "reviewed_by", "validity_due_date"]
                 if not submission.assigned_pm_id:
@@ -2977,7 +3995,28 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
                 if "reviewed_by" not in save_fields:
                     save_fields.append("reviewed_by")
 
-        submission.save(update_fields=save_fields)
+        tracked_fields = self._tracked_fields_for_change(field, save_fields)
+        old_values = self._snapshot_values(original_submission, tracked_fields)
+        with transaction.atomic():
+            submission.save(update_fields=save_fields)
+            new_values = self._snapshot_values(submission, tracked_fields)
+            change = SqrSubmissionChange.objects.create(
+                submission=submission,
+                changed_by=request.user,
+                field=field,
+                old_values=old_values,
+                new_values=new_values,
+                expires_at=timezone.now() + self._UNDO_RETENTION,
+            )
+            record_sqr_history(
+                submission,
+                request.user,
+                field=field,
+                old_values=old_values,
+                new_values=new_values,
+                source="inline",
+                metadata={"change_id": change.pk},
+            )
 
         # Email engineer when status changed to For Revision via inline edit
         if (
@@ -2993,73 +4032,213 @@ class SqrInlineFieldUpdateView(LoginRequiredMixin, View):
             )
 
         # When status → Approved: launch the user's default email app with the draft.
-        _approval_email_draft_url = None
-        _approval_email_eml_url = None
+        approval_urls = {}
         if (
             field == "status"
             and coerced == SqrSubmission.Status.APPROVED
             and old_status != SqrSubmission.Status.APPROVED
         ):
-            _approval_email_draft_url = _build_sqr_approval_mailto_url(_get_sqr_approval_email_context(submission))
-            _approval_email_eml_url = reverse("hub:sqr-approval-email-eml", args=[submission.pk])
+            approval_urls["draft"] = _build_sqr_approval_mailto_url(_get_sqr_approval_email_context(submission))
+            approval_urls["eml"] = reverse("hub:sqr-approval-email-eml", args=[submission.pk])
 
-        response_data = {"ok": True}
-        if _approval_email_draft_url:
-            response_data["approval_email_draft_url"] = _approval_email_draft_url
-        if _approval_email_eml_url:
-            response_data["approval_email_eml_url"] = _approval_email_eml_url
-        if "pm_amount" in save_fields:
-            response_data["pm_amount"] = str(submission.pm_amount) if submission.pm_amount is not None else ""
-        if "pm_manhrs" in save_fields:
-            response_data["pm_manhrs"] = str(int(submission.pm_manhrs)) if submission.pm_manhrs is not None else ""
-        if "sse_amount" in save_fields:
-            response_data["sse_amount"] = str(submission.sse_amount) if submission.sse_amount is not None else ""
-        # Return recomputed discount amount and total price whenever any component changes
-        _PRICE_TRIGGERS = frozenset(["pm_amount", "sse_amount", "managed_support_amount", "discount_rate"])
-        if any(f in save_fields for f in _PRICE_TRIGGERS) or field in _PRICE_TRIGGERS:
-            da = submission.computed_discount_amount
-            tp = submission.computed_total_price
-            response_data["computed_discount_amount"] = str(da) if da is not None else ""
-            response_data["computed_total_price"] = str(tp) if tp is not None else ""
-        if "managed_support_amount" in save_fields:
-            msa = submission.managed_support_amount
-            response_data["managed_support_amount"] = str(msa) if msa is not None else ""
-        if "reviewed_at" in save_fields:
-            rat = submission.reviewed_at
-            rat_manila = rat.astimezone(MANILA_TZ) if rat else None
-            response_data["reviewed_at"] = rat_manila.strftime("%b %d, %Y") if rat_manila else ""
-        if "validity_due_date" in save_fields:
-            vdd = submission.validity_due_date
-            response_data["validity_due_date"] = vdd.strftime("%b %d, %Y") if vdd else ""
-        if "assigned_pm" in save_fields:
-            pm = submission.assigned_pm
-            response_data["assigned_pm_pk"] = pm.pk if pm else ""
-            response_data["assigned_pm_name"] = (pm.get_full_name() or pm.username) if pm else ""
-        if field == "assigned_sse":
-            sse = submission.assigned_sse
-            response_data["assigned_sse_name"] = (sse.get_full_name() or sse.username) if sse else ""
-        if field == "linked_request":
-            req = submission.linked_request
-            response_data["rq_pk"] = req.pk if req else ""
-            response_data["rq_code"] = req.reference_code if req else ""
-        def _fmt(d):
-            return d.strftime("%b %d, %Y") if d else ""
-
-        if field == "delivery_completion_signed_date":
-            response_data["post_svc_warranty_end_date"] = _fmt(submission.computed_post_svc_warranty_end_date)
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        if field in ("project_details", "customer_company"):
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        # Return updated AK when AJ (managed_support_start_date) changes
-        if field == "managed_support_start_date":
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
-        if field == "managed_support_amount":
-            response_data["support_start_date"] = _fmt(submission.computed_support_start_date)
-            response_data["managed_support_end_date"] = _fmt(submission.computed_managed_support_end_date)
+        response_data = self._build_inline_response(
+            submission,
+            field,
+            tracked_fields,
+            request=request,
+            change=change,
+            approval_urls=approval_urls,
+        )
         return JsonResponse(response_data)
+
+
+class SqrInlineFieldUndoView(SqrInlineFieldUpdateView):
+    """AJAX endpoint that reverts a previously saved inline SQR field change."""
+
+    def post(self, request, pk, change_id):
+        allowed = self._allowed_fields_for_user(request.user)
+        if allowed is None:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        with transaction.atomic():
+            change = get_object_or_404(
+                SqrSubmissionChange.objects.select_for_update().select_related("submission"),
+                pk=change_id,
+                submission_id=pk,
+            )
+            if change.field not in allowed:
+                return JsonResponse({"ok": False, "error": "Field not allowed"}, status=400)
+            if change.is_undone:
+                return JsonResponse({"ok": False, "error": "This change was already undone."}, status=400)
+            if change.is_expired:
+                return JsonResponse({"ok": False, "error": "Undo expired for this change."}, status=400)
+
+            submission = SqrSubmission.objects.select_for_update().get(pk=pk)
+            if (
+                submission.proposal_status in (
+                    SqrSubmission.ProposalStatus.CLOSED_LOST,
+                    SqrSubmission.ProposalStatus.CLOSED_CANCELED,
+                )
+                and change.field != "proposal_status"
+                and any(field in self._CLOSED_LOST_LOCKED_FIELDS for field in change.old_values)
+            ):
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Delivery and billing fields are locked when Proposal Status is Closed-Lost or Closed-Canceled",
+                    },
+                    status=400,
+                )
+
+            current_values = self._snapshot_values(submission, change.new_values.keys())
+            if current_values != change.new_values:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Undo skipped because this SQR was changed again after the saved edit.",
+                    },
+                    status=409,
+                )
+
+            restore_fields = list(change.old_values.keys())
+            for restore_field, restore_value in change.old_values.items():
+                self._apply_serialized_field_value(submission, restore_field, restore_value)
+            update_values = {}
+            for restore_field in restore_fields:
+                if restore_field in self._SERIALIZED_FK_FIELDS:
+                    update_values[f"{restore_field}_id"] = getattr(submission, f"{restore_field}_id")
+                else:
+                    update_values[restore_field] = getattr(submission, restore_field)
+            SqrSubmission.objects.filter(pk=submission.pk).update(**update_values)
+            change.undone_at = timezone.now()
+            change.undone_by = request.user
+            change.save(update_fields=["undone_at", "undone_by"])
+            submission = SqrSubmission.objects.select_related(
+                "assigned_pm", "assigned_sse", "linked_request"
+            ).get(pk=pk)
+
+        response_data = self._build_inline_response(
+            submission,
+            change.field,
+            restore_fields,
+            request=request,
+            undone=True,
+        )
+        return JsonResponse(response_data)
+
+
+class SqrHistoryView(LoginRequiredMixin, View):
+    """Return PM/Admin-visible permanent history for a single SQR."""
+
+    def get(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        submission = get_object_or_404(SqrSubmission, pk=pk)
+        entries = []
+        for entry in submission.history_entries.select_related("actor", "restored_by").all()[:200]:
+            changed_fields = [
+                key for key in entry.new_values.keys()
+                if entry.old_values.get(key) != entry.new_values.get(key)
+            ]
+            fields = changed_fields or list(entry.new_values.keys()) or ([entry.field] if entry.field else [])
+            entries.append({
+                "id": entry.pk,
+                "action": entry.action,
+                "action_label": entry.get_action_display(),
+                "field": entry.field,
+                "field_label": get_sqr_history_field_label(entry.field),
+                "summary": entry.summary,
+                "actor": entry.actor.get_full_name() or entry.actor.username,
+                "created_at": timezone.localtime(entry.created_at, MANILA_TZ).strftime("%b %d, %Y · %I:%M %p"),
+                "source": entry.source,
+                "is_restored": entry.is_restored,
+                "restored_by": (entry.restored_by.get_full_name() or entry.restored_by.username) if entry.restored_by else "",
+                "restored_at": timezone.localtime(entry.restored_at, MANILA_TZ).strftime("%b %d, %Y · %I:%M %p") if entry.restored_at else "",
+                "restore_url": reverse("hub:sqr-history-restore", args=[submission.pk, entry.pk]),
+                "restorable": entry.action == SqrSubmissionHistory.Action.UPDATED and not entry.is_restored and bool(entry.old_values),
+                "changes": [
+                    {
+                        "field": changed_field,
+                        "field_label": get_sqr_history_field_label(changed_field),
+                        "old": format_sqr_history_value(changed_field, entry.old_values.get(changed_field)),
+                        "new": format_sqr_history_value(changed_field, entry.new_values.get(changed_field)),
+                    }
+                    for changed_field in fields
+                ],
+            })
+        return JsonResponse({
+            "ok": True,
+            "submission": {
+                "id": submission.pk,
+                "reference_code": submission.reference_code or str(submission),
+            },
+            "entries": entries,
+        })
+
+
+class SqrHistoryRestoreView(LoginRequiredMixin, View):
+    """Restore a single permanent SQR history entry when no later edit touched it."""
+
+    def post(self, request, pk, history_id):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            return JsonResponse({"ok": False, "error": "Permission denied"}, status=403)
+
+        allowed = SqrInlineFieldUpdateView._allowed_fields_for_user(request.user) or frozenset()
+        with transaction.atomic():
+            history = get_object_or_404(
+                SqrSubmissionHistory.objects.select_for_update().select_related("submission"),
+                pk=history_id,
+                submission_id=pk,
+            )
+            if history.action != SqrSubmissionHistory.Action.UPDATED or history.is_restored:
+                return JsonResponse({"ok": False, "error": "This history entry cannot be restored."}, status=400)
+            restore_fields = list(history.old_values.keys())
+            disallowed = [field for field in restore_fields if field not in allowed and field not in {"reviewed_at", "reviewed_by", "validity_due_date", "review_notes", "sse_amount", "pm_amount", "managed_support_amount"}]
+            if disallowed:
+                return JsonResponse({"ok": False, "error": "You cannot restore one or more fields in this history entry."}, status=403)
+
+            submission = SqrSubmission.objects.select_for_update().get(pk=pk)
+            current_values = SqrInlineFieldUpdateView._snapshot_values(submission, history.new_values.keys())
+            if current_values != history.new_values:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Restore skipped because this SQR changed after the selected history entry.",
+                    },
+                    status=409,
+                )
+
+            for restore_field, restore_value in history.old_values.items():
+                SqrInlineFieldUpdateView._apply_serialized_field_value(submission, restore_field, restore_value)
+            update_values = {}
+            for restore_field in restore_fields:
+                if restore_field in SqrInlineFieldUpdateView._SERIALIZED_FK_FIELDS:
+                    update_values[f"{restore_field}_id"] = getattr(submission, f"{restore_field}_id")
+                else:
+                    update_values[restore_field] = getattr(submission, restore_field)
+            SqrSubmission.objects.filter(pk=submission.pk).update(**update_values)
+            history.restored_at = timezone.now()
+            history.restored_by = request.user
+            history.save(update_fields=["restored_at", "restored_by"])
+            restore_entry = record_sqr_history(
+                submission,
+                request.user,
+                field=history.field,
+                old_values=history.new_values,
+                new_values=history.old_values,
+                action=SqrSubmissionHistory.Action.RESTORED,
+                source="history_restore",
+                metadata={"restored_history_id": history.pk},
+            )
+
+        return JsonResponse({
+            "ok": True,
+            "message": "History entry restored.",
+            "restored_history_id": history.pk,
+            "restore_entry_id": restore_entry.pk if restore_entry else None,
+            "reload_required": True,
+        })
 
 
 class SqrReviewUpdateView(LoginRequiredMixin, View):
@@ -3495,12 +4674,34 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         original = Request.objects.get(pk=form.instance.pk)
         previous_engineer_id = original.engineer_id
         previous_backup_id = original.backup_engineer_id
-        changed_fields = list(form.changed_data)
+        previous_backup_id = original.backup_engineer_id
+        changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
+        lifecycle_result = request_lifecycle.record_assignment_change(
+            self.object.pk,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+            actor=self.request.user,
+            source="Admin · Manage Request",
+            allow_capacity_override=self.request.POST.get("override_capacity") == "1",
+        )
+        self.object = lifecycle_result.request
+        if original.status != self.object.status:
+            lifecycle_status = request_lifecycle.record_status_change(
+                self.object.pk,
+                previous_status=original.status,
+                actor=self.request.user,
+                source="Admin · Manage Request",
+            )
+            self.object = lifecycle_status.request
         clear_engineer_outlook_lock_on_reassignment(
             self.object,
             previous_engineer_id=previous_engineer_id,
         )
+        if original.account_id != self.object.account_id and "account" not in changed_fields:
+            changed_fields.append("account")
+        if "request_date" in form.changed_data and "start_date" not in changed_fields:
+            changed_fields.append("start_date")
         if changed_fields:
             self._notify_request_update(original, self.object, changed_fields)
         assignment_email_result = notify_engineer_assignment_email(
@@ -3539,8 +4740,10 @@ class RequestAdminUpdateView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, Upda
         context["engineer_capacity_map"] = self._build_engineer_capacity_map()
         context["status_form"] = None
         context["status_allowed"] = False
-        context["account_name_choices"] = []
+        context["account_name_choices"] = getattr(context.get("form"), "account_name_suggestions", ()) or ()
         context["is_admin_form"] = True
+        context["can_change_account"] = True
+        context["lifecycle"] = request_lifecycle.build_lifecycle_context(self.object, self.request.user)
         context.update(get_request_activity_log_context(self.object))
         return context
 
@@ -3646,6 +4849,14 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
         previous_engineer_id = original.engineer_id
         changed_fields = normalize_request_form_changed_fields(form.changed_data)
         response = super().form_valid(form)
+        lifecycle_result = request_lifecycle.record_assignment_change(
+            self.object.pk,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+            actor=self.request.user,
+            source="Requestor · Edit Request",
+        )
+        self.object = lifecycle_result.request
         clear_engineer_outlook_lock_on_reassignment(
             self.object,
             previous_engineer_id=previous_engineer_id,
@@ -3660,6 +4871,12 @@ class RequestUpdateView(LoginRequiredMixin, UpdateView):
                 changed_fields,
                 "Requestor · Edit Request",
             )
+        notify_engineer_assignment_notification(
+            self.object,
+            actor_user=self.request.user,
+            previous_engineer_id=previous_engineer_id,
+            previous_backup_id=previous_backup_id,
+        )
         messages.success(self.request, "Request updated.")
         return response
 
@@ -3668,6 +4885,10 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     template_name = "hub/request_manager_form.html"
 
     def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            return redirect_to_login(request.get_full_path())
+
         allowed = ADMIN_PANEL_ROLES | REQUEST_CREATOR_ROLES | ENGINEER_ACCESS_ROLES | {PM_ESS_ROLE}
         if request.user.role not in allowed:
             messages.error(request, "You are not allowed to manage this request.")
@@ -3689,8 +4910,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             # Requestors can only see their own requests
             queryset = queryset.filter(pk=pk, requestor=user)
         elif user.role in ENGINEER_ACCESS_ROLES:
-            # Engineers can only see requests they are assigned to (primary or backup)
-            queryset = queryset.filter(pk=pk).filter(Q(engineer=user) | Q(backup_engineer=user))
+            # Engineers can see requests they are assigned to directly, or requests
+            # linked to SQR submissions they own. The linked-SQR case handles
+            # historical rows where the SQR requester and request assignee differ.
+            queryset = queryset.filter(pk=pk).filter(
+                Q(engineer=user) | Q(backup_engineer=user) | Q(sqr_links__engineer=user)
+            ).distinct()
         else:
             raise Http404
 
@@ -3702,7 +4927,12 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         except Http404:
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
-        context = self.get_context_data(request_obj)
+        editing_activity_log = self._get_requested_edit_activity_log(request_obj)
+        context = self.get_context_data(
+            request_obj,
+            activity_form=None,
+            editing_activity_log=editing_activity_log,
+        )
         return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
@@ -3712,6 +4942,8 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             messages.error(request, "You are not allowed to manage this request.")
             return redirect("hub:dashboard")
         form_type = request.POST.get("form_type", "details")
+        if form_type == "activity_log":
+            return self._handle_activity_log_post(request, request_obj)
         if form_type == "status_log":
             return self._handle_status_log_post(request, request_obj)
         if form_type == "status":
@@ -3724,16 +4956,46 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
     def _source_label(self, suffix: str) -> str:
         return f"{self._actor_prefix()} · {suffix}"
 
-    def get_context_data(self, request_obj, form=None, status_form=None, log_form=None):
+    def _get_requested_edit_activity_log(self, request_obj):
+        edit_activity_id = (self.request.GET.get("edit_activity") or "").strip()
+        if not edit_activity_id:
+            return None
+        try:
+            edit_activity_id_int = int(edit_activity_id)
+        except (TypeError, ValueError):
+            messages.error(self.request, "We could not find that activity log to edit.")
+            return None
+
+        queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request").filter(
+            request=request_obj
+        )
+        if self.request.user.role in ENGINEER_ACCESS_ROLES:
+            queryset = queryset.filter(engineer=self.request.user)
+        try:
+            return queryset.get(pk=edit_activity_id_int)
+        except EngineerActivityLog.DoesNotExist:
+            messages.error(self.request, "We could not find that activity log to edit.")
+            return None
+
+    def get_context_data(self, request_obj, form=None, status_form=None, log_form=None, activity_form=None, editing_activity_log=None):
         if form is None:
             form = RequestForm(instance=request_obj, actor_role=self.request.user.role, actor_user=self.request.user)
-        status_allowed = self.request.user.role in ENGINEER_ACCESS_ROLES
+        status_allowed = (
+            self.request.user.pk == request_obj.engineer_id
+            or self.request.user.role in ADMIN_PANEL_ROLES
+        )
         if status_allowed and status_form is None:
-            status_form = RequestStatusForm(instance=request_obj)
+            status_form = RequestStatusForm(instance=request_obj, actor_user=self.request.user)
         elif not status_allowed:
             status_form = None
         if log_form is None:
             log_form = StatusLogForm()
+        if editing_activity_log is not None and activity_form is None:
+            activity_form = EngineerActivityLogForm(
+                engineer=editing_activity_log.engineer,
+                bound_request=request_obj,
+                instance=editing_activity_log,
+            )
 
         referer = self.request.META.get("HTTP_REFERER")
         fallback = reverse("hub:dashboard")
@@ -3749,13 +5011,53 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             "form": form,
             "status_form": status_form,
             "log_form": log_form,
+            "activity_form": activity_form,
+            "editing_activity_log": editing_activity_log,
             "status_logs": request_obj.status_logs.select_related("author").order_by("-created_at"),
             "account_name_choices": getattr(form, "account_name_suggestions", ()),
             "back_url": back_url,
             "status_allowed": status_allowed,
+            "can_change_account": self.request.user.role in ADMIN_PANEL_ROLES,
             "linked_sqr": linked_sqr,
+            "lifecycle": request_lifecycle.build_lifecycle_context(request_obj, self.request.user),
             **get_request_activity_log_context(request_obj),
         }
+
+    def _handle_activity_log_post(self, request, request_obj):
+        log_id = (request.POST.get("log_id") or "").strip()
+        instance = None
+        if log_id:
+            queryset = EngineerActivityLog.objects.select_related("engineer", "account", "request").filter(
+                request=request_obj
+            )
+            if request.user.role in ENGINEER_ACCESS_ROLES:
+                queryset = queryset.filter(engineer=request.user)
+            try:
+                instance = queryset.get(pk=log_id)
+            except (EngineerActivityLog.DoesNotExist, ValueError):
+                messages.error(request, "Unable to update the selected activity log.")
+                return redirect("hub:request-manage-collab", pk=request_obj.pk)
+
+        engineer_for_form = instance.engineer if instance else (request_obj.engineer or request.user)
+        form = EngineerActivityLogForm(
+            data=request.POST,
+            engineer=engineer_for_form,
+            bound_request=request_obj,
+            instance=instance,
+        )
+        if form.is_valid():
+            activity_log = form.save(commit=False)
+            activity_log.engineer = engineer_for_form
+            activity_log.request = request_obj
+            activity_log.account = request_obj.account
+            if not activity_log.request_date:
+                activity_log.request_date = timezone.now().date()
+            activity_log.save()
+            messages.success(request, "Activity log updated successfully." if instance else "Activity log saved successfully.")
+            return redirect("hub:request-manage-collab", pk=request_obj.pk)
+
+        context = self.get_context_data(request_obj, activity_form=form, editing_activity_log=instance)
+        return render(request, self.template_name, context)
 
     def _handle_details_update(self, request, request_obj):
         form = RequestForm(request.POST, instance=request_obj, actor_role=request.user.role, actor_user=request.user)
@@ -3768,6 +5070,14 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             previous_backup_id = original.backup_engineer_id
             changed_fields = normalize_request_form_changed_fields(form.changed_data)
             form.save()
+            lifecycle_result = request_lifecycle.record_assignment_change(
+                request_obj.pk,
+                previous_engineer_id=previous_engineer_id,
+                previous_backup_id=previous_backup_id,
+                actor=request.user,
+                source=source_label,
+            )
+            request_obj = lifecycle_result.request
             clear_engineer_outlook_lock_on_reassignment(
                 request_obj,
                 previous_engineer_id=previous_engineer_id,
@@ -3802,10 +5112,13 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
     def _handle_status_update(self, request, request_obj):
-        if request.user.role not in ENGINEER_ACCESS_ROLES:
-            messages.error(request, "Only the assigned engineer can update the status.")
+        if request.user.pk != request_obj.engineer_id and request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only the primary assignee or a manager can update the status.")
             return HttpResponseRedirect(request.path)
-        status_form = RequestStatusForm(request.POST, instance=request_obj)
+
+        status_form = RequestStatusForm(request.POST, instance=request_obj, actor_user=request.user)
+        target_status = request.POST.get("status")
+        is_completion = target_status == Request.Status.COMPLETED
         if status_form.is_valid():
             send_closing_email = (request.POST.get("send_closing_email") or "").strip() in {"1", "true", "True", "on"}
             source_label = self._source_label("Manage Request · Status")
@@ -3813,6 +5126,13 @@ class RequestCollaborativeManageView(LoginRequiredMixin, View):
             request_obj._actor_user = request.user
             request_obj._actor_source = source_label
             status_form.save()
+            lifecycle_result = request_lifecycle.record_status_change(
+                request_obj.pk,
+                previous_status=original.status,
+                actor=request.user,
+                source=source_label,
+            )
+            request_obj = lifecycle_result.request
             changed_fields = []
             if original.status != request_obj.status:
                 changed_fields.append("status")
@@ -3916,7 +5236,12 @@ class RequestDeleteView(LoginRequiredMixin, DeleteView):
 
     def delete(self, request, *args, **kwargs):
         obj = self.get_object()
-        Request.objects.filter(pk=obj.pk).update(is_deleted=True, deleted_at=timezone.now())
+        now = timezone.now()
+        Request.objects.filter(pk=obj.pk).update(
+            is_deleted=True,
+            deleted_at=now,
+            updated_at=now,
+        )
         messages.success(request, f"Request {obj.reference_code} deleted. You can restore it from Profile → Backup &amp; Restore.")
         return redirect(self.success_url)
 
@@ -3928,8 +5253,11 @@ class RequestRestoreView(LoginRequiredMixin, View):
         if request.user.role != User.Roles.ADMIN:
             messages.error(request, "Access denied.")
             return redirect("accounts:update")
+        now = timezone.now()
         updated = Request.all_objects.filter(pk=pk, is_deleted=True).update(
-            is_deleted=False, deleted_at=None
+            is_deleted=False,
+            deleted_at=None,
+            updated_at=now,
         )
         if updated:
             ref = Request.all_objects.filter(pk=pk).values_list("reference_code", flat=True).first()
@@ -3939,24 +5267,8 @@ class RequestRestoreView(LoginRequiredMixin, View):
         return redirect(str(reverse_lazy("accounts:update")) + "#backup")
 
 
-class RequestTeamsRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
-    def post(self, request, pk):
-        request_obj = get_object_or_404(Request.objects.select_related("engineer", "requestor"), pk=pk)
-        teams_url = request_obj.teams_chat_url
-
-        if not teams_url:
-            messages.error(
-                request,
-                "Unable to start a Teams chat. Ensure the engineer and requestor both have emails configured.",
-            )
-            return redirect("hub:dashboard")
-
-        messages.info(request, "Opening Microsoft Teams in a new tab…")
-        return redirect(teams_url)
-
-
 class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixin, View):
-    def post(self, request, pk):
+    def post(self, request, pk, allow_existing_draft=False):
         request_obj = get_object_or_404(
             Request.objects.select_related("engineer", "backup_engineer", "requestor", "account"),
             pk=pk,
@@ -3973,7 +5285,7 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
                 user__role__in=ENGINEER_ACCESS_ROLES,
                 channel=RequestCommunication.Channel.OUTLOOK,
             ).exists()
-            if already_launched:
+            if already_launched and not allow_existing_draft:
                 messages.warning(request, "You already launched the Outlook draft for this request.")
                 return redirect(redirect_target)
 
@@ -4082,7 +5394,12 @@ class RequestOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequiredMixi
         return render(
             request,
             "hub/outlook_redirect.html",
-            {"mailto_url": outlook_url},
+            {
+                "mailto_url": outlook_url,
+                "launch_url": outlook_url,
+                "formatted_draft_url": "",
+                "return_url": redirect_target,
+            },
         )
 
 
@@ -4127,14 +5444,17 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
 
         to_addresses = {manager_email, engineer_email}
         cc_addresses = {"ESGRequestHub@phildata.com"}
+        if request_obj.requestor and request_obj.requestor.role == User.Roles.REQUESTOR_ESS:
+            cc_addresses.add("JoanI@phildata.com")
         if backup_email:
             cc_addresses.add(backup_email)
 
         recipients = ",".join(sorted(addr for addr in to_addresses if addr))
         cc_field = ",".join(sorted(cc_addresses))
 
-        # Use the same subject pattern as the acknowledgement so Outlook threads replies together, but add advisory notice.
-        ack_subject = f"Re: {request_obj.reference_code} · {request_obj.account.name} · Advisory Only (Do Not Reply)"
+        # Match the acknowledgement subject exactly so Outlook can group the request emails together.
+        account_name = request_obj.account.name if request_obj.account else "Request"
+        ack_subject = f"Re: {request_obj.reference_code} · {account_name}"
         subject = quote(ack_subject)
 
         requestor = request_obj.requestor
@@ -4154,6 +5474,7 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         body_template = (
             "Hello {requestor_name},\n\n"
             "Following up on our earlier acknowledgement for {reference}, this is to confirm the request has been fulfilled and is now marked as closed.\n\n"
+            "Advisory Only: Please do not reply to this closed request thread for new support needs.\n\n"
             "View request details: {detail_url}\n\n"
             "If you believe further action is required or have additional questions, please submit a new one via Request Hub.\n\n"
             "Thank you for your cooperation."
@@ -4183,7 +5504,12 @@ class RequestClosingOutlookRedirectView(AdminOrEngineerRequiredMixin, LoginRequi
         return render(
             request,
             "hub/outlook_redirect.html",
-            {"mailto_url": outlook_url},
+            {
+                "mailto_url": outlook_url,
+                "launch_url": outlook_url,
+                "formatted_draft_url": "",
+                "return_url": redirect_target,
+            },
         )
 
 
@@ -4336,11 +5662,28 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         qs = SqrSubmission.objects.select_related(
             "engineer", "pm_esg_reviewer", "reviewed_by",
             "assigned_pm", "assigned_sse", "linked_request",
-        ).order_by("-created_at")
+        ).order_by("-created_at", "-pk")
+
+        report_type = request.GET.get("report", "sqr")
+        if report_type not in {"sqr", "esg"}:
+            report_type = "sqr"
+
+        report_config = {
+            "sqr": {
+                "worksheet_title": "SQR",
+                "filename_prefix": "sqr-export",
+                "columns": _get_sqr_export_columns,
+            },
+            "esg": {
+                "worksheet_title": "ESG Performance Tracker",
+                "filename_prefix": "esg-performance-tracker",
+                "columns": _get_sqr_esg_export_columns,
+            },
+        }[report_type]
 
         wb = Workbook()
         ws = wb.active
-        ws.title = "SQR"
+        ws.title = report_config["worksheet_title"]
 
         # ── Styles ──────────────────────────────────────────────
         hdr_font  = Font(bold=True, color="FFFFFF", size=9)
@@ -4349,7 +5692,7 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         cell_align = Alignment(vertical="center")
         thin = Side(style="thin", color="CCCCCC")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        columns = _get_sqr_export_columns()
+        columns = report_config["columns"]()
 
         # ── Header row ──────────────────────────────────────────
         ws.row_dimensions[1].height = 36
@@ -4394,7 +5737,8 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
             buf.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        response["Content-Disposition"] = f'attachment; filename="sqr-export-{timestamp}.xlsx"'
+        filename_prefix = report_config["filename_prefix"]
+        response["Content-Disposition"] = f'attachment; filename="{filename_prefix}-{timestamp}.xlsx"'
         return response
 
 
@@ -4409,9 +5753,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
     REVENUE_DECLARATION_MAP = _build_choice_import_map(SqrSubmission.RevenueDeclaration.choices)
     IMPORT_STATUS_TIMEOUT = 60 * 60
     MANAGED_SCOPES = frozenset([
-        "Implementation",
-        "Implementation and Project Management",
-        "Managed Support and Maintenance Service",
+        "Deployment Only", "Deployment and Project Management", "Maintenance", "On-Call Services", "Implementation", "Implementation and Project Management", "Managed Support and Maintenance Service",
     ])
 
     def post(self, request, *args, **kwargs):
@@ -4911,10 +6253,27 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
             "key_updates_risks": self._stringify(row_data.get("Key Updates / Risks")),
             "delivery_actual_finish_date": self._parse_date_lenient(row_data.get("Actual Finish Date"), "Actual Finish Date"),
             "delivery_completion_signed_date": self._parse_date_lenient(row_data.get("Completion Signed Date"), "Completion Signed Date"),
-            "revenue_date": self._parse_date_lenient(row_data.get("SI / Revenue Date"), "SI / Revenue Date"),
-            "revenue_source": self._stringify(row_data.get("Source")),
-            "revenue_reference_no": self._stringify(row_data.get("Reference No.")),
-            "revenue_remarks": self._stringify(row_data.get("Remarks")),
+            "revenue_date": self._parse_date_lenient(
+                row_data.get("Billed Date")
+                or row_data.get("Date")
+                or row_data.get("SI / Revenue Date"),
+                "Billed Date",
+            ),
+            "revenue_source": self._stringify(
+                row_data.get("Billing Type") or row_data.get("Source")
+            ),
+            "revenue_reference_no": self._stringify(
+                row_data.get("Billing Reference") or row_data.get("Reference No.")
+            ),
+            "revenue_status": self._stringify(
+                row_data.get("Billing Status") or row_data.get("Revenue Status")
+            ),
+            "revenue_remarks": self._stringify(
+                row_data.get("PO Remarks") or row_data.get("Remarks")
+            ),
+            "revenue_overview": self._stringify(
+                row_data.get("Billing Remarks") or row_data.get("Revenue Declaration")
+            ),
             "revenue_declaration": revenue_declaration,
             "status": status,
             "documentation_links": "",
@@ -4928,7 +6287,7 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
             reviewed_at = self._to_datetime(approval_date) or timezone.now()
             data["reviewed_at"] = reviewed_at
             data["reviewed_by"] = actor
-            data["validity_due_date"] = validity_due_date or (reviewed_at.date() + timedelta(days=90))
+            data["validity_due_date"] = validity_due_date or (reviewed_at.date() + timedelta(days=45))
         else:
             data["reviewed_at"] = None
             data["reviewed_by"] = None
@@ -4962,6 +6321,36 @@ class SqrImportView(AdminRequiredMixin, LoginRequiredMixin, View):
 
 class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateView):
     template_name = "hub/report.html"
+    CHART_RANKING_LIMIT = 10
+
+    @classmethod
+    def _compact_ranked_chart(cls, rows: list[dict]) -> dict:
+        visible_rows = rows[: cls.CHART_RANKING_LIMIT]
+        overflow_rows = rows[cls.CHART_RANKING_LIMIT :]
+        labels = [row["name"] for row in visible_rows]
+        totals = [row["total"] for row in visible_rows]
+        ongoing = [row["ongoing"] for row in visible_rows]
+        completed = [row["completed"] for row in visible_rows]
+        if overflow_rows:
+            labels.append("Others")
+            totals.append(sum(row["total"] for row in overflow_rows))
+            ongoing.append(sum(row["ongoing"] for row in overflow_rows))
+            completed.append(sum(row["completed"] for row in overflow_rows))
+        return {
+            "labels": labels,
+            "totals": totals,
+            "ongoing": ongoing,
+            "completed": completed,
+        }
+
+    @staticmethod
+    def _full_ranked_chart(rows: list[dict]) -> dict:
+        return {
+            "labels": [row["name"] for row in rows],
+            "totals": [row["total"] for row in rows],
+            "ongoing": [row["ongoing"] for row in rows],
+            "completed": [row["completed"] for row in rows],
+        }
 
     @staticmethod
     def _normalize_report_view(value: str | None) -> str:
@@ -5020,7 +6409,9 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
         start_month_date = self._month_start(start_month)
         end_month_date = self._month_start(end_month)
 
+        range_swapped = False
         if start_month_date and end_month_date and start_month_date > end_month_date:
+            range_swapped = True
             start_month, end_month = end_month, start_month
             start_month_date, end_month_date = end_month_date, start_month_date
 
@@ -5044,6 +6435,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "start_month_date": start_month_date,
             "end_exclusive_date": end_exclusive_date,
             "label": label,
+            "range_swapped": range_swapped,
         }
 
     @staticmethod
@@ -5199,6 +6591,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             {
                 "label": status_labels.get(status, status.title()),
                 "total": total,
+                "status": status,
             }
             for status, total in status_counts.items()
             if total > 0
@@ -5221,29 +6614,17 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
                 bucket["completed"] += item["total"]
 
         engagement_labels_map = dict(Request.Engagement.choices)
-        engagement_order = [
-            Request.Engagement.OPPORTUNITY,
-            Request.Engagement.SUPPORT,
-            Request.Engagement.TRAINING,
-            Request.Engagement.INQUIRY,
-        ]
+        engagement_order = [value for value, _ in Request.Engagement.choices]
 
-        product_categories = ["Azure", "M365", "Others"]
+        product_choices = list(Request._meta.get_field("product_category").choices)
+        product_categories = [value for value, _ in product_choices]
         product_buckets = {
             category: {"total": 0, "ongoing": 0, "completed": 0}
             for category in product_categories
         }
         for item in Request.objects.values("product_category", "status").annotate(total=Count("id")):
             category = item["product_category"] or "Others"
-            normalized = (category or "").lower()
-            if normalized == "azure" or category == "Azure":
-                key = "Azure"
-            elif normalized in {"m365", "microsoft 365"}:
-                key = "M365"
-            else:
-                key = "Others"
-
-            bucket = product_buckets.setdefault(key, {"total": 0, "ongoing": 0, "completed": 0})
+            bucket = product_buckets.setdefault(category, {"total": 0, "ongoing": 0, "completed": 0})
             bucket["total"] += item["total"]
             if item["status"] == Request.Status.ONGOING:
                 bucket["ongoing"] += item["total"]
@@ -5257,7 +6638,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "completed": [engagement_counts.get(value, {"completed": 0})["completed"] for value in engagement_order],
         }
         product_chart_payload = {
-            "labels": list(product_buckets.keys()),
+            "labels": [dict(product_choices).get(key, key) for key in product_buckets],
             "totals": [bucket["total"] for bucket in product_buckets.values()],
             "ongoing": [bucket["ongoing"] for bucket in product_buckets.values()],
             "completed": [bucket["completed"] for bucket in product_buckets.values()],
@@ -5284,18 +6665,10 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
                 "ongoing": Request.objects.filter(status=Request.Status.ONGOING).count(),
                 "completed": Request.objects.filter(status=Request.Status.COMPLETED).count(),
             },
-            "account_manager_chart": {
-                "labels": [item["name"] for item in account_manager_data],
-                "totals": [item["total"] for item in account_manager_data],
-                "ongoing": [item["ongoing"] for item in account_manager_data],
-                "completed": [item["completed"] for item in account_manager_data],
-            },
-            "engineer_chart": {
-                "labels": [item["name"] for item in engineer_data],
-                "totals": [item["total"] for item in engineer_data],
-                "ongoing": [item["ongoing"] for item in engineer_data],
-                "completed": [item["completed"] for item in engineer_data],
-            },
+            "account_manager_chart": self._compact_ranked_chart(account_manager_data),
+            "account_manager_chart_full": self._full_ranked_chart(account_manager_data),
+            "engineer_chart": self._compact_ranked_chart(engineer_data),
+            "engineer_chart_full": self._full_ranked_chart(engineer_data),
             "engagement_chart": engagement_chart_payload,
             "engagement_chart_has_data": engagement_chart_has_data,
             "product_chart": product_chart_payload,
@@ -5444,6 +6817,7 @@ class RequestReportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, TemplateV
             "activity_start_month": month_filters["start_month"],
             "activity_end_month": month_filters["end_month"],
             "activity_month_filter_label": month_filters["label"],
+            "activity_range_swapped": month_filters.get("range_swapped", False),
             "activity_engineer_chart": engineer_chart,
             "activity_engineer_table": engineer_table,
             "activity_type_chart": activity_chart,
@@ -5463,14 +6837,51 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
     def get_queryset(self):
         return User.objects.order_by("date_joined", "username")
 
+    def _paginate_users(self, request):
+        """Server-side search + pagination for the management users pane.
+
+        The users table edits are per-row via a separate endpoint, so it is safe
+        to page the queryset here. Accounts pane stays client-side (bulk formset).
+        """
+        qs = self.get_queryset()
+        query = (request.GET.get("user_q") or "").strip()
+        if query:
+            terms = [term for term in query.split() if term]
+            for term in terms:
+                qs = qs.filter(
+                    Q(first_name__icontains=term)
+                    | Q(last_name__icontains=term)
+                    | Q(username__icontains=term)
+                    | Q(email__icontains=term)
+                    | Q(department__icontains=term)
+                    | Q(role__icontains=term)
+                )
+        qs = qs.order_by("first_name", "last_name", "username")
+        paginator = Paginator(qs, 50)
+        page_num = request.GET.get("user_page") or 1
+        try:
+            page_obj = paginator.page(page_num)
+        except InvalidPage:
+            page_obj = paginator.page(1)
+        return page_obj, query
+
     def get(self, request, *args, **kwargs):
         self._sync_account_baseline()
-        formset = self.formset_class(queryset=self.get_queryset())
+        users_page_obj, user_search_query = self._paginate_users(request)
         account_formset = self.account_form_class(queryset=Account.objects.order_by("name"))
         create_user_form = UserManagementForm(prefix="create_user")
-        self._prepare_formset(formset)
         self._prepare_account_formset(account_formset)
-        return render(request, self.template_name, self._build_context(formset, account_formset, create_user_form=create_user_form))
+        return render(
+            request,
+            self.template_name,
+            self._build_context(
+                None,
+                account_formset,
+                create_user_form=create_user_form,
+                users_page_obj=users_page_obj,
+                user_search_query=user_search_query,
+            ),
+        )
 
     def post(self, request, *args, **kwargs):
         active_tab = request.POST.get("active_tab", "users")
@@ -5636,9 +7047,12 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             return redirect("hub:management")
         return render(request, self.template_name, self._build_context(user_formset, account_formset, active_tab="accounts"))
 
-    def _build_context(self, formset, account_formset, active_tab="users", create_user_form=None, show_create_user_modal=False):
+    def _build_context(self, formset, account_formset, active_tab="users", create_user_form=None, show_create_user_modal=False, users_page_obj=None, user_search_query=""):
         if create_user_form is None:
             create_user_form = UserManagementForm(prefix="create_user")
+        # Fall back to the full (unpaginated) list for POST re-renders and any
+        # path that doesn't pass a page object, preserving prior behavior.
+        users_value = users_page_obj if users_page_obj is not None else User.objects.select_related().order_by("date_joined", "username")
         return {
             "formset": formset,
             "account_formset": account_formset,
@@ -5647,8 +7061,9 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
             "total_users": User.objects.count(),
             "total_accounts": Account.objects.count(),
             "active_tab": active_tab,
-            "default_password": getattr(settings, "DEFAULT_USER_PASSWORD", "@Password"),
-            "users": User.objects.select_related().order_by("date_joined", "username"),
+            "users": users_value,
+            "users_page_obj": users_page_obj,
+            "user_search_query": user_search_query,
             "role_choices": User.Roles.choices,
         }
 
@@ -5670,18 +7085,10 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
 
     @staticmethod
     def _sync_account_baseline():
-        if Account.objects.exists():
-            return
-
-        seed_accounts = []
-        for raw_name in ACCOUNT_NAME_RAW:
-            normalized = (raw_name or "").strip()
-            if not normalized:
-                continue
-            seed_accounts.append(Account(name=normalized))
-
-        if seed_accounts:
-            Account.objects.bulk_create(seed_accounts, ignore_conflicts=True)
+        # Accounts are created via request get_or_create and Management "New".
+        # Do not bulk-seed ACCOUNT_NAME_RAW on an empty table — that reintroduces
+        # hundreds of unused names after prune_unused_accounts.
+        return
 
     def _handle_user_action_request(self, request, action_value):
         action, separator, raw_user_id = (action_value or "").partition(":")
@@ -5719,19 +7126,46 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
         return removed
 
     def _reset_user_password(self, request, target_user: User):
-        default_password = getattr(settings, "DEFAULT_USER_PASSWORD", "@Password")
-        target_user.set_password(default_password)
+        temporary_password = self._generate_temporary_password()
+        target_user.set_password(temporary_password)
         target_user.must_change_password = True
         target_user.save(update_fields=["password", "must_change_password"])
         removed_sessions = self._clear_user_sessions(target_user)
         display_name = target_user.get_full_name() or target_user.username
         message = (
-            f"Reset password for {display_name}. The default password has been restored and they must set a new password on next sign-in."
+            f"Reset password for {display_name}. Temporary password: {temporary_password}. "
+            "They must set a new password on next sign-in."
         )
         if removed_sessions:
             message += f" Ended {removed_sessions} session{'s' if removed_sessions != 1 else ''}."
         messages.success(request, message)
         return redirect("hub:management")
+
+    @staticmethod
+    def _generate_temporary_password() -> str:
+        return get_random_string(16, allowed_chars="abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+
+    @staticmethod
+    def _protected_delete_error_message(display_name: str, protected_records: set) -> str:
+        if not protected_records:
+            return f"Cannot delete the account for {display_name} because it is still referenced by protected records."
+
+        summary = []
+        for record in sorted(protected_records, key=lambda obj: (obj._meta.label_lower, getattr(obj, "reference_code", "") or "", obj.pk)):
+            model_name = record._meta.verbose_name.title()
+            identifier = getattr(record, "reference_code", None) or getattr(record, "title", None) or getattr(record, "username", None)
+            if identifier:
+                summary.append(f"{model_name} {identifier}")
+            else:
+                summary.append(f"{model_name} #{record.pk}")
+
+        details = ", ".join(summary[:3])
+        if len(summary) > 3:
+            details += ", ..."
+        return (
+            f"Cannot delete the account for {display_name} because it is still referenced by protected records: {details}. "
+            "Reassign or delete those related records first."
+        )
 
     def _delete_user_account(self, request, target_user: User):
         if target_user.is_superuser:
@@ -5749,7 +7183,16 @@ class UserManagementView(AdminRequiredMixin, LoginRequiredMixin, View):
                 return redirect("hub:management")
 
         display_name = target_user.get_full_name() or target_user.username
-        target_user.delete()
+        try:
+            target_user.delete()
+        except ProtectedError as exc:
+            protected_records = getattr(exc, "protected", set())
+            if not protected_records and len(exc.args) > 1 and isinstance(exc.args[1], set):
+                protected_records = exc.args[1]
+            message = self._protected_delete_error_message(display_name, protected_records)
+            messages.error(request, message)
+            return redirect("hub:management")
+
         messages.success(request, f"Deleted user account for {display_name}.")
         return redirect("hub:management")
 
@@ -5776,16 +7219,51 @@ class NotificationListView(LoginRequiredMixin, ListView):
     model = Notification
     template_name = "hub/notifications.html"
     context_object_name = "notifications"
-    paginate_by = 25
+    paginate_by = 50
 
     def get_queryset(self):
         queryset = (
-            self.request.user.notifications.select_related("related_request")
+            self.request.user.notifications.select_related("related_request", "related_request__account")
             .order_by("-created_at")
         )
         user = self.request.user
         if getattr(user, "role", None) in ADMIN_PANEL_ROLES:
             queryset = queryset.filter(source__icontains="new request")
+
+        # ── Filter: read/unread (default to unread for the notification dashboard) ──
+        self._filter_read = self.request.GET.get("filter", "unread")
+        if self._filter_read == "unread":
+            queryset = queryset.filter(is_read=False)
+        elif self._filter_read == "read":
+            queryset = queryset.filter(is_read=True)
+
+        # ── Filter: category ──
+        self._filter_category = self.request.GET.get("category", "")
+        if self._filter_category:
+            # We can't directly filter on computed properties, so filter on message/source patterns
+            cat = self._filter_category
+            if cat == "new_request":
+                queryset = queryset.filter(source__icontains="new request")
+            elif cat == "assignment":
+                queryset = queryset.filter(message__icontains="assigned to request")
+            elif cat == "update":
+                queryset = queryset.filter(
+                    Q(source__icontains="status update") |
+                    Q(message__icontains="posted an update") |
+                    Q(message__icontains=" updated ")
+                )
+            elif cat == "completion":
+                queryset = queryset.filter(
+                    Q(message__icontains="completed") |
+                    Q(message__icontains="closed") |
+                    Q(source__icontains="close")
+                )
+            elif cat == "reminder":
+                queryset = queryset.filter(
+                    Q(source__icontains="nudge") |
+                    Q(message__icontains="reminder")
+                )
+
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -5796,7 +7274,53 @@ class NotificationListView(LoginRequiredMixin, ListView):
             base_qs = base_qs.filter(source__icontains="new request")
         context["unread_count"] = base_qs.filter(is_read=False).count()
         context["total_count"] = base_qs.count()
+        context["current_filter"] = self._filter_read
+        context["current_category"] = self._filter_category
+
+        # ── Category breakdown for the summary bar ──
+        category_counts = {
+            "new_request": base_qs.filter(source__icontains="new request").count(),
+            "assignment": base_qs.filter(message__icontains="assigned to request").count(),
+            "update": base_qs.filter(
+                Q(source__icontains="status update") |
+                Q(message__icontains="posted an update") |
+                Q(message__icontains=" updated ")
+            ).count(),
+            "completion": base_qs.filter(
+                Q(message__icontains="completed") |
+                Q(message__icontains="closed") |
+                Q(source__icontains="close")
+            ).count(),
+            "reminder": base_qs.filter(
+                Q(source__icontains="nudge") |
+                Q(message__icontains="reminder")
+            ).count(),
+        }
+        context["category_counts"] = category_counts
+
+        # ── Date-grouped notifications for timeline display ──
+        notifications_list = list(context["notifications"])
+        context["grouped_notifications"] = self._group_by_date(notifications_list)
+
         return context
+
+    def _group_by_date(self, notifications):
+        """Group notifications by Today, Yesterday, This Week, Older."""
+        now = timezone.now().date()
+        groups = {"Today": [], "Yesterday": [], "This Week": [], "Older": []}
+
+        for n in notifications:
+            created_date = timezone.localtime(n.created_at, MANILA_TZ).date()
+            if created_date == now:
+                groups["Today"].append(n)
+            elif created_date == now - timedelta(days=1):
+                groups["Yesterday"].append(n)
+            elif (now - created_date).days < 7:
+                groups["This Week"].append(n)
+            else:
+                groups["Older"].append(n)
+
+        return {k: v for k, v in groups.items() if v}
 
 
 class NotificationReadView(LoginRequiredMixin, View):
@@ -5868,6 +7392,45 @@ class RequestNudgeView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         return redirect("hub:request-manage", pk=pk)
 
 
+class RequestLifecycleAcknowledgeView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        try:
+            expected_revision = int(request.POST.get("assignment_revision", ""))
+        except (TypeError, ValueError):
+            messages.error(request, "The assignment version is invalid. Refresh and try again.")
+            return redirect("hub:request-manage-collab", pk=pk)
+
+        request_obj = get_object_or_404(
+            Request.objects.select_related("engineer", "requestor"),
+            pk=pk,
+        )
+        engineer_email = request_obj.engineer.email if request_obj.engineer and request_obj.engineer.email else None
+        manager_email = request_obj.requestor.email if request_obj.requestor and request_obj.requestor.email else None
+        if not engineer_email or not manager_email:
+            messages.error(
+                request,
+                "Unable to draft an acknowledgement email. Ensure the engineer and requestor both have emails configured.",
+            )
+            return redirect("hub:request-manage-collab", pk=pk)
+
+        try:
+            request_lifecycle.acknowledge_request(
+                pk,
+                actor=request.user,
+                expected_revision=expected_revision,
+            )
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+            return redirect("hub:request-manage-collab", pk=pk)
+        except request_lifecycle.LifecycleConflictError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("hub:request-manage-collab", pk=pk)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("hub:request-manage-collab", pk=pk)
+        return RequestOutlookRedirectView().post(request, pk, allow_existing_draft=True)
+
+
 class RequestStatusUpdateView(LoginRequiredMixin, View):
     def post(self, request, pk):
         request_obj = get_object_or_404(
@@ -5880,11 +7443,17 @@ class RequestStatusUpdateView(LoginRequiredMixin, View):
             return redirect("hub:request-manage-collab", pk=pk)
 
         original = Request.objects.get(pk=request_obj.pk)
-        form = RequestStatusForm(request.POST, instance=request_obj)
+        form = RequestStatusForm(request.POST, instance=request_obj, actor_user=request.user)
         if form.is_valid():
             request_obj._actor_user = request.user
             request_obj._actor_source = "Engineer · Status Update"
             form.save()
+            request_lifecycle.record_status_change(
+                request_obj.pk,
+                previous_status=original.status,
+                actor=request.user,
+                source="Engineer · Status Update",
+            )
             changed_fields = []
             if original.status != request_obj.status:
                 changed_fields.append("status")

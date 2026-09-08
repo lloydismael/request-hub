@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Account, EngineerActivityLog, Notification, Request, SqrSubmission, StatusLog
+from .models import Account, EngineerActivityLog, Notification, Request, SqrSubmission, SqrSubmissionHistory, StatusLog
 
 
 @admin.register(Account)
@@ -62,3 +62,12 @@ class SqrSubmissionAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at", "reviewed_at")
     search_fields = ("reference_code", "customer_name", "project_title", "engineer__username", "pm_esg_reviewer__username")
     autocomplete_fields = ("engineer", "pm_esg_reviewer", "reviewed_by")
+
+
+@admin.register(SqrSubmissionHistory)
+class SqrSubmissionHistoryAdmin(admin.ModelAdmin):
+    list_display = ("submission", "action", "field", "actor", "created_at", "restored_at")
+    list_filter = ("action", "field", "source", "created_at")
+    search_fields = ("submission__reference_code", "actor__username", "actor__first_name", "actor__last_name", "summary")
+    autocomplete_fields = ("submission", "actor", "restored_by")
+    readonly_fields = ("old_values", "new_values", "metadata", "created_at", "restored_at")

@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from .views import (
+    DashboardLiveDataView,
     DashboardView,
     EngineerActivityLogView,
     NotificationListView,
@@ -9,6 +10,7 @@ from .views import (
     NotificationReadView,
     NotificationDeleteView,
     NotificationMarkAllReadView,
+    NotificationToastDataView,
     RequestAdminUpdateView,
     RequestDeleteView,
     RequestRestoreView,
@@ -23,13 +25,17 @@ from .views import (
     RequestReportView,
     ReportExportView,
     SqrListView,
+    SqrReportsDataView,
     SqrDeliveryUpdateView,
     SqrToRevenueView,
     SqrEngineerDeleteView,
     SqrEngineerUpdateView,
     SqrImportView,
     SqrProposalUpdateView,
+    SqrHistoryView,
+    SqrHistoryRestoreView,
     SqrInlineFieldUpdateView,
+    SqrInlineFieldUndoView,
     SqrRevenueTrackerUpdateView,
     SqrRevenueUpdateView,
     SqrTeamsRedirectView,
@@ -42,12 +48,15 @@ from .views import (
     UserEditView,
     UserManagementView,
     RequestCollaborativeManageView,
+    RequestLifecycleAcknowledgeView,
 )
 
 app_name = "hub"
 
 urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
+    path("dashboard/live/", DashboardLiveDataView.as_view(), name="dashboard-live"),
+    path("dashboard/toasts/", NotificationToastDataView.as_view(), name="notification-toast-data"),
     path("activity-logs/", EngineerActivityLogView.as_view(), name="activity-logs"),
     path("activity-logs/<int:pk>/delete/", EngineerActivityLogDeleteView.as_view(), name="activity-log-delete"),
     path("requests/export/csv/", RequestExportCSVView.as_view(), name="request-export"),
@@ -56,6 +65,7 @@ urlpatterns = [
     path("requests/<int:pk>/status/", RequestStatusUpdateView.as_view(), name="request-status"),
     path("requests/<int:pk>/manage/", RequestAdminUpdateView.as_view(), name="request-manage"),
     path("requests/<int:pk>/manage/collab/", RequestCollaborativeManageView.as_view(), name="request-manage-collab"),
+    path("requests/<int:pk>/lifecycle/acknowledge/", RequestLifecycleAcknowledgeView.as_view(), name="request-lifecycle-acknowledge"),
     path("status-logs/<int:pk>/edit/", StatusLogUpdateView.as_view(), name="status-log-edit"),
     path("requests/<int:pk>/nudge/", RequestNudgeView.as_view(), name="request-nudge"),
     path("requests/<int:pk>/teams-chat/", RequestTeamsRedirectView.as_view(), name="request-teams"),
@@ -69,11 +79,15 @@ urlpatterns = [
     path("notifications/<int:pk>/delete/", NotificationDeleteView.as_view(), name="notification-delete"),
     path("notifications/mark-all-read/", NotificationMarkAllReadView.as_view(), name="notification-mark-all-read"),
     path("sqr/", SqrListView.as_view(), name="sqr"),
+    path("sqr/reports/data/", SqrReportsDataView.as_view(), name="sqr-reports-data"),
     path("sqr/export/", SqrExportView.as_view(), name="sqr-export"),
     path("sqr/import/", SqrImportView.as_view(), name="sqr-import"),
     path("sqr/import/status/", SqrImportView.as_view(), name="sqr-import-status"),
     path("sqr/<int:pk>/edit/", SqrEngineerUpdateView.as_view(), name="sqr-edit"),
+    path("sqr/<int:pk>/history/", SqrHistoryView.as_view(), name="sqr-history"),
+    path("sqr/<int:pk>/history/<int:history_id>/restore/", SqrHistoryRestoreView.as_view(), name="sqr-history-restore"),
     path("sqr/<int:pk>/inline-update/", SqrInlineFieldUpdateView.as_view(), name="sqr-inline-update"),
+    path("sqr/<int:pk>/inline-update/<int:change_id>/undo/", SqrInlineFieldUndoView.as_view(), name="sqr-inline-undo"),
     path("sqr/<int:pk>/delete/", SqrEngineerDeleteView.as_view(), name="sqr-delete"),
     path("sqr/<int:pk>/revenue-tracker/", SqrRevenueTrackerUpdateView.as_view(), name="sqr-revenue-update"),
     path("sqr/<int:pk>/proposal/", SqrProposalUpdateView.as_view(), name="sqr-proposal-update"),

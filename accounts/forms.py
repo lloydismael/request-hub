@@ -73,6 +73,7 @@ class ProfileForm(forms.ModelForm):
                 ("Dell", "Dell"),
                 ("ENS", "ENS"),
                 ("ESG", "ESG"),
+                ("ISG", "ISG"),
                 ("Other", "Other"),
             ], attrs={"class": "form-select"}),
             "profile_photo": forms.FileInput(attrs={"class": "form-control"}),
@@ -181,23 +182,36 @@ class RoleAuthenticationForm(AuthenticationForm):
                     data[username_field] = matched_alias
                     self._matched_role = matched_role
                 else:
-                    case_insensitive_match = (
-                        User.objects.filter(username__iexact=normalized)
-                        .values_list("username", "role")
-                        .first()
-                    )
-                    if case_insensitive_match:
-                        actual_username, role_value = case_insensitive_match
+                    exact_match = User.objects.filter(username__exact=normalized).values_list("username", "role").first()
+                    if exact_match:
+                        actual_username, role_value = exact_match
                         data[username_field] = actual_username
                         self._matched_role = self._matched_role or role_value
                     else:
-                        data[username_field] = normalized_lower
+                        case_insensitive_match = (
+                            User.objects.filter(username__iexact=normalized)
+                            .order_by("username")
+                            .values_list("username", "role")
+                            .first()
+                        )
+                        if case_insensitive_match:
+                            actual_username, role_value = case_insensitive_match
+                            data[username_field] = actual_username
+                            self._matched_role = self._matched_role or role_value
+                        else:
+                            data[username_field] = normalized_lower
             kwargs["data"] = data
 
         super().__init__(request=request, *args, **kwargs)
 
-        self.fields["username"].widget.attrs.update({"class": "form-control"})
-        self.fields["password"].widget.attrs.update({"class": "form-control"})
+        # placeholder=" " is required for the CSS floating-label rule
+        # (`input:not(:placeholder-shown) ~ label`) used on the login page.
+        self.fields["username"].widget.attrs.update(
+            {"class": "form-control", "placeholder": " ", "autocomplete": "username"}
+        )
+        self.fields["password"].widget.attrs.update(
+            {"class": "form-control", "placeholder": " ", "autocomplete": "current-password"}
+        )
 
 
 class UserManagementForm(forms.ModelForm):
@@ -230,6 +244,7 @@ class UserManagementForm(forms.ModelForm):
                 ("Dell", "Dell"),
                 ("ENS", "ENS"),
                 ("ESG", "ESG"),
+                ("ISG", "ISG"),
                 ("Other", "Other"),
             ], attrs={"class": "form-select"}),
         }

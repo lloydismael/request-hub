@@ -85,13 +85,17 @@ class RequestForm(forms.ModelForm):
 
     account_name = forms.CharField(
         label="Account Name",
-        help_text="Select from the list or type a new account name.",
+        help_text="Search existing accounts or create a new one.",
         widget=forms.TextInput(
             attrs={
                 "class": "form-control",
                 "list": "account-name-options",
-                "placeholder": "Start typing to search accounts",
+                "placeholder": "Search accounts…",
                 "autocomplete": "off",
+                "data-account-autocomplete": "true",
+                "role": "combobox",
+                "aria-autocomplete": "list",
+                "aria-expanded": "false",
             }
         ),
     )
@@ -301,6 +305,20 @@ class RequestForm(forms.ModelForm):
                 filtered_choices.append((Request.Engagement.CERTIFICATION, Request.Engagement.CERTIFICATION.label))
             engagement_field.choices = filtered_choices
 
+        # Human-readable blank options instead of Django's default "---------".
+        product_field = self.fields["product_category"]
+        product_field.choices = self._choices_with_placeholder(
+            product_field.choices,
+            "Select product category",
+        )
+        engagement_field.choices = self._choices_with_placeholder(
+            engagement_field.choices,
+            "Select engagement type",
+        )
+        product_field.widget.attrs.setdefault("aria-label", "Product category")
+        engagement_field.widget.attrs.setdefault("aria-label", "Engagement type")
+        engineer_field.widget.attrs.setdefault("aria-label", engineer_field.label)
+
         _DEPLOYMENT_LIKE = {Request.Engagement.DEPLOYMENT, Request.Engagement.CERTIFICATION}
         deployment_start_field = self.fields["deployment_start"]
         deployment_end_field = self.fields["deployment_end"]
@@ -311,7 +329,7 @@ class RequestForm(forms.ModelForm):
             deployment_start_field.initial = today
             deployment_end_field.initial = today
 
-        existing_accounts = Account.objects.order_by("name").values_list("name", flat=True)
+        existing_accounts = Account.used_queryset().values_list("name", flat=True)
         suggestions = []
         for raw_name in existing_accounts:
             cleaned = (raw_name or "").strip()
@@ -328,6 +346,16 @@ class RequestForm(forms.ModelForm):
                     class_list = existing_classes.split()
                     if "is-invalid" not in class_list:
                         widget.attrs["class"] = (existing_classes + " is-invalid").strip()
+
+    @staticmethod
+    def _choices_with_placeholder(choices, placeholder: str):
+        """Replace Django's default blank label (---------) with a clear prompt."""
+        cleaned = []
+        for value, label in list(choices or ()):
+            if value in (None, ""):
+                continue
+            cleaned.append((value, label))
+        return [("", placeholder), *cleaned]
 
     def clean_account_name(self):
         value = self.cleaned_data["account_name"].strip()
@@ -437,6 +465,24 @@ class RequestForm(forms.ModelForm):
 
 
 class RequestAdminForm(forms.ModelForm):
+    account_name = forms.CharField(
+        label="Account",
+        required=True,
+        help_text="Search existing accounts or create a new one.",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "list": "account-name-options",
+                "placeholder": "Search accounts…",
+                "autocomplete": "off",
+                "data-account-autocomplete": "true",
+                "data-admin-account-field": "true",
+                "role": "combobox",
+                "aria-autocomplete": "list",
+                "aria-expanded": "false",
+            }
+        ),
+    )
     request_date = forms.DateField(
         label="Request Date",
         required=True,
@@ -467,6 +513,7 @@ class RequestAdminForm(forms.ModelForm):
     class Meta:
         model = Request
         fields = [
+            "account_name",
             "request_date",
             "requestor",
             "priority",
@@ -490,9 +537,39 @@ class RequestAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Flag used by Request.clean() to bypass engineer capacity validation when admin overrides.
         self.instance._allow_capacity_override = allow_capacity_override
+        self.order_fields(
+            [
+                "account_name",
+                "request_date",
+                "requestor",
+                "priority",
+                "status",
+                "engineer",
+                "backup_engineer",
+                "due_date",
+                "end_date",
+                "description",
+            ]
+        )
         # Request date initial
         if self.instance and getattr(self.instance, "start_date", None):
             self.fields["request_date"].initial = self.instance.start_date
+
+        existing_accounts = Account.used_queryset().values_list("name", flat=True)
+        suggestions = []
+        for raw_name in existing_accounts:
+            cleaned = (raw_name or "").strip()
+            if cleaned:
+                suggestions.append(cleaned)
+        current_account_name = ""
+        if self.instance and getattr(self.instance, "account_id", None):
+            current_account_name = (self.instance.account.name or "").strip()
+            if current_account_name and current_account_name not in suggestions:
+                suggestions.insert(0, current_account_name)
+        self.account_name_suggestions = tuple(suggestions)
+        if current_account_name:
+            self.fields["account_name"].initial = current_account_name
+
         # Requestor field setup
         self.fields["requestor"].queryset = self.fields["requestor"].queryset.order_by("first_name", "last_name")
         req_widget = self.fields["requestor"].widget
@@ -516,7 +593,26 @@ class RequestAdminForm(forms.ModelForm):
         due_field.required = False
         due_field.help_text = "Leave blank to keep the SLA-based due date."
 
+        if self.is_bound and self.errors:
+            for name, field in self.fields.items():
+                if name in self.errors:
+                    widget = field.widget
+                    existing_classes = widget.attrs.get("class", "")
+                    class_list = existing_classes.split()
+                    if "is-invalid" not in class_list:
+                        widget.attrs["class"] = (existing_classes + " is-invalid").strip()
+
+    def clean_account_name(self):
+        value = (self.cleaned_data.get("account_name") or "").strip()
+        if not value:
+            raise forms.ValidationError("Account name is required.")
+        return value
+
     def save(self, commit=True):
+        account_name = self.cleaned_data.get("account_name")
+        if account_name:
+            account, _ = Account.objects.get_or_create(name=account_name)
+            self.instance.account = account
         self.instance.start_date = self.cleaned_data.get("request_date") or self.instance.start_date
         return super().save(commit=commit)
 
@@ -529,6 +625,7 @@ class SqrSubmissionForm(forms.ModelForm):
         ("Dell", "Dell"),
         ("ENS", "ENS"),
         ("ESG", "ESG"),
+        ("ISG", "ISG"),
         ("Other", "Other"),
     )
 
@@ -576,6 +673,7 @@ class SqrSubmissionForm(forms.ModelForm):
             "Jhoanna Marie Quijano",
         ],
         "ESG": [],
+        "ISG": [],
         "Other": [],
     }
 
@@ -585,10 +683,15 @@ class SqrSubmissionForm(forms.ModelForm):
         "Dell": "Jeram Zamora",
         "ENS": "Jeram Zamora",
         "ESG": "Jeram Zamora",
+        "ISG": "Jeram Zamora",
         "Other": "Jeram Zamora",
     }
 
     SSE_MANHRS_SCOPES = frozenset([
+        "Deployment Only",
+        "On-Call Services",
+        "Deployment and Project Management",
+        # Legacy values kept for existing rows.
         "Training",
         "Support",
         "Implementation",
@@ -598,20 +701,19 @@ class SqrSubmissionForm(forms.ModelForm):
     ])
     HIDE_SSE_MANHRS_SCOPES = frozenset([
         "Project Management",
+        "Maintenance",
+        # Legacy values kept for existing rows.
         "Managed Support and Maintenance Service",
         "Managed Support and Service",
     ])
 
     SCOPE_CHOICES = (
         ("", "— Select Scope —"),
-        ("Training", "Training"),
-        ("Support", "Support"),
-        ("Implementation", "Implementation"),
+        ("Deployment Only", "Deployment Only"),
+        ("On-Call Services", "On-Call Services"),
+        ("Maintenance", "Maintenance"),
         ("Project Management", "Project Management"),
-        ("Implementation and Project Management", "Implementation and Project Management"),
-        ("Demonstration", "Demonstration"),
-        ("Managed Support and Maintenance Service", "Managed Support and Maintenance Service"),
-        ("Other", "Other"),
+        ("Deployment and Project Management", "Deployment and Project Management"),
     )
 
     customer_company = forms.ChoiceField(
@@ -695,7 +797,7 @@ class SqrSubmissionForm(forms.ModelForm):
         import json
         super().__init__(*args, **kwargs)
         self.account_name_options = list(
-            Account.objects.order_by("name").values_list("name", flat=True).distinct()
+            Account.used_queryset().values_list("name", flat=True).distinct()
         )
         required_fields = ("linked_request", "pm_esg_reviewer", "sqr_folder_link")
         for field_name in required_fields:
@@ -883,7 +985,7 @@ class SqrTrackerEditForm(forms.ModelForm):
             "delivery_completion_signed_date": "Completion Signed Date (AH)",
             "warranty_end_date": "Warranty End Date (AI)",
             "revenue_source": "Source (AM)",
-            "revenue_reference_no": "Reference No. (AN)",
+            "revenue_reference_no": "Billing Reference (AN)",
             "revenue_remarks": "Remarks (AP)",
             "revenue_declaration": "Revenue Declaration (AQ)",
         }
@@ -1056,7 +1158,7 @@ class SqrProposalStatusForm(forms.ModelForm):
             "sse_amount": "SSE Amount (PHP)",
             "pm_manhrs": "PM Manhours",
             "pm_amount": "PM Amount (PHP)",
-            "managed_support_amount": "Managed Support Service Amount (PHP)",
+            "managed_support_amount": "Maintenance Amt. (PHP)",
             "discount_rate": "Discount Rate",
             "quotation_total_price": "Total Price (PHP)",
             "validity_due_date": "Validity Due Date",
@@ -1176,37 +1278,41 @@ class SqrRevenueForm(forms.ModelForm):
     class Meta:
         model = SqrSubmission
         fields = [
-            "revenue_date",
+            "revenue_remarks",
             "revenue_source",
+            "revenue_date",
             "revenue_reference_no",
             "revenue_status",
-            "revenue_remarks",
-            "revenue_declaration",
+            "revenue_overview",
         ]
         labels = {
-            "revenue_date": "SI / Revenue Date",
-            "revenue_source": "Source",
-            "revenue_reference_no": "Reference No.",
-            "revenue_status": "Revenue Status",
-            "revenue_remarks": "Remarks",
-            "revenue_declaration": "Revenue Declaration",
+            "revenue_remarks": "PO Remarks",
+            "revenue_source": "Billing Type",
+            "revenue_date": "Billed Date",
+            "revenue_reference_no": "Billing Reference",
+            "revenue_status": "Billing Status",
+            "revenue_overview": "Billing Remarks",
         }
         widgets = {
-            "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "revenue_source": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. Invoiced"}),
-            "revenue_reference_no": forms.TextInput(attrs={"class": "form-control"}),
-            "revenue_status": forms.Select(attrs={"class": "form-select"}),
             "revenue_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
-            "revenue_declaration": forms.Select(attrs={"class": "form-select"}),
+            "revenue_source": forms.Select(attrs={"class": "form-select"}),
+            "revenue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "revenue_reference_no": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "SI / PNL / CFDM number"}
+            ),
+            "revenue_status": forms.Select(attrs={"class": "form-select"}),
+            "revenue_overview": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["revenue_source"].choices = [("", "\u2014 Not set \u2014")] + [
+            ("internal", "Internal"),
+            ("invoiced", "Invoiced"),
+            ("unbilled", "Unbilled"),
+        ]
         self.fields["revenue_status"].choices = [("", "\u2014 Not set \u2014")] + list(
             SqrSubmission.RevenueStatus.choices
-        )
-        self.fields["revenue_declaration"].choices = [("", "\u2014 Not set \u2014")] + list(
-            SqrSubmission.RevenueDeclaration.choices
         )
         for f in self.fields.values():
             f.required = False
@@ -1221,9 +1327,19 @@ class RequestStatusForm(forms.ModelForm):
             "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor_user=None, **kwargs):
+        self.actor_user = actor_user
         super().__init__(*args, **kwargs)
         self.instance._allow_capacity_override = True
+
+    def _is_blocked_completion_without_activity(self) -> bool:
+        if not self.actor_user or self.actor_user.role not in User.ENGINEER_ACCESS_ROLES:
+            return False
+        if self.instance.status == Request.Status.COMPLETED:
+            return False
+        if self.actor_user.pk not in {self.instance.engineer_id, self.instance.backup_engineer_id}:
+            return False
+        return not self.instance.activity_logs.exists()
 
     def clean(self):
         cleaned_data = super().clean()
@@ -1238,6 +1354,11 @@ class RequestStatusForm(forms.ModelForm):
                 self.add_error("end_date", "Select the completion date before closing the ticket.")
             else:
                 self.instance.end_date = end_date
+                if self._is_blocked_completion_without_activity():
+                    self.add_error(
+                        "status",
+                        "Add at least one related activity log before marking this request as completed.",
+                    )
         return cleaned_data
 
     def save(self, commit=True):
@@ -1316,21 +1437,33 @@ class EngineerActivityLogForm(forms.ModelForm):
             "status": forms.Select(attrs={"class": "form-select"}),
         }
 
-    def __init__(self, *args, engineer=None, **kwargs):
+    def __init__(self, *args, engineer=None, bound_request=None, **kwargs):
         self.engineer = engineer
+        self.bound_request = bound_request
         if self.engineer is None:
             raise ValueError("EngineerActivityLogForm requires an engineer instance.")
         super().__init__(*args, **kwargs)
 
         account_field = self.fields["account"]
         account_field.required = False
-        account_field.queryset = Account.objects.order_by("name")
+        account_qs = Account.used_queryset()
+        current_account = getattr(self.instance, "account", None)
+        if current_account and current_account.pk:
+            account_qs = (account_qs | Account.objects.filter(pk=current_account.pk)).distinct().order_by("name")
+        account_field.queryset = account_qs
 
         request_field = self.fields["request"]
         request_field.required = False
-        related_requests = Request.objects.filter(
-            Q(engineer=self.engineer) | Q(backup_engineer=self.engineer)
-        ).order_by("-created_at").select_related("account")
+        if self.bound_request is not None:
+            related_requests = Request.objects.filter(pk=self.bound_request.pk)
+            request_field.required = True
+            if not self.is_bound and not self.instance.pk:
+                request_field.initial = self.bound_request
+        else:
+            related_requests = Request.objects.filter(
+                Q(engineer=self.engineer) | Q(backup_engineer=self.engineer)
+            )
+        related_requests = related_requests.order_by("-created_at").select_related("account")
         request_field.queryset = related_requests
         request_field.empty_label = "Select request (optional)"
         self.fields["is_billable"].initial = "false"
@@ -1481,7 +1614,7 @@ class AdminRequestFilterForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["account"].queryset = Account.objects.order_by("name")
+        self.fields["account"].queryset = Account.used_queryset()
         self.fields["account"].empty_label = "All accounts"
         requestor_qs = User.objects.filter(role=User.Roles.REQUESTOR).order_by("first_name", "last_name")
         self.fields["account_manager"].queryset = requestor_qs

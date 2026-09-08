@@ -2,16 +2,17 @@
 {% load tz %}
 
 {% block title %}Management · Request Hub{% endblock %}
+{% block body_class %}management-page{% endblock %}
 
 {% block content %}
 
 {# ── Page Header ── #}
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+<div class="glass-card management-header p-3 mb-3 lg-enter" data-lg-delay="0" data-navbar-surface="theme">
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
     <div>
-        <h1 class="h3 mb-1 fw-semibold">
+        <h1 class="h5 mb-0 fw-semibold">
             <i class="bi bi-shield-lock-fill me-2 text-primary"></i>Management
         </h1>
-        <p class="text-muted mb-0 small">Create, update, or remove user accounts and managed accounts for the workspace.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-center">
         <ul class="nav nav-pills mgmt-tabs gap-1 mb-0" role="tablist">
@@ -40,41 +41,41 @@
         </span>
     </div>
 </div>
+</div>
 
 {# ── Tab Content ── #}
 <div class="tab-content">
 
     {# ══════════════════ USERS PANE ══════════════════ #}
-    <div class="tab-pane fade {% if active_tab != 'accounts' %}show active{% endif %}"
+    <div class="tab-pane {% if active_tab != 'accounts' %}show active{% endif %}"
          id="users-pane" role="tabpanel" aria-labelledby="users-tab" tabindex="0">
 
         {# Toolbar: search + New User button #}
-        <div class="glass-card overflow-hidden p-0">
-            <div class="mgmt-toolbar">
-                <div class="mgmt-search-box">
+        <div class="glass-card overflow-hidden p-0 lg-enter" data-lg-delay="40">
+            <div class="mgmt-toolbar management-dashboard-toolbar">
+                <form method="get" action="{% url 'hub:management' %}" class="mgmt-search-box" role="search">
                     <i class="bi bi-search mgmt-search-icon"></i>
-                    <input type="text" id="user-search" class="mgmt-search-input"
-                           placeholder="Search by name, username, email or department…" autocomplete="off">
-                    <span class="mgmt-result-badge" id="user-count-badge"></span>
-                </div>
-                <button type="button" class="btn btn-primary btn-sm"
-                        data-bs-toggle="modal" data-bs-target="#create-user-modal">
+                    <input type="text" id="user-search" name="user_q" class="mgmt-search-input"
+                           value="{{ user_search_query }}" placeholder="Search users..." autocomplete="off" aria-label="Search users">
+                    <span class="mgmt-result-badge" id="user-count-badge">{% if users_page_obj %}{{ users_page_obj.paginator.count }} total{% endif %}</span>
+                </form>
+                <button type="button" class="btn btn-primary btn-sm lg-btn lg-btn--accent" id="new-user-btn">
                     <i class="bi bi-person-plus-fill me-1"></i>New User
                 </button>
             </div>
 
             {# Users table #}
-            <div class="table-responsive">
+            <div class="table-responsive dashboard-table-wrapper mgmt-table-wrapper">
                 <table class="table mgmt-table align-middle mb-0">
                     <thead class="mgmt-thead">
                         <tr>
-                            <th scope="col" style="min-width:220px;">Name</th>
-                            <th scope="col" style="min-width:140px;">Username</th>
-                            <th scope="col" style="min-width:200px;">Email</th>
-                            <th scope="col" style="min-width:120px;">Department</th>
-                            <th scope="col" style="min-width:160px;">Account Type</th>
-                            <th scope="col" style="min-width:160px;">Last Login</th>
-                            <th scope="col" style="min-width:160px;">Actions</th>
+                            <th scope="col" class="mgmt-th mgmt-th--name">Name</th>
+                            <th scope="col" class="mgmt-th mgmt-th--username">Username</th>
+                            <th scope="col" class="mgmt-th mgmt-th--email">Email</th>
+                            <th scope="col" class="mgmt-th mgmt-th--department">Department</th>
+                            <th scope="col" class="mgmt-th mgmt-th--role">Account Type</th>
+                            <th scope="col" class="mgmt-th mgmt-th--login">Last Login</th>
+                            <th scope="col" class="mgmt-th mgmt-th--actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="users-tbody">
@@ -86,7 +87,7 @@
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="mgmt-avatar flex-shrink-0">
                                             {% if user.profile_photo %}
-                                                <img src="{{ user.profile_photo.url }}" alt="{{ user.get_full_name }}" class="mgmt-avatar__img">
+                                                <img src="{{ user.profile_photo.url }}" alt="{{ user.get_full_name }}" class="mgmt-avatar__img" width="40" height="40" loading="lazy" decoding="async">
                                             {% else %}
                                                 <span class="mgmt-avatar__initial">{{ user.get_full_name|default:user.username|slice:":1"|upper }}</span>
                                             {% endif %}
@@ -137,7 +138,7 @@
                                 <td>
                                     <div class="d-flex flex-wrap gap-2 align-items-center">
                                         <button type="button"
-                                                class="btn btn-sm btn-primary mgmt-manage-btn"
+                                                class="btn btn-sm btn-primary lg-btn lg-btn--accent mgmt-manage-btn"
                                                 data-user-pk="{{ user.pk }}"
                                                 data-user-first="{{ user.first_name|escapejs }}"
                                                 data-user-last="{{ user.last_name|escapejs }}"
@@ -145,8 +146,7 @@
                                                 data-user-email="{{ user.email|escapejs }}"
                                                 data-user-department="{{ user.department|escapejs }}"
                                                 data-user-role="{{ user.role }}"
-                                                data-user-name="{{ user.get_full_name|default:user.username|escapejs }}"
-                                                data-bs-toggle="modal" data-bs-target="#manage-user-modal">
+                                                data-user-name="{{ user.get_full_name|default:user.username|escapejs }}">
                                             <i class="bi bi-pencil-square me-1"></i>Manage
                                         </button>
                                         {% if not user.is_superuser and request.user.pk != user.pk %}
@@ -155,7 +155,7 @@
                                                   onsubmit="return confirm('Delete account for {{ user.get_full_name|default:user.username|escapejs }}?');">
                                                 {% csrf_token %}
                                                 <input type="hidden" name="active_tab" value="users">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                <button type="submit" class="btn btn-sm btn-outline-danger lg-btn lg-btn--danger"
                                                         name="user_action" value="delete_user:{{ user.pk }}"
                                                         title="Delete {{ user.get_full_name|default:user.username|escapejs }}">
                                                     <i class="bi bi-trash3-fill"></i>
@@ -177,79 +177,115 @@
                 </table>
             </div>
 
-            {# Card footer #}
+            {# Card footer — server-side pager for users #}
             <div class="mgmt-card-footer">
-                <span class="mgmt-limit-note" id="user-limit-note"></span>
-                <div class="mgmt-pagination" id="user-pagination"></div>
+                <span class="mgmt-limit-note" id="user-limit-note">{% if users_page_obj %}{% if users_page_obj.paginator.num_pages > 1 %}Showing {{ users_page_obj.start_index }}–{{ users_page_obj.end_index }} of {{ users_page_obj.paginator.count }}{% endif %}{% endif %}</span>
+                <div class="mgmt-pagination" id="user-pagination">
+                    {% if users_page_obj and users_page_obj.paginator.num_pages > 1 %}
+                        {% if users_page_obj.has_previous %}
+                            <a class="btn btn-sm btn-outline-secondary mgmt-page-btn"
+                               href="?user_page={{ users_page_obj.previous_page_number }}{% if user_search_query %}&user_q={{ user_search_query|urlencode }}{% endif %}"
+                               aria-label="Previous page"><i class="bi bi-chevron-left"></i></a>
+                        {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary mgmt-page-btn" disabled><i class="bi bi-chevron-left"></i></button>
+                        {% endif %}
+                        <span class="mgmt-page-label">Page {{ users_page_obj.number }} / {{ users_page_obj.paginator.num_pages }}</span>
+                        {% if users_page_obj.has_next %}
+                            <a class="btn btn-sm btn-outline-secondary mgmt-page-btn"
+                               href="?user_page={{ users_page_obj.next_page_number }}{% if user_search_query %}&user_q={{ user_search_query|urlencode }}{% endif %}"
+                               aria-label="Next page"><i class="bi bi-chevron-right"></i></a>
+                        {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary mgmt-page-btn" disabled><i class="bi bi-chevron-right"></i></button>
+                        {% endif %}
+                    {% endif %}
+                </div>
             </div>
         </div>
 
         {# ── Create User Modal ── #}
-        <div class="modal fade" id="create-user-modal" tabindex="-1"
-             aria-labelledby="create-user-modal-title" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                <div class="modal-content">
+        <div class="requestor-modal" id="create-user-modal" aria-hidden="true"
+             data-open-on-load="{% if show_create_user_modal %}true{% else %}false{% endif %}">
+            <div class="requestor-modal__backdrop" id="create-user-backdrop"></div>
+            <div class="requestor-modal__dialog requestor-modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+                <div class="requestor-modal__header">
+                    <h2 class="h5 mb-0" id="create-user-title">
+                        <i class="bi bi-person-plus-fill me-2"></i>Create New User
+                    </h2>
+                    <button type="button" class="btn-close" id="close-create-user-btn" aria-label="Close"></button>
+                </div>
+                <div class="requestor-modal__body">
                     <form method="post" action="{% url 'hub:management' %}" novalidate>
                         {% csrf_token %}
                         <input type="hidden" name="active_tab" value="users">
                         <input type="hidden" name="create_user_submit" value="1">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="create-user-modal-title">
-                                <i class="bi bi-person-plus-fill me-2"></i>Create New User
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            {% if create_user_form.non_field_errors %}
-                                <div class="alert alert-danger" role="alert">
-                                    {% for error in create_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
-                                </div>
-                            {% endif %}
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.first_name.id_for_label }}">First Name</label>
-                                    {{ create_user_form.first_name }}
-                                    {% for error in create_user_form.first_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.last_name.id_for_label }}">Last Name</label>
-                                    {{ create_user_form.last_name }}
-                                    {% for error in create_user_form.last_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.username.id_for_label }}">Username</label>
-                                    {{ create_user_form.username }}
-                                    {% for error in create_user_form.username.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.email.id_for_label }}">Email</label>
-                                    {{ create_user_form.email }}
-                                    {% for error in create_user_form.email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.department.id_for_label }}">Department</label>
-                                    {{ create_user_form.department }}
-                                    {% for error in create_user_form.department.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.role.id_for_label }}">Account Type</label>
-                                    {{ create_user_form.role }}
-                                    {% for error in create_user_form.role.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.password1.id_for_label }}">Password</label>
-                                    {{ create_user_form.password1 }}
-                                    {% for error in create_user_form.password1.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="{{ create_user_form.password2.id_for_label }}">Confirm Password</label>
-                                    {{ create_user_form.password2 }}
-                                    {% for error in create_user_form.password2.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
+                        {% if create_user_form.non_field_errors %}
+                            <div class="alert alert-danger">{{ create_user_form.non_field_errors }}</div>
+                        {% endif %}
+                        {% if create_user_form.errors %}
+                            <div class="alert alert-danger" role="alert">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Please resolve the highlighted fields before submitting.
+                            </div>
+                        {% endif %}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.first_name.id_for_label }}">{{ create_user_form.first_name.label }}</label>
+                                {{ create_user_form.first_name }}
+                                {% if create_user_form.first_name.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.first_name.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.last_name.id_for_label }}">{{ create_user_form.last_name.label }}</label>
+                                {{ create_user_form.last_name }}
+                                {% if create_user_form.last_name.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.last_name.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.username.id_for_label }}">{{ create_user_form.username.label }}</label>
+                                {{ create_user_form.username }}
+                                {% if create_user_form.username.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.username.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.email.id_for_label }}">{{ create_user_form.email.label }}</label>
+                                {{ create_user_form.email }}
+                                {% if create_user_form.email.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.email.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.department.id_for_label }}">{{ create_user_form.department.label }}</label>
+                                {{ create_user_form.department }}
+                                {% if create_user_form.department.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.department.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.role.id_for_label }}">{{ create_user_form.role.label }}</label>
+                                {{ create_user_form.role }}
+                                {% if create_user_form.role.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.role.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.password1.id_for_label }}">{{ create_user_form.password1.label }}</label>
+                                {{ create_user_form.password1 }}
+                                {% if create_user_form.password1.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.password1.errors|join:" " }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ create_user_form.password2.id_for_label }}">{{ create_user_form.password2.label }}</label>
+                                {{ create_user_form.password2 }}
+                                {% if create_user_form.password2.errors %}
+                                    <div class="invalid-feedback d-block">{{ create_user_form.password2.errors|join:" " }}</div>
+                                {% endif %}
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <div class="d-flex gap-2 justify-content-end mt-4">
+                            <button type="button" class="btn btn-outline-secondary" id="cancel-create-user-btn">Cancel</button>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-person-plus-fill me-1"></i>Create User
                             </button>
@@ -260,100 +296,98 @@
         </div>
 
         {# ── Manage User Modal ── #}
-        <div class="modal fade" id="manage-user-modal" tabindex="-1"
-             aria-labelledby="manage-user-modal-title" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                <div class="modal-content">
+        <div class="requestor-modal" id="manage-user-modal" aria-hidden="true">
+            <div class="requestor-modal__backdrop" id="manage-user-backdrop"></div>
+            <div class="requestor-modal__dialog requestor-modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="manage-user-title">
+                <div class="requestor-modal__header">
+                    <h2 class="h5 mb-0" id="manage-user-title">
+                        <i class="bi bi-person-gear me-2"></i>Manage User
+                    </h2>
+                    <button type="button" class="btn-close" id="close-manage-user-btn" aria-label="Close"></button>
+                </div>
+                <div class="requestor-modal__body">
                     <form method="post" id="manage-user-form" novalidate>
                         {% csrf_token %}
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="manage-user-modal-title">
-                                <i class="bi bi-person-gear me-2"></i>Manage User
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body pb-2">
 
-                            {# ── Section 1: Identity ── #}
-                            <p class="fw-semibold text-muted text-uppercase small mb-2">
-                                <i class="bi bi-person-fill me-1"></i>Identity
-                            </p>
-                            <div class="row g-3 mb-4">
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-first-name">First Name</label>
-                                    <input type="text" class="form-control" id="mu-first-name" name="first_name" required>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-last-name">Last Name</label>
-                                    <input type="text" class="form-control" id="mu-last-name" name="last_name">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-username">Username</label>
-                                    <input type="text" class="form-control" id="mu-username" name="username" required autocomplete="off">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-email">Email</label>
-                                    <input type="email" class="form-control" id="mu-email" name="email" autocomplete="off">
-                                </div>
+                        {# ── Section 1: Identity ── #}
+                        <p class="fw-semibold text-muted text-uppercase small mb-2">
+                            <i class="bi bi-person-fill me-1"></i>Identity
+                        </p>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-first-name">First Name</label>
+                                <input type="text" class="form-control" id="mu-first-name" name="first_name" required>
                             </div>
-
-                            {# ── Section 2: Role & Department ── #}
-                            <p class="fw-semibold text-muted text-uppercase small mb-2">
-                                <i class="bi bi-shield-fill me-1"></i>Role &amp; Department
-                            </p>
-                            <div class="row g-3 mb-4">
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-role">Account Type</label>
-                                    <select class="form-select" id="mu-role" name="role" required>
-                                        {% for value, label in role_choices %}
-                                            <option value="{{ value }}">{{ label }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-department">Department</label>
-                                    <select class="form-select" id="mu-department" name="department">
-                                        <option value="">— Select department —</option>
-                                        <option value="ESS">ESS</option>
-                                        <option value="HP">HP</option>
-                                        <option value="Dell">Dell</option>
-                                        <option value="ENS">ENS</option>
-                                        <option value="ESG">ESG</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-last-name">Last Name</label>
+                                <input type="text" class="form-control" id="mu-last-name" name="last_name">
                             </div>
-
-                            {# ── Section 3: Password ── #}
-                            <p class="fw-semibold text-muted text-uppercase small mb-2">
-                                <i class="bi bi-lock-fill me-1"></i>Password
-                            </p>
-                            <div class="alert alert-info d-flex align-items-start gap-2 py-2 small mb-3" role="alert">
-                                <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
-                                <span>Leave blank to keep the current password. Use <strong>Reset to Default</strong> to restore
-                                <code class="mgmt-code">{{ default_password }}</code> and force a re-login.</span>
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-username">Username</label>
+                                <input type="text" class="form-control" id="mu-username" name="username" required autocomplete="off">
                             </div>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-password1">New Password</label>
-                                    <input type="password" class="form-control" id="mu-password1"
-                                           name="password1" autocomplete="new-password" placeholder="Leave blank to keep current">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="mu-password2">Confirm Password</label>
-                                    <input type="password" class="form-control" id="mu-password2"
-                                           name="password2" autocomplete="new-password" placeholder="Confirm new password">
-                                </div>
-                            </div>
-                            <div class="mb-2">
-                                <button type="submit" form="mu-reset-form" class="btn btn-sm btn-outline-warning"
-                                        onclick="return confirm('Reset password to default and force re-login?');">
-                                    <i class="bi bi-key-fill me-1"></i>Reset to Default Password
-                                </button>
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-email">Email</label>
+                                <input type="email" class="form-control" id="mu-email" name="email" autocomplete="off">
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+
+                        {# ── Section 2: Role & Department ── #}
+                        <p class="fw-semibold text-muted text-uppercase small mb-2">
+                            <i class="bi bi-shield-fill me-1"></i>Role &amp; Department
+                        </p>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-role">Account Type</label>
+                                <select class="form-select" id="mu-role" name="role" required>
+                                    {% for value, label in role_choices %}
+                                        <option value="{{ value }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-department">Department</label>
+                                <select class="form-select" id="mu-department" name="department">
+                                    <option value="">— Select department —</option>
+                                    <option value="ESS">ESS</option>
+                                    <option value="HP">HP</option>
+                                    <option value="Dell">Dell</option>
+                                    <option value="ENS">ENS</option>
+                                    <option value="ESG">ESG</option>
+                                    <option value="ISG">ISG</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {# ── Section 3: Password ── #}
+                        <p class="fw-semibold text-muted text-uppercase small mb-2">
+                            <i class="bi bi-lock-fill me-1"></i>Password
+                        </p>
+                        <div class="alert alert-info d-flex align-items-start gap-2 py-2 small mb-3" role="alert">
+                            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+                            <span>Leave blank to keep the current password. Use <strong>Reset to Temporary Password</strong> to generate a one-time password and force a re-login.</span>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-password1">New Password</label>
+                                <input type="password" class="form-control" id="mu-password1"
+                                       name="password1" autocomplete="new-password" placeholder="Leave blank to keep current">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="mu-password2">Confirm Password</label>
+                                <input type="password" class="form-control" id="mu-password2"
+                                       name="password2" autocomplete="new-password" placeholder="Confirm new password">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <button type="submit" form="mu-reset-form" class="btn btn-sm btn-outline-warning"
+                                    onclick="return confirm('Reset this account to a one-time temporary password and force re-login?');">
+                                <i class="bi bi-key-fill me-1"></i>Reset to Temporary Password
+                            </button>
+                        </div>
+                        <div class="d-flex gap-2 justify-content-end mt-4">
+                            <button type="button" class="btn btn-outline-secondary" id="cancel-manage-user-btn">Cancel</button>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-floppy-fill me-1"></i>Save Changes
                             </button>
@@ -370,22 +404,13 @@
             <input type="hidden" id="mu-reset-pk" name="user_action" value="">
         </form>
 
-        {% if show_create_user_modal %}
-            <script>
-                document.addEventListener("DOMContentLoaded", function () {
-                    var modalElement = document.getElementById("create-user-modal");
-                    if (!modalElement || typeof bootstrap === "undefined") return;
-                    new bootstrap.Modal(modalElement).show();
-                });
-            </script>
-        {% endif %}
     </div>
 
     {# ══════════════════ ACCOUNTS PANE ══════════════════ #}
-    <div class="tab-pane fade {% if active_tab == 'accounts' %}show active{% endif %}"
+    <div class="tab-pane {% if active_tab == 'accounts' %}show active{% endif %}"
          id="accounts-pane" role="tabpanel" aria-labelledby="accounts-tab" tabindex="0">
 
-        <form method="post" class="glass-card overflow-hidden p-0" novalidate>
+        <form method="post" class="glass-card overflow-hidden p-0 lg-enter" data-lg-delay="40" novalidate>
             {% csrf_token %}
             <input type="hidden" name="active_tab" value="accounts">
             {% for hidden in account_formset.management_form %}{{ hidden }}{% endfor %}
@@ -397,25 +422,25 @@
             {% endif %}
 
             {# Toolbar: search + save #}
-            <div class="mgmt-toolbar">
+            <div class="mgmt-toolbar management-dashboard-toolbar">
                 <div class="mgmt-search-box">
                     <i class="bi bi-search mgmt-search-icon"></i>
                     <input type="text" id="account-search" class="mgmt-search-input"
                            placeholder="Search accounts by name…" autocomplete="off">
                     <span class="mgmt-result-badge" id="account-count-badge"></span>
                 </div>
-                <button type="submit" class="btn btn-success btn-sm" id="accounts-save-btn" style="display:none">
+                <button type="submit" class="btn btn-success btn-sm lg-btn lg-btn--ok" id="accounts-save-btn" style="display:none">
                     <i class="bi bi-floppy-fill me-1"></i>Save Changes
                 </button>
             </div>
 
             {# Accounts table #}
-            <div class="table-responsive">
+            <div class="table-responsive dashboard-table-wrapper mgmt-table-wrapper">
                 <table class="table mgmt-table align-middle mb-0">
                     <thead class="mgmt-thead">
                         <tr>
-                            <th scope="col" style="min-width: 260px;">Account Name</th>
-                            <th scope="col" style="min-width: 180px;" class="text-end">Actions</th>
+                            <th scope="col" class="mgmt-th mgmt-th--account">Account Name</th>
+                            <th scope="col" class="mgmt-th mgmt-th--account-actions text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="accounts-tbody">
@@ -593,8 +618,127 @@
         render();
     }
 
+    function initUserLiveSearch() {
+        var searchInput = document.getElementById('user-search');
+        var tbody = document.getElementById('users-tbody');
+        var badge = document.getElementById('user-count-badge');
+        if (!searchInput || !tbody) return;
+
+        var rows = Array.from(tbody.querySelectorAll('tr.mgmt-row'));
+        var emptyState = tbody.querySelector('tr.mgmt-empty-state');
+        if (!emptyState) {
+            emptyState = document.createElement('tr');
+            emptyState.className = 'mgmt-empty-state text-center text-muted';
+            emptyState.innerHTML = '<td colspan="7" class="text-center text-muted py-5"><i class="bi bi-people display-6 d-block mb-2 opacity-50"></i>No users found.</td>';
+            tbody.appendChild(emptyState);
+        }
+
+        function scoreMatch(row, query) {
+            if (!query) return 1;
+            var text = (row.dataset.searchText || '').toLowerCase();
+            if (!text) return 0;
+            var score = 0;
+            if (text === query) score += 1000;
+            if (text.startsWith(query)) score += 300;
+            if (text.includes(query)) score += 120;
+            var parts = text.split(/\s+/);
+            for (var i = 0; i < parts.length; i += 1) {
+                if (parts[i] === query) score += 180;
+                if (parts[i].startsWith(query)) score += 60;
+            }
+            return score;
+        }
+
+        function render() {
+            var q = searchInput.value.trim().toLowerCase();
+            var filtered = rows
+                .map(function (row) {
+                    return { row: row, score: scoreMatch(row, q) };
+                })
+                .filter(function (item) {
+                    return !q || item.score > 0;
+                })
+                .sort(function (a, b) {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return (a.row.dataset.searchText || '').localeCompare(b.row.dataset.searchText || '');
+                });
+
+            rows.forEach(function (row) {
+                row.style.display = 'none';
+            });
+
+            if (filtered.length === 0) {
+                emptyState.style.display = '';
+            } else {
+                emptyState.style.display = 'none';
+                filtered.forEach(function (item) {
+                    item.row.style.display = '';
+                    tbody.appendChild(item.row);
+                });
+            }
+
+            if (badge) {
+                badge.textContent = q
+                    ? filtered.length + ' match' + (filtered.length !== 1 ? 'es' : '')
+                    : rows.length + ' total';
+            }
+        }
+
+        searchInput.addEventListener('input', render);
+        render();
+    }
+
+    /* ── Shared requestor-modal open/close (same as Create Request) ── */
+    function bindRequestorModal(modalId, closeIds) {
+        var modal = document.getElementById(modalId);
+        if (!modal) return null;
+        var dialog = modal.querySelector('.requestor-modal__dialog');
+
+        function isOpen() {
+            return modal.classList.contains('requestor-modal--visible');
+        }
+
+        function syncBodyLock() {
+            document.body.classList.toggle(
+                'requestor-modal-open',
+                Boolean(document.querySelector('.requestor-modal.requestor-modal--visible'))
+            );
+        }
+
+        function open() {
+            document.querySelectorAll('.requestor-modal.requestor-modal--visible').forEach(function (el) {
+                if (el !== modal) {
+                    el.classList.remove('requestor-modal--visible');
+                    el.setAttribute('aria-hidden', 'true');
+                }
+            });
+            modal.classList.add('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'false');
+            if (dialog) dialog.scrollTop = 0;
+            syncBodyLock();
+        }
+
+        function close() {
+            modal.classList.remove('requestor-modal--visible');
+            modal.setAttribute('aria-hidden', 'true');
+            syncBodyLock();
+        }
+
+        (closeIds || []).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('click', close);
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && isOpen()) close();
+        });
+
+        if (modal.dataset.openOnLoad === 'true') open();
+        return { open: open, close: close };
+    }
+
     /* ── Manage User Modal: populate from data-* attributes ── */
-    function initManageModal() {
+    function initManageModal(manageUserModal) {
         var manageForm   = document.getElementById('manage-user-form');
         var resetPkInput = document.getElementById('mu-reset-pk');
         if (!manageForm) return;
@@ -610,17 +754,14 @@
                 var role       = btn.dataset.userRole   || '';
                 var fullName   = btn.dataset.userName   || username;
 
-                /* Update modal title */
-                var titleEl = document.getElementById('manage-user-modal-title');
+                var titleEl = document.getElementById('manage-user-title');
                 if (titleEl) {
                     titleEl.innerHTML = '<i class="bi bi-person-gear me-2"></i>Manage &mdash; ' +
                         fullName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
                 }
 
-                /* Set form action */
                 manageForm.action = '/users/' + pk + '/manage/';
 
-                /* Populate fields */
                 manageForm.querySelector('#mu-first-name').value  = firstName;
                 manageForm.querySelector('#mu-last-name').value   = lastName;
                 manageForm.querySelector('#mu-username').value    = username;
@@ -632,16 +773,26 @@
                 var roleSelect = manageForm.querySelector('#mu-role');
                 if (roleSelect) roleSelect.value = role;
 
-                /* Set the reset-password hidden input */
                 if (resetPkInput) resetPkInput.value = 'reset_password:' + pk;
+                if (manageUserModal) manageUserModal.open();
             });
         });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        initTab('users-tbody',    'user-search',    'user-count-badge',    'user-limit-note',    'user-pagination',    null, null);
+        initUserLiveSearch();
         initTab('accounts-tbody', 'account-search', 'account-count-badge', 'account-limit-note', 'account-pagination', 'accounts-save-btn', '#accounts-pane form');
-        initManageModal();
+        var createUserModal = bindRequestorModal('create-user-modal', [
+            'close-create-user-btn', 'cancel-create-user-btn', 'create-user-backdrop'
+        ]);
+        var manageUserModal = bindRequestorModal('manage-user-modal', [
+            'close-manage-user-btn', 'cancel-manage-user-btn', 'manage-user-backdrop'
+        ]);
+        var newUserBtn = document.getElementById('new-user-btn');
+        if (newUserBtn && createUserModal) {
+            newUserBtn.addEventListener('click', createUserModal.open);
+        }
+        initManageModal(manageUserModal);
     });
 }());
 </script>

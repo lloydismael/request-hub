@@ -1,5 +1,6 @@
-# Copilot Instructions
+# Workspace Copilot Instructions
 
-- End every response with estimated token usage in this format: `Estimated tokens — input: <number>, output: <number>`.
-- Also include the estimated request cost in Philippine Peso on the same line, for example: `estimated cost: PHP <amount>`.
-- If exact token pricing is unavailable, provide a best-effort estimate and clearly keep it labeled as estimated.
+- Keep responses concise and avoid restating code or terminal output already visible.
+- For large logs, search results, JSON, diffs, or file contents, prefer summarizing only relevant parts and preserving all errors.
+- When Headroom MCP tools are available, use them for large content compression/retrieval before sending bulky context to the model.
+- Preserve exact error messages, stack traces, file paths, and line numbers when compressing context.

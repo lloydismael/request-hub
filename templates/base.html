@@ -3,15 +3,62 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}Request Hub{% endblock %}</title>
+    <script>
+        (function () {
+            try {
+                var direction = sessionStorage.getItem('reqHubPageTransitionDirection');
+                if (direction === 'back' || direction === 'forward') {
+                    document.documentElement.dataset.pageTransitionDirection = direction;
+                    sessionStorage.removeItem('reqHubPageTransitionDirection');
+                }
+            } catch (_) {}
+        }());
+    </script>
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('reqHubTheme');
+                var useDark = savedTheme === 'dark';
+                document.documentElement.classList.toggle('theme-dark-pending', useDark);
+                document.documentElement.dataset.theme = useDark ? 'dark' : 'light';
+                document.documentElement.style.colorScheme = useDark ? 'dark' : 'light';
+            } catch (_) {}
+        }());
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=24">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}?v=13">
+    <link rel="stylesheet" href="{% static 'css/liquid-glass-dashboard.css' %}?v=51">
+    <!-- Ambient background layer renders below content; defer so it doesn't block first paint -->
+    <link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=3" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="{% static 'css/liquid-glass-ambient.css' %}?v=3"></noscript>
+    {% block extra_head %}{% endblock %}
+    {{ sqr_json_scripts }}
     <link rel="icon" type="image/png" href="{% static 'images/PD favicon.png' %}">
 </head>
-<body class="bg-light {% block body_class %}{% endblock %}">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm">
+<body class="bg-light {% block body_class %}{% endblock %}{% if request.user.is_authenticated %} authenticated{% if request.user.pref_compact_tables %} pref-compact-tables{% endif %}{% if request.user.pref_large_text %} pref-large-text{% endif %}{% if request.user.pref_reduce_effects %} pref-reduce-effects{% endif %}{% if request.user.pref_reduce_motion %} pref-reduce-motion{% endif %}{% endif %}">
+    <script>
+        if (document.documentElement.classList.contains('theme-dark-pending')) {
+            document.body.classList.add('dark-mode');
+        }
+        document.documentElement.classList.remove('theme-dark-pending');
+    </script>
+    <!-- Shared ambient background — animated color orbs behind every page.
+         Subtle intensity; login/landing re-intensify via CSS overrides. -->
+    <div class="ambient-mesh" aria-hidden="true">
+        <span class="ambient-mesh__orb ambient-mesh__orb--1"></span>
+        <span class="ambient-mesh__orb ambient-mesh__orb--2"></span>
+        <span class="ambient-mesh__orb ambient-mesh__orb--3"></span>
+        <span class="ambient-mesh__orb ambient-mesh__orb--4"></span>
+        <span class="ambient-mesh__orb ambient-mesh__orb--5"></span>
+        <span class="ambient-mesh__orb ambient-mesh__orb--6"></span>
+        <span class="ambient-mesh__orb ambient-mesh__orb--7"></span>
+        <span class="ambient-mesh__grain"></span>
+    </div>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm" data-nav-surface="light" data-nav-default-surface="light">
         <div class="container-fluid">
             <a class="navbar-brand fw-semibold" href="{% if request.user.is_authenticated %}{% url 'hub:dashboard' %}{% else %}{% url 'landing' %}{% endif %}">
                 <i class="bi bi-hexagon-half me-1"></i>Request Hub
@@ -21,7 +68,7 @@
                      order-lg-2 → on desktop appears after nav links; on mobile sits between brand and toggler -->
                 <div class="d-flex align-items-center gap-2 ms-auto me-1 order-lg-2">
                     <div class="theme-toggle-wrapper">
-                        <input type="checkbox" class="checkbox" id="theme-checkbox">
+                        <input type="checkbox" class="checkbox" id="theme-checkbox" aria-label="Use dark mode">
                         <label for="theme-checkbox" class="checkbox-label" title="Toggle Dark/Light Mode" aria-label="Toggle Dark Mode">
                             <i class="bi bi-moon-fill"></i>
                             <i class="bi bi-brightness-high-fill"></i>
@@ -31,7 +78,7 @@
                     <!-- Avatar dropdown -->
                     <div class="nav-avatar-wrap" id="nav-avatar-wrap">
                         {% if request.user.profile_photo %}
-                            <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">
+                            <img src="{{ request.user.profile_photo.url }}" alt="Profile photo" class="nav-avatar" id="nav-avatar-trigger" width="40" height="40" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">
                         {% else %}
                             {% with display_name=request.user.get_full_name|default:request.user.username %}
                                 <span class="nav-avatar nav-avatar--placeholder" id="nav-avatar-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-avatar-menu">{{ display_name|slice:":1"|upper }}</span>
@@ -79,9 +126,9 @@
                             <li class="nav-item"><a class="nav-link" href="{% url 'hub:report' %}"><i class="bi bi-bar-chart-fill nav-icon"></i>Reports</a></li>
                         {% endif %}
                         <li class="nav-item position-relative">
-                            <a class="nav-link {% if request.user.role == 'admin' or request.user.role == 'pm_esg' or request.user.is_engineer_access_role and new_ticket_count %}nav-link-with-dot{% endif %}" href="{% url 'hub:notifications' %}">
+                            <a class="nav-link {% if new_ticket_count %}nav-link-with-dot{% endif %}" href="{% url 'hub:notifications' %}">
                                 <i class="bi bi-bell-fill nav-icon"></i>Notifications
-                                {% if request.user.role == 'admin' or request.user.role == 'pm_esg' or request.user.is_engineer_access_role and new_ticket_count %}
+                                {% if new_ticket_count %}
                                     <span class="notification-dot notification-dot--nav" title="New assignments or tickets" aria-label="{{ new_ticket_count }} new items">
                                         <span class="notification-dot__count">{{ new_ticket_count }}</span>
                                     </span>
@@ -108,16 +155,34 @@
         </div>
     </nav>
     <script>
-        // Apply view-mobile class based on screen width (auto-detection) or saved preference.
-        // Screens ≤ 520 px always get the mobile layout; wider screens use the saved toggle.
+        (function () {
+            var navbar = document.querySelector('.navbar[data-nav-surface]');
+            if (!navbar) return;
+            var surface = document.body.classList.contains('dark-mode') ||
+                document.body.classList.contains('pref-reduce-effects') ? 'dark' : 'light';
+            navbar.dataset.navSurface = surface;
+            navbar.dataset.navDefaultSurface = surface;
+        }());
+    </script>
+    <script>
+        // view-mobile: shared phone skin (auto on ≤520px, or saved Profile toggle).
+        // view-mobile-preview: 390px mock — only when the toggle is on AND width > 520.
         (function() {
             try {
                 var MQ = window.matchMedia('(max-width: 520px)');
                 function syncViewMode() {
-                    if (MQ.matches || localStorage.getItem('reqHubViewMode') === 'mobile') {
-                        document.body.classList.add('view-mobile');
+                    var preferMobile = localStorage.getItem('reqHubViewMode') === 'mobile';
+                    var isPhone = MQ.matches;
+                    var body = document.body;
+                    if (isPhone) {
+                        body.classList.add('view-mobile');
+                        body.classList.remove('view-mobile-preview');
+                    } else if (preferMobile) {
+                        body.classList.add('view-mobile');
+                        body.classList.add('view-mobile-preview');
                     } else {
-                        document.body.classList.remove('view-mobile');
+                        body.classList.remove('view-mobile');
+                        body.classList.remove('view-mobile-preview');
                     }
                 }
                 syncViewMode();
@@ -127,120 +192,98 @@
     </script>
     <script>
         (function() {
-            // Theme Toggle Logic
             const toggle = document.getElementById('theme-checkbox');
             const toggleLabel = document.querySelector('label[for="theme-checkbox"]');
             const body = document.body;
+            const root = document.documentElement;
             const storageKey = 'reqHubTheme';
-            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            const canUseViewTransition = typeof document.startViewTransition === 'function' && !prefersReducedMotion;
-            // Slow, deeply satisfying reveal — 1.65s with a gentle deceleration curve
-            const THEME_REVEAL_DURATION = 1650;
-            const THEME_REVEAL_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
-            const THEME_FADE_DURATION = 320;
+            const THEME_REVEAL_DURATION = 620;
+            const THEME_REVEAL_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+            let lastClickX = window.innerWidth / 2;
+            let lastClickY = window.innerHeight / 2;
+            let transitionToken = 0;
+            let activeTransition = null;
+            let activeAnimations = [];
 
-            // Helper to set theme state
-            const applyTheme = (isDark) => {
-                if (isDark) {
-                    body.classList.add('dark-mode');
-                    localStorage.setItem(storageKey, 'dark');
-                } else {
-                    body.classList.remove('dark-mode');
-                    localStorage.setItem(storageKey, 'light');
-                }
+            const safelyStoreTheme = (theme) => {
+                try { localStorage.setItem(storageKey, theme); } catch (_) {}
             };
 
-            // Apply saved theme immediately on load
-            const currentTheme = localStorage.getItem(storageKey);
-            if (currentTheme === 'dark') {
-                body.classList.add('dark-mode');
-                if (toggle) toggle.checked = true;
-            }
+            const safelyReadTheme = () => {
+                try { return localStorage.getItem(storageKey); } catch (_) { return null; }
+            };
+
+            const shouldReduceThemeMotion = () => (
+                body.classList.contains('pref-reduce-motion')
+                || body.classList.contains('pref-reduce-effects')
+                || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            );
+
+            const applyTheme = (isDark) => {
+                const navbar = document.querySelector('.navbar');
+                const theme = isDark ? 'dark' : 'light';
+                body.classList.toggle('dark-mode', isDark);
+                root.dataset.theme = theme;
+                root.style.colorScheme = theme;
+                safelyStoreTheme(theme);
+                if (toggle) toggle.checked = isDark;
+                if (toggle) toggle.setAttribute('aria-label', isDark ? 'Use light mode' : 'Use dark mode');
+                if (toggleLabel) toggleLabel.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+                if (navbar) {
+                    navbar.dataset.navDefaultSurface = theme;
+                    navbar.dataset.navSurface = theme;
+                }
+                window.dispatchEvent(new CustomEvent('requesthub:theme-changed', {
+                    detail: { theme: theme, animated: body.classList.contains('theme-switching') }
+                }));
+            };
+
+            const currentTheme = safelyReadTheme();
+            const startsDark = currentTheme === 'dark';
+            applyTheme(startsDark);
 
             if (toggle) {
-                let lastClickX = window.innerWidth / 2;
-                let lastClickY = window.innerHeight / 2;
-                let themeTransitionInFlight = false;
-
                 const resolveThemeOrigin = () => {
                     if (toggleLabel) {
                         const rect = toggleLabel.getBoundingClientRect();
                         const centerX = rect.left + rect.width / 2;
                         const centerY = rect.top + rect.height / 2;
-
-                        const hasPointerPosition = Number.isFinite(lastClickX) && Number.isFinite(lastClickY) && (lastClickX !== 0 || lastClickY !== 0);
                         return {
-                            x: hasPointerPosition ? lastClickX : centerX,
-                            y: hasPointerPosition ? lastClickY : centerY
+                            x: Number.isFinite(lastClickX) ? lastClickX : centerX,
+                            y: Number.isFinite(lastClickY) ? lastClickY : centerY
                         };
                     }
-
-                    return {
-                        x: window.innerWidth / 2,
-                        y: window.innerHeight / 2
-                    };
+                    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
                 };
 
-                const runFallbackReveal = async (isDark, x, y) => {
-                    if (prefersReducedMotion) {
-                        applyTheme(isDark);
-                        return;
-                    }
-
+                const runFallbackReveal = async (isDark, token) => {
                     const overlay = document.createElement('span');
                     overlay.className = 'theme-reveal-overlay';
-                    // Dark → deep navy, Light → clean off-white
-                    overlay.style.background = isDark
-                        ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
-                        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)';
-
-                    const endRadius = Math.hypot(
-                        Math.max(x, window.innerWidth - x),
-                        Math.max(y, window.innerHeight - y)
-                    );
-
                     body.appendChild(overlay);
                     applyTheme(isDark);
-
-                    const revealAnimation = overlay.animate(
-                        [
-                            {
-                                clipPath: `circle(0px at ${x}px ${y}px)`,
-                                opacity: 0.95,
-                                filter: isDark ? 'brightness(0.9)' : 'brightness(1.05)'
-                            },
-                            {
-                                clipPath: `circle(${endRadius * 0.45}px at ${x}px ${y}px)`,
-                                opacity: 1,
-                                filter: 'brightness(1)',
-                                offset: 0.5
-                            },
-                            {
-                                clipPath: `circle(${endRadius}px at ${x}px ${y}px)`,
-                                opacity: 1,
-                                filter: 'brightness(1)'
-                            }
-                        ],
-                        {
-                            duration: THEME_REVEAL_DURATION,
-                            easing: THEME_REVEAL_EASING,
-                            fill: 'forwards'
-                        }
+                    if (typeof overlay.animate !== 'function') {
+                        overlay.remove();
+                        return;
+                    }
+                    const animation = overlay.animate(
+                        [{ opacity: 0 }, { opacity: 0.34, offset: 0.38 }, { opacity: 0 }],
+                        { duration: 360, easing: THEME_REVEAL_EASING, fill: 'forwards' }
                     );
-
-                    await revealAnimation.finished.catch(() => {});
-
-                    const fadeAnimation = overlay.animate(
-                        [{ opacity: 1 }, { opacity: 0 }],
-                        {
-                            duration: THEME_FADE_DURATION,
-                            easing: 'ease-out',
-                            fill: 'forwards'
-                        }
-                    );
-
-                    await fadeAnimation.finished.catch(() => {});
+                    activeAnimations = [animation];
+                    await animation.finished.catch(() => {});
                     overlay.remove();
+                    if (token === transitionToken) activeAnimations = [];
+                };
+
+                const cancelActiveMotion = () => {
+                    activeAnimations.forEach((animation) => {
+                        try { animation.cancel(); } catch (_) {}
+                    });
+                    activeAnimations = [];
+                    if (activeTransition && typeof activeTransition.skipTransition === 'function') {
+                        try { activeTransition.skipTransition(); } catch (_) {}
+                    }
+                    document.querySelectorAll('.theme-reveal-overlay').forEach((node) => node.remove());
                 };
 
                 if (toggleLabel) {
@@ -250,86 +293,58 @@
                     }, { passive: true });
                 }
 
-                toggle.addEventListener('change', async function(e) {
-                    if (themeTransitionInFlight) {
-                        return;
-                    }
-                    themeTransitionInFlight = true;
+                toggle.addEventListener('change', async function() {
                     const isDark = this.checked;
+                    const token = ++transitionToken;
+                    cancelActiveMotion();
                     body.classList.add('theme-switching');
-
-                    const finishThemeTransition = () => {
-                        body.classList.remove('theme-switching');
-                        themeTransitionInFlight = false;
-                    };
-
-                    // Fallback for browsers without View Transition API
                     const { x, y } = resolveThemeOrigin();
 
-                    if (!canUseViewTransition) {
-                        await runFallbackReveal(isDark, x, y);
-                        finishThemeTransition();
+                    if (shouldReduceThemeMotion()) {
+                        applyTheme(isDark);
+                        if (token === transitionToken) body.classList.remove('theme-switching');
                         return;
                     }
 
-                    // Calculate distance to furthest corner ensuring full coverage
+                    if (typeof document.startViewTransition !== 'function') {
+                        await runFallbackReveal(isDark, token);
+                        if (token === transitionToken) body.classList.remove('theme-switching');
+                        return;
+                    }
+
                     const endRadius = Math.hypot(
                         Math.max(x, window.innerWidth - x),
                         Math.max(y, window.innerHeight - y)
                     );
-
-                    // Start the View Transition
                     const transition = document.startViewTransition(() => {
                         applyTheme(isDark);
                     });
+                    activeTransition = transition;
 
                     try {
-                        // Wait for the pseudo-elements to be created
                         await transition.ready;
-
-// Smooth, slow, satisfying circular reveal from toggle origin
-                    const revealAnimation = document.documentElement.animate(
-                        {
+                        if (token !== transitionToken) return;
+                        const revealAnimation = root.animate({
                             clipPath: [
                                 `circle(0px at ${x}px ${y}px)`,
                                 `circle(${endRadius}px at ${x}px ${y}px)`
                             ],
-                            filter: [
-                                isDark ? 'brightness(1.08) saturate(0.9)' : 'brightness(0.96) saturate(0.95)',
-                                'brightness(1) saturate(1)'
-                            ],
-                            opacity: [0.92, 1]
-                        },
-                        {
+                            opacity: [0.82, 1]
+                        }, {
                             duration: THEME_REVEAL_DURATION,
                             easing: THEME_REVEAL_EASING,
                             pseudoElement: '::view-transition-new(root)'
-                        }
-                    );
-
-                    const outgoingAnimation = document.documentElement.animate(
-                        {
-                            opacity: [1, 0.12],
-                            filter: [
-                                'brightness(1) saturate(1)',
-                                isDark ? 'brightness(0.7) saturate(0.6)' : 'brightness(1.15) saturate(0.8)'
-                            ],
-                            scale: ['1', '1.005']
-                        },
-                        {
-                            duration: Math.round(THEME_REVEAL_DURATION * 0.72),
-                            easing: 'cubic-bezier(0.4, 0, 1, 1)',
-                                pseudoElement: '::view-transition-old(root)'
-                            }
-                        );
-
-                        await Promise.all([
-                            revealAnimation.finished.catch(() => {}),
-                            outgoingAnimation.finished.catch(() => {})
-                        ]);
-                        await transition.finished;
+                        });
+                        activeAnimations = [revealAnimation];
+                        await revealAnimation.finished.catch(() => {});
+                        await transition.finished.catch(() => {});
                     } finally {
-                        finishThemeTransition();
+                        if (token === transitionToken) {
+                            activeTransition = null;
+                            activeAnimations = [];
+                            body.classList.remove('theme-switching');
+                            toggle.checked = body.classList.contains('dark-mode');
+                        }
                     }
                 });
             }
@@ -337,7 +352,8 @@
     </script>
 
 
-    <main class="container py-4">
+        <main class="container py-4">
+            <div id="request-hub-page" class="request-hub-page">
         {% for message in messages %}
             {% if "request-success" in message.tags %}
                 <div class="request-success-toast" role="status" aria-live="polite" data-request-success-toast>
@@ -347,14 +363,21 @@
                             <path class="request-success-toast__check" d="M16 24.5l6 6 12-12"></path>
                         </svg>
                     </span>
-                    <span class="request-success-toast__message">{{ message }}</span>
+                    <span class="request-success-toast__content">
+                        <span class="request-success-toast__message">Request submitted successfully</span>
+                        {% if request_success_reference %}
+                            <strong class="request-success-toast__ticket">{{ request_success_reference }}</strong>
+                        {% endif %}
+                    </span>
                 </div>
             {% elif "login-success" in message.tags %}
                 <div class="login-success-overlay" data-login-success-overlay data-redirect-delay="1800" aria-live="polite" role="status">
                     <div class="login-success-card">
                         <div class="login-success-card__ring">
                             <div class="login-success-card__icon">
-                                <i class="bi bi-check2"></i>
+                                <svg class="login-success-card__check" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                                    <path d="M13 24.5 20.5 32 35 17"></path>
+                                </svg>
                             </div>
                         </div>
                         <h2 class="login-success-card__title">Welcome back!</h2>
@@ -369,9 +392,28 @@
             {% endif %}
         {% endfor %}
         {% block content %}{% endblock %}
+            </div>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    {% if request.user.is_authenticated %}
+        <div data-notification-toast-config
+             data-url="{% url 'hub:notification-toast-data' %}"
+             data-user-id="{{ request.user.pk }}"
+             data-initial-cursor="{{ notification_toast_initial_cursor|default:0 }}"
+             hidden></div>
+        <section class="notification-toast-region"
+                 aria-label="Request notifications"
+                 aria-live="polite"
+                 aria-relevant="additions"
+                 data-notification-toast-region></section>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
+        <script src="{% static 'js/page-transitions.js' %}?v=1" defer></script>
+    <script src="{% static 'js/navbar-contrast.js' %}?v=1" defer></script>
+    <script src="{% static 'js/liquid-glass.js' %}?v=4" defer></script>
+    <script src="{% static 'js/smooth-scroll.js' %}?v=11" defer></script>
+    <script src="{% static 'js/notification-toasts.js' %}?v=2" defer></script>
     <script src="{% static 'js/login-success.js' %}" defer></script>
     <script>
         // Nav avatar dropdown
@@ -515,50 +557,15 @@
                 const toggleBtn = document.getElementById('ai-chat-toggle-btn');
                 const chatWindow = document.getElementById('ai-chat-window');
                 const closeBtn = document.getElementById('ai-chat-close-btn');
-                const icon = toggleBtn.querySelector('i');
+                const chatIframe = document.getElementById('ai-chat-iframe');
+                const chatBody = chatWidget.querySelector('.ai-chat-body');
                 const chatStateKey = 'reqHubChatOpen';
+                let chatObserver = null;
+                let iframeLoaded = false;
 
-                const applyChatState = (open, options = {}) => {
-                    const shouldFocus = Boolean(options.focus);
-
-                    if (open) {
-                        chatWindow.classList.add('open');
-                        toggleBtn.classList.add('active');
-                        icon.classList.remove('bi-robot');
-                        icon.classList.add('bi-x-lg');
-                        toggleBtn.setAttribute('aria-expanded', 'true');
-                        localStorage.setItem(chatStateKey, '1');
-                        if (shouldFocus) {
-                            chatWindow.focus();
-                        }
-                    } else {
-                        chatWindow.classList.remove('open');
-                        toggleBtn.classList.remove('active');
-                        icon.classList.remove('bi-x-lg');
-                        icon.classList.add('bi-robot');
-                        toggleBtn.setAttribute('aria-expanded', 'false');
-                        localStorage.setItem(chatStateKey, '0');
-                        if (shouldFocus) {
-                            toggleBtn.focus();
-                        }
-                    }
-                };
-
-                // Toggle visibility
-                const toggleChat = () => {
-                    const isOpen = chatWindow.classList.contains('open');
-                    applyChatState(!isOpen, { focus: true });
-                };
-
-                if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
-                if (closeBtn) closeBtn.addEventListener('click', () => applyChatState(false, { focus: true }));
-
-                if (localStorage.getItem(chatStateKey) === '1') {
-                    applyChatState(true);
-                }
+                if (!toggleBtn || !chatWindow) return;
 
                 const removeInjectedAgentLabel = () => {
-                    const chatBody = document.querySelector('.ai-chat-body');
                     if (!chatBody) return;
                     const labels = chatBody.querySelectorAll('div');
                     labels.forEach((node) => {
@@ -569,37 +576,92 @@
                     });
                 };
 
-                removeInjectedAgentLabel();
-                const chatObserver = new MutationObserver(removeInjectedAgentLabel);
-                chatObserver.observe(document.body, { childList: true, subtree: true });
+                const ensureIframeLoaded = () => {
+                    if (!chatIframe || iframeLoaded) return;
+                    const src = chatIframe.getAttribute('data-src');
+                    if (src) {
+                        chatIframe.setAttribute('src', src);
+                        chatIframe.removeAttribute('data-src');
+                    }
+                    iframeLoaded = true;
+                };
 
-                // Focus Trap Logic
-                if (chatWindow) {
-                    chatWindow.addEventListener('keydown', (e) => {
-                        if (e.key === 'Tab' || e.key === 'Escape') {
-                            if (e.key === 'Escape') {
-                                toggleChat();
-                                return;
-                            }
-                            const focusableElements = chatWindow.querySelectorAll('button, [href], iframe, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-                            if (focusableElements.length) {
-                                const firstElement = focusableElements[0];
-                                const lastElement = focusableElements[focusableElements.length - 1];
-                                if (e.shiftKey) { 
-                                    if (document.activeElement === firstElement) {
-                                        lastElement.focus();
-                                        e.preventDefault();
-                                    }
-                                } else { 
-                                    if (document.activeElement === lastElement) {
-                                        firstElement.focus();
-                                        e.preventDefault();
-                                    }
-                                }
-                            }
-                        }
-                    });
+                const startChatObserver = () => {
+                    if (chatObserver || !chatBody || typeof MutationObserver === 'undefined') return;
+                    removeInjectedAgentLabel();
+                    chatObserver = new MutationObserver(removeInjectedAgentLabel);
+                    // Scope to chat body only — never observe document.body
+                    chatObserver.observe(chatBody, { childList: true, subtree: true });
+                };
+
+                const stopChatObserver = () => {
+                    if (!chatObserver) return;
+                    chatObserver.disconnect();
+                    chatObserver = null;
+                };
+
+                const applyChatState = (open, options = {}) => {
+                    const shouldFocus = Boolean(options.focus);
+
+                    if (open) {
+                        ensureIframeLoaded();
+                        startChatObserver();
+                    } else {
+                        stopChatObserver();
+                    }
+
+                    chatWindow.classList.toggle('open', open);
+                    toggleBtn.classList.toggle('active', open);
+                    toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    toggleBtn.setAttribute('aria-label', open ? 'Close AI Assistant' : 'Open AI Assistant');
+                    localStorage.setItem(chatStateKey, open ? '1' : '0');
+
+                    if (shouldFocus) {
+                        (open ? chatWindow : toggleBtn).focus();
+                    }
+                };
+
+                const toggleChat = () => {
+                    const isOpen = chatWindow.classList.contains('open');
+                    applyChatState(!isOpen, { focus: true });
+                };
+
+                toggleBtn.addEventListener('click', toggleChat);
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => applyChatState(false, { focus: true }));
                 }
+
+                if (localStorage.getItem(chatStateKey) === '1') {
+                    applyChatState(true);
+                }
+
+                chatWindow.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        applyChatState(false, { focus: true });
+                        return;
+                    }
+
+                    if (e.key !== 'Tab' || !chatWindow.classList.contains('open')) {
+                        return;
+                    }
+
+                    const focusableElements = chatWindow.querySelectorAll('button, [href], iframe, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                    if (!focusableElements.length) {
+                        return;
+                    }
+
+                    const firstElement = focusableElements[0];
+                    const lastElement = focusableElements[focusableElements.length - 1];
+                    if (e.shiftKey) {
+                        if (document.activeElement === firstElement) {
+                            lastElement.focus();
+                            e.preventDefault();
+                        }
+                    } else if (document.activeElement === lastElement) {
+                        firstElement.focus();
+                        e.preventDefault();
+                    }
+                });
             };
 
             // Ensure DOM is ready before init
@@ -616,18 +678,21 @@
     <!-- AI Chat Bot Widget -->
     <div id="ai-chat-widget-container" class="ai-chat-widget">
         <!-- Chat Window -->
-        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" aria-modal="true" tabindex="-1">
+        <div id="ai-chat-window" class="ai-chat-window" role="dialog" aria-label="ESG AI Assistant" tabindex="-1">
             <button id="ai-chat-close-btn" class="ai-chat-close-btn" type="button" aria-label="Close AI Assistant">
                 <i class="bi bi-x-lg" aria-hidden="true"></i>
             </button>
-            <div class="ai-chat-body" style="height: 100%; width: 100%;">
-                <iframe 
+            <div class="ai-chat-body">
+                {# Lazy-load iframe on first open — avoids Copilot Studio boot cost on every navigation #}
+                <iframe
                     id="ai-chat-iframe"
-                    src="https://copilotstudio.microsoft.com/environments/Default-1d11f56e-9937-45ad-80aa-03b05da28e8d/bots/auto_agent_TCzv9/webchat?__version__=2"
-                    frameborder="0" 
+                    data-src="https://copilotstudio.microsoft.com/environments/Default-1d11f56e-9937-45ad-80aa-03b05da28e8d/bots/auto_agent_TCzv9/canvas?__version__=2&amp;enableFileAttachment=true&amp;tenantId=1d11f56e-9937-45ad-80aa-03b05da28e8d"
+                    data-connection-string="https://default1d11f56e993745ad80aa03b05da28e.8d.environment.api.powerplatform.com/copilotstudio/dataverse-backed/authenticated/bots/auto_agent_TCzv9/conversations?api-version=2022-03-01-preview"
+                    frameborder="0"
                     style="width: 100%; height: 100%;"
                     sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                    title="Chat with ESG AI Assistant">
+                    title="Chat with ESG AI Assistant"
+                    loading="lazy">
                 </iframe>
             </div>
         </div>
@@ -716,10 +781,24 @@
             idleTimer = setTimeout(showWarning, IDLE_MS);
         }
 
-        // User activity events that reset the timer
-        var events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-        events.forEach(function (evt) {
+        // Throttle high-frequency activity so scroll/mousemove don't thrash timers every frame
+        var highFreqPending = false;
+        function resetIdleTimerThrottled() {
+            if (highFreqPending || overlay.classList.contains('is-open')) return;
+            highFreqPending = true;
+            requestAnimationFrame(function () {
+                highFreqPending = false;
+                resetIdleTimer();
+            });
+        }
+
+        // Immediate reset for discrete actions
+        ['mousedown', 'keydown', 'touchstart', 'click'].forEach(function (evt) {
             document.addEventListener(evt, resetIdleTimer, { passive: true });
+        });
+        // Throttled for continuous movement/scroll
+        ['mousemove', 'scroll'].forEach(function (evt) {
+            document.addEventListener(evt, resetIdleTimerThrottled, { passive: true });
         });
 
         // "Yes, I'm here" button

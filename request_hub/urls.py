@@ -4,11 +4,22 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
+from django.http import HttpResponse
 from django.urls import include, path
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET
 
 from accounts.views import LandingView, RoleLoginView
 
+
+@never_cache
+@require_GET
+def healthz(_request):
+    return HttpResponse("ok", content_type="text/plain; charset=utf-8")
+
+
 urlpatterns = [
+    path("healthz/", healthz, name="healthz"),
     path("admin/", admin.site.urls),
     path("", LandingView.as_view(), name="landing"),
     path("accounts/login/", RoleLoginView.as_view(), name="login"),

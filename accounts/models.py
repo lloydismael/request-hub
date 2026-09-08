@@ -75,9 +75,28 @@ class User(AbstractUser):
     ASSIGNABLE_ENGINEER_ROLES = (Roles.ENGINEER,)
     profile_completed = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
-    show_chatbot = models.BooleanField(default=True, verbose_name="Show AI Chatbot")
+    show_chatbot = models.BooleanField(default=False, verbose_name="Show AI Chatbot")
     idle_timeout_enabled = models.BooleanField(default=True, verbose_name="5-Minute Idle Timeout")
     show_login_banner = models.BooleanField(default=True, verbose_name="Welcome Banner on Login")
+
+    # ── Appearance / Performance / Accessibility preferences ─────────────
+    # All default to current behaviour so existing users see no change.
+    pref_compact_tables = models.BooleanField(
+        default=False, verbose_name="Compact Tables",
+        help_text="Denser rows and tighter spacing on data tables.",
+    )
+    pref_large_text = models.BooleanField(
+        default=False, verbose_name="Large Text",
+        help_text="Increase the base font size across the app.",
+    )
+    pref_reduce_effects = models.BooleanField(
+        default=False, verbose_name="Reduce Visual Effects",
+        help_text="Disable glass blur and animated background effects for better performance.",
+    )
+    pref_reduce_motion = models.BooleanField(
+        default=False, verbose_name="Reduce Motion",
+        help_text="Disable entrance animations and smooth scrolling.",
+    )
 
     def must_complete_profile(self) -> bool:
         required_fields = [self.email, self.phone_number, self.profile_photo]
