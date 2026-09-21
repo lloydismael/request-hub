@@ -7421,14 +7421,37 @@ class RequestLifecycleAcknowledgeView(LoginRequiredMixin, View):
             )
         except PermissionDenied as exc:
             messages.error(request, str(exc))
-            return redirect("hub:request-manage-collab", pk=pk)
+            return self._acknowledge_failure(request, pk)
         except request_lifecycle.LifecycleConflictError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect("hub:request-manage-collab", pk=pk)
+            return self._acknowledge_failure(request, pk)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-            return redirect("hub:request-manage-collab", pk=pk)
+            return self._acknowledge_failure(request, pk)
+        except Exception as exc:  # noqa: BLE001 — surface unexpected DB failures instead of a raw 500
+            logger.exception("Acknowledge failed for request %s (user %s)", pk, request.user)
+            messages.error(
+                request,
+                "We could not record your acknowledgement right now. "
+                "The request has NOT been marked as acknowledged — please refresh and try again.",
+            )
+            return self._acknowledge_failure(request, pk)
         return RequestOutlookRedirectView().post(request, pk, allow_existing_draft=True)
+
+    def _acknowledge_failure(self, request, pk):
+        """Re-render the collab page so the engineer sees the authoritative
+        lifecycle state together with the error, instead of a bare redirect.
+        """
+        try:
+            request_obj = RequestCollaborativeManageView()
+            request_obj.request = request
+            request_obj.kwargs = {"pk": pk}
+            request_obj.args = ()
+            obj = request_obj.get_object()
+            context = request_obj.get_context_data(obj)
+            return render(request, request_obj.template_name, context)
+        except Exception:  # noqa: BLE001 — fall back to a redirect if re-render fails
+            return redirect("hub:request-manage-collab", pk=pk)
 
 
 class RequestStatusUpdateView(LoginRequiredMixin, View):
