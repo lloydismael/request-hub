@@ -637,6 +637,7 @@ class SqrSubmissionForm(forms.ModelForm):
             "Mica Ella R. Labindao",
             "Anabelle D. Alapide",
             "Jimlyn Espinosa",
+            "Aira E. Coloma",
         ],
         "HP": [
             "Ann Irma Tablada",
