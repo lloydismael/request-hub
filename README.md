@@ -375,13 +375,16 @@ docker compose exec web python manage.py migrate
 | `DJANGO_SECRET_KEY` | Django secret key. Required when `DJANGO_DEBUG` is `False`; must not be empty or `insecure-development-key`. |
 | `DJANGO_DEBUG` | `True` for local HTTP development, `False` for production (fail-closed). |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed host names |
+| `DJANGO_PRIMARY_DOMAIN` | Canonical domain(s), comma-separated; auto-added to `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (default `esgrequesthub.com`) |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Comma-separated trusted origins, e.g. `https://esgrequesthub.com,https://www.esgrequesthub.com` |
+| `DJANGO_DEFAULT_FROM_EMAIL` | Default from address (default `ESG Request Hub <no-reply@esgrequesthub.com>`) |
 | `DB_NAME` | PostgreSQL database name |
 | `DB_USER` | Database username. Required when `DJANGO_DEBUG` is `False`. |
 | `DB_PASSWORD` | Database password. Required when `DJANGO_DEBUG` is `False`. |
 | `DB_HOST` | Database host (e.g. Azure PostgreSQL hostname). Required when `DJANGO_DEBUG` is `False`. |
 | `DB_PORT` | Database port (default `5432`) |
 | `ACS_EMAIL_CONNECTION_STRING` | Azure Communication Services connection string |
-| `ACS_EMAIL_SENDER` | ACS sender address |
+| `ACS_EMAIL_SENDER` | ACS sender address (verified sender `DoNotReply@esgrequesthub.com`) |
 | `PHILDATA_TENANT_ID` | Microsoft Entra tenant ID |
 | `PHILDATA_CLIENT_ID` | App registration client ID |
 | `PHILDATA_CLIENT_SECRET` | App registration client secret |
