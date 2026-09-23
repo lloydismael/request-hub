@@ -8,7 +8,7 @@ from typing import Iterable, List
 from django.db.models import Q
 
 from accounts.models import User
-from .models import Account, EngineerActivityLog, Request, SqrSubmission, StatusLog
+from .models import Account, EngineerActivityLog, Request, SqrProjectPerformance, SqrSubmission, StatusLog
 
 
 class AvatarSelect(forms.Select):
@@ -1268,6 +1268,68 @@ class SqrDeliveryForm(forms.ModelForm):
 
     def clean_delivery_progress(self):
         value = self.cleaned_data.get("delivery_progress")
+        if value is not None and not (0 <= value <= 100):
+            raise forms.ValidationError("Progress must be between 0 and 100.")
+        return value
+
+
+class SqrPerformanceForm(forms.ModelForm):
+    """PM fills this to track Project Performance (Status + Health) per SQR."""
+
+    class Meta:
+        model = SqrProjectPerformance
+        fields = [
+            "project_manager",
+            "start_date",
+            "finish_date",
+            "status",
+            "percent_complete",
+            "next_action_remarks",
+            "folder_link",
+            "schedule_health",
+            "scope_health",
+            "budget_health",
+            "recovery_action_remarks",
+        ]
+        labels = {
+            "project_manager": "Project Manager",
+            "start_date": "Start Date",
+            "finish_date": "Finish Date",
+            "status": "Status",
+            "percent_complete": "% Complete",
+            "next_action_remarks": "Next Action / Remarks",
+            "folder_link": "Folder link",
+            "schedule_health": "Schedule Health",
+            "scope_health": "Scope Health",
+            "budget_health": "Budget Health",
+            "recovery_action_remarks": "Recovery Action / Remarks",
+        }
+        widgets = {
+            "project_manager": forms.Select(attrs={"class": "form-select"}),
+            "start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "finish_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "percent_complete": forms.NumberInput(
+                attrs={"class": "form-control", "min": "0", "max": "100", "placeholder": "0-100"}
+            ),
+            "next_action_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
+            "folder_link": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://"}),
+            "schedule_health": forms.Select(attrs={"class": "form-select"}),
+            "scope_health": forms.Select(attrs={"class": "form-select"}),
+            "budget_health": forms.Select(attrs={"class": "form-select"}),
+            "recovery_action_remarks": forms.Textarea(attrs={"class": "form-control", "rows": "3"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["project_manager"].queryset = User.objects.filter(
+            role__in=["pm_esg", "admin"]
+        ).order_by("first_name", "last_name")
+        for f in self.fields.values():
+            f.required = False
+
+    def clean_percent_complete(self):
+        value = self.cleaned_data.get("percent_complete")
         if value is not None and not (0 <= value <= 100):
             raise forms.ValidationError("Progress must be between 0 and 100.")
         return value

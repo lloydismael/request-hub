@@ -66,6 +66,7 @@ from .forms import (
     AdminRequestFilterForm,
     EngineerActivityLogForm,
     RequestAdminForm,
+    SqrPerformanceForm,
     SqrDeliveryForm,
     SqrProposalStatusForm,
     SqrRevenueForm,
@@ -84,6 +85,7 @@ from .models import (
     Notification,
     Request,
     RequestCommunication,
+    SqrProjectPerformance,
     SqrSubmission,
     SqrSubmissionChange,
     SqrSubmissionHistory,
@@ -2734,6 +2736,115 @@ def _get_sqr_esg_export_columns():
     ]
 
 
+def _get_sqr_performance(prefetched=True):
+    """Return {submission_id: SqrProjectPerformance} for all rows (single query)."""
+    return {p.submission_id: p for p in SqrProjectPerformance.objects.select_related("project_manager")}
+
+
+def _get_sqr_performance_export_columns():
+    def _date(d):
+        return d.strftime("%Y-%m-%d") if d else ""
+
+    def _name(u):
+        return (u.get_full_name() or u.username) if u else ""
+
+    def _perf(s):
+        return getattr(s, "performance", None)
+
+    def _status(s):
+        p = _perf(s)
+        if not p:
+            return ""
+        return dict(SqrProjectPerformance.ProjectStatus.choices).get(p.status, p.status or "")
+
+    def _health(value):
+        return dict(SqrProjectPerformance.Health.choices).get(value, value or "")
+
+    def _overall(s):
+        p = _perf(s)
+        if not p:
+            return ""
+        return dict(SqrProjectPerformance.OverallHealth.choices).get(p.overall_health, p.overall_health)
+
+    return [
+        ("SQR ID", lambda s: s.reference_code or ""),
+        ("Description", lambda s: s.project_title or ""),
+        ("Project Manager", lambda s: _name(_perf(s).project_manager) if _perf(s) and _perf(s).project_manager else (_name(s.assigned_pm) or _name(s.pm_esg_reviewer))),
+        ("Start Date", lambda s: _date(_perf(s).start_date) if _perf(s) else ""),
+        ("Finish Date", lambda s: _date(_perf(s).finish_date) if _perf(s) else ""),
+        ("Status", _status),
+        ("% Complete", lambda s: _perf(s).percent_complete if _perf(s) and _perf(s).percent_complete is not None else ""),
+        ("Next Action / Remarks", lambda s: _perf(s).next_action_remarks if _perf(s) else ""),
+        ("Folder link", lambda s: (_perf(s).folder_link or s.sqr_folder_link or "") if _perf(s) else (s.sqr_folder_link or "")),
+        ("Schedule Health", lambda s: _health(_perf(s).schedule_health) if _perf(s) else ""),
+        ("Scope Health", lambda s: _health(_perf(s).scope_health) if _perf(s) else ""),
+        ("Budget Health", lambda s: _health(_perf(s).budget_health) if _perf(s) else ""),
+        ("Recovery Action / Remarks", lambda s: _perf(s).recovery_action_remarks if _perf(s) else ""),
+        ("Overall Health", _overall),
+        ("Last Updated Date", lambda s: _perf(s).updated_at.strftime("%Y-%m-%d %H:%M") if _perf(s) and _perf(s).updated_at else ""),
+    ]
+
+
+def _perf_sqr_mismatches(submission):
+    """Compare a performance row against its SQR Tracker source columns.
+
+    Returns a list of {field, label, sqr_value, perf_value}. PM is compared by
+    user ID (not display name) to avoid false flags on name formatting.
+    Kept dormant (no UI) for programmatic checks; covered by unit test.
+    """
+    perf = getattr(submission, "performance", None)
+    if not perf:
+        return []
+    mismatches = []
+
+    def _fmt_date(d):
+        return d.strftime("%Y-%m-%d") if d else "—"
+
+    def _fmt_user(u):
+        return (u.get_full_name() or u.username) if u else "—"
+
+    sqr_pm = submission.assigned_pm or submission.pm_esg_reviewer
+    if (perf.project_manager_id, getattr(sqr_pm, "pk", None)) != (None, None) and perf.project_manager_id != getattr(sqr_pm, "pk", None):
+        mismatches.append({
+            "field": "project_manager",
+            "label": "Project Manager ≠ SQR Assigned PM",
+            "sqr_value": _fmt_user(sqr_pm),
+            "perf_value": _fmt_user(perf.project_manager),
+        })
+    if perf.start_date != submission.delivery_start_date and (perf.start_date or submission.delivery_start_date):
+        mismatches.append({
+            "field": "start_date",
+            "label": "Start Date ≠ SQR Start Date",
+            "sqr_value": _fmt_date(submission.delivery_start_date),
+            "perf_value": _fmt_date(perf.start_date),
+        })
+    if perf.finish_date != submission.delivery_actual_finish_date and (perf.finish_date or submission.delivery_actual_finish_date):
+        mismatches.append({
+            "field": "finish_date",
+            "label": "Finish Date ≠ SQR Actual Finish Date",
+            "sqr_value": _fmt_date(submission.delivery_actual_finish_date),
+            "perf_value": _fmt_date(perf.finish_date),
+        })
+    sqr_folder = (submission.sqr_folder_link or "").strip().rstrip("/")
+    perf_folder = (perf.folder_link or "").strip().rstrip("/")
+    if sqr_folder != perf_folder and (sqr_folder or perf_folder):
+        mismatches.append({
+            "field": "folder_link",
+            "label": "Folder link ≠ SQR Doc. Ref. Link",
+            "sqr_value": submission.sqr_folder_link or "—",
+            "perf_value": perf.folder_link or "—",
+        })
+    if (perf.percent_complete is not None and submission.delivery_progress is not None
+            and abs(perf.percent_complete - submission.delivery_progress) > 10):
+        mismatches.append({
+            "field": "percent_complete",
+            "label": "% Complete differs from SQR Overall Progress % by >10",
+            "sqr_value": f"{submission.delivery_progress}%",
+            "perf_value": f"{perf.percent_complete}%",
+        })
+    return mismatches
+
+
 def _normalize_import_text(value) -> str:
     return " ".join(
         str(value or "")
@@ -3225,6 +3336,7 @@ class SqrListView(LoginRequiredMixin, TemplateView):
                 "proposal_counts": proposal_counts,
                 "delivery_submissions": delivery_submissions,
                 "delivery_health_counts": delivery_health_counts,
+
                 "revenue_data": revenue_data,
                 "sqr_reports_summary": sqr_reports_summary,
                 "sqr_reports_status_chart": sqr_reports_status_chart,
@@ -4386,6 +4498,67 @@ class SqrDeliveryUpdateView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             messages.success(request, f"Service delivery updated for {submission.reference_code}.")
+        else:
+            for field, errors in form.errors.items():
+                label = form.fields[field].label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f"{label}: {error}")
+
+        return redirect("hub:sqr")
+
+
+class SqrPerformanceUpdateView(LoginRequiredMixin, View):
+    """PM-ESG / Admin: create-or-update the 1-to-1 Project Performance record."""
+
+    def post(self, request, pk):
+        if request.user.role not in ADMIN_PANEL_ROLES:
+            messages.error(request, "Only PM-ESG or Admin can update Project Performance details.")
+            return redirect("hub:sqr")
+
+        submission = get_object_or_404(SqrSubmission, pk=pk)
+        try:
+            instance = submission.performance
+        except SqrProjectPerformance.DoesNotExist:
+            instance = SqrProjectPerformance(
+                submission=submission,
+                start_date=submission.delivery_start_date,
+                finish_date=submission.delivery_actual_finish_date,
+                project_manager=submission.assigned_pm or submission.pm_esg_reviewer,
+                folder_link=submission.sqr_folder_link or "",
+            )
+
+        form = SqrPerformanceForm(request.POST, instance=instance)
+        if form.is_valid():
+            performance = form.save(commit=False)
+            performance.submission = submission
+            # Preserve seeded lookup values when the posted form leaves them blank.
+            if not performance.start_date:
+                performance.start_date = submission.delivery_start_date
+            if not performance.finish_date:
+                performance.finish_date = submission.delivery_actual_finish_date
+            if not performance.folder_link:
+                performance.folder_link = submission.sqr_folder_link or ""
+            if not performance.project_manager_id:
+                performance.project_manager = submission.assigned_pm or submission.pm_esg_reviewer
+            performance.save()
+            SqrSubmissionHistory.objects.create(
+                submission=submission,
+                actor=request.user,
+                action=SqrSubmissionHistory.Action.UPDATED,
+                field="performance",
+                old_values={},
+                new_values={
+                    "status": performance.status,
+                    "overall_health": performance.overall_health,
+                    "schedule_health": performance.schedule_health,
+                    "scope_health": performance.scope_health,
+                    "budget_health": performance.budget_health,
+                    "percent_complete": performance.percent_complete,
+                },
+                summary=f"Project performance updated for {submission.reference_code}.",
+                source="sqr-performance-update",
+            )
+            messages.success(request, f"Project performance updated for {submission.reference_code}.")
         else:
             for field, errors in form.errors.items():
                 label = form.fields[field].label if field in form.fields else field
@@ -5662,10 +5835,11 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
         qs = SqrSubmission.objects.select_related(
             "engineer", "pm_esg_reviewer", "reviewed_by",
             "assigned_pm", "assigned_sse", "linked_request",
+            "performance", "performance__project_manager",
         ).order_by("-created_at", "-pk")
 
         report_type = request.GET.get("report", "sqr")
-        if report_type not in {"sqr", "esg"}:
+        if report_type not in {"sqr", "esg", "performance"}:
             report_type = "sqr"
 
         report_config = {
@@ -5678,6 +5852,11 @@ class SqrExportView(AdminOrPmEsgRequiredMixin, LoginRequiredMixin, View):
                 "worksheet_title": "ESG Performance Tracker",
                 "filename_prefix": "esg-performance-tracker",
                 "columns": _get_sqr_esg_export_columns,
+            },
+            "performance": {
+                "worksheet_title": "Project Performance Tracking",
+                "filename_prefix": "project-performance-tracking",
+                "columns": _get_sqr_performance_export_columns,
             },
         }[report_type]
 

@@ -986,6 +986,79 @@ class SqrSubmissionChange(models.Model):
         return self.undone_at is not None
 
 
+class SqrProjectPerformance(models.Model):
+    """1-to-1 Project Performance Tracking record linked to an SQR submission.
+
+    Lookup / auto-filled from SQR: SQR ID (reference_code), Description (project_title).
+    Finish Date means the Actual Finish date (delivery_actual_finish_date seed).
+    """
+
+    class ProjectStatus(models.TextChoices):
+        PENDING_START = "pending_start", "Pending Start"
+        ONGOING = "ongoing", "Ongoing"
+        AT_RISK = "at_risk", "At Risk"
+        CLOSED = "closed", "Closed"
+
+    class Health(models.TextChoices):
+        OK = "ok", "OK"
+        AT_RISK = "at_risk", "At Risk"
+        OVER = "over", "Overdue"
+
+    class OverallHealth(models.TextChoices):
+        GREEN = "green", "Green"
+        YELLOW = "yellow", "Yellow"
+        RED = "red", "Red"
+
+    submission = models.OneToOneField(
+        SqrSubmission,
+        on_delete=models.CASCADE,
+        related_name="performance",
+    )
+    project_manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sqr_performance_managed",
+        blank=True,
+        null=True,
+    )
+    start_date = models.DateField(blank=True, null=True)
+    finish_date = models.DateField(blank=True, null=True, verbose_name="Finish Date (Actual)")
+    status = models.CharField(
+        max_length=20, choices=ProjectStatus.choices, default=ProjectStatus.PENDING_START
+    )
+    percent_complete = models.PositiveSmallIntegerField(blank=True, null=True)
+    next_action_remarks = models.TextField(blank=True)
+    folder_link = models.URLField(blank=True)
+    schedule_health = models.CharField(
+        max_length=20, choices=Health.choices, default=Health.OK
+    )
+    scope_health = models.CharField(
+        max_length=20, choices=Health.choices, default=Health.OK
+    )
+    budget_health = models.CharField(
+        max_length=20, choices=Health.choices, default=Health.OK
+    )
+    recovery_action_remarks = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-pk"]
+
+    def __str__(self) -> str:
+        return f"Performance for {self.submission}"
+
+    @property
+    def overall_health(self) -> str:
+        """Auto-calculated: any Overdue -> Red; elif any At Risk -> Yellow; else Green."""
+        healths = {self.schedule_health, self.scope_health, self.budget_health}
+        if self.Health.OVER in healths:
+            return self.OverallHealth.RED
+        if self.Health.AT_RISK in healths:
+            return self.OverallHealth.YELLOW
+        return self.OverallHealth.GREEN
+
+
 class SqrSubmissionHistory(models.Model):
     """Permanent user-visible history entry for SQR field and workflow changes."""
 
